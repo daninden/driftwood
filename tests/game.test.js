@@ -20,6 +20,12 @@ describe('game', () => {
     expect(input.target).toBeNull();
     expect(Math.hypot(g.player.x - target.x, g.player.z - target.z)).toBeLessThan(0.2);
   });
+  it('runs to a double-tapped target', () => {
+    const walkG = createGame(w, spawn), runG = createGame(w, spawn), to = { x: spawn.x + 3, z: spawn.z };
+    const a = makeInput({ target: { ...to } }), b = makeInput({ target: { ...to, run: true } });
+    for (let i = 0; i < 20; i++) { walkG.update(a, 1 / 60); runG.update(b, 1 / 60); }
+    expect(runG.player.speed).toBeGreaterThan(walkG.player.speed * 1.2);
+  });
   it('gives up on a target in the sea', () => {
     const g = createGame(w, spawn), input = makeInput({ target: { x: -350, z: -350 } });
     for (let i = 0; i < 60 * 120 && input.target; i++) g.update(input, 1 / 60);

@@ -37,8 +37,8 @@ Rules:
 | `world/occlusion` | Darker ground under crowns and in hollows. |
 | `world/spots` | Finding places: the start spot, examples of each passage (for tests). |
 | `world/world` | Builds everything from a seed and returns one read-only object with queries. |
-| `game/movement` | Walking rules: walls block, passages let you climb, sliding along walls. |
-| `game/input` | Keys and clicks/taps to a movement intent; mouse wheel and `+`/`-` to zoom steps; `Q`/`E` and right-mouse drag to turn and tilt. |
+| `game/movement` | Walking rules: walls block, passages let you climb, sliding along walls; trunks, boulders and crags (from the tile data, cached per tile) block and you slide round them. |
+| `game/input` | Keys and clicks/taps to a movement intent (a double tap runs); mouse wheel, `+`/`-` and a two-finger pinch to zoom steps; `Q`/`E`, right-mouse drag and a two-finger twist to turn (the mouse also tilts). |
 | `game/clock` | The time of day: a 20-minute day, part of the game state. |
 | `game/game` | Game state (the player and the clock) and the per-frame update. |
 | `render/palette` | All colours of style C in one place, the castaway's included. |
@@ -97,14 +97,14 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 ```
 
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
-- `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea.
+- `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea; trunks, palms and boulders must stop you while you slide past them, small stones must not.
 - `tests/streaming.test.js`, `tests/ghosts.test.js` and `tests/core.test.js` test the pure logic without a browser.
 - `tests/loading.test.js` tests the loading bar: steps in order, never backwards, ends full. The smoke test also saves the loader halfway (`smoke-0.png`) and checks the bar ends full.
 - `tests/stage.test.js` checks that the shadow depth bias stays a few centimetres at every zoom level.
 - `tests/props.test.js` tests the variety of trees, pines and palms (shapes, colours, lean directions, how many withered fronds) with a recording batch.
 - `tests/game.test.js` tests click-to-walk, the running clock and the saveable state.
 - `tests/sky.test.js` tests the clock and the light of the day: sun up and down, east to west, golden hour, enough light at night, a minimum light height, smooth changes.
-- `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser). Movement, ghost and streaming tests also run from turned and tilted views.
+- `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser, and on touch: tap, double tap, pinch and twist). Movement, ghost and streaming tests also run from turned and tilted views.
 
 Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for.
 

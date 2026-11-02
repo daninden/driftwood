@@ -55,7 +55,9 @@ No two trees look alike, but all stay within the style and the calm palette (no 
 
 A small blocky figure with outlines, dressed for a tropical island after a long time alone: a straw hat, shaggy dark hair and a long, unkempt beard, a yellowed shirt with ripped short sleeves, holes and a ragged hem, frayed short trousers, bare sun-tanned legs and bare feet, and a staff. Because the figure is small on screen, the detail lives in the silhouette and in flat colour areas (skin against cloth), not in small parts.
 
-The castaway walks unhurried (2.9 per second) and with Shift breaks into a calm trot (3.9, about 1⅓ × walking), never a sprint: there is no hurry on the island.
+The castaway walks unhurried (2.9 per second) and with Shift (on a touch screen: a double tap) breaks into a calm trot (3.9, about 1⅓ × walking), never a sprint: there is no hurry on the island.
+
+Tree trunks (broadleaf, rain forest, pine and palm), boulders of 0.35 m and larger and the crags in the walls are solid: the castaway bumps into the trunk, not the crown, and slides round it. Bushes, grass, roots, small stones and beach finds are walked through or stepped over, and so are stones lying on a climbing route: there you scramble over them.
 
 ## Day and night
 
@@ -99,7 +101,8 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - Tree crowns between the camera and the castaway turn see-through.
 - No plinth while playing.
 - The camera stays far enough away that the castaway is small in a big landscape (about 6% of the screen height): zooming in too close shrinks the loneliness.
-- **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved. Touch is not supported for now: the target is a normal desktop browser.
+- **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved.
+- **Touch screens:** tap to walk to a spot, drag to steer, double tap to run there (hold and drag after the double tap to steer while running). Two fingers: pinch to zoom (same limits), twist to turn the view; the island turns with the fingers, and the castaway stops while two fingers are down. No tilting on a touch screen. The browser's own page zoom is switched off.
 - On a summit the camera zooms out a further 1.6× on top of the player's zoom (at most 14), as a reward for the climb.
 - **No interface for now:** no HUD, map or menu. What you see is the island. The one exception is the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
 

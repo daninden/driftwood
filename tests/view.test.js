@@ -73,3 +73,56 @@ describe('zoom input', () => {
     input.dispose();
   });
 });
+
+describe('touch input', () => {
+  beforeAll(() => { if (!globalThis.window) globalThis.window = new EventTarget(); });
+  const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
+  const touch = (id, x, y) => ({ pointerType: 'touch', pointerId: id, button: 0, clientX: x, clientY: y });
+  const setup = () => { let t = 0; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t); return { el, input, at: ms => { t = ms; } }; };
+
+  it('walks on a tap and runs on a double tap', () => {
+    const { el, input, at } = setup();
+    fire(el, 'pointerdown', touch(1, 100, 100)); fire(window, 'pointerup', touch(1, 100, 100));
+    expect(input.target).toEqual({ x: 100, z: 100 });
+    at(200); fire(el, 'pointerdown', touch(2, 105, 98));
+    expect(input.target).toEqual({ x: 105, z: 98, run: true });
+    fire(el, 'pointermove', touch(2, 140, 120));   // hold and drag: keeps running
+    expect(input.target).toEqual({ x: 140, z: 120, run: true });
+    fire(window, 'pointerup', touch(2, 140, 120));
+    at(1000); fire(el, 'pointerdown', touch(3, 300, 300));
+    expect(input.target.run).toBeUndefined();
+    input.dispose();
+  });
+  it('does not take two slow or far apart taps for a double tap', () => {
+    const { el, input, at } = setup();
+    fire(el, 'pointerdown', touch(1, 100, 100)); fire(window, 'pointerup', touch(1, 100, 100));
+    at(500); fire(el, 'pointerdown', touch(2, 100, 100)); fire(window, 'pointerup', touch(2, 100, 100));
+    expect(input.target.run).toBeUndefined();
+    at(600); fire(el, 'pointerdown', touch(3, 300, 100));
+    expect(input.target.run).toBeUndefined();
+    input.dispose();
+  });
+  it('zooms with a pinch, turns with a twist, and stops walking meanwhile', () => {
+    const { el, input, at } = setup();
+    fire(el, 'pointerdown', touch(1, 100, 200)); expect(input.target).not.toBeNull();
+    at(400); fire(el, 'pointerdown', touch(2, 300, 200));
+    expect(input.target).toBeNull();
+    fire(el, 'pointermove', touch(2, 500, 200));   // fingers spread: zoom in
+    expect(input.takeZoom()).toBeLessThan(0);
+    expect(input.target).toBeNull();
+    fire(el, 'pointermove', touch(2, 100, 400));   // straight below: a quarter turn clockwise on screen
+    const t = input.takeTurn(0.016); expect(t.yaw).toBeCloseTo(Math.PI / 2); expect(t.pitch).toBe(0);
+    expect(input.takeZoom()).toBeGreaterThan(0);   // and closer together: zoom out
+    fire(window, 'pointerup', touch(2, 100, 400));
+    fire(el, 'pointermove', touch(1, 150, 250));   // the finger left behind does not walk
+    expect(input.target).toBeNull(); expect(input.takeTurn(0.016)).toEqual({ yaw: 0, pitch: 0 });
+    input.dispose();
+  });
+  it('zooms one step for each 1.1x change in finger distance', () => {
+    const { el, input } = setup();
+    fire(el, 'pointerdown', touch(1, 0, 0)); fire(el, 'pointerdown', touch(2, 110, 0));
+    fire(el, 'pointermove', touch(2, 100, 0));
+    expect(input.takeZoom()).toBeCloseTo(1);
+    input.dispose();
+  });
+});

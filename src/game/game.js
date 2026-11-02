@@ -10,7 +10,8 @@
  *   game.player                 { x, y, z, heading, moving, speed, phase }
  *   game.clock                  { time } fraction of the day (game/clock)
  *   game.update(input, dt) -> { distance, terrain, time }
- *     moves the player from the input (game/input), clears a reached or
+ *     moves the player from the input (game/input; Shift or a double-tapped
+ *     target runs), clears a reached or
  *     blocked click target, advances the clock, and reports what is under
  *     the player's feet and the time of day.
  *   game.state() -> plain object with what would need saving
@@ -27,7 +28,7 @@ export function createGame(world, spawn, opts = {}) {
   function update(input, dt) {
     const dir = moveIntent(input, player);
     if (!dir && input.target) input.clearTarget();
-    const res = stepPlayer(world, player, dir, dt, input.run);
+    const res = stepPlayer(world, player, dir, dt, input.run || !!(input.target && input.target.run));
     if (res.blocked && input.target) { blockedFor += dt; if (blockedFor > 0.5) input.clearTarget(); } else blockedFor = 0;
     clock.advance(dt);
     return { distance: res.distance, terrain: terrainAt(world, player.x, player.z), time: clock.time };
