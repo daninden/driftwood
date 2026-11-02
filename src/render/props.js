@@ -6,15 +6,18 @@
  * from world/vegetation. Order of r() calls matters: it keeps a tile
  * looking the same every time it is built.
  *
- *   addTree(B, kit, t, r)            broadleaf or jungle tree: trunk + blob crown
- *   addPine(B, kit, t, r)            trunk + three cones
- *   addPalm(B, kit, t, r)            curved trunk + fronds
+ *   addTree(B, kit, t, r)            broadleaf or jungle tree in one of TREE_SHAPES
+ *                                    (round, umbrella, tall, fork): trunk + blob crown
+ *   addPine(B, kit, t, r)            trunk + two to four cones, slim or wide, some lean
+ *   addPalm(B, kit, t, r, others?)   bent trunk in one of PALM_SHAPES + tinted fronds,
+ *                                    sometimes withered fronds (DRY_CHANCE); others are
+ *                                    the tile's palms, so close neighbours lean apart
  *   addRoots(B, kit, w, t, r)        roots curling over a wall edge, lianas in arcs
  *   addBeach(B, kit, w, tile, r)     coconuts under palms, bleached driftwood logs
  *   addTideLine(B, kit, w, tile, r, slicer)   generator: seaweed band with shells
  *   rockColor(r, dk?)
  *
- * Depends on: three, core/noise, render/palette, render/geometry
+ * Depends on: three, core/noise, render/palette, render/geometry, world/constants
  */
 import * as THREE from 'three';
 import { pick } from '../core/noise.js';
@@ -24,31 +27,82 @@ import { stickMatrix, mat4 } from './geometry.js';
 
 export function rockColor(r, dk) { return new THREE.Color(r() < 0.5 ? P.rock : P.rock2).offsetHSL(0, 0, -0.03 - r() * (dk || 0.07)).getHex(); }
 
+/** Pick a shape by weight: shapes = [[name, weight], ...]. */
+function shapeOf(r, shapes) { let u = r(), k = 0; while (k < shapes.length - 1 && (u -= shapes[k][1]) > 0) k++; return shapes[k][0]; }
+/** A colour with a small random shift in hue and lightness. */
+const shade = (c, r, dh, dl) => new THREE.Color(c).offsetHSL((r() - 0.5) * dh, 0, (r() - 0.5) * dl).getHex();
+
+export const TREE_SHAPES = [['round', 0.55], ['umbrella', 0.2], ['tall', 0.15], ['fork', 0.1]];
 export function addTree(B, kit, t, r) {
-  const jg = t.jungle, h = jg ? 2.6 + r() * 1.8 : 1.3 + r() * 1.4, lean = new THREE.Vector3((r() - 0.5) * 0.4, h, (r() - 0.5) * 0.4);
-  const base = new THREE.Vector3(t.x, t.y - 0.1, t.z), top = base.clone().add(lean), tm = stickMatrix(base, top, (jg ? 0.15 : 0.1) + r() * 0.05);
-  B.add('trunk', kit.trunk, kit.trunkMat, tm, jg ? 0x6a4c34 : P.trunk, { outline: 1.25 });
-  const nb = jg ? 5 + (r() * 3 | 0) : 3 + (r() * 2 | 0), cs = (jg ? 1.05 : 0.75) + r() * 0.45, pal = jg ? P.jungle : P.canopy, tint = pick(r, pal);
-  for (let k = 0; k < nb; k++) {
-    const rad = 0.55 + r() * 0.35, a = r() * Math.PI * 2, rr = r() * (jg ? 0.8 : 0.55), y = top.y + (r() - 0.25) * 0.6 * cs;
-    const c = new THREE.Color(r() < 0.75 ? tint : pick(r, pal)).offsetHSL(0, 0, (r() - 0.5) * 0.06).getHex();
-    B.add('canopy', kit.canopy, kit.canopyMat, mat4(top.x + Math.cos(a) * rr * cs, y, top.z + Math.sin(a) * rr * cs, rad * cs, rad * cs * 0.85, rad * cs, r() * 6), c, { outline: 1.07 });
+  const jg = t.jungle, shape = shapeOf(r, TREE_SHAPES), pal = jg ? P.jungle : P.canopy;
+  const h = (jg ? 2.6 + r() * 1.8 : 1.3 + r() * 1.4) * (shape === 'tall' ? 1.3 : shape === 'umbrella' ? 1.1 : 1);
+  const cs = ((jg ? 1.05 : 0.75) + r() * 0.45) * (shape === 'tall' ? 0.75 : shape === 'fork' ? 0.8 : 1);
+  const tint = shade(pick(r, pal), r, 0.03, 0.08), bark = r() < 0.25 ? (jg ? P.jungleBark[1] : P.bark[1]) : (jg ? P.jungleBark[0] : P.bark[0]);
+  const base = new THREE.Vector3(t.x, t.y - 0.1, t.z), rad = (jg ? 0.15 : 0.1) + r() * 0.05;
+  const crown = (top, nb) => {
+    for (let k = 0; k < nb; k++) {
+      const br = 0.55 + r() * 0.35, a = r() * Math.PI * 2, c = new THREE.Color(r() < 0.75 ? tint : pick(r, pal)).offsetHSL(0, 0, (r() - 0.5) * 0.06).getHex();
+      let rr = r() * (jg ? 0.8 : 0.55), y = top.y + (r() - 0.25) * 0.6 * cs, sy = 0.85;
+      if (shape === 'umbrella') { rr = rr * 1.7 + 0.25; y = top.y + (r() - 0.5) * 0.2 * cs; sy = 0.5; }
+      else if (shape === 'tall') { rr *= 0.45; y = top.y + (0.6 - k / nb * 1.8) * cs; }
+      B.add('canopy', kit.canopy, kit.canopyMat, mat4(top.x + Math.cos(a) * rr * cs, y, top.z + Math.sin(a) * rr * cs, br * cs, br * cs * sy, br * cs, r() * 6), c, { outline: 1.07 });
+    }
+  };
+  const nb = jg ? 5 + (r() * 3 | 0) : 3 + (r() * 2 | 0);
+  if (shape === 'fork') {
+    const split = base.clone().add(new THREE.Vector3(0, h * 0.4, 0)), a = r() * Math.PI;
+    B.add('trunk', kit.trunk, kit.trunkMat, stickMatrix(base, split, rad), bark, { outline: 1.25 });
+    for (const sgn of [1, -1]) {
+      const top = split.clone().add(new THREE.Vector3(Math.cos(a) * sgn * h * 0.3, h * (0.55 + r() * 0.15), Math.sin(a) * sgn * h * 0.3));
+      B.add('trunk', kit.trunk, kit.trunkMat, stickMatrix(split, top, rad * 0.75), bark, { outline: 1.25 });
+      crown(top, Math.ceil(nb * 0.7));
+    }
+  } else {
+    const top = base.clone().add(new THREE.Vector3((r() - 0.5) * 0.4, h, (r() - 0.5) * 0.4));
+    B.add('trunk', kit.trunk, kit.trunkMat, stickMatrix(base, top, rad), bark, { outline: 1.25 });
+    crown(top, nb);
   }
 }
 
 export function addPine(B, kit, t, r) {
-  const h = 1.6 + r() * 1.4, w = 0.45 + r() * 0.2, c = pick(r, P.pine);
-  B.add('trunk', kit.trunk, kit.trunkMat, stickMatrix(new THREE.Vector3(t.x, t.y - 0.1, t.z), new THREE.Vector3(t.x, t.y + h * 0.4, t.z), 0.08), P.trunk, { outline: 1.25 });
-  for (let k = 0; k < 3; k++) B.add('pine', kit.pine, kit.canopyMat, mat4(t.x, t.y + h * (0.35 + k * 0.22), t.z, w * (1 - k * 0.25), h * 0.42, w * (1 - k * 0.25), r() * 6), c, { outline: 1.08 });
+  const h = 1.6 + r() * 1.4, slim = r() < 0.4, w = (slim ? 0.34 + r() * 0.12 : 0.45 + r() * 0.25), c = shade(pick(r, P.pine), r, 0.02, 0.06), n = 2 + (r() * 3 | 0);
+  const lx = (r() - 0.5) * 0.3, lz = (r() - 0.5) * 0.3, lean = r() < 0.3;
+  const at = u => new THREE.Vector3(t.x + (lean ? lx * u * h : 0), t.y + u * h, t.z + (lean ? lz * u * h : 0));
+  B.add('trunk', kit.trunk, kit.trunkMat, stickMatrix(new THREE.Vector3(t.x, t.y - 0.1, t.z), at(0.4), 0.08), P.trunk, { outline: 1.25 });
+  for (let k = 0; k < n; k++) {
+    const u = k / (n - 1), p = at(0.35 + u * 0.44), s = w * (1 - u * 0.5);
+    B.add('pine', kit.pine, kit.canopyMat, mat4(p.x, p.y, p.z, s, h * (1.26 / n) * (slim ? 1.15 : 1), s, lean ? 0 : r() * 6, lean ? lz : 0, lean ? -lx : 0), c, { outline: 1.08 });
+  }
 }
 
+/**
+ * Palms: most lean towards the sea, some stand nearly straight, some bend
+ * out and up again (curve), some lean low. A palm close to another one
+ * often leans away from it. About a quarter carry one or two withered
+ * fronds hanging down.
+ */
+export const PALM_SHAPES = [['lean', 0.6], ['straight', 0.15], ['curve', 0.15], ['low', 0.1]];
+export const DRY_CHANCE = 0.25;
 const O3 = new THREE.Object3D();
-export function addPalm(B, kit, p, r) {
-  const o = new THREE.Vector3(p.x, p.y - 0.08, p.z), hgt = 2.4 + r() * 1.4, lean = 0.5 + r() * 0.9, th = Math.atan2(p.z, p.x) + (r() - 0.5) * 1.2, sd = { x: Math.cos(th), z: Math.sin(th) };
+export function addPalm(B, kit, p, r, others = []) {
+  const shape = shapeOf(r, PALM_SHAPES), o = new THREE.Vector3(p.x, p.y - 0.08, p.z);
+  let th = Math.atan2(p.z, p.x) + (r() - 0.5) * 2.4;
+  let near = null, nd = 3;
+  for (const q of others) { const d = Math.hypot(q.x - p.x, q.z - p.z); if (q !== p && d < nd) { nd = d; near = q; } }
+  if (near && r() < 0.6) th = Math.atan2(p.z - near.z, p.x - near.x) + (r() - 0.5) * 0.8;
+  let hgt = 2.0 + r() * 2.2, lean = 0.6 + r() * 1.0, bend = t => t * t;
+  if (shape === 'straight') { lean = 0.1 + r() * 0.2; th = r() * Math.PI * 2; }
+  else if (shape === 'curve') bend = t => 2.2 * t - 1.4 * t * t;
+  else if (shape === 'low') { hgt = 1.6 + r() * 0.6; lean = 1.6 + r() * 0.8; }
+  const sd = { x: Math.cos(th), z: Math.sin(th) }, bark = pick(r, P.palmTrunk);
   let prev = o.clone();
-  for (let i = 0; i < 8; i++) { const t = (i + 1) / 8, q = o.clone().add(new THREE.Vector3(sd.x * lean * t * t, hgt * t, sd.z * lean * t * t)); B.add('palmseg', kit.seg, kit.palmTrunkMat, stickMatrix(prev, q, 0.1 - 0.035 * t), 0x9a8264, { outline: 1.35 }); prev = q; }
-  const nf = 8 + (r() * 3 | 0);
-  for (let k = 0; k < nf; k++) { O3.position.copy(prev); O3.rotation.order = 'YZX'; O3.rotation.set(0, k / nf * Math.PI * 2 + r() * 0.3, (r() - 0.35) * 0.5); O3.scale.setScalar(0.75 + r() * 0.3); O3.updateMatrix(); B.add('frond', kit.frond, kit.frondMat, O3.matrix.clone(), 0xffffff, { depthMat: kit.frondDepth }); }
+  for (let i = 0; i < 8; i++) { const t = (i + 1) / 8, f = lean * bend(t), q = o.clone().add(new THREE.Vector3(sd.x * f, hgt * t, sd.z * f)); B.add('palmseg', kit.seg, kit.palmTrunkMat, stickMatrix(prev, q, 0.1 - 0.035 * t), bark, { outline: 1.35 }); prev = q; }
+  const nf = 8 + (r() * 3 | 0), tint = pick(r, P.frondTint);
+  for (let k = 0; k < nf; k++) { O3.position.copy(prev); O3.rotation.order = 'YZX'; O3.rotation.set(0, k / nf * Math.PI * 2 + r() * 0.3, (r() - 0.35) * 0.5); O3.scale.setScalar(0.75 + r() * 0.3); O3.updateMatrix(); B.add('frond', kit.frond, kit.frondMat, O3.matrix.clone(), shade(tint, r, 0.02, 0.06), { depthMat: kit.frondDepth }); }
+  if (r() < DRY_CHANCE) for (let k = 0, n = r() < 0.3 ? 2 : 1; k < n; k++) {
+    O3.position.set(prev.x, prev.y - 0.06, prev.z); O3.rotation.set(0, r() * Math.PI * 2, -(0.55 + r() * 0.35)); O3.scale.setScalar(0.8 + r() * 0.2); O3.updateMatrix();
+    B.add('frondDry', kit.frond, kit.dryFrondMat, O3.matrix.clone(), pick(r, P.dryTint), { depthMat: kit.dryFrondDepth });
+  }
 }
 
 export function addRoots(B, kit, w, t, r) {

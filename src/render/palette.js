@@ -1,7 +1,8 @@
 /**
  * render/palette — the colours of style C (hand-painted with outlines).
  *
- * P    named colours as 0xrrggbb (single) or arrays (variations)
+ * P    named colours as 0xrrggbb (single) or arrays (variations); frondTint
+ *      and dryTint multiply the green and the dry frond textures
  * PC   the single colours as [r, g, b] in 0..1, for painting textures
  * TG   ground colours per terrace tier: open (o, o2) and forest floor (f, f2)
  * BUSHC  bush colours per tier
@@ -19,8 +20,12 @@ import { hex } from '../core/math.js';
 export const P = Object.freeze({
   sand: 0xebd09a, sand2: 0xdfc188, wet: 0xc4a676, seabed: 0x8fae96, rock: 0xa49684, rock2: 0x8e8070, peak: 0xe2d8c6,
   trunk: 0x7a5638, water: 0x6fc0b6, waterDeep: 0x3a8296, noise: 0.08,
-  canopy: [0x6e933f, 0x5c8236, 0x82a04a, 0x8fa64e], jungle: [0x4f7a3a, 0x5a8540, 0x46703a, 0x618a44],
-  pine: [0x4d7440, 0x5a8248], bush: [0x6f9442, 0x7f9f48], bg: ['#efe0c2', '#cdb48c'],
+  canopy: [0x6e933f, 0x5c8236, 0x82a04a, 0x8fa64e, 0x7d8c3e, 0x98a850, 0x4e7432],
+  jungle: [0x4f7a3a, 0x5a8540, 0x46703a, 0x618a44, 0x3e6434, 0x6a8c3e],
+  pine: [0x4d7440, 0x5a8248, 0x466a44, 0x5a7a5a, 0x52705c], bush: [0x6f9442, 0x7f9f48], bg: ['#efe0c2', '#cdb48c'],
+  bark: [0x7a5638, 0x8a7c6a], jungleBark: [0x6a4c34, 0x75685a],
+  palmTrunk: [0x9a8264, 0x8a7a6a, 0xa89070, 0x907660],
+  frondTint: [0xffffff, 0xe4ee88, 0xffd878, 0xa8c090, 0xc0c47c], dryTint: [0xffffff, 0xd4b08c],
 });
 
 export const PC = Object.freeze(Object.fromEntries(Object.entries(P).filter(([, v]) => typeof v === 'number').map(([k, v]) => [k, hex(v)])));

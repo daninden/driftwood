@@ -3,7 +3,8 @@
  *
  * createKit(noise) -> kit with geometries and materials, built once:
  *   canopy, canopyLod, trunk, pine, pineLod, bush, bushLod, rock, rockLod,
- *   seg (unit cylinder for sticks), frond (+ frondMat, frondDepth),
+ *   seg (unit cylinder for sticks), frond (+ frondMat, frondDepth, and
+ *   dryFrondMat, dryFrondDepth for withered fronds),
  *   grass, reed, fern, pebble, shell, driftwood
  *   materials: canopyMat, trunkMat, rockMat, palmTrunkMat, grassMat,
  *   fernMat, smallMat
@@ -40,11 +41,13 @@ export function createKit(noise) {
     for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; for (let s = 0; s < 4; s++) { const t0 = s / 4, t1 = (s + 1) / 4, w0 = 0.07 * (1 - t0 * 0.8), w1 = 0.07 * (1 - t1 * 0.8); const p0 = [Math.cos(a) * t0 * 0.6, 0.26 * Math.sin(t0 * 2.4), Math.sin(a) * t0 * 0.6], p1 = [Math.cos(a) * t1 * 0.6, 0.26 * Math.sin(t1 * 2.4), Math.sin(a) * t1 * 0.6], px = -Math.sin(a), pz = Math.cos(a); pos.push(p0[0] - px * w0, p0[1], p0[2] - pz * w0, p0[0] + px * w0, p0[1], p0[2] + pz * w0, p1[0] + px * w1, p1[1], p1[2] + pz * w1, p0[0] - px * w0, p0[1], p0[2] - pz * w0, p1[0] + px * w1, p1[1], p1[2] + pz * w1, p1[0] - px * w1, p1[1], p1[2] - pz * w1); } }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
   })();
-  const frondTex = (() => {
-    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const g = cv.getContext('2d'), greens = ['#6e8f3c', '#5c7d34', '#7f9c48'];
-    for (let x = 4; x < 250; x += 4) { const len = (1 - x / 256) * 25 + 5; for (const side of [-1, 1]) { g.strokeStyle = greens[(hash2(x, side + 3, 41) * greens.length) | 0]; g.lineWidth = 2.6; g.beginPath(); g.moveTo(x, 32); g.quadraticCurveTo(x + len * 0.4, 32 + side * len * 0.55, x + len * 0.95, 32 + side * len); g.stroke(); } }
-    g.strokeStyle = '#6b6a35'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 32); g.lineTo(256, 32); g.stroke(); return new THREE.CanvasTexture(cv);
-  })();
+  const paintFrond = (cols, rib, seed) => {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const g = cv.getContext('2d');
+    for (let x = 4; x < 250; x += 4) { const len = (1 - x / 256) * 25 + 5; for (const side of [-1, 1]) { g.strokeStyle = cols[(hash2(x, side + 3, seed) * cols.length) | 0]; g.lineWidth = 2.6; g.beginPath(); g.moveTo(x, 32); g.quadraticCurveTo(x + len * 0.4, 32 + side * len * 0.55, x + len * 0.95, 32 + side * len); g.stroke(); } }
+    g.strokeStyle = rib; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 32); g.lineTo(256, 32); g.stroke(); return new THREE.CanvasTexture(cv);
+  };
+  const frondTex = paintFrond(['#6e8f3c', '#5c7d34', '#7f9c48'], '#6b6a35', 41);
+  const dryTex = paintFrond(['#c9ad6a', '#b89a58', '#a8844a', '#bfa060'], '#8a6a3a', 43);
   const frond = (() => { const g = new THREE.PlaneGeometry(2.0, 0.6, 10, 1), p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i) + 1.0, y = p.getY(i), t = x / 2.0; p.setXYZ(i, x, -0.15 * x * x + 0.25 * x * (1 - t), y * (1 - 0.6 * t)); } g.computeVertexNormals(); return g; })();
 
   return {
@@ -64,6 +67,8 @@ export function createKit(noise) {
     canopyMat: toon(0xffffff, { vertexColors: true }), trunkMat: toon(), rockMat: toon(), palmTrunkMat: toon(),
     frondMat: toon(0xffffff, { map: frondTex, alphaTest: 0.4, side: THREE.DoubleSide }),
     frondDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: frondTex, alphaTest: 0.4 }),
+    dryFrondMat: toon(0xffffff, { map: dryTex, alphaTest: 0.4, side: THREE.DoubleSide }),
+    dryFrondDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: dryTex, alphaTest: 0.4 }),
     grassMat: toon(0xffffff, { side: THREE.DoubleSide }), fernMat: toon(0xffffff, { side: THREE.DoubleSide }), smallMat: toon(),
   };
 }

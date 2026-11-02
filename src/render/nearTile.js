@@ -32,7 +32,7 @@ export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
 
   for (const t of tile.trees) { const mk = B.mark(); addTree(B, kit, t, r); trees.push({ x: t.x, z: t.z, y: t.y, ranges: B.since(mk) }); if (slicer.over()) yield; }
   for (const t of tile.pines) { const mk = B.mark(); addPine(B, kit, t, r); trees.push({ x: t.x, z: t.z, y: t.y, ranges: B.since(mk) }); if (slicer.over()) yield; }
-  for (const t of tile.palms) { addPalm(B, kit, t, r); if (slicer.over()) yield; }
+  for (const t of tile.palms) { addPalm(B, kit, t, r, tile.palms); if (slicer.over()) yield; }
   tile.crags.forEach(t => B.add('crag', kit.rock, kit.rockMat, mat4(t.x, t.y - t.s * 0.35, t.z, t.s * 1.3, t.s * 0.55, t.s, r() * 6, (r() - 0.5) * 0.5, (r() - 0.5) * 0.5), rockColor(r), { outline: 1.06 }));
   tile.rocks.forEach(t => B.add('rock', kit.rock, kit.rockMat, mat4(t.x, t.y - t.s * 0.2, t.z, t.s, t.s * 0.7, t.s, r() * 6, r() * 0.4), t.moss ? pick(r, [0x7b8456, 0x6e7a4c, 0x87885c]) : rockColor(r), { outline: 1.08 }));
   for (const t of tile.roots) { addRoots(B, kit, w, t, r); if (slicer.over()) yield; }

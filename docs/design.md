@@ -45,6 +45,12 @@ Each terrace has its own colour and vegetation within the same style:
 - **Mountain plateau:** dry grass, heath, pines and rocks, cooler light.
 - **Summit:** grey rock with lichen, less saturated and cool.
 
+No two trees look alike, but all stay within the style and the calm palette (no flowering trees):
+
+- **Palms:** most lean towards the sea, at widely different angles; some stand nearly straight, some bend out and up again, a few lean low. Palms close together often lean apart. Fronds range from fresh green to yellow-green and olive, trunks from grey-brown to sandy. About a quarter carry one or two withered, straw-coloured fronds hanging down; never more.
+- **Broadleaf and rain forest trees:** round crowns, wide flat umbrella crowns, tall narrow ones and now and then a forked trunk with two crowns. Crown greens from yellow-green to dark; some trees have grey bark.
+- **Pines:** two to four tiers, slim or wide, some leaning a little, in greens from warm to grey-blue.
+
 ## The castaway
 
 A small blocky figure with outlines, dressed for a tropical island after a long time alone: a straw hat, shaggy dark hair and a long, unkempt beard, a yellowed shirt with ripped short sleeves, holes and a ragged hem, frayed short trousers, bare sun-tanned legs and bare feet, and a staff. Because the figure is small on screen, the detail lives in the silhouette and in flat colour areas (skin against cloth), not in small parts.

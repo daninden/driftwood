@@ -45,7 +45,7 @@ Rules:
 | `render/materials` | Toon shading, outlines, the rock shader for steep walls, see-through crowns. |
 | `render/geometry` | Shared shapes (crowns, rocks, grass, ferns, driftwood) and matrix helpers. |
 | `render/batch` | Many small objects into a few InstancedMeshes with outlines. |
-| `render/props` | Detailed trees, palms, roots and lianas, beach finds, the tide line. |
+| `render/props` | Detailed trees, palms, roots and lianas, beach finds, the tide line. Trees, pines and palms each pick a shape and colours from the tile generator. |
 | `render/terrainTile` | Ground mesh and painted texture of one tile. |
 | `render/farTiles` | A cheap version of every tile, always present. |
 | `render/nearTile` | The full-detail version of one tile. |
@@ -98,6 +98,7 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea.
 - `tests/streaming.test.js`, `tests/ghosts.test.js` and `tests/core.test.js` test the pure logic without a browser.
+- `tests/props.test.js` tests the variety of trees, pines and palms (shapes, colours, lean directions, how many withered fronds) with a recording batch.
 - `tests/game.test.js` tests click-to-walk, the running clock and the saveable state.
 - `tests/sky.test.js` tests the clock and the light of the day: sun up and down, east to west, golden hour, enough light at night, a minimum light height, smooth changes.
 - `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser). Movement, ghost and streaming tests also run from turned and tilted views.
