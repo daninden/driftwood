@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createNoise, mulberry32, hashInt } from '../src/core/noise.js';
 import { ss, lerp, hex, mix } from '../src/core/math.js';
 import { createSlicer, drain } from '../src/core/slicer.js';
-import { toView, screenUp, CAMDIR, RIGHT } from '../src/core/view.js';
+import { toView, screenUp, groundDepth, basis, CAMDIR, RIGHT, YAW, PITCH_MIN, PITCH_MAX } from '../src/core/view.js';
 
 describe('core/noise', () => {
   it('is deterministic per seed', () => {
@@ -47,6 +47,18 @@ describe('core/view', () => {
   });
   it('puts higher points higher and nearer points lower on screen', () => {
     expect(screenUp(1, 0)).toBeGreaterThan(0); expect(screenUp(0, 1)).toBeLessThan(0);
+  });
+  it('turns the view basis with the yaw and starts at the old fixed view', () => {
+    const b = basis(YAW); expect(b.cam.x).toBeCloseTo(Math.SQRT1_2); expect(b.cam.z).toBeCloseTo(Math.SQRT1_2); expect(b.right.z).toBeCloseTo(-Math.SQRT1_2);
+    for (const yaw of [0, 1, 2.5, -4]) {
+      const { cam, right } = basis(yaw);
+      expect(Math.hypot(cam.x, cam.z)).toBeCloseTo(1); expect(cam.x * right.x + cam.z * right.z).toBeCloseTo(0);
+      const v = toView(cam.x * 3 + right.x * 2, cam.z * 3 + right.z * 2, yaw); expect(v.dc).toBeCloseTo(3); expect(v.dr).toBeCloseTo(2);
+    }
+  });
+  it('covers more ground the flatter the view', () => {
+    expect(groundDepth(PITCH_MIN)).toBeGreaterThan(groundDepth(PITCH_MAX));
+    expect(screenUp(0, 1, PITCH_MAX)).toBeLessThan(screenUp(0, 1, PITCH_MIN));
   });
 });
 

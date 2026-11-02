@@ -30,6 +30,9 @@ async function boot() {
   window.__driftwood = { world, game, view, input, ready: true };
   requestAnimationFrame(function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    view.zoomBy(input.takeZoom());
+    view.turn(input.takeTurn(dt));
+    input.yaw = view.yaw;
     view.render(game.player, game.update(input, dt), dt);
     requestAnimationFrame(frame);
   });

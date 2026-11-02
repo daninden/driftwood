@@ -3,14 +3,17 @@
  *
  * A warm hemisphere light plus one directional sun with a 2048 px shadow
  * map. The sun stands about 30° towards the camera so walls facing the
- * viewer catch light. The shadow camera follows the view and is snapped to
- * shadow texels so shadows do not shimmer while walking.
+ * viewer catch light, and it turns with the camera: whichever way you look,
+ * the light looks the same. The shadow camera follows the view and is
+ * snapped to shadow texels so shadows do not shimmer while walking.
  *
- * createStage(container) -> { renderer, scene, hemi, sun, SUNDIR, resize(), followSun(target, half) }
+ * SUNDIR   direction towards the sun for the starting view
+ * createStage(container) -> { renderer, scene, hemi, sun, resize(), followSun(target, half, yaw?) }
  *
- * Depends on: three
+ * Depends on: three, core/view
  */
 import * as THREE from 'three';
+import { YAW } from '../core/view.js';
 
 const SUNEL = 0.68, SUNAZ = -0.15;
 export const SUNDIR = new THREE.Vector3(Math.sin(SUNAZ) * Math.cos(SUNEL), Math.sin(SUNEL), Math.cos(SUNAZ) * Math.cos(SUNEL)).normalize();
@@ -29,11 +32,12 @@ export function createStage(container) {
   function resize() { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); renderer.setSize(window.innerWidth, window.innerHeight); }
   resize();
 
-  const st = new THREE.Vector3();
-  function followSun(target, half) {
+  const st = new THREE.Vector3(), dir = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+  function followSun(target, half, yaw = YAW) {
+    dir.copy(SUNDIR).applyAxisAngle(UP, yaw - YAW);
     const texel = half * 2 / sun.shadow.mapSize.x;
     st.set(Math.round(target.x / texel) * texel, target.y, Math.round(target.z / texel) * texel);
-    sun.target.position.copy(st); sun.position.copy(st).addScaledVector(SUNDIR, half * 3 + 60); sun.target.updateMatrixWorld();
+    sun.target.position.copy(st); sun.position.copy(st).addScaledVector(dir, half * 3 + 60); sun.target.updateMatrixWorld();
     Object.assign(sun.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 1, far: half * 6 + 200 });
     sun.shadow.camera.updateProjectionMatrix();
   }

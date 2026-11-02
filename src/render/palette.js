@@ -5,6 +5,8 @@
  * PC   the single colours as [r, g, b] in 0..1, for painting textures
  * TG   ground colours per terrace tier: open (o, o2) and forest floor (f, f2)
  * BUSHC  bush colours per tier
+ * HERO   the castaway: sun-tanned skin, yellowed torn shirt, faded shorts,
+ *        dark hair and beard, straw hat, staff
  *
  * Changing a value here changes the look everywhere; nothing else hard-codes
  * these colours. Plain data, no Three.js.
@@ -29,3 +31,5 @@ export const TG = Object.freeze([
 ]);
 
 export const BUSHC = Object.freeze([[0x8a9a52, 0x9aa45a], P.bush, [0x4f7038, 0x5a7a3c, 0x46683a], [0x857a5c, 0x7d7f52, 0x86766a], [0x7d8452, 0x8a8a5a]]);
+
+export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8a7558, hair: 0x4a3222, hat: 0xc9b07a, staff: 0x7a5a3a });

@@ -18,13 +18,15 @@
  * terrainAt(world, x, z) -> { y, L, s, rv, inRiver, depth, pa, fr, climb }
  * stepFactor(world, from, x, z) -> 0 (blocked) or a speed factor 0..1
  * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase }
- * moveIntent(input) -> unit direction { x, z } or null, from keys/target
+ * moveIntent(input, player) -> unit direction { x, z } or null, from keys/target;
+ *   keys walk relative to the screen, so they use input.yaw (the current
+ *   view angle, see core/view; the starting view when missing)
  * stepPlayer(world, player, dir, dt, run) -> { moved, distance, blocked }
  *   Mutates player. `phase` advances with distance (for the walk cycle).
  *
  * Depends on: core/view
  */
-import { CAMDIR, RIGHT } from '../core/view.js';
+import { YAW, basis } from '../core/view.js';
 
 export const WALK_SPEED = 3.3;
 export const RUN_SPEED = 5.6;
@@ -57,13 +59,13 @@ export function createPlayer(spot) {
 }
 
 /**
- * input: { up, down, left, right } booleans and/or target { x, z } and the
- * player position. Keys win over a target. Returns null when standing still.
+ * input: { up, down, left, right } booleans, yaw, and/or target { x, z }, and
+ * the player position. Keys win over a target. Returns null when standing still.
  */
 export function moveIntent(input, player) {
   const u = (input.up ? 1 : 0) - (input.down ? 1 : 0), r = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   let x = 0, z = 0;
-  if (u || r) { x = -CAMDIR.x * u + RIGHT.x * r; z = -CAMDIR.z * u + RIGHT.z * r; }
+  if (u || r) { const { cam, right } = basis(input.yaw === undefined ? YAW : input.yaw); x = -cam.x * u + right.x * r; z = -cam.z * u + right.z * r; }
   else if (input.target) { x = input.target.x - player.x; z = input.target.z - player.z; if (Math.hypot(x, z) < 0.12) return null; }
   const l = Math.hypot(x, z);
   return l < 1e-4 ? null : { x: x / l, z: z / l };
