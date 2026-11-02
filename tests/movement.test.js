@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { passageSpots, startSpot } from '../src/world/spots.js';
-import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt, WALK_SPEED, RUN_SPEED } from '../src/game/movement.js';
+import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt, obstaclesNear, pushOut, WALK_SPEED, RUN_SPEED, STONE_MIN } from '../src/game/movement.js';
 import { CAMDIR, basis } from '../src/core/view.js';
 
 let w, spots;
@@ -94,5 +94,39 @@ describe('speed', () => {
       const p = createPlayer(s), res = stepPlayer(w, p, { x: 1, z: 0 }, 0.1, run);
       expect(res.distance).toBeCloseTo((run ? RUN_SPEED : WALK_SPEED) * 0.1, 1);
     }
+  });
+});
+
+describe('obstacles', () => {
+  const all = kind => w.tiles.flatMap(t => t[kind]);
+  // a trunk or stone on gentle ground with no other obstacle close by
+  const lonely = (o, r = 3) => terrainAt(w, o.x, o.z).s < 0.3 && obstaclesNear(w, o.x, o.z).filter(q => Math.hypot(q.x - o.x, q.z - o.z) < r).length === 1;
+  const open = o => { for (let d = -2.5; d <= 3; d += 0.25) { const t = terrainAt(w, o.x + d, o.z + 0.12); if (t.s > 0.6 || t.depth > 0.05 || t.y < 0) return false; } return true; };
+  const blocks = o => obstaclesNear(w, o.x, o.z).some(q => q.x === o.x && q.z === o.z);
+  const clear = o => blocks(o) && lonely(o) && open(o);
+  const walkPast = (o, side) => {
+    const p = createPlayer({ x: o.x - 2.5, y: w.H(o.x - 2.5, o.z), z: o.z + side }); let closest = 9;
+    for (let i = 0; i < 180; i++) { stepPlayer(w, p, { x: 1, z: 0 }, 1 / 60); closest = Math.min(closest, Math.hypot(p.x - o.x, p.z - o.z)); }
+    return { p, closest };
+  };
+  it('does not let you walk through a tree trunk, a palm or a boulder, but lets you slide past', () => {
+    const cases = [...all('trees').filter(clear).slice(0, 5), ...all('palms').filter(clear).slice(0, 5), ...all('rocks').filter(t => t.s >= 0.5 && clear(t)).slice(0, 5)];
+    expect(cases.length).toBeGreaterThan(8);
+    for (const o of cases) {
+      const r = obstaclesNear(w, o.x, o.z).find(q => q.x === o.x && q.z === o.z).r;
+      const { p, closest } = walkPast(o, 0.12);
+      expect(closest).toBeGreaterThan(r - 0.01);
+      expect(p.x).toBeGreaterThan(o.x + 0.5);   // slid round it and walked on
+    }
+  });
+  it('lets you walk over small stones', () => {
+    const small = all('rocks').filter(t => t.s < STONE_MIN && lonely(t, 1.5)).slice(0, 10);
+    expect(small.length).toBeGreaterThan(3);
+    for (const o of small) expect(pushOut(w, { x: o.x - 0.3, z: o.z }, o.x, o.z)).toEqual({ x: o.x, z: o.z });
+  });
+  it('lets you walk out when you somehow stand inside a trunk', () => {
+    const o = all('trees').find(clear), p = createPlayer({ x: o.x + 0.05, y: o.y, z: o.z });
+    walk(p, { x: 1, z: 0 }, 1);
+    expect(p.x - o.x).toBeGreaterThan(1);
   });
 });

@@ -10,6 +10,11 @@
  *     at 42 % up to steepness 3.2. The short steps of a bench and a root
  *     wall can be steeper (up to 4.8); you haul yourself up at 30 %.
  *   - Wading slows you down.
+ *   - Tree trunks (broadleaf, rain forest, pine, palm), boulders of at least
+ *     STONE_MIN and crags block; you collide with the trunk, not the crown.
+ *     Bushes, grass, roots, small stones and beach finds do not block, nor do
+ *     stones lying on a climbing route (you scramble over them).
+ *     Standing inside an obstacle (never on purpose) you can always walk out.
  *   - When the way ahead is blocked, a few deflected directions are tried
  *     so you slide along walls instead of sticking to them.
  *
@@ -17,6 +22,10 @@
  *
  * terrainAt(world, x, z) -> { y, L, s, rv, inRiver, depth, pa, fr, climb }
  * stepFactor(world, from, x, z) -> 0 (blocked) or a speed factor 0..1
+ * obstaclesNear(world, x, z) -> [{ x, z, r }] blocking circles from the tiles
+ *   around (x, z); r already includes the castaway's own radius (BODY)
+ * pushOut(world, from, x, z) -> { x, z } moved back onto the rim of any
+ *   obstacle that stepping from `from` to (x, z) would enter
  * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase }
  * moveIntent(input, player) -> unit direction { x, z } or null, from keys/target;
  *   keys walk relative to the screen, so they use input.yaw (the current
@@ -24,12 +33,55 @@
  * stepPlayer(world, player, dir, dt, run) -> { moved, distance, blocked }
  *   Mutates player. `phase` advances with distance (for the walk cycle).
  *
- * Depends on: core/view
+ * Depends on: core/view, world/constants
  */
 import { YAW, basis } from '../core/view.js';
+import { HALF, T, NT } from '../world/constants.js';
 
 export const WALK_SPEED = 2.9;
 export const RUN_SPEED = 3.9;
+export const BODY = 0.2;        // the castaway's radius
+export const STONE_MIN = 0.35;  // smaller stones are stepped over
+
+const cache = new WeakMap();
+function tileObstacles(w, tile) {
+  let list = cache.get(tile);
+  if (list) return list;
+  list = [];
+  const onRoute = t => terrainAt(w, t.x, t.z).climb > 0.25;   // stones on a climbing route are scrambled over
+  for (const t of tile.trees) list.push({ x: t.x, z: t.z, r: (t.jungle ? 0.18 : 0.13) + BODY });
+  for (const t of tile.pines) list.push({ x: t.x, z: t.z, r: 0.09 + BODY });
+  for (const t of tile.palms) list.push({ x: t.x, z: t.z, r: 0.1 + BODY });
+  for (const t of tile.rocks) if (t.s >= STONE_MIN && !onRoute(t)) list.push({ x: t.x, z: t.z, r: t.s * 0.9 + BODY });
+  for (const t of tile.crags) if (!onRoute(t)) list.push({ x: t.x, z: t.z, r: t.s * 1.1 + BODY });
+  cache.set(tile, list);
+  return list;
+}
+
+const REACH = 1.6;   // larger than any obstacle radius
+export function obstaclesNear(w, x, z) {
+  const out = [], t0x = Math.floor((x - REACH + HALF) / T), t1x = Math.floor((x + REACH + HALF) / T);
+  const t0z = Math.floor((z - REACH + HALF) / T), t1z = Math.floor((z + REACH + HALF) / T);
+  for (let tz = Math.max(0, t0z); tz <= Math.min(NT - 1, t1z); tz++) for (let tx = Math.max(0, t0x); tx <= Math.min(NT - 1, t1x); tx++) {
+    const tile = w.tiles[tz * NT + tx];
+    if (tile) for (const o of tileObstacles(w, tile)) if (Math.abs(o.x - x) < REACH && Math.abs(o.z - z) < REACH) out.push(o);
+  }
+  return out;
+}
+
+/** Push (x, z) out of any obstacle it entered from `a`, onto its rim: that makes you slide round trunks and boulders. */
+export function pushOut(w, a, x, z) {
+  for (let pass = 0; pass < 3; pass++) {
+    let moved = false;
+    for (const o of obstaclesNear(w, x, z)) {
+      const dx = x - o.x, dz = z - o.z, d = Math.hypot(dx, dz);
+      if (d >= o.r || d >= Math.hypot(a.x - o.x, a.z - o.z)) continue;   // outside, or already inside and walking out
+      const k = d > 1e-6 ? o.r / d : 0; x = o.x + (k ? dx * k : o.r); z = o.z + (k ? dz * k : 0); moved = true;
+    }
+    if (!moved) break;
+  }
+  return { x, z };
+}
 
 export function terrainAt(w, x, z) {
   const y = w.H(x, z), L = w.Lat(x, z), s = w.slope(x, z);
@@ -84,8 +136,16 @@ export function stepPlayer(w, p, dir, dt, run = false) {
     best = { dx, dz, f: Math.min(f, probe) * (da === 0 ? 1 : Math.cos(da) * 0.9) }; break;
   }
   if (!best) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
-  const step = base * best.f;
-  p.x += best.dx * step; p.z += best.dz * step; p.y = w.H(p.x, p.z);
+  let step = base * best.f, nx = p.x + best.dx * step, nz = p.z + best.dz * step;
+  if (w.tiles) {
+    const q = pushOut(w, here, nx, nz);
+    if (q.x !== nx || q.z !== nz) {
+      step = Math.hypot(q.x - p.x, q.z - p.z); nx = q.x; nz = q.z;
+      if (step < 1e-4 || !stepFactor(w, here, nx, nz)) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
+      best.dx = (nx - p.x) / step; best.dz = (nz - p.z) / step;
+    }
+  }
+  p.x = nx; p.z = nz; p.y = w.H(p.x, p.z);
   p.moving = true; p.speed = dt > 0 ? step / dt : 0;
   const ta = Math.atan2(best.dx, best.dz); let d = ta - p.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); p.heading += d * Math.min(1, dt * 12);
   p.phase += step * 5.2;
