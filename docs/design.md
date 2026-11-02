@@ -45,9 +45,13 @@ Each terrace has its own colour and vegetation within the same style:
 - **Mountain plateau:** dry grass, heath, pines and rocks, cooler light.
 - **Summit:** grey rock with lichen, less saturated and cool.
 
+## The castaway
+
+A small blocky figure with outlines, dressed for a tropical island after a long time alone: a straw hat, shaggy dark hair and a long, unkempt beard, a yellowed shirt with ripped short sleeves, holes and a ragged hem, frayed short trousers, bare sun-tanned legs and bare feet, and a staff. Because the figure is small on screen, the detail lives in the silhouette and in flat colour areas (skin against cloth), not in small parts.
+
 ## World
 
-Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. The island is about **600 × 600**: crossing it takes a few minutes of walking, a walk around the coast about a quarter of an hour. You never see it all at once; the camera follows the castaway closely.
+Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. The island is about **600 × 600**: crossing it takes a few minutes of walking, a walk around the coast about a quarter of an hour. You never see it all at once; the camera follows the castaway, but from far enough away that the figure stays small in the landscape.
 
 ![Overview of seed 1337](images/island-1337-overview.jpg)
 
@@ -75,7 +79,8 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - Orthographic, rotated 45° and tilted 30° down: isometric without perspective.
 - Tree crowns between the camera and the castaway turn see-through.
 - No plinth while playing.
-- On a summit the camera zooms out further, as a reward for the climb.
+- The camera stays far enough away that the castaway is small in a big landscape (about 5% of the screen height): zooming in too close shrinks the loneliness.
+- On a summit the camera zooms out further (1.6×), as a reward for the climb.
 - **No interface for now:** no HUD, map or menu. What you see is the island.
 
 ## Decisions

@@ -39,7 +39,7 @@ Rules:
 | `game/movement` | Walking rules: walls block, passages let you climb, sliding along walls. |
 | `game/input` | Keys and clicks/taps to a movement intent. |
 | `game/game` | Game state (the player) and the per-frame update. |
-| `render/palette` | All colours of style C in one place. |
+| `render/palette` | All colours of style C in one place, the castaway's included. |
 | `render/terrainColor` | Painted ground colour per point (pure, tested against the prototype). |
 | `render/materials` | Toon shading, outlines, the rock shader for steep walls, see-through crowns. |
 | `render/geometry` | Shared shapes (crowns, rocks, grass, ferns, driftwood) and matrix helpers. |
@@ -51,7 +51,7 @@ Rules:
 | `render/streaming` | Which detailed tiles exist; building one at a time, dropping old ones. |
 | `render/ghosts` | Making crowns between camera and castaway see-through. |
 | `render/water` | Sea, river ribbons, surf, foam and spray at waterfalls. |
-| `render/hero` | The castaway with a walk cycle. |
+| `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle. |
 | `render/footprints` | Footprints in the sand. |
 | `render/camera` | Orthographic camera that follows; zooms out on the summits; ground picking. |
 | `render/mood` | Atmosphere per terrace: colour grading, mist, cooler light, paper grain, vignette. |
