@@ -11,7 +11,8 @@
  *     wall can be steeper (up to 4.8); you haul yourself up at 30 %.
  *   - Wading slows you down, and so does pushing through a bush (more in its
  *     middle than at its edge; not on a climbing route).
- *   - Tree trunks (broadleaf, rain forest, pine, palm), boulders of at least
+ *   - Tree trunks (broadleaf, rain forest, pine, palm; thicker on taller
+ *     trees), boulders of at least
  *     STONE_MIN and crags block; you collide with the trunk, not the crown.
  *     Bushes, grass, roots, small stones and beach finds do not block, nor do
  *     stones lying on a climbing route (you scramble over them).
@@ -39,7 +40,7 @@
  */
 import { YAW, basis } from '../core/view.js';
 import { HALF, T, NT } from '../world/constants.js';
-import { bushSize } from '../world/vegetation.js';
+import { bushSize, treeScale } from '../world/vegetation.js';
 
 export const WALK_SPEED = 2.9;
 export const RUN_SPEED = 3.9;
@@ -53,9 +54,9 @@ function tileObstacles(w, tile) {
   if (list) return list;
   list = [];
   const onRoute = t => terrainAt(w, t.x, t.z).climb > 0.25;   // stones on a climbing route are scrambled over
-  for (const t of tile.trees) list.push({ x: t.x, z: t.z, r: (t.jungle ? 0.18 : 0.13) + BODY });
-  for (const t of tile.pines) list.push({ x: t.x, z: t.z, r: 0.09 + BODY });
-  for (const t of tile.palms) list.push({ x: t.x, z: t.z, r: 0.1 + BODY });
+  for (const t of tile.trees) list.push({ x: t.x, z: t.z, r: (t.jungle ? 0.18 : 0.13) * Math.sqrt(treeScale(t, t.jungle ? 'jungle' : 'tree')) + BODY });
+  for (const t of tile.pines) list.push({ x: t.x, z: t.z, r: 0.09 * Math.sqrt(treeScale(t, 'pine')) + BODY });
+  for (const t of tile.palms) list.push({ x: t.x, z: t.z, r: 0.1 * Math.sqrt(treeScale(t, 'palm')) + BODY });
   for (const t of tile.rocks) if (t.s >= STONE_MIN && !onRoute(t)) list.push({ x: t.x, z: t.z, r: t.s * 0.9 + BODY });
   for (const t of tile.crags) if (!onRoute(t)) list.push({ x: t.x, z: t.z, r: t.s * 1.1 + BODY });
   cache.set(tile, list);

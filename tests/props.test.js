@@ -87,3 +87,17 @@ describe('ground brush strokes', () => {
     paintStroke(d, size, 0, 0, 0.7, 5, 2, 0, 0, 0, 1);   // clipped at the edge, no throw
   });
 });
+
+describe('tree heights', () => {
+  it('are mostly middling, with a few young trees and a few giants, fixed by place', async () => {
+    const { treeHeight, TREE_SIZE } = await import('../src/world/vegetation.js');
+    for (const kind of Object.keys(TREE_SIZE)) {
+      const S = TREE_SIZE[kind], hs = [];
+      for (let i = 0; i < 4000; i++) { const t = { x: (i % 63) * 1.37 - 40, z: Math.floor(i / 63) * 1.29 - 40 }; hs.push(treeHeight(t, kind)); expect(treeHeight({ ...t }, kind)).toBe(hs.at(-1)); }
+      const small = hs.filter(h => h < S.base * S.mid[0]).length / hs.length, big = hs.filter(h => h > S.base * S.mid[1]).length / hs.length;
+      expect(small).toBeGreaterThan(S.young[0] * 0.6); expect(small).toBeLessThan(S.young[0] * 1.4);
+      expect(big).toBeGreaterThan(S.giant[0] * 0.6); expect(big).toBeLessThan(S.giant[0] * 1.4);
+      expect(Math.max(...hs) / Math.min(...hs)).toBeGreaterThan(2.5);   // a real spread
+    }
+  });
+});

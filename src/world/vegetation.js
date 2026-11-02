@@ -15,6 +15,10 @@
  *     bushes [{ x, y, z, k }]        k = tier; size from bushSize
  *     roots  [{ x, y, z }]           spots where roots drape over a wall
  *
+ * treeHeight(tree, kind) -> height in metres for kind 'tree', 'jungle',
+ *   'pine' or 'palm'; most are middling, a few young and small, a few old
+ *   giants (TREE_SIZE). Fixed by the tree's place, so near and far agree.
+ * treeScale(tree, kind) -> treeHeight relative to that kind's usual height
  * bushSize(bush) -> radius in metres, a fixed function of the bush's place
  *   and tier, so drawing (render/props) and walking (game/movement) agree
  *
@@ -22,6 +26,23 @@
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from './constants.js';
+
+// per kind: usual height, then [chance, from, to] as factors of it for young trees and giants, and the middling range
+export const TREE_SIZE = Object.freeze({
+  tree: { base: 2.0, young: [0.12, 0.55, 0.75], giant: [0.1, 1.6, 2.2], mid: [0.85, 1.25] },
+  jungle: { base: 3.4, young: [0.1, 0.6, 0.75], giant: [0.08, 1.6, 2.05], mid: [0.85, 1.2] },
+  pine: { base: 2.2, young: [0.15, 0.45, 0.7], giant: [0.1, 1.5, 2.0], mid: [0.85, 1.3] },
+  palm: { base: 3.1, young: [0.12, 0.55, 0.75], giant: [0.1, 1.35, 1.6], mid: [0.8, 1.2] },
+});
+const SALT = { tree: 31, jungle: 37, pine: 41, palm: 43 };
+export function treeScale(t, kind) {
+  const S = TREE_SIZE[kind], ix = Math.round(t.x * 64), iz = Math.round(t.z * 64);
+  const u = hashInt(ix, iz, SALT[kind]) / 4294967296, v = hashInt(iz, ix, SALT[kind] + 1) / 4294967296;
+  if (u < S.young[0]) return S.young[1] + v * (S.young[2] - S.young[1]);
+  if (u > 1 - S.giant[0]) return S.giant[1] + v * (S.giant[2] - S.giant[1]);
+  return S.mid[0] + v * (S.mid[1] - S.mid[0]);
+}
+export const treeHeight = (t, kind) => TREE_SIZE[kind].base * treeScale(t, kind);
 
 const BUSH_R = [[0.35, 0.3], [0.3, 0.28], [0.38, 0.3], [0.3, 0.25], [0.24, 0.16]];   // per tier: smallest radius, extra range
 export function bushSize(b) {
