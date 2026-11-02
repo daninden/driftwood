@@ -104,6 +104,10 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 
 Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for.
 
+## Publishing
+
+The game is published on Vercel as a static site. The Vercel project is linked to the GitHub repository: every push to `main` is built there with `npm run build` and goes live from `dist/` (see `vercel.json`). So `main` is always what players see; run `npm test` (and for visual changes the smoke test) before pushing.
+
 ## Saving (not built yet)
 
 The design allows for saving without building it yet:
