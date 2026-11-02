@@ -101,7 +101,7 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - The camera stays far enough away that the castaway is small in a big landscape (about 6% of the screen height): zooming in too close shrinks the loneliness.
 - **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved. Touch is not supported for now: the target is a normal desktop browser.
 - On a summit the camera zooms out a further 1.6× on top of the player's zoom (at most 14), as a reward for the climb.
-- **No interface for now:** no HUD, map or menu. What you see is the island.
+- **No interface for now:** no HUD, map or menu. What you see is the island. The one exception is the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
 
 ## Decisions
 
@@ -144,4 +144,3 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 - Some roots stand slightly off the wall, so their shadow falls loose on the wall.
 - Driftwood looks flat from above (more like planks than round logs); a bark texture would help.
 - The colour transition between terraces could be softer.
-- Loading takes about 10 seconds with no feedback.

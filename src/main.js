@@ -5,6 +5,9 @@
  * For tests and development only: `?spawn=x,z` starts somewhere else, and
  * `?time=t` starts at another time of day (0 midnight, 0.5 noon).
  *
+ * While loading, the bar in #loader (index.html) shows how far it is
+ * (core/loading); it fades out with the class `ready` on <body>.
+ *
  * window.__driftwood exposes { world, game, view, ready } for the smoke test.
  */
 import { generateWorld } from './world/world.js';
@@ -12,8 +15,11 @@ import { startSpot } from './world/spots.js';
 import { createIslandView } from './render/islandView.js';
 import { createGame } from './game/game.js';
 import { createInput } from './game/input.js';
+import { createLoading } from './core/loading.js';
 
-const breathe = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+const fill = document.querySelector('#loader .fill');
+const loading = createLoading(v => { if (fill) fill.style.transform = `scaleX(${v})`; });
+const breathe = (label, f) => { loading.report(label, f); return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); };
 
 async function boot() {
   const seed = parseInt(((location.hash || '').match(/seed-(\d+)/) || [])[1] || '1337', 10);
@@ -28,6 +34,7 @@ async function boot() {
 
   let last = performance.now();
   view.render(game.player, game.update(input, 0), 0);
+  loading.done();
   document.body.classList.add('ready');
   window.__driftwood = { world, game, view, input, ready: true };
   requestAnimationFrame(function frame(now) {

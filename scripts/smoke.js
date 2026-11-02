@@ -2,6 +2,7 @@
 // Run `npm run build` first. Usage: npm run smoke [-- x,z]
 // Loads dist/driftwood.html, waits for the world, builds the detailed tiles
 // around the start (or around x,z), walks for a moment and saves screenshots.
+// smoke-0.png shows the loader while it is filling.
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -17,7 +18,13 @@ page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 const t0 = Date.now();
 await page.goto('file://' + file + spawn, { waitUntil: 'commit', timeout: 0 });
+const barAt = () => page.evaluate(() => { const f = document.querySelector('#loader .fill'); return f ? new DOMMatrix(getComputedStyle(f).transform).a : -1; });
+await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || document.body.dataset.error || new DOMMatrix(getComputedStyle(f).transform).a > 0.25; }, null, { timeout: 300000, polling: 100 });
+await page.screenshot({ path: 'smoke-0.png' });
 await page.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
+await page.waitForTimeout(400);
+const bar = await barAt();
+if (bar < 0.99) errors.push('loading bar ended at ' + bar);
 const err = await page.evaluate(() => document.body.dataset.error);
 if (err) { console.error('boot failed:', err); process.exit(1); }
 console.log('ready after', ((Date.now() - t0) / 1000).toFixed(1), 's');

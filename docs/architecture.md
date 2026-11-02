@@ -27,6 +27,7 @@ Rules:
 | `core/math` | `ss` (smoothstep), `lerp`, colour mixing. |
 | `core/view` | The isometric view as angles (turn and tilt, with the tilt limits): what "towards the camera" and "screen right" mean for a given view. Pure maths; the camera owns the current angles. |
 | `core/slicer` | Time slicing: heavy work as a generator that pauses when the frame budget is spent. |
+| `core/loading` | The loading bar as one number: each generation step owns a measured share, so the bar fills evenly and never moves backwards. `main` draws it in `#loader` (`index.html`). |
 | `world/constants` | Dimensions: 720 × 720 area, 0.25 grid, 40-unit tiles, terrace heights. |
 | `world/shape` | Island outline and scattered highlands; scale to terrace level L. |
 | `world/terrain` | From L to height: terraces, rock walls and the natural passages. |
@@ -83,7 +84,7 @@ input ──> view.zoomBy(input.takeZoom()), view.turn(input.takeTurn(dt))
 
 ## Loading
 
-`generateWorld` takes a few seconds in the browser (mostly the height grid). Then `islandView` builds the water and the far tiles. `main.js` lets the browser breathe between the steps. There is no loading screen: you see the background colour, and the island fades in when it is ready.
+`generateWorld` takes a few seconds in the browser (mostly the height grid). Then `islandView` builds the water and the far tiles. `main.js` lets the browser breathe between the steps and fills the loading bar from the step reports (`core/loading`). When the first frame is drawn, the loader fades out and the island fades in.
 
 A Web Worker is not needed yet: nothing stutters while playing, because detailed tiles are built in slices of about 9 ms per frame. Because `world` is pure, it can move to a worker later if loading gets too slow.
 
@@ -98,6 +99,7 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea.
 - `tests/streaming.test.js`, `tests/ghosts.test.js` and `tests/core.test.js` test the pure logic without a browser.
+- `tests/loading.test.js` tests the loading bar: steps in order, never backwards, ends full. The smoke test also saves the loader halfway (`smoke-0.png`) and checks the bar ends full.
 - `tests/stage.test.js` checks that the shadow depth bias stays a few centimetres at every zoom level.
 - `tests/props.test.js` tests the variety of trees, pines and palms (shapes, colours, lean directions, how many withered fronds) with a recording batch.
 - `tests/game.test.js` tests click-to-walk, the running clock and the saveable state.
