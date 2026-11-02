@@ -11,7 +11,15 @@
  * While loading, the bar in #loader (index.html) shows how far it is
  * (core/loading); it fades out with the class `ready` on <body>.
  *
- * window.__driftwood exposes { world, game, view, ready } for the smoke test.
+ * window.__driftwood exposes { world, game, view, input, ready } for the smoke
+ * test, plus three hooks so it does not have to play in real time (a
+ * headless browser without a GPU draws only a few frames per second):
+ *   pause(on)              stop or restart drawing in the frame loop
+ *   step(seconds, until?)  run the game in fixed steps of 1/60 s without
+ *                          drawing, until the time is up or until() is true;
+ *                          returns the simulated seconds
+ *   draw()                 draw one settled frame (camera and figure caught up)
+ * Footprints are only laid while drawing, so stepped walks leave none.
  */
 import { generateWorld } from './world/world.js';
 import { startSpot } from './world/spots.js';
@@ -38,15 +46,20 @@ async function boot() {
   await view.prepare(spawn, breathe);   // no simple stand-in tiles round the castaway at the start
   const qt = new URLSearchParams(location.search).get('time');
   const game = createGame(world, spawn, qt === null ? {} : { time: Number(qt) });
+  view.setWood(game.wood);
   const input = createInput(view.canvas, view.pickGround);
 
-  let last = performance.now();
+  let last = performance.now(), paused = false;
+  const STEP = 1 / 60;
+  const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };
+  const draw = () => { view.settle(game.player); for (let i = 0; i < 4; i++) view.render(game.player, game.update(input, 0), 0.5); };
   view.render(game.player, game.update(input, 0), 0);
   loading.done();
   document.body.classList.add('ready');
-  window.__driftwood = { world, game, view, input, ready: true };
+  window.__driftwood = { world, game, view, input, ready: true, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (paused) { requestAnimationFrame(frame); return; }
     view.zoomBy(input.takeZoom());
     view.turn(input.takeTurn(dt));
     input.yaw = view.yaw;

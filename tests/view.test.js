@@ -83,9 +83,9 @@ describe('touch input', () => {
   it('walks on a tap and runs on a double tap', () => {
     const { el, input, at } = setup();
     fire(el, 'pointerdown', touch(1, 100, 100)); fire(window, 'pointerup', touch(1, 100, 100));
-    expect(input.target).toEqual({ x: 100, z: 100 });
+    expect(input.target).toEqual({ x: 100, z: 100, tap: true, touch: true });
     at(200); fire(el, 'pointerdown', touch(2, 105, 98));
-    expect(input.target).toEqual({ x: 105, z: 98, run: true });
+    expect(input.target).toEqual({ x: 105, z: 98, run: true, tap: true, touch: true });
     fire(el, 'pointermove', touch(2, 140, 120));   // hold and drag: keeps running
     expect(input.target).toEqual({ x: 140, z: 120, run: true });
     fire(window, 'pointerup', touch(2, 140, 120));
@@ -116,6 +116,22 @@ describe('touch input', () => {
     fire(window, 'pointerup', touch(2, 100, 400));
     fire(el, 'pointermove', touch(1, 150, 250));   // the finger left behind does not walk
     expect(input.target).toBeNull(); expect(input.takeTurn(0.016)).toEqual({ yaw: 0, pitch: 0 });
+    input.dispose();
+  });
+  it('keeps a tap that wobbles a little, and steers once the finger really moves', () => {
+    const { el, input } = setup();
+    fire(el, 'pointerdown', touch(1, 100, 100));
+    fire(el, 'pointermove', touch(1, 104, 103));   // a finger never stays quite still
+    expect(input.target).toEqual({ x: 100, z: 100, tap: true, touch: true });
+    fire(el, 'pointermove', touch(1, 130, 100));   // steering after the tap is not a tap
+    expect(input.target).toEqual({ x: 130, z: 100 });
+    input.dispose();
+  });
+  it('marks a tap on the castaway', () => {
+    const el = new EventTarget(), input = createInput(el, (x, y, t) => ({ x, z: y, hero: t }), () => 0);
+    fire(el, 'pointerdown', touch(1, 10, 20));
+    expect(input.target).toEqual({ x: 10, z: 20, tap: true, touch: true, hero: true });
+    fire(window, 'pointerup', touch(1, 10, 20));
     input.dispose();
   });
   it('zooms one step for each 1.1x change in finger distance', () => {

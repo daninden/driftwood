@@ -10,7 +10,7 @@
  *     at 42 % up to steepness 3.2. The short steps of a bench and a root
  *     wall can be steeper (up to 4.8); you haul yourself up at 30 %.
  *   - Wading slows you down, and so does pushing through a bush (more in its
- *     middle than at its edge; not on a climbing route).
+ *     middle than at its edge; not on a climbing route), and so does a load.
  *   - Tree trunks (broadleaf, rain forest, pine, palm; thicker on taller
  *     trees), boulders of at least
  *     STONE_MIN and crags block; you collide with the trunk, not the crown.
@@ -29,12 +29,12 @@
  * bushFactor(world, x, z) -> speed factor 0..1 from bushes at (x, z)
  * pushOut(world, from, x, z) -> { x, z } moved back onto the rim of any
  *   obstacle that stepping from `from` to (x, z) would enter
- * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase }
+ * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase, stoop }
  * moveIntent(input, player) -> unit direction { x, z } or null, from keys/target;
  *   keys walk relative to the screen, so they use input.yaw (the current
  *   view angle, see core/view; the starting view when missing)
- * stepPlayer(world, player, dir, dt, run) -> { moved, distance, blocked }
- *   Mutates player. `phase` advances with distance (for the walk cycle).
+ * stepPlayer(world, player, dir, dt, run, load?) -> { moved, distance, blocked }
+ *   Mutates player. load (default 1) scales the speed, for carrying (game/wood). `phase` advances with distance (for the walk cycle).
  *
  * Depends on: core/view, world/constants, world/vegetation
  */
@@ -140,7 +140,7 @@ export function stepFactor(w, a, x, z) {
 }
 
 export function createPlayer(spot) {
-  return { x: spot.x, y: spot.y, z: spot.z, heading: 2.6, moving: false, speed: 0, phase: 0 };
+  return { x: spot.x, y: spot.y, z: spot.z, heading: 2.6, moving: false, speed: 0, phase: 0, stoop: 0 };
 }
 
 /**
@@ -158,9 +158,9 @@ export function moveIntent(input, player) {
 
 const DEFLECT = [0, 0.5, -0.5, 1.0, -1.0, 1.35, -1.35];
 
-export function stepPlayer(w, p, dir, dt, run = false) {
+export function stepPlayer(w, p, dir, dt, run = false, load = 1) {
   if (!dir) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: false }; }
-  const base = (run ? RUN_SPEED : WALK_SPEED) * dt, here = { x: p.x, z: p.z, y: p.y };
+  const base = (run ? RUN_SPEED : WALK_SPEED) * load * dt, here = { x: p.x, z: p.z, y: p.y };
   let best = null;
   for (const da of DEFLECT) {
     const c = Math.cos(da), s = Math.sin(da), dx = dir.x * c - dir.z * s, dz = dir.x * s + dir.z * c;

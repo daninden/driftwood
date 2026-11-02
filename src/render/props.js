@@ -18,7 +18,8 @@
  *                                    lowland shrub, rain forest leaf fans, heath, summit
  *                                    tufts), sized by world/vegetation bushSize
  *   addRoots(B, kit, w, t, r)        roots curling over a wall edge, lianas in arcs
- *   addBeach(B, kit, w, tile, r)     coconuts under palms, bleached driftwood logs
+ *   addBeach(B, kit, w, tile, r)     coconuts under palms (the driftwood that can be
+ *                                    gathered is drawn by render/driftwood)
  *   addTideLine(B, kit, w, tile, r, slicer)   generator: seaweed band with shells
  *   rockColor(r, dk?)
  *
@@ -193,17 +194,8 @@ export function addRoots(B, kit, w, t, r) {
 }
 
 export function addBeach(B, kit, w, tile, r) {
-  const { H, slope, Lat } = w;
+  const { H } = w;
   tile.palms.forEach(t => { if (r() < 0.6) for (let c = 0, n = 1 + (r() * 3 | 0); c < n; c++) { const a = r() * 6, d = 0.3 + r() * 0.9, x = t.x + Math.cos(a) * d, z = t.z + Math.sin(a) * d; B.add('coco', kit.shell, kit.smallMat, mat4(x, H(x, z) + 0.07, z, 0.1, 0.085, 0.09, a), pick(r, [0x7a5a36, 0x6a4c2e, 0x8a6a3e]), { outline: 1.15 }); } });
-  for (let n = 0; n < 26; n++) {
-    const x = tile.x0 + r() * T, z = tile.z0 + r() * T, y = H(x, z); if (!(y > 0.25 && y < 1.1 && slope(x, z) < 0.35 && Lat(x, z) < 0.35) || r() > 0.5) continue;
-    const len = 0.9 + r() * 1.3, a = r() * Math.PI, ca = Math.cos(a), sa = Math.sin(a), rad = 0.07 + r() * 0.06, col = pick(r, [0xa8987c, 0x9a8a70, 0xb4a68c, 0x8e8068]);
-    const A = new THREE.Vector3(x - ca * len / 2, 0, z - sa * len / 2), Bv = new THREE.Vector3(x + ca * len / 2, 0, z + sa * len / 2);
-    A.y = Math.max(H(A.x, A.z), y - 0.2) + rad * 0.7; Bv.y = Math.max(H(Bv.x, Bv.z), y - 0.2) + rad * 0.6;
-    B.add('log', kit.driftwood, kit.smallMat, stickMatrix(A, Bv, rad / 0.09), col, { outline: 1.12 });
-    if (r() < 0.6) { const u = 0.3 + r() * 0.5, P0 = new THREE.Vector3().lerpVectors(A, Bv, u), side = r() < 0.5 ? 1 : -1, bl = 0.5 + r() * 0.7, P1 = P0.clone().add(new THREE.Vector3((ca * 0.6 - sa * side) * bl, 0.15 + r() * 0.3, (sa * 0.6 + ca * side) * bl)); B.add('logb', kit.driftwood, kit.smallMat, stickMatrix(P0, P1, rad * 0.4 / 0.09), col, { outline: 1.15 }); }
-    if (r() < 0.35) for (let k = 0; k < 5; k++) { const ang = k / 5 * Math.PI * 2 + r(), P1 = A.clone().add(new THREE.Vector3(-ca * 0.15 + Math.cos(ang) * -sa * 0.45, Math.sin(ang) * 0.4 + 0.1, -sa * 0.15 + Math.cos(ang) * ca * 0.45)); P1.y = Math.max(P1.y, H(P1.x, P1.z) + 0.03); B.add('logr', kit.driftwood, kit.smallMat, stickMatrix(A, P1, rad * 0.35 / 0.09), col, { outline: 1.15 }); }
-  }
 }
 
 export function* addTideLine(B, kit, w, tile, r, slicer) {

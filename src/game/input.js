@@ -4,7 +4,10 @@
  *
  *   W A S D / arrow keys   walk (relative to the screen)
  *   Shift                  run
- *   click or tap           walk to that spot (touch: drag to steer)
+ *   click or tap           walk to that spot (touch: drag to steer); on a piece
+ *                          of driftwood or a pile: walk there and pick it up;
+ *                          on the castaway: lay down what is carried (the
+ *                          game decides, see game/game)
  *   double tap             run to that spot (touch: hold and drag to steer
  *                          while running)
  *   two fingers            pinch to zoom, twist to turn the view; walking
@@ -16,14 +19,17 @@
  *
  * createInput(element, pickGround, now?) -> input
  *   input: { up, down, left, right, run, target, yaw }  read by game/game
- *     target: { x, z, run? }; run is set by a double tap
+ *     target: { x, z, run?, tap?, touch?, hero? }; run is set by a double tap;
+ *     tap marks the spot of a click or tap itself (not of steering after it),
+ *     touch that it was a finger, hero that it was on the castaway
  *     each frame; yaw is the current view angle, set by main from the view,
  *     so the keys walk relative to the screen
  *   input.takeZoom() -> zoom steps since the last call (positive = further
  *     away), then resets; main passes them to the view
  *   input.takeTurn(dt) -> { yaw, pitch } in radians since the last call
  *     (held Q/E plus mouse drag), then resets; main passes it to the view
- *   pickGround(clientX, clientY) -> { x, z } | null   supplied by the renderer
+ *   pickGround(clientX, clientY, touch) -> { x, z, hero? } | null   supplied by
+ *     the renderer; hero when the point is on (a finger: near) the castaway
  *   now() -> milliseconds, for telling a double tap (defaults to performance.now)
  *   input.clearTarget()   called by the game when the target is reached
  *   input.dispose()
@@ -33,13 +39,13 @@
 
 const TURN_RATE = 1.0, DRAG_YAW = 0.005, DRAG_PITCH = 0.002;   // rad/s for Q/E, rad per pixel for dragging
 const PINCH = 1 / Math.log(1.1);   // zoom steps per e-fold of finger distance (render/camera zooms 1.1x per step)
-const DOUBLE_TAP_MS = 300, DOUBLE_TAP_PX = 40;
+const DOUBLE_TAP_MS = 300, DOUBLE_TAP_PX = 40, STEER_PX = 12;   // a finger that moves less than STEER_PX still taps
 const ZOOM_KEYS = { Equal: -1, NumpadAdd: -1, Minus: 1, NumpadSubtract: 1 };
 const KEYS = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right' };
 
 export function createInput(element, pickGround, now = () => performance.now()) {
   const touches = new Map();   // pointerId -> { x, y } for fingers on the screen
-  let pinch = null, lastTap = null, running = false;
+  let pinch = null, lastTap = null, running = false, downAt = null, steering = false;
   let pointerDown = false, dragging = false, zoom = 0, dragYaw = 0, dragPitch = 0, turnL = false, turnR = false;
   const takeZoom = () => { const z = zoom; zoom = 0; return z; };
   const takeTurn = dt => {
@@ -62,7 +68,12 @@ export function createInput(element, pickGround, now = () => performance.now()) 
   };
   const keydown = onKey(true), keyup = onKey(false);
   const blur = () => { input.up = input.down = input.left = input.right = input.run = turnL = turnR = dragging = pointerDown = false; touches.clear(); pinch = null; };
-  const setTarget = e => { const g = pickGround(e.clientX, e.clientY); if (g) input.target = running ? { ...g, run: true } : g; };
+  const setTarget = (e, tap) => {
+    const touch = e.pointerType === 'touch', g = pickGround(e.clientX, e.clientY, touch); if (!g) return;
+    const t = { x: g.x, z: g.z }; if (running) t.run = true;
+    if (tap) { t.tap = true; if (touch) t.touch = true; if (g.hero) t.hero = true; }
+    input.target = t;
+  };
   const twoFingers = () => {
     const [a, b] = [...touches.values()];
     return { d: Math.hypot(b.x - a.x, b.y - a.y) || 1, a: Math.atan2(b.y - a.y, b.x - a.x) };
@@ -75,9 +86,9 @@ export function createInput(element, pickGround, now = () => performance.now()) 
       const t = now();
       running = !!lastTap && t - lastTap.t < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX;
       lastTap = running ? null : { t, x: e.clientX, y: e.clientY };
-      pointerDown = true; setTarget(e); return;
+      pointerDown = true; downAt = { x: e.clientX, y: e.clientY }; steering = false; setTarget(e, true); return;
     }
-    if (e.button === 0) { running = false; pointerDown = true; setTarget(e); }
+    if (e.button === 0) { running = false; pointerDown = true; setTarget(e, true); }
   };
   const pmove = e => {
     if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
@@ -88,7 +99,10 @@ export function createInput(element, pickGround, now = () => performance.now()) 
         return;
       }
     }
-    if (pointerDown && e.pointerType !== 'mouse') setTarget(e);
+    if (pointerDown && e.pointerType !== 'mouse') {
+      if (!steering && downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < STEER_PX) return;
+      steering = true; setTarget(e);
+    }
   };
   const drag = e => { if (dragging) { dragYaw -= (e.movementX || 0) * DRAG_YAW; dragPitch += (e.movementY || 0) * DRAG_PITCH; } };
   const pup = e => {

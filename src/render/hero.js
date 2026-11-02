@@ -13,9 +13,15 @@
  * a light stippled silhouette shows through, so you never lose it.
  * Vegetation is cut away round it instead (render/cutout).
  *
- * createHero(scene) -> { group, update(player, wadeDepth) }
+ * Carried driftwood is held under the left arm, at its real length (low
+ * enough that the head and hat stay readable). When the castaway picks up or lays down wood, the upper
+ * body bends down and up again (player.stoop).
+ *
+ * createHero(scene) -> { group, update(player, wadeDepth, load?) }
  *   update copies position and heading from the player state
  *   (game/movement) and animates the walk cycle from player.phase.
+ *   load: the carried pieces as [{ len, rad, col }] (bottom first); the
+ *   bundle is rebuilt when it changes.
  *   The figure faces +z in its own space.
  *
  * Depends on: three, render/materials, render/palette
@@ -34,8 +40,9 @@ export function createHero(scene) {
   const shirt = toon(HERO.shirt), shorts = toon(HERO.shorts), skin = toon(HERO.skin), hair = toon(HERO.hair), hatM = toon(HERO.hat);
   const part = (parent, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); const o = new THREE.Mesh(geo, outlineMat); o.scale.setScalar(1.12); m.add(o); return m; };
   const box = (parent, w, h, d, mat, x, y, z) => part(parent, new THREE.BoxGeometry(w, h, d), mat, x, y, z);
-  const joint = (x, y, z) => { const j = new THREE.Group(); j.position.set(x, y, z); body.add(j); return j; };
-  const hipL = joint(-0.08, 0.48, 0), hipR = joint(0.08, 0.48, 0), shL = joint(-0.21, 0.88, 0), shR = joint(0.21, 0.88, 0), torso = joint(0, 0, 0);
+  const HIP = 0.48, upper = new THREE.Group(); upper.position.y = HIP; body.add(upper);   // bends at the hips
+  const joint = (x, y, z, parent = body) => { const j = new THREE.Group(); j.position.set(x, y, z); parent.add(j); return j; };
+  const hipL = joint(-0.08, HIP, 0), hipR = joint(0.08, HIP, 0), shL = joint(-0.21, 0.88 - HIP, 0, upper), shR = joint(0.21, 0.88 - HIP, 0, upper), torso = joint(0, -HIP, 0, upper);
 
   // Legs: frayed shorts to just above the knee, bare lower leg, bare foot.
   for (const [hip, s] of [[hipL, -1], [hipR, 1]]) {
@@ -80,20 +87,47 @@ export function createHero(scene) {
   // Silhouette: where something solid hides the figure, a light stippled
   // shape shows through. It is drawn after the world and before the figure
   // itself (renderOrder), with an inverted depth test.
-  const parts = []; group.traverse(o => { if (o.isMesh) parts.push(o); });
-  for (const m of parts) {
-    m.renderOrder = 2;
-    if (m.material === outlineMat) continue;
-    const sil = new THREE.Mesh(m.geometry, silMat); sil.renderOrder = 1; m.add(sil);
-  }
+  const silhouette = root => {
+    const parts = []; root.traverse(o => { if (o.isMesh && o.material !== silMat) parts.push(o); });
+    for (const m of parts) {
+      m.renderOrder = 2;
+      if (m.material === outlineMat) continue;
+      const sil = new THREE.Mesh(m.geometry, silMat); sil.renderOrder = 1; m.add(sil);
+    }
+  };
+  silhouette(group);
   scene.add(group);
 
-  function update(p, wade = 0) {
+  // The bundle under the left arm, in metres (undoing the body scale).
+  const bundle = new THREE.Group(); bundle.position.set(-0.27, 0.66 - HIP, 0); bundle.scale.setScalar(1 / 0.62); upper.add(bundle);
+  const logGeo = new THREE.CylinderGeometry(1, 0.8, 1, 7), axis = new THREE.Vector3(0.04, -0.1, 1).normalize(), up = new THREE.Vector3(0, 1, 0);
+  let loadKey = '';
+  function setLoad(load) {
+    const key = load.map(l => l.len.toFixed(3) + l.col).join();
+    if (key === loadKey) return;
+    loadKey = key;
+    for (const c of [...bundle.children]) { bundle.remove(c); c.traverse(o => { if (o.isMesh && o.material !== outlineMat && o.material !== silMat) o.material.dispose(); }); }
+    load.forEach((l, i) => {
+      const m = new THREE.Mesh(logGeo, toon(l.col)); m.castShadow = true;
+      m.position.set(-l.rad * 0.6 - (i % 2) * 0.05, (i >> 1) * 0.07 - (i % 2) * 0.02, (i - 1) * 0.07 - l.len * 0.1);
+      m.quaternion.setFromUnitVectors(up, axis); m.scale.set(l.rad, l.len, l.rad);
+      const o = new THREE.Mesh(logGeo, outlineMat); o.scale.set(1.18, 1.02, 1.18); m.add(o);
+      bundle.add(m);
+    });
+    silhouette(bundle);
+  }
+
+  function update(p, wade = 0, load = []) {
+    setLoad(load);
     group.position.set(p.x, p.y - Math.min(0.35, wade * 0.6), p.z); group.rotation.y = p.heading;
-    const sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) : 0;
-    hipL.rotation.x += (sw - hipL.rotation.x) * 0.4; hipR.rotation.x += (-sw - hipR.rotation.x) * 0.4;
-    shL.rotation.x += (-sw * 0.8 - shL.rotation.x) * 0.4; shR.rotation.x += (sw * 0.5 - 0.15 - shR.rotation.x) * 0.4;
-    body.position.y = p.moving ? Math.abs(Math.cos(p.phase)) * 0.03 : 0;
+    const sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) : 0, carry = load.length > 0;
+    const bend = Math.sin(Math.PI * Math.min(1, p.stoop || 0));   // down and up again
+    hipL.rotation.x += (sw + bend * 0.5 - hipL.rotation.x) * 0.4; hipR.rotation.x += (-sw + bend * 0.5 - hipR.rotation.x) * 0.4;
+    upper.rotation.x = bend * 0.9;
+    shL.rotation.z = carry ? -0.35 : 0;
+    shL.rotation.x += ((carry ? -0.35 : -sw * 0.8) - bend * 0.5 - shL.rotation.x) * 0.4;   // the left arm holds the bundle
+    shR.rotation.x += (sw * 0.5 - 0.15 - bend * 0.6 - shR.rotation.x) * 0.4;
+    body.position.y = (p.moving ? Math.abs(Math.cos(p.phase)) * 0.03 : 0) - bend * 0.12;
   }
   return { group, update };
 }

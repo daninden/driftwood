@@ -34,14 +34,15 @@ Rules:
 | `world/terrain` | From L to height: terraces, rock walls and the natural passages. |
 | `world/heightfield` | The height and level grids, and bilinear sampling. |
 | `world/rivers` | Rivers (Dijkstra, smooth curve), waterfalls, carving beds and banks. |
-| `world/vegetation` | Per tile: trees, palms, rocks, bushes, root spots (data only). |
+| `world/vegetation` | Per tile: trees, palms, rocks, bushes, root spots, and the driftwood that can be gathered (with its own PRNG and an id per piece) (data only). |
 | `world/occlusion` | Darker ground under crowns and in hollows. |
 | `world/spots` | Finding places: the start spot, examples of each passage (for tests). |
 | `world/world` | Builds everything from a seed and returns one read-only object with queries. |
 | `game/movement` | Walking rules: walls block, passages let you climb, sliding along walls; trunks, boulders and crags (from the tile data, cached per tile) block and you slide round them. |
-| `game/input` | Keys and clicks/taps to a movement intent (a double tap runs); mouse wheel, `+`/`-` and a two-finger pinch to zoom steps; `Q`/`E`, right-mouse drag and a two-finger twist to turn (the mouse also tilts). |
+| `game/input` | Keys and clicks/taps to a movement intent (a double tap runs; the tapped spot itself is marked, steering after it is not; a finger may wobble a little); mouse wheel, `+`/`-` and a two-finger pinch to zoom steps; `Q`/`E`, right-mouse drag and a two-finger twist to turn (the mouse also tilts). |
+| `game/wood` | Gathering: driftwood still on the beach, what is carried (at most 3, each piece slows you), piles; finding the nearest piece or pile, taking, laying down, a plain saveable state. |
 | `game/clock` | The time of day: a 20-minute day, part of the game state. |
-| `game/game` | Game state (the player and the clock) and the per-frame update. |
+| `game/game` | Game state (the player, the clock and the wood) and the per-frame update: a tapped target is looked at once (on the castaway: lay down; on wood: walk there and pick it up, bending down briefly). |
 | `render/palette` | All colours of style C in one place, the castaway's included. |
 | `render/terrainColor` | Painted ground colour per point (pure, tested against the prototype). |
 | `render/materials` | Toon shading, outlines (also a cut version for vegetation), the rock shader for steep walls. |
@@ -54,9 +55,10 @@ Rules:
 | `render/streaming` | Which detailed tiles exist for the current view; building one at a time, dropping old ones. |
 | `render/cutout` | The thinned veil in the vegetation round the castaway: a shader patch on the vegetation materials that discards, with an ordered dither, part of what lies in front of the figure inside a screen circle (40% kept in the middle, filling in to all at the edge). |
 | `render/water` | Sea, river ribbons, surf, foam and spray at waterfalls. |
-| `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle, and a light stippled silhouette (drawn with an inverted depth test before the figure) where something solid hides it. |
+| `render/driftwood` | The driftwood of `game/wood`: logs on the beach per detailed tile (rebuilt when wood is taken), piles stacked crosswise, and each piece's look, fixed by its place. |
+| `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle, carried wood under the arm, bending down, and a light stippled silhouette (drawn with an inverted depth test before the figure) where something solid hides it. |
 | `render/footprints` | Footprints in the sand: at most 80, the oldest fading out. |
-| `render/camera` | Orthographic camera that follows; player zoom within fixed limits; free turning and limited tilting, eased; zooms out on the summits; ground picking. |
+| `render/camera` | Orthographic camera that follows; player zoom within fixed limits; free turning and limited tilting, eased; zooms out on the summits; ground picking. (`islandView.pickGround` also tells whether a point is on the castaway.) |
 | `render/sky` | The light of the day from the time (pure): sun and moon paths, light and fill colours, grading for golden hour, dusk and night. |
 | `render/mood` | Atmosphere per terrace and per time of day: colour grading, mist, cooler light, light colours, paper grain, vignette. |
 | `render/stage` | Renderer, scene, lights (placed by `render/sky`, fixed in the world) and the shadow that follows the view. |
@@ -71,11 +73,11 @@ input ──> view.zoomBy(input.takeZoom()), view.turn(input.takeTurn(dt))
   │          zoom and view angles are view settings, not game state
   │      input.yaw = view.yaw   so the keys walk relative to the screen
   │
-  └─> game.update(input, dt) ──> the player moves (game/movement), the clock runs
+  └─> game.update(input, dt) ──> a tap is looked at (game/wood), the player moves (game/movement), the clock runs
                 │
                 └─> { distance, terrain, time } ──> view.render(player, info, dt)
                                                 ├ camera follows; sun or moon from the time (render/sky)
-                                                ├ castaway and footprints
+                                                ├ driftwood when game.wood changed; castaway with its load, footprints
                                                 ├ streaming: at most ~9 ms building tiles
                                                 ├ far tiles on/off
                                                 ├ window in the vegetation round the castaway
@@ -94,7 +96,7 @@ Nothing stutters while playing, because detailed tiles are built in slices of ab
 ```
 npm test          unit tests (Vitest, Node), about 30 s
 npm run build     builds dist/ and dist/driftwood.html (a single file)
-npm run smoke     opens the build in headless Chromium, walks a bit, takes screenshots
+npm run smoke     opens the build in headless Chromium, walks, gathers wood, takes screenshots (about 30 s)
 ```
 
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
@@ -104,11 +106,12 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 - `tests/loading.test.js` tests the loading bar: steps in order, never backwards, ends full. The smoke test also saves the loader halfway (`smoke-0.png`) and checks the bar ends full.
 - `tests/stage.test.js` checks that the shadow depth bias stays a few centimetres at every zoom level.
 - `tests/props.test.js` tests the variety of trees, pines and palms (shapes, colours, lean directions, how many withered fronds) with a recording batch.
+- `tests/wood.test.js` tests gathering: driftwood on the beach, picking up with a click or (less precise) tap, not when steering, at most three pieces and the slowdown, laying down on the castaway, piles, and the saved state.
 - `tests/game.test.js` tests click-to-walk, the running clock and the saveable state.
 - `tests/sky.test.js` tests the clock and the light of the day: sun up and down, east to west, golden hour, enough light at night, a minimum light height, smooth changes.
 - `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser, and on touch: tap, double tap, pinch and twist). Movement and streaming tests also run from turned and tilted views.
 
-Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for.
+Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for. A headless browser without a GPU draws only a few frames per second, so after loading the smoke test does not play in real time: it pauses drawing, runs the game in fixed 1/60 s steps and draws one settled frame per screenshot (`__driftwood.pause`, `step`, `draw` in `main.js`, for the smoke test only). Stepped walks leave no footprints, because those are laid while drawing.
 
 ## Publishing
 
@@ -119,7 +122,7 @@ The game is published on Vercel as a static site. The Vercel project is linked t
 The design allows for saving without building it yet:
 
 - **The world never needs saving.** It follows entirely from the seed.
-- **What needs saving is small:** the seed, the time of day, the player's position, and later what the player changed (dug, built, gathered) as a list of changes on top of the generated world. `game.state()` already returns that as a plain object.
+- **What needs saving is small:** the seed, the time of day, the player's position, and what the player changed on top of the generated world: for now the driftwood carried and the piles (as ids of the pieces), later what was dug and built. `game.state()` already returns that as a plain object.
 - **Saving goes behind one interface**, for example `save/store.js` with `load()` and `save(state)`. First a local version in the browser; a backend can come later behind the same interface, without `game` or `render` noticing.
 
 ## Agreements

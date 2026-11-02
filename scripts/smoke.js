@@ -1,8 +1,14 @@
 // Smoke test of the built game in a real (headless) browser.
 // Run `npm run build` first. Usage: npm run smoke [-- x,z]
 // Loads dist/driftwood.html, waits for the world, builds the detailed tiles
-// around the start (or around x,z), walks for a moment and saves screenshots.
+// around the start (or around x,z), walks for a moment, gathers driftwood and
+// lays it down, and saves screenshots.
 // smoke-0.png shows the loader while it is filling.
+//
+// A headless browser here has no GPU and draws only a few frames per second,
+// so after loading the test does not play in real time: it pauses drawing,
+// runs the game in fixed steps (__driftwood.step) and draws one settled frame
+// per screenshot (__driftwood.draw). See src/main.js.
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -16,7 +22,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-const t0 = Date.now();
+const t0 = Date.now(), secs = () => ((Date.now() - t0) / 1000).toFixed(1) + ' s';
 await page.goto('file://' + file + spawn, { waitUntil: 'commit', timeout: 0 });
 const barAt = () => page.evaluate(() => { const f = document.querySelector('#loader .fill'); return f ? new DOMMatrix(getComputedStyle(f).transform).a : -1; });
 await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || document.body.dataset.error || new DOMMatrix(getComputedStyle(f).transform).a > 0.25; }, null, { timeout: 300000, polling: 100 });
@@ -27,18 +33,49 @@ const bar = await barAt();
 if (bar < 0.99) errors.push('loading bar ended at ' + bar);
 const err = await page.evaluate(() => document.body.dataset.error);
 if (err) { console.error('boot failed:', err); process.exit(1); }
-console.log('ready after', ((Date.now() - t0) / 1000).toFixed(1), 's');
-const settle = () => page.evaluate(() => { const w = window.__driftwood; w.view.settle(w.game.player); return w.view.stats(); });
-console.log('tiles', JSON.stringify(await settle()));
-await page.waitForTimeout(1500);
-await page.screenshot({ path: 'smoke-1.png' });
-const before = await page.evaluate(() => ({ ...window.__driftwood.game.player }));
-await page.keyboard.down('KeyW'); await page.waitForTimeout(3000); await page.keyboard.up('KeyW');
-const after = await page.evaluate(() => ({ ...window.__driftwood.game.player }));
-console.log('walked', Math.hypot(after.x - before.x, after.z - before.z).toFixed(2), 'units');
-console.log('tiles', JSON.stringify(await settle()));
-await page.waitForTimeout(1500);
-await page.screenshot({ path: 'smoke-2.png' });
+console.log('ready after', secs());
+
+await page.evaluate(() => window.__driftwood.pause(true));
+await page.waitForTimeout(1200);   // let the loader finish fading out
+const shot = async name => { await page.evaluate(() => window.__driftwood.draw()); await page.screenshot({ path: name }); };
+await shot('smoke-1.png');
+console.log('tiles', JSON.stringify(await page.evaluate(() => window.__driftwood.view.stats())));
+
+const start = await page.evaluate(() => ({ x: window.__driftwood.game.player.x, z: window.__driftwood.game.player.z }));
+const walked = await page.evaluate(() => {
+  const { game, input, step } = window.__driftwood, a = { x: game.player.x, z: game.player.z };
+  input.up = true; step(3); input.up = false;
+  return Math.hypot(game.player.x - a.x, game.player.z - a.z);
+});
+console.log('walked', walked.toFixed(2), 'units');
+if (walked < 3) errors.push('walked only ' + walked.toFixed(2) + ' units in 3 s');
+await shot('smoke-2.png');
+console.log('tiles', JSON.stringify(await page.evaluate(() => window.__driftwood.view.stats())));
+
+// Gathering: stand next to the piece of driftwood nearest the start, click
+// it and the two next nearest up one by one (smoke-3: carrying), then lay
+// them down with a click on the castaway (smoke-4: a pile).
+const gathered = await page.evaluate(start => {
+  const { world, game, input, step } = window.__driftwood, p = game.player;
+  const near = world.tiles.flatMap(t => t.drift).sort((a, b) => Math.hypot(a.x - start.x, a.z - start.z) - Math.hypot(b.x - start.x, b.z - start.z)).slice(0, 3);
+  p.x = near[0].x + 1.2; p.z = near[0].z + 1.2; p.y = world.H(p.x, p.z);
+  for (const l of near) { input.target = { x: l.x, z: l.z, tap: true }; step(60, () => !input.target && !p.stoop); }
+  input.target = { x: p.x - 1.5, z: p.z + 1.5 }; step(10, () => !input.target);
+  return game.wood.carried.length;
+}, start);
+console.log('carrying', gathered);
+if (gathered !== 3) errors.push('picked up ' + gathered + ' pieces instead of 3');
+await shot('smoke-3.png');
+const pile = await page.evaluate(() => {
+  const { game, input, step } = window.__driftwood, p = game.player;
+  input.target = { x: p.x, z: p.z, tap: true, hero: true }; step(5, () => !input.target && !p.stoop);
+  input.target = { x: p.x - 1.4, z: p.z + 1.4 }; step(10, () => !input.target);
+  return game.wood.piles.length ? game.wood.piles[0].logs.length : 0;
+});
+console.log('pile of', pile);
+if (pile !== 3) errors.push('laid down ' + pile + ' pieces instead of 3');
+await shot('smoke-4.png');
 await browser.close();
+console.log('done after', secs());
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 console.log('ok');

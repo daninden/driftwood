@@ -6,7 +6,7 @@
  * data (positions and a few parameters); world/… never creates meshes.
  *
  * scatterTiles(world) -> tiles[]
- *   tile: { tx, tz, x0, z0, hmax, trees, pines, palms, crags, rocks, bushes, roots }
+ *   tile: { tx, tz, x0, z0, hmax, trees, pines, palms, crags, rocks, bushes, roots, drift }
  *     trees  [{ x, y, z, jungle }]   broadleaf (jungle = tier 2 rain forest)
  *     pines  [{ x, y, z }]           plateau and top
  *     palms  [{ x, y, z }]           beach
@@ -14,6 +14,10 @@
  *     rocks  [{ x, y, z, s, moss? }] loose boulders (also mark passages)
  *     bushes [{ x, y, z, k }]        k = tier; size from bushSize
  *     roots  [{ x, y, z }]           spots where roots drape over a wall
+ *     drift  [{ id, x, y, z, len, a, rad }]   driftwood logs on the beach: centre,
+ *                                    length, angle (radians, about y) and radius;
+ *                                    id is unique on the island. They have their
+ *                                    own PRNG, so the rest of the tile is unchanged.
  *
  * treeHeight(tree, kind) -> height in metres for kind 'tree', 'jungle',
  *   'pine' or 'palm'; most are middling, a few young and small, a few old
@@ -53,10 +57,11 @@ export function bushSize(b) {
 export function scatterTiles(w) {
   const { seed, H, Lat, slope, tierAt, forestB, forestF, dryOfRiver, passAt, fallRouteAt, rcAt } = w;
   const tiles = [];
+  let driftId = 0;
   for (let tz = 0; tz < NT; tz++) for (let tx = 0; tx < NT; tx++) {
     const x0 = -HALF + tx * T, z0 = -HALF + tz * T, r = mulberry32(hashInt(seed, tx, tz));
     let hmax = -99; for (let j = 0; j <= 8; j++) for (let i = 0; i <= 8; i++) hmax = Math.max(hmax, H(x0 + i * T / 8, z0 + j * T / 8));
-    const tile = { tx, tz, x0, z0, hmax, trees: [], pines: [], palms: [], crags: [], rocks: [], bushes: [], roots: [] };
+    const tile = { tx, tz, x0, z0, hmax, trees: [], pines: [], palms: [], crags: [], rocks: [], bushes: [], roots: [], drift: [] };
     tiles.push(tile);
     if (hmax < -8.9) continue;
     const cells = (c, fn) => { const n = Math.round(T / c); for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x = x0 + (i + r()) * c, z = z0 + (j + r()) * c; fn(x, z, r()); } };
@@ -90,6 +95,11 @@ export function scatterTiles(w) {
       const F = forestF(k, forestB(x, z)), p = [0.05, 0.08 + F * 0.2, 0.25, 0.14, 0.05][k];
       if (u < p) tile.bushes.push({ x, y, z, k });
     });
+    const rd = mulberry32(hashInt(seed + 23, tx, tz));   // driftwood on the dry beach above the tide line
+    for (let n = 0; n < 26; n++) {
+      const x = x0 + rd() * T, z = z0 + rd() * T, y = H(x, z), len = 0.9 + rd() * 1.3, a = rd() * Math.PI, rad = 0.07 + rd() * 0.06;
+      if (y > 0.25 && y < 1.1 && slope(x, z) < 0.35 && Lat(x, z) < 0.35 && rd() < 0.5) tile.drift.push({ id: driftId++, x, y, z, len, a, rad });
+    }
   }
   return tiles;
 }

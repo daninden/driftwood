@@ -62,6 +62,17 @@ The castaway walks unhurried (2.9 per second) and with Shift (on a touch screen:
 
 Tree trunks (broadleaf, rain forest, pine and palm), boulders of 0.35 m and larger and the crags in the walls are solid: the castaway bumps into the trunk, not the crown, and slides round it. Grass, roots, small stones and beach finds are walked through or stepped over, and so are stones lying on a climbing route: there you scramble over them. Bushes are pushed through: they slow you to 55 % in the middle and hardly at all when you brush the edge (not on a climbing route).
 
+## Gathering driftwood
+
+The first game element. Driftwood lies on the dry beach above the tide line, a few pieces per stretch of beach, each with its own look (bleached colour, sometimes a side branch or a root plate).
+
+- **Picking up:** click or tap a piece; the castaway walks there, bends down briefly and picks it up. A finger may tap a little less precisely than a mouse. Steering with a dragged finger never picks anything up.
+- **Carrying:** at most **3 pieces**, under the left arm at their real length (low enough that the head and hat stay readable). Every piece slows walking and running by 6 % (three pieces: 82 %).
+- **Laying down:** click or tap the castaway: everything carried goes down at the feet, on a pile close by or as a new pile. Not in water.
+- **Piles** stay where they are, and can be picked up again by clicking them (the top pieces first, as many as fit).
+- No counter, no inventory: what you carry is what you see. Wood is never solid; you walk over it.
+- Wood does not wash up again yet; the beach empties as you gather.
+
 ## Day and night
 
 - **One day lasts 20 minutes of play.** A game starts in the middle of the morning.
@@ -115,7 +126,7 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - **Language:** everything is in English: the game, the code and the documentation.
 - **Name:** Driftwood.
 - **Engine:** Three.js in the browser for now. A large tiled world works well there. Godot may come later, for example for Steam or a console.
-- **Scope of the base:** only the island and walking. Atmosphere comes next, game elements later.
+- **Scope of the base:** the island and walking, then atmosphere. The first game element is gathering driftwood (see above); more only after discussion.
 - **Saving:** not built. When it comes: local in the browser first, behind one interface, so a backend can be added later without changing the game (see `architecture.md`).
 - **Working method:** see `CLAUDE.md`.
 
@@ -125,7 +136,7 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 
 | Part | Idea |
 |---|---|
-| Gathering | Driftwood on the tide line, branches under trees, a barrel of nails at the wreck |
+| Gathering, later | Branches under trees, a barrel of nails at the wreck |
 | Digging | The ground really sinks; salt water on the beach, nails at the wreck |
 | Building | Fire (4 branches, 1 driftwood), lean-to (6 driftwood, 6 branches) |
 | Building, later | Rope from lianas or palm fibre, lashing, palisade, storage pit, raft |
