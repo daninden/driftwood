@@ -52,7 +52,7 @@ Rules:
 | `render/farTiles` | A cheap version of every tile. Those in view at the start are built before the game starts; the rest follow in the background, about 3 ms per frame, tiles in view first. |
 | `render/nearTile` | The full-detail version of one tile. |
 | `render/streaming` | Which detailed tiles exist for the current view; building one at a time, dropping old ones. |
-| `render/cutout` | The soft round window in the vegetation round the castaway: a shader patch on the vegetation materials that discards, with an ordered-dither edge, what lies in front of the figure inside a screen circle. |
+| `render/cutout` | The thinned veil in the vegetation round the castaway: a shader patch on the vegetation materials that discards, with an ordered dither, part of what lies in front of the figure inside a screen circle (40% kept in the middle, filling in to all at the edge). |
 | `render/water` | Sea, river ribbons, surf, foam and spray at waterfalls. |
 | `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle, and a light stippled silhouette (drawn with an inverted depth test before the figure) where something solid hides it. |
 | `render/footprints` | Footprints in the sand: at most 80, the oldest fading out. |
