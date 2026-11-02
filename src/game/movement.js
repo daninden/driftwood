@@ -28,8 +28,8 @@
  */
 import { YAW, basis } from '../core/view.js';
 
-export const WALK_SPEED = 3.3;
-export const RUN_SPEED = 5.6;
+export const WALK_SPEED = 2.9;
+export const RUN_SPEED = 3.9;
 
 export function terrainAt(w, x, z) {
   const y = w.H(x, z), L = w.Lat(x, z), s = w.slope(x, z);

@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { passageSpots, startSpot } from '../src/world/spots.js';
-import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt } from '../src/game/movement.js';
+import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt, WALK_SPEED, RUN_SPEED } from '../src/game/movement.js';
 import { CAMDIR, basis } from '../src/core/view.js';
 
 let w, spots;
@@ -79,5 +79,20 @@ describe('moveIntent', () => {
   });
   it('lets keys win over a target', () => {
     expect(moveIntent({ left: true, target: { x: 3, z: 4 } }, p).x).toBeLessThan(0);
+  });
+});
+
+describe('speed', () => {
+  it('keeps walking unhurried and running a calm trot', () => {
+    expect(WALK_SPEED).toBeLessThanOrEqual(3);
+    expect(RUN_SPEED).toBeGreaterThan(WALK_SPEED);
+    expect(RUN_SPEED).toBeLessThanOrEqual(WALK_SPEED * 1.4);
+  });
+  it('covers the walk speed on open beach', () => {
+    const s = startSpot(w);
+    for (const run of [false, true]) {
+      const p = createPlayer(s), res = stepPlayer(w, p, { x: 1, z: 0 }, 0.1, run);
+      expect(res.distance).toBeCloseTo((run ? RUN_SPEED : WALK_SPEED) * 0.1, 1);
+    }
   });
 });

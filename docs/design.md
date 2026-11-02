@@ -49,6 +49,8 @@ Each terrace has its own colour and vegetation within the same style:
 
 A small blocky figure with outlines, dressed for a tropical island after a long time alone: a straw hat, shaggy dark hair and a long, unkempt beard, a yellowed shirt with ripped short sleeves, holes and a ragged hem, frayed short trousers, bare sun-tanned legs and bare feet, and a staff. Because the figure is small on screen, the detail lives in the silhouette and in flat colour areas (skin against cloth), not in small parts.
 
+The castaway walks unhurried (2.9 per second) and with Shift breaks into a calm trot (3.9, about 1⅓ × walking), never a sprint: there is no hurry on the island.
+
 ## Day and night
 
 - **One day lasts 20 minutes of play.** A game starts in the middle of the morning.
