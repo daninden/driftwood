@@ -28,6 +28,11 @@ describe('game', () => {
   });
   it('reports a small, saveable state', () => {
     const s = createGame(w, spawn).state();
-    expect(s.seed).toBe(1337); expect(JSON.parse(JSON.stringify(s))).toEqual(s);
+    expect(s.seed).toBe(1337); expect(typeof s.time).toBe('number'); expect(JSON.parse(JSON.stringify(s))).toEqual(s);
+  });
+  it('lets the day go round while playing, and can start at another time', () => {
+    const g = createGame(w, spawn, { time: 0.9 }), t0 = g.clock.time;
+    const info = g.update(makeInput(), 0.05);
+    expect(info.time).toBeGreaterThan(t0); expect(info.time).toBe(g.clock.time);
   });
 });

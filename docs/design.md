@@ -32,7 +32,7 @@ Explored earlier and dropped: 2D pixel art, plain low-poly and voxels.
 
 - **Colour:** warm, earthy tones. Sand, olive green, weathered wood. All colours live in `src/render/palette.js`.
 - **Ground:** a painted texture with brush strokes.
-- **Lighting:** toon shading in three light steps, bright midday light, soft warm colour grading and a light paper grain. The sun stands about 30° towards the camera, so walls facing the viewer catch light. The sun turns with the camera, so the light looks the same whichever way you look.
+- **Lighting:** toon shading in three light steps, bright midday light, soft warm colour grading and a light paper grain. The sun follows its own path through the day (see *Day and night*); it stands still in the world when you turn the view, so shadows stay on the ground.
 - **Outlines:** dark brown edges around trees, rocks, palm trunks and the castaway.
 - **Detail:** leaf clusters, grass tufts, pebbles, shells and driftwood, at the level of the original style C.
 - **Rock walls:** painted in the shader with strata, cracks and ledges, greyer higher up, so the texture never stretches on steep faces.
@@ -48,6 +48,15 @@ Each terrace has its own colour and vegetation within the same style:
 ## The castaway
 
 A small blocky figure with outlines, dressed for a tropical island after a long time alone: a straw hat, shaggy dark hair and a long, unkempt beard, a yellowed shirt with ripped short sleeves, holes and a ragged hem, frayed short trousers, bare sun-tanned legs and bare feet, and a staff. Because the figure is small on screen, the detail lives in the silhouette and in flat colour areas (skin against cloth), not in small parts.
+
+## Day and night
+
+- **One day lasts 20 minutes of play.** A game starts in the middle of the morning.
+- **The sun** rises in the east, climbs over the south to about 62° and sets in the west. It is up for about 13 minutes. Low sun gives warm golden light and long shadows; at noon the light is plain style C.
+- **Dusk and dawn** last about a minute each around the horizon: the light turns lilac and mauve, the warm coast grading fades and colours lose some saturation.
+- **Night lasts about 5 minutes and is moonlit:** cool blue, dim, with soft moon shadows, but the island stays visible. Darker nights (where only your fire gives light) can come once there is fire.
+- The light never comes from lower than about 12°, so shadows stay readable.
+- No clock on screen, no stars, moon disc or weather yet, and the day has no effect on the game yet. What the day/night cycle should mean for playing is still to be discussed.
 
 ## World
 
@@ -118,7 +127,8 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 
 - Who are the strangers (mutineers, slave traders, other castaways)?
 - Saving: local only, or a backend later?
-- Mood per terrace: weather and light over time (mist in the rain forest, wind on the summit, day and night).
+- Mood per terrace: weather over time (mist in the rain forest, wind on the summit).
+- What should the day/night cycle mean for playing (food, sleep, strangers, fire)?
 
 ## Known weak spots
 

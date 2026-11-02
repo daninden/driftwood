@@ -2,7 +2,8 @@
  * main — boots the game: world, view, game state, input, loop.
  *
  * Seed: from the page address `#seed-<n>`, otherwise 1337 (the fixed demo).
- * For tests and development only: `?spawn=x,z` starts somewhere else.
+ * For tests and development only: `?spawn=x,z` starts somewhere else, and
+ * `?time=t` starts at another time of day (0 midnight, 0.5 noon).
  *
  * window.__driftwood exposes { world, game, view, ready } for the smoke test.
  */
@@ -21,7 +22,8 @@ async function boot() {
   const q = new URLSearchParams(location.search).get('spawn');
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
   const view = await createIslandView(world, container, breathe);
-  const game = createGame(world, spawn);
+  const qt = new URLSearchParams(location.search).get('time');
+  const game = createGame(world, spawn, qt === null ? {} : { time: Number(qt) });
   const input = createInput(view.canvas, view.pickGround);
 
   let last = performance.now();

@@ -1,22 +1,19 @@
 /**
  * render/stage — renderer, scene and the two lights.
  *
- * A warm hemisphere light plus one directional sun with a 2048 px shadow
- * map. The sun stands about 30° towards the camera so walls facing the
- * viewer catch light, and it turns with the camera: whichever way you look,
- * the light looks the same. The shadow camera follows the view and is
- * snapped to shadow texels so shadows do not shimmer while walking.
+ * A hemisphere sky fill plus one directional light (the sun by day, the
+ * moon by night) with a 2048 px shadow map. Where that light stands, and its
+ * colour, come from render/sky; it stands still in the world while you turn
+ * the view, so shadows stay on the ground. The shadow camera follows the
+ * view and is snapped to shadow texels so shadows do not shimmer while
+ * walking.
  *
- * SUNDIR   direction towards the sun for the starting view
- * createStage(container) -> { renderer, scene, hemi, sun, resize(), followSun(target, half, yaw?) }
+ * createStage(container) -> { renderer, scene, hemi, sun, resize(), followSun(target, half, dir) }
+ *   dir: unit vector { x, y, z } towards the light
  *
- * Depends on: three, core/view
+ * Depends on: three
  */
 import * as THREE from 'three';
-import { YAW } from '../core/view.js';
-
-const SUNEL = 0.68, SUNAZ = -0.15;
-export const SUNDIR = new THREE.Vector3(Math.sin(SUNAZ) * Math.cos(SUNEL), Math.sin(SUNEL), Math.cos(SUNAZ) * Math.cos(SUNEL)).normalize();
 
 export function createStage(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -32,13 +29,14 @@ export function createStage(container) {
   function resize() { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); renderer.setSize(window.innerWidth, window.innerHeight); }
   resize();
 
-  const st = new THREE.Vector3(), dir = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
-  function followSun(target, half, yaw = YAW) {
-    dir.copy(SUNDIR).applyAxisAngle(UP, yaw - YAW);
+  const st = new THREE.Vector3(), dir = new THREE.Vector3();
+  function followSun(target, half, d) {
+    dir.set(d.x, d.y, d.z).normalize();
     const texel = half * 2 / sun.shadow.mapSize.x;
     st.set(Math.round(target.x / texel) * texel, target.y, Math.round(target.z / texel) * texel);
-    sun.target.position.copy(st); sun.position.copy(st).addScaledVector(dir, half * 3 + 60); sun.target.updateMatrixWorld();
-    Object.assign(sun.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 1, far: half * 6 + 200 });
+    sun.target.position.copy(st); const dist = half * 3 + 200;   // far enough that a low light still stands above the summits
+    sun.position.copy(st).addScaledVector(dir, dist); sun.target.updateMatrixWorld();
+    Object.assign(sun.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 1, far: dist * 2 + half * 2 });
     sun.shadow.camera.updateProjectionMatrix();
   }
   return { renderer, scene, hemi, sun, resize, followSun };

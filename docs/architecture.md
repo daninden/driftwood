@@ -38,7 +38,8 @@ Rules:
 | `world/world` | Builds everything from a seed and returns one read-only object with queries. |
 | `game/movement` | Walking rules: walls block, passages let you climb, sliding along walls. |
 | `game/input` | Keys and clicks/taps to a movement intent; mouse wheel and `+`/`-` to zoom steps; `Q`/`E` and right-mouse drag to turn and tilt. |
-| `game/game` | Game state (the player) and the per-frame update. |
+| `game/clock` | The time of day: a 20-minute day, part of the game state. |
+| `game/game` | Game state (the player and the clock) and the per-frame update. |
 | `render/palette` | All colours of style C in one place, the castaway's included. |
 | `render/terrainColor` | Painted ground colour per point (pure, tested against the prototype). |
 | `render/materials` | Toon shading, outlines, the rock shader for steep walls, see-through crowns. |
@@ -54,8 +55,9 @@ Rules:
 | `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle. |
 | `render/footprints` | Footprints in the sand. |
 | `render/camera` | Orthographic camera that follows; player zoom within fixed limits; free turning and limited tilting, eased; zooms out on the summits; ground picking. |
-| `render/mood` | Atmosphere per terrace: colour grading, mist, cooler light, paper grain, vignette. |
-| `render/stage` | Renderer, scene, lights (the sun turns with the camera) and the shadow that follows the view. |
+| `render/sky` | The light of the day from the time (pure): sun and moon paths, light and fill colours, grading for golden hour, dusk and night. |
+| `render/mood` | Atmosphere per terrace and per time of day: colour grading, mist, cooler light, light colours, paper grain, vignette. |
+| `render/stage` | Renderer, scene, lights (placed by `render/sky`, fixed in the world) and the shadow that follows the view. |
 | `render/islandView` | Puts all render modules together and draws a frame. |
 
 Every module starts with a header that says what it does, what it exports and what it depends on.
@@ -67,10 +69,10 @@ input ──> view.zoomBy(input.takeZoom()), view.turn(input.takeTurn(dt))
   │          zoom and view angles are view settings, not game state
   │      input.yaw = view.yaw   so the keys walk relative to the screen
   │
-  └─> game.update(input, dt) ──> the player moves (game/movement)
+  └─> game.update(input, dt) ──> the player moves (game/movement), the clock runs
                 │
-                └─> { distance, terrain } ──> view.render(player, info, dt)
-                                                ├ camera and sun follow
+                └─> { distance, terrain, time } ──> view.render(player, info, dt)
+                                                ├ camera follows; sun or moon from the time (render/sky)
                                                 ├ castaway and footprints
                                                 ├ streaming: at most ~9 ms building tiles
                                                 ├ far tiles on/off
@@ -96,7 +98,8 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea.
 - `tests/streaming.test.js`, `tests/ghosts.test.js` and `tests/core.test.js` test the pure logic without a browser.
-- `tests/game.test.js` tests click-to-walk and the saveable state.
+- `tests/game.test.js` tests click-to-walk, the running clock and the saveable state.
+- `tests/sky.test.js` tests the clock and the light of the day: sun up and down, east to west, golden hour, enough light at night, a minimum light height, smooth changes.
 - `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser). Movement, ghost and streaming tests also run from turned and tilted views.
 
 Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for.
@@ -106,7 +109,7 @@ Rendering itself is not checked by unit tests. That is what the smoke test with 
 The design allows for saving without building it yet:
 
 - **The world never needs saving.** It follows entirely from the seed.
-- **What needs saving is small:** the seed, the player's position, and later what the player changed (dug, built, gathered) as a list of changes on top of the generated world. `game.state()` already returns that as a plain object.
+- **What needs saving is small:** the seed, the time of day, the player's position, and later what the player changed (dug, built, gathered) as a list of changes on top of the generated world. `game.state()` already returns that as a plain object.
 - **Saving goes behind one interface**, for example `save/store.js` with `load()` and `save(state)`. First a local version in the browser; a backend can come later behind the same interface, without `game` or `render` noticing.
 
 ## Agreements

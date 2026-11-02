@@ -3,9 +3,10 @@
  *
  * createIslandView(world, container, progress?) -> Promise<view>
  *   view.render(player, frameInfo, dt)
- *     frameInfo: { distance, terrain } from game.update
- *     follows the player with camera and sun, streams detailed tiles,
- *     updates see-through crowns, footprints, mood, and draws the frame.
+ *     frameInfo: { distance, terrain, time } from game.update
+ *     follows the player with camera and sun, sets the light for the time
+ *     of day, streams detailed tiles, updates see-through crowns,
+ *     footprints, mood, and draws the frame.
  *   view.zoomBy(steps)   zoom the camera (positive = further away), see render/camera
  *   view.turn({ yaw, pitch })   turn and tilt the view (radians), see render/camera
  *   view.yaw              the current view angle (for walking relative to the screen)
@@ -31,6 +32,7 @@ import { createHero } from './hero.js';
 import { createFootprints } from './footprints.js';
 import { createCamera } from './camera.js';
 import { createMood } from './mood.js';
+import { skyAt } from './sky.js';
 
 const BUILD_MS = 9;
 
@@ -67,8 +69,9 @@ export async function createIslandView(world, container, progress) {
     streamer.pump(BUILD_MS);
     updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
     ghosts.update(nearTrees(), player, yaw, pitch);
-    stage.followSun(cam.target, Math.max(24, Math.min(90, cam.zoom * 3.2)), yaw);
-    mood.update(world.tierAt(t.L), dt);
+    const sky = skyAt(info.time);
+    stage.followSun(cam.target, Math.max(24, Math.min(90, cam.zoom * 3.2)), sky.light.dir);
+    mood.update(world.tierAt(t.L), dt, sky);
     renderer.render(scene, cam.camera);
   }
 
