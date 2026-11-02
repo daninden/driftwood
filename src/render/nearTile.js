@@ -5,9 +5,7 @@
  * rocks, roots and lianas, beach drift, the tide line, and ground cover
  * (grass, ferns, reeds, pebbles, shells).
  *
- * buildNearTile(world, colorAt, kit, tile, slicer) — generator; returns
- *   { group, trees } where trees are records for see-through crowns
- *   (render/ghosts): { x, z, y, cy, R, parts: [{ key, entry, a, b }] }
+ * buildNearTile(world, colorAt, kit, tile, slicer) — generator; returns { group }
  *
  * Depends on: three, core/noise, render/*
  */
@@ -24,13 +22,13 @@ const GRASS = [[0xa9b062, 0x98a356], null, [0x6a8a3c, 0x7a9446], [0xb3ab6c, 0xa3
 
 export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
   const { H, Lat, slope, tierAt, riverAt, forestB, forestF } = w;
-  const group = new THREE.Group(), B = new Batch(outlineMat), trees = [];
+  const group = new THREE.Group(), B = new Batch(outlineMat);
   const geo = yield* tileGeometry(w, tile, 160, slicer), tex = yield* tileTexture(w, colorAt, tile, 1024, slicer, anisotropy);
   const mesh = new THREE.Mesh(geo, terrainMat(tex)); mesh.receiveShadow = true; mesh.castShadow = true; group.add(mesh);
   const r = mulberry32(hashInt(w.seed + 11, tile.tx, tile.tz));
 
-  for (const t of tile.trees) { const mk = B.mark(); addTree(B, kit, t, r); trees.push({ x: t.x, z: t.z, y: t.y, ranges: B.since(mk) }); if (slicer.over()) yield; }
-  for (const t of tile.pines) { const mk = B.mark(); addPine(B, kit, t, r); trees.push({ x: t.x, z: t.z, y: t.y, ranges: B.since(mk) }); if (slicer.over()) yield; }
+  for (const t of tile.trees) { addTree(B, kit, t, r); if (slicer.over()) yield; }
+  for (const t of tile.pines) { addPine(B, kit, t, r); if (slicer.over()) yield; }
   for (const t of tile.palms) { addPalm(B, kit, t, r, tile.palms); if (slicer.over()) yield; }
   tile.crags.forEach(t => B.add('crag', kit.rock, kit.rockMat, mat4(t.x, t.y - t.s * 0.35, t.z, t.s * 1.3, t.s * 0.55, t.s, r() * 6, (r() - 0.5) * 0.5, (r() - 0.5) * 0.5), rockColor(r), { outline: 1.06 }));
   tile.rocks.forEach(t => B.add('rock', kit.rock, kit.rockMat, mat4(t.x, t.y - t.s * 0.2, t.z, t.s, t.s * 0.7, t.s, r() * 6, r() * 0.4), t.moss ? pick(r, [0x7b8456, 0x6e7a4c, 0x87885c]) : rockColor(r), { outline: 1.08 }));
@@ -62,16 +60,7 @@ export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
   }
   B.build(group);
 
-  // resolve tree records to their instanced meshes, for see-through crowns
-  for (const tr of trees) {
-    let sy = 0, nc = 0, R = 0.6;
-    tr.parts = tr.ranges.map(([key, a, b]) => ({ key, entry: B.map.get(key), a, b }));
-    for (const p of tr.parts) if (p.key === 'canopy' || p.key === 'pine') for (let i = p.a; i < p.b; i++) {
-      const el = p.entry.list[i].m.elements; sy += el[13]; nc++; R = Math.max(R, Math.hypot(el[12] - tr.x, el[14] - tr.z) + Math.hypot(el[0], el[1], el[2]));
-    }
-    tr.cy = nc ? sy / nc : tr.y + 1.5; tr.R = R; delete tr.ranges;
-  }
-  return { group, trees };
+  return { group };
 }
 
 export function disposeGroup(group) {

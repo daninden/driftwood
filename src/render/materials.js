@@ -6,11 +6,13 @@
  * terrainMat(map)     toon material for a terrain tile; in the shader, steep
  *                     faces get painted rock: strata, cracks and ledges,
  *                     greyer and cooler higher up
- * ghostMat            transparent crowns for trees between camera and player
+ * outlineCutMat       the same outline for vegetation, cut round the castaway
+ *                     (render/cutout)
  *
- * Depends on: three
+ * Depends on: three, render/cutout
  */
 import * as THREE from 'three';
+import { withCutout } from './cutout.js';
 
 const gradMap = (() => {
   const d = new Uint8Array([90, 90, 90, 255, 175, 175, 175, 255, 255, 255, 255, 255]);
@@ -19,7 +21,7 @@ const gradMap = (() => {
 
 export const toon = (color, o) => new THREE.MeshToonMaterial(Object.assign({ color: color === undefined ? 0xffffff : color, gradientMap: gradMap }, o || {}));
 export const outlineMat = new THREE.MeshBasicMaterial({ color: 0x2e2418, side: THREE.BackSide });
-export const ghostMat = toon(0xffffff, { vertexColors: true, transparent: true, opacity: 0.14, depthWrite: false });
+export const outlineCutMat = withCutout(outlineMat.clone(), -2.5);
 
 const ROCK_GLSL = `#include <map_fragment>
   float st = 1.0 - smoothstep(0.45, 0.74, vWN.y);

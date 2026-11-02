@@ -12,9 +12,12 @@
  *       shadow themselves in stripes),
  *       depthMat (custom shadow depth material), order (renderOrder)
  *
- * Depends on: three
+ * Outlines of cut materials (render/cutout) use the cut outline as well.
+ *
+ * Depends on: three, render/materials
  */
 import * as THREE from 'three';
+import { outlineCutMat } from './materials.js';
 
 export class Batch {
   constructor(outlineMat) { this.outlineMat = outlineMat; this.map = new Map(); }
@@ -34,7 +37,7 @@ export class Batch {
       if (b.opts.order) im.renderOrder = b.opts.order;
       group.add(im); b.im = im;
       if (b.opts.outline) {
-        const ol = new THREE.InstancedMesh(b.geo, this.outlineMat, b.list.length); ol.frustumCulled = false; b.olM = [];
+        const ol = new THREE.InstancedMesh(b.geo, b.mat.userData.cut ? outlineCutMat : this.outlineMat, b.list.length); ol.frustumCulled = false; b.olM = [];
         b.list.forEach((it, i) => { it.m.decompose(pos, q, sc); sc.multiplyScalar(b.opts.outline); tmp.compose(pos, q, sc); ol.setMatrixAt(i, tmp); b.olM.push(tmp.clone()); });
         group.add(ol); b.ol = ol;
       }

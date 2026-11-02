@@ -7,7 +7,8 @@
  *   view.render(player, frameInfo, dt)
  *     frameInfo: { distance, terrain, time } from game.update
  *     follows the player with camera and sun, sets the light for the time
- *     of day, streams detailed tiles, updates see-through crowns,
+ *     of day, streams detailed tiles, cuts the window in the vegetation round
+ *     the castaway (render/cutout),
  *     footprints, mood, and draws the frame.
  *   view.zoomBy(steps)   zoom the camera (positive = further away), see render/camera
  *   view.turn({ yaw, pitch })   turn and tilt the view (radians), see render/camera
@@ -34,7 +35,7 @@ import { SUMMIT_MAX } from './camera.js';
 import { T } from '../world/constants.js';
 import { buildNearTile, disposeGroup } from './nearTile.js';
 import { createStreamer, tileInView } from './streaming.js';
-import { createGhosts } from './ghosts.js';
+import { updateCutout } from './cutout.js';
 import { createHero } from './hero.js';
 import { createFootprints } from './footprints.js';
 import { createCamera } from './camera.js';
@@ -55,19 +56,17 @@ export async function createIslandView(world, container, progress, start) {
   const far = await buildFarTiles(world, colorAt, kit, scene, (l, f) => p('far tiles', f), first);
   if (start) far.rest.sort((a, b) => Math.hypot(a.x0 - start.x, a.z0 - start.z) - Math.hypot(b.x0 - start.x, b.z0 - start.z));
   const slicer = createSlicer();
-  const ghosts = createGhosts(scene, kit);
-  const near = new Map();   // tile -> { group, trees }
+  const near = new Map();   // tile -> { group }
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso),
     onReady: (tile, v) => { scene.add(v.group); near.set(tile, v); },
-    onDrop: (tile, v) => { if (v) { ghosts.forget(v.trees); disposeGroup(v.group); } near.delete(tile); },
+    onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); },
   });
   const hero = createHero(scene), steps = createFootprints(scene, world.H), cam = createCamera();
   const mood = createMood({ stage, canvas: renderer.domElement, container });
   window.addEventListener('resize', stage.resize);
 
-  function* nearTrees() { for (const v of near.values()) yield* v.trees; }
 
   function render(player, info, dt) {
     const t = info.terrain, aspect = window.innerWidth / window.innerHeight;
@@ -79,7 +78,7 @@ export async function createIslandView(world, container, progress, start) {
     streamer.pump(BUILD_MS);
     pumpFarTiles(far, tile => tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch), FAR_MS);
     updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
-    ghosts.update(nearTrees(), player, yaw, pitch);
+    updateCutout(cam.camera, renderer, { x: player.x, y: hero.group.position.y + 0.4, z: player.z });
     const sky = skyAt(info.time);
     stage.followSun(cam.target, Math.max(24, Math.min(90, cam.zoom * 3.2)), sky.light.dir);
     mood.update(world.tierAt(t.L), dt, sky);

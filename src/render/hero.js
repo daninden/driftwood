@@ -9,6 +9,10 @@
  * The figure is read from far away, so the detail lives in the silhouette
  * and in flat colour areas (skin against cloth), not in small parts.
  *
+ * Where something solid (a rock wall, a boulder, a trunk) hides the figure,
+ * a light stippled silhouette shows through, so you never lose it.
+ * Vegetation is cut away round it instead (render/cutout).
+ *
  * createHero(scene) -> { group, update(player, wadeDepth) }
  *   update copies position and heading from the player state
  *   (game/movement) and animates the walk cycle from player.phase.
@@ -19,6 +23,11 @@
 import * as THREE from 'three';
 import { toon, outlineMat } from './materials.js';
 import { HERO } from './palette.js';
+
+const silMat = new THREE.MeshBasicMaterial({ color: HERO.silhouette, depthFunc: THREE.GreaterDepth, depthWrite: false });
+silMat.onBeforeCompile = sh => {
+  sh.fragmentShader = sh.fragmentShader.replace('void main() {', 'void main() {\n  vec2 sp = floor(gl_FragCoord.xy);\n  if (mod(sp.x + sp.y, 2.0) > 0.5) discard;');
+};
 
 export function createHero(scene) {
   const group = new THREE.Group(), body = new THREE.Group(); group.add(body); body.scale.setScalar(0.62);
@@ -67,6 +76,16 @@ export function createHero(scene) {
   part(torso, new THREE.CylinderGeometry(0.12, 0.14, 0.13, 16), hatM, 0, 1.2, 0);
 
   part(shR, new THREE.CylinderGeometry(0.018, 0.022, 1.35, 6), toon(HERO.staff), 0.06, -0.3, 0.1);
+
+  // Silhouette: where something solid hides the figure, a light stippled
+  // shape shows through. It is drawn after the world and before the figure
+  // itself (renderOrder), with an inverted depth test.
+  const parts = []; group.traverse(o => { if (o.isMesh) parts.push(o); });
+  for (const m of parts) {
+    m.renderOrder = 2;
+    if (m.material === outlineMat) continue;
+    const sil = new THREE.Mesh(m.geometry, silMat); sil.renderOrder = 1; m.add(sil);
+  }
   scene.add(group);
 
   function update(p, wade = 0) {

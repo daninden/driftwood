@@ -101,7 +101,8 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - Orthographic: isometric without perspective. It starts rotated 45° and tilted 30° down.
 - **Turning and tilting:** the player turns the view freely around (hold `Q` / `E`, or drag with the right mouse button) and tilts it between 25° and 45° (right mouse button up/down). Turning starts and stops softly. No snapping to fixed angles. Not flatter than 25° (without perspective the ground would run on endlessly) and not steeper than 45° (the rock walls and terraces would stop reading). Walking with the keys stays relative to the screen: W always walks away from you. The view angles are not saved.
 - Turning also lets you look behind walls and trees; worth keeping in mind once hiding from the strangers is designed.
-- Tree crowns between the camera and the castaway turn see-through.
+- **Never lose the castaway:** vegetation between the camera and the castaway (crowns, pines, palms, bushes, ferns) gets a soft round window around the figure, with a stippled edge. It moves smoothly with the castaway; whole trees never switch on or off. Where something solid hides the figure (a rock wall, a boulder, a trunk, a fern right in front), a light stippled silhouette of the castaway shows through.
+- **Footprints** in the sand: at most about 80 (some 17 m of trail); the oldest fade out, so the trail thins behind you.
 - No plinth while playing.
 - The camera stays far enough away that the castaway is small in a big landscape (about 6% of the screen height): zooming in too close shrinks the loneliness.
 - **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved.

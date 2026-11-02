@@ -44,7 +44,7 @@ Rules:
 | `game/game` | Game state (the player and the clock) and the per-frame update. |
 | `render/palette` | All colours of style C in one place, the castaway's included. |
 | `render/terrainColor` | Painted ground colour per point (pure, tested against the prototype). |
-| `render/materials` | Toon shading, outlines, the rock shader for steep walls, see-through crowns. |
+| `render/materials` | Toon shading, outlines (also a cut version for vegetation), the rock shader for steep walls. |
 | `render/geometry` | Shared shapes (crowns, rocks, grass, ferns, driftwood) and matrix helpers. |
 | `render/batch` | Many small objects into a few InstancedMeshes with outlines. |
 | `render/props` | Detailed trees, palms, roots and lianas, beach finds, the tide line. Trees, pines and palms each pick a shape and colours from the tile generator. |
@@ -52,10 +52,10 @@ Rules:
 | `render/farTiles` | A cheap version of every tile. Those in view at the start are built before the game starts; the rest follow in the background, about 3 ms per frame, tiles in view first. |
 | `render/nearTile` | The full-detail version of one tile. |
 | `render/streaming` | Which detailed tiles exist for the current view; building one at a time, dropping old ones. |
-| `render/ghosts` | Making crowns between camera and castaway see-through, from any view angle. |
+| `render/cutout` | The soft round window in the vegetation round the castaway: a shader patch on the vegetation materials that discards, with an ordered-dither edge, what lies in front of the figure inside a screen circle. |
 | `render/water` | Sea, river ribbons, surf, foam and spray at waterfalls. |
-| `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle. |
-| `render/footprints` | Footprints in the sand. |
+| `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle, and a light stippled silhouette (drawn with an inverted depth test before the figure) where something solid hides it. |
+| `render/footprints` | Footprints in the sand: at most 80, the oldest fading out. |
 | `render/camera` | Orthographic camera that follows; player zoom within fixed limits; free turning and limited tilting, eased; zooms out on the summits; ground picking. |
 | `render/sky` | The light of the day from the time (pure): sun and moon paths, light and fill colours, grading for golden hour, dusk and night. |
 | `render/mood` | Atmosphere per terrace and per time of day: colour grading, mist, cooler light, light colours, paper grain, vignette. |
@@ -78,7 +78,7 @@ input ──> view.zoomBy(input.takeZoom()), view.turn(input.takeTurn(dt))
                                                 ├ castaway and footprints
                                                 ├ streaming: at most ~9 ms building tiles
                                                 ├ far tiles on/off
-                                                ├ see-through crowns
+                                                ├ window in the vegetation round the castaway
                                                 ├ mood of the current terrace
                                                 └ draw
 ```
@@ -99,14 +99,14 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea; trunks, palms and boulders must stop you while you slide past them, small stones must not.
-- `tests/streaming.test.js`, `tests/ghosts.test.js` and `tests/core.test.js` test the pure logic without a browser.
+- `tests/streaming.test.js`, `tests/render.test.js` (window round the castaway, fading footprints) and `tests/core.test.js` test the pure logic without a browser.
 - `tests/heights.test.js` checks that building the height grids in strips (as the workers do) gives exactly the same grids, and that a failing worker lets `main` fall back.
 - `tests/loading.test.js` tests the loading bar: steps in order, never backwards, ends full. The smoke test also saves the loader halfway (`smoke-0.png`) and checks the bar ends full.
 - `tests/stage.test.js` checks that the shadow depth bias stays a few centimetres at every zoom level.
 - `tests/props.test.js` tests the variety of trees, pines and palms (shapes, colours, lean directions, how many withered fronds) with a recording batch.
 - `tests/game.test.js` tests click-to-walk, the running clock and the saveable state.
 - `tests/sky.test.js` tests the clock and the light of the day: sun up and down, east to west, golden hour, enough light at night, a minimum light height, smooth changes.
-- `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser, and on touch: tap, double tap, pinch and twist). Movement, ghost and streaming tests also run from turned and tilted views.
+- `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser, and on touch: tap, double tap, pinch and twist). Movement and streaming tests also run from turned and tilted views.
 
 Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for.
 

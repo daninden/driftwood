@@ -8,15 +8,17 @@
  *   grass, reed, fern, pebble, shell, driftwood
  *   materials: canopyMat, trunkMat, rockMat, palmTrunkMat, grassMat,
  *   fernMat, smallMat
+ *   Vegetation materials are cut round the castaway (render/cutout).
  *   Some shapes are made lumpy with the island's noise, so they belong to a seed.
  * stickMatrix(a, b, r)   matrix that stretches the unit cylinder from a to b
  * mat4(x, y, z, sx, sy, sz, ry, rx, rz)   compose position, scale, rotation
  *
- * Depends on: three, core/noise, render/materials
+ * Depends on: three, core/noise, render/materials, render/cutout
  */
 import * as THREE from 'three';
 import { mulberry32 } from '../core/noise.js';
 import { toon } from './materials.js';
+import { withCutout } from './cutout.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 export function stickMatrix(a, b, r) {
@@ -64,11 +66,11 @@ export function createKit(noise) {
     frond, grass: tuft(7, 0.22, 0.2, 0.022, 5), reed: tuft(9, 0.55, 0.45, 0.016, 8), fern,
     pebble: new THREE.IcosahedronGeometry(1, 0), shell: new THREE.SphereGeometry(1, 6, 4),
     driftwood: lumpy(new THREE.CylinderGeometry(0.09, 0.07, 1, 8, 4), 0.5, 7),
-    canopyMat: toon(0xffffff, { vertexColors: true }), trunkMat: toon(), rockMat: toon(), palmTrunkMat: toon(),
-    frondMat: toon(0xffffff, { map: frondTex, alphaTest: 0.4, side: THREE.DoubleSide }),
+    canopyMat: withCutout(toon(0xffffff, { vertexColors: true })), trunkMat: withCutout(toon()), rockMat: toon(), palmTrunkMat: withCutout(toon()),
+    frondMat: withCutout(toon(0xffffff, { map: frondTex, alphaTest: 0.4, side: THREE.DoubleSide })),
     frondDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: frondTex, alphaTest: 0.4 }),
-    dryFrondMat: toon(0xffffff, { map: dryTex, alphaTest: 0.4, side: THREE.DoubleSide }),
+    dryFrondMat: withCutout(toon(0xffffff, { map: dryTex, alphaTest: 0.4, side: THREE.DoubleSide })),
     dryFrondDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: dryTex, alphaTest: 0.4 }),
-    grassMat: toon(0xffffff, { side: THREE.DoubleSide }), fernMat: toon(0xffffff, { side: THREE.DoubleSide }), smallMat: toon(),
+    grassMat: toon(0xffffff, { side: THREE.DoubleSide }), fernMat: withCutout(toon(0xffffff, { side: THREE.DoubleSide })), smallMat: toon(),
   };
 }
