@@ -23,4 +23,7 @@ Another island: add `#seed-2024` to the address.
 
 ## More
 
+- [docs/design.md](docs/design.md): what the game is, the art style, the world and the decisions
 - [docs/architecture.md](docs/architecture.md): layers, modules, testing and saving
+- [CLAUDE.md](CLAUDE.md): working agreements
+- [prototypes/](prototypes/): the prototypes the game grew out of

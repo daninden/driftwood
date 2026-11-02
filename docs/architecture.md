@@ -1,6 +1,6 @@
 # Architecture of Driftwood
 
-Driftwood is small and lonely: one island, one castaway, atmosphere first. The architecture has to keep it that way. Every part has one job, can be tested on its own, and knows as little as possible about the rest.
+Driftwood is small and lonely: one island, one castaway, atmosphere first (see `design.md`). The architecture has to keep it that way. Every part has one job, can be tested on its own, and knows as little as possible about the rest.
 
 ## Layers
 
