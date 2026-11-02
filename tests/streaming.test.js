@@ -3,6 +3,7 @@ import { tileInView, createStreamer } from '../src/render/streaming.js';
 import { createSlicer } from '../src/core/slicer.js';
 import { HALF, T, NT } from '../src/world/constants.js';
 import { GAME_ZOOM, MAX_ZOOM, SUMMIT_MAX } from '../src/render/camera.js';
+import { PITCH_MIN, PITCH_MAX } from '../src/core/view.js';
 
 const grid = () => { const t = []; for (let tz = 0; tz < NT; tz++) for (let tx = 0; tx < NT; tx++) t.push({ tx, tz, x0: -HALF + tx * T, z0: -HALF + tz * T, hmax: 1 }); return t; };
 
@@ -16,6 +17,16 @@ describe('tileInView', () => {
   it('wants a handful of tiles at game zoom', () => {
     const n = grid().filter(t => tileInView(t, { x: 0, z: 0 }, GAME_ZOOM, 1.6)).length;
     expect(n).toBeGreaterThan(1); expect(n).toBeLessThan(12);
+  });
+  it('wants a reasonable number of tiles from every view angle', () => {
+    for (const yaw of [0, 0.8, 2, 3.9]) for (const pitch of [PITCH_MIN, PITCH_MAX]) {
+      const n = grid().filter(t => tileInView(t, { x: 0, z: 0 }, MAX_ZOOM, 1.6, 0, yaw, pitch)).length;
+      expect(n).toBeGreaterThan(1); expect(n).toBeLessThan(16);
+    }
+  });
+  it('sees more ground from a flatter view', () => {
+    const count = pitch => grid().filter(t => tileInView(t, { x: 0, z: 0 }, MAX_ZOOM, 1.6, 0, 0, pitch)).length;
+    expect(count(PITCH_MIN)).toBeGreaterThanOrEqual(count(PITCH_MAX));
   });
   it('still wants only a few more tiles fully zoomed out, and on a summit', () => {
     for (const z of [MAX_ZOOM, SUMMIT_MAX]) expect(grid().filter(t => tileInView(t, { x: 0, z: 0 }, z, 1.6)).length).toBeLessThan(16);

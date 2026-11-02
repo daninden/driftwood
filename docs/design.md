@@ -32,7 +32,7 @@ Explored earlier and dropped: 2D pixel art, plain low-poly and voxels.
 
 - **Colour:** warm, earthy tones. Sand, olive green, weathered wood. All colours live in `src/render/palette.js`.
 - **Ground:** a painted texture with brush strokes.
-- **Lighting:** toon shading in three light steps, bright midday light, soft warm colour grading and a light paper grain. The sun stands about 30° towards the camera, so walls facing the viewer catch light.
+- **Lighting:** toon shading in three light steps, bright midday light, soft warm colour grading and a light paper grain. The sun stands about 30° towards the camera, so walls facing the viewer catch light. The sun turns with the camera, so the light looks the same whichever way you look.
 - **Outlines:** dark brown edges around trees, rocks, palm trunks and the castaway.
 - **Detail:** leaf clusters, grass tufts, pebbles, shells and driftwood, at the level of the original style C.
 - **Rock walls:** painted in the shader with strata, cracks and ledges, greyer higher up, so the texture never stretches on steep faces.
@@ -76,7 +76,9 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 
 ## Camera and view
 
-- Orthographic, rotated 45° and tilted 30° down: isometric without perspective.
+- Orthographic: isometric without perspective. It starts rotated 45° and tilted 30° down.
+- **Turning and tilting:** the player turns the view freely around (hold `Q` / `E`, or drag with the right mouse button) and tilts it between 25° and 45° (right mouse button up/down). Turning starts and stops softly. No snapping to fixed angles. Not flatter than 25° (without perspective the ground would run on endlessly) and not steeper than 45° (the rock walls and terraces would stop reading). Walking with the keys stays relative to the screen: W always walks away from you. The view angles are not saved.
+- Turning also lets you look behind walls and trees; worth keeping in mind once hiding from the strangers is designed.
 - Tree crowns between the camera and the castaway turn see-through.
 - No plinth while playing.
 - The camera stays far enough away that the castaway is small in a big landscape (about 6% of the screen height): zooming in too close shrinks the loneliness.

@@ -4,7 +4,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { passageSpots, startSpot } from '../src/world/spots.js';
 import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt } from '../src/game/movement.js';
-import { CAMDIR } from '../src/core/view.js';
+import { CAMDIR, basis } from '../src/core/view.js';
 
 let w, spots;
 beforeAll(async () => { w = await generateWorld(1337); spots = passageSpots(w); }, 120000);
@@ -69,6 +69,13 @@ describe('moveIntent', () => {
   it('walks to a target and stops when close', () => {
     expect(moveIntent({ target: { x: 3, z: 4 } }, p)).toEqual({ x: 0.6, z: 0.8 });
     expect(moveIntent({ target: { x: 0.05, z: 0 } }, p)).toBeNull();
+  });
+  it('keeps W away from the camera when the view is turned', () => {
+    for (const yaw of [0, 1.3, 3, -2]) {
+      const { cam, right } = basis(yaw), w = moveIntent({ up: true, yaw }, p), d = moveIntent({ right: true, yaw }, p);
+      expect(w.x).toBeCloseTo(-cam.x); expect(w.z).toBeCloseTo(-cam.z);
+      expect(d.x).toBeCloseTo(right.x); expect(d.z).toBeCloseTo(right.z);
+    }
   });
   it('lets keys win over a target', () => {
     expect(moveIntent({ left: true, target: { x: 3, z: 4 } }, p).x).toBeLessThan(0);

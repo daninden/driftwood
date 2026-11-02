@@ -7,6 +7,8 @@
  *     follows the player with camera and sun, streams detailed tiles,
  *     updates see-through crowns, footprints, mood, and draws the frame.
  *   view.zoomBy(steps)   zoom the camera (positive = further away), see render/camera
+ *   view.turn({ yaw, pitch })   turn and tilt the view (radians), see render/camera
+ *   view.yaw              the current view angle (for walking relative to the screen)
  *   view.pickGround(clientX, clientY) -> { x, z } | null
  *   view.canvas
  *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
@@ -60,11 +62,12 @@ export async function createIslandView(world, container, progress) {
     cam.follow(player, dt, t.L > 4.25);
     hero.update(player, t.inRiver ? t.depth : 0);
     steps.step(player, info.distance, t.L < 0.4 && t.y > -0.05 && t.y < 1.3 && !t.inRiver);
-    streamer.update(player, cam.zoom, aspect);
+    const { yaw, pitch } = cam;
+    streamer.update(player, cam.zoom, aspect, yaw, pitch);
     streamer.pump(BUILD_MS);
-    updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20));
-    ghosts.update(nearTrees(), player);
-    stage.followSun(cam.target, Math.max(24, Math.min(90, cam.zoom * 3.2)));
+    updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
+    ghosts.update(nearTrees(), player, yaw, pitch);
+    stage.followSun(cam.target, Math.max(24, Math.min(90, cam.zoom * 3.2)), yaw);
     mood.update(world.tierAt(t.L), dt);
     renderer.render(scene, cam.camera);
   }
@@ -75,8 +78,8 @@ export async function createIslandView(world, container, progress) {
   }
   function settle(player) {
     const aspect = window.innerWidth / window.innerHeight;
-    for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect); if (!streamer.pump(1e6)) break; }
+    for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, zoomBy: cam.zoomBy, pickGround, canvas: renderer.domElement, stats, settle };
+  return { render, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, pickGround, canvas: renderer.domElement, stats, settle };
 }

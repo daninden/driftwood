@@ -2,20 +2,21 @@
  * render/ghosts — tree crowns between the camera and the castaway turn
  * see-through, so you never lose the little figure in the forest.
  *
- * occludes(tree, player) -> boolean   pure: does this crown cover the player
- *   on screen? tree: { x, z, cy (crown centre height), R (crown radius) }
- * createGhosts(scene, kit) -> { update(trees, player) }
+ * occludes(tree, player, yaw?, pitch?) -> boolean   pure: does this crown
+ *   cover the player on screen, for the given view angles (core/view)?
+ *   tree: { x, z, cy (crown centre height), R (crown radius) }
+ * createGhosts(scene, kit) -> { update(trees, player, yaw?, pitch?), forget(trees) }
  *   Hides the solid instances of occluding trees (scale 0) and draws them
  *   instead in shared transparent InstancedMeshes.
  *
  * Depends on: three, core/view, render/materials
  */
 import * as THREE from 'three';
-import { toView, screenUp } from '../core/view.js';
+import { YAW, PITCH, toView, screenUp } from '../core/view.js';
 import { ghostMat } from './materials.js';
 
-export function occludes(tr, p) {
-  const v = toView(tr.x - p.x, tr.z - p.z), u = screenUp(tr.cy - p.y - 0.45, v.dc);
+export function occludes(tr, p, yaw = YAW, pitch = PITCH) {
+  const v = toView(tr.x - p.x, tr.z - p.z, yaw), u = screenUp(tr.cy - p.y - 0.45, v.dc, pitch);
   return v.dc > 0.15 && Math.abs(v.dr) < tr.R + 0.35 && Math.abs(u) < tr.R * 0.95 + 0.6;
 }
 
@@ -36,9 +37,9 @@ export function createGhosts(scene, kit) {
   }
 
   /** trees: iterable of tree records near the player (render/nearTile). */
-  function update(trees, p) {
+  function update(trees, p, yaw = YAW, pitch = PITCH) {
     const want = new Set();
-    for (const tr of trees) { if (Math.abs(tr.x - p.x) > 16 || Math.abs(tr.z - p.z) > 16) continue; if (occludes(tr, p)) want.add(tr); }
+    for (const tr of trees) { if (Math.abs(tr.x - p.x) > 16 || Math.abs(tr.z - p.z) > 16) continue; if (occludes(tr, p, yaw, pitch)) want.add(tr); }
     shown.forEach(tr => { if (!want.has(tr)) setHidden(tr, false); });
     want.forEach(tr => { if (!shown.has(tr)) setHidden(tr, true); });
     shown = want;

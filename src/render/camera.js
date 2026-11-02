@@ -1,15 +1,21 @@
 /**
  * render/camera — the orthographic isometric camera that follows the player.
  *
- * Fixed angles (core/view). The camera eases towards the player; zoom eases
- * too. The player can zoom between MIN_ZOOM and MAX_ZOOM (it starts at
+ * The camera eases towards the player; zoom and view angles ease too, so
+ * turning starts and stops softly. The player can turn the view freely
+ * around and tilt it between PITCH_MIN and PITCH_MAX (core/view). The player can zoom between MIN_ZOOM and MAX_ZOOM (it starts at
  * GAME_ZOOM); never closer, because a close camera shrinks the loneliness.
  * On the summits it zooms out a further 1.6x, up to SUMMIT_MAX, as a reward
  * for the climb.
  *
  * stepZoom(level, steps) -> the new zoom level after some zoom steps
  *   (positive = further away), clamped to MIN_ZOOM..MAX_ZOOM. Pure.
- * createCamera() -> { camera, follow(target, dt, onSummit), zoomBy(steps), zoom, pick(ndcX, ndcY, H) }
+ * turnView(angles, turn) -> new { yaw, pitch } after a turn { yaw, pitch }
+ *   (radians), with the pitch clamped to PITCH_MIN..PITCH_MAX. Pure.
+ * createCamera() -> { camera, follow(target, dt, onSummit), zoomBy(steps),
+ *   turn({ yaw, pitch }), zoom, yaw, pitch, target, pick(ndcX, ndcY, H) }
+ *   yaw and pitch are the current (eased) angles, for everything else that
+ *   depends on the view.
  *   pick returns the ground point under a screen position (normalised
  *   device coordinates), or null, by marching the view ray over the
  *   heightfield.
@@ -17,23 +23,26 @@
  * Depends on: three, core/view
  */
 import * as THREE from 'three';
-import { PITCH, YAW } from '../core/view.js';
+import { PITCH, YAW, PITCH_MIN, PITCH_MAX } from '../core/view.js';
 
 export const GAME_ZOOM = 7, MIN_ZOOM = 5, MAX_ZOOM = 10, SUMMIT_FACTOR = 1.6, SUMMIT_MAX = 14;
 const R = 400, STEP = 1.1;
 
 export const stepZoom = (level, steps) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, level * Math.pow(STEP, steps)));
 export const summitZoom = level => Math.min(SUMMIT_MAX, level * SUMMIT_FACTOR);
+export const turnView = (a, t) => ({ yaw: a.yaw + t.yaw, pitch: Math.min(PITCH_MAX, Math.max(PITCH_MIN, a.pitch + t.pitch)) });
 
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 4000);
   const at = new THREE.Vector3(), goal = new THREE.Vector3();
-  const state = { zoom: GAME_ZOOM, level: GAME_ZOOM, ready: false };
+  const state = { zoom: GAME_ZOOM, level: GAME_ZOOM, yaw: YAW, pitch: PITCH, ready: false };
+  let aim = { yaw: YAW, pitch: PITCH };
 
   function place() {
     const a = window.innerWidth / window.innerHeight, z = state.zoom;
     Object.assign(camera, { left: -z * a, right: z * a, top: z, bottom: -z }); camera.updateProjectionMatrix();
-    camera.position.set(at.x + R * Math.cos(PITCH) * Math.sin(YAW), at.y + R * Math.sin(PITCH), at.z + R * Math.cos(PITCH) * Math.cos(YAW));
+    const { yaw, pitch } = state;
+    camera.position.set(at.x + R * Math.cos(pitch) * Math.sin(yaw), at.y + R * Math.sin(pitch), at.z + R * Math.cos(pitch) * Math.cos(yaw));
     camera.lookAt(at); camera.updateMatrixWorld();
   }
 
@@ -41,6 +50,7 @@ export function createCamera() {
     goal.set(target.x, target.y + 0.5, target.z);
     if (!state.ready) { at.copy(goal); state.ready = true; } else at.lerp(goal, Math.min(1, dt * 6));
     state.zoom += ((onSummit ? summitZoom(state.level) : state.level) - state.zoom) * Math.min(1, dt * 4);
+    const k = Math.min(1, dt * 6); state.yaw += (aim.yaw - state.yaw) * k; state.pitch += (aim.pitch - state.pitch) * k;
     place();
   }
 
@@ -56,5 +66,6 @@ export function createCamera() {
     return { x: o.x + d.x * b, z: o.z + d.z * b };
   }
   function zoomBy(steps) { if (steps) state.level = stepZoom(state.level, steps); }
-  return { camera, follow, zoomBy, pick, get zoom() { return state.zoom; }, get target() { return at; } };
+  function turn(t) { if (t && (t.yaw || t.pitch)) aim = turnView(aim, t); }
+  return { camera, follow, zoomBy, turn, pick, get yaw() { return state.yaw; }, get pitch() { return state.pitch; }, get zoom() { return state.zoom; }, get target() { return at; } };
 }

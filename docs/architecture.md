@@ -25,7 +25,7 @@ Rules:
 |---|---|
 | `core/noise` | Seeded noise (`vnoise`, `fbm`), PRNG and tile hash. The formulas are frozen. |
 | `core/math` | `ss` (smoothstep), `lerp`, colour mixing. |
-| `core/view` | The fixed isometric view direction: what "towards the camera" and "screen right" mean. |
+| `core/view` | The isometric view as angles (turn and tilt, with the tilt limits): what "towards the camera" and "screen right" mean for a given view. Pure maths; the camera owns the current angles. |
 | `core/slicer` | Time slicing: heavy work as a generator that pauses when the frame budget is spent. |
 | `world/constants` | Dimensions: 720 × 720 area, 0.25 grid, 40-unit tiles, terrace heights. |
 | `world/shape` | Island outline and scattered highlands; scale to terrace level L. |
@@ -37,7 +37,7 @@ Rules:
 | `world/spots` | Finding places: the start spot, examples of each passage (for tests). |
 | `world/world` | Builds everything from a seed and returns one read-only object with queries. |
 | `game/movement` | Walking rules: walls block, passages let you climb, sliding along walls. |
-| `game/input` | Keys and clicks/taps to a movement intent; mouse wheel and `+`/`-` to zoom steps. |
+| `game/input` | Keys and clicks/taps to a movement intent; mouse wheel and `+`/`-` to zoom steps; `Q`/`E` and right-mouse drag to turn and tilt. |
 | `game/game` | Game state (the player) and the per-frame update. |
 | `render/palette` | All colours of style C in one place, the castaway's included. |
 | `render/terrainColor` | Painted ground colour per point (pure, tested against the prototype). |
@@ -48,14 +48,14 @@ Rules:
 | `render/terrainTile` | Ground mesh and painted texture of one tile. |
 | `render/farTiles` | A cheap version of every tile, always present. |
 | `render/nearTile` | The full-detail version of one tile. |
-| `render/streaming` | Which detailed tiles exist; building one at a time, dropping old ones. |
-| `render/ghosts` | Making crowns between camera and castaway see-through. |
+| `render/streaming` | Which detailed tiles exist for the current view; building one at a time, dropping old ones. |
+| `render/ghosts` | Making crowns between camera and castaway see-through, from any view angle. |
 | `render/water` | Sea, river ribbons, surf, foam and spray at waterfalls. |
 | `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle. |
 | `render/footprints` | Footprints in the sand. |
-| `render/camera` | Orthographic camera that follows; player zoom within fixed limits; zooms out on the summits; ground picking. |
+| `render/camera` | Orthographic camera that follows; player zoom within fixed limits; free turning and limited tilting, eased; zooms out on the summits; ground picking. |
 | `render/mood` | Atmosphere per terrace: colour grading, mist, cooler light, paper grain, vignette. |
-| `render/stage` | Renderer, scene, lights and the shadow that follows the view. |
+| `render/stage` | Renderer, scene, lights (the sun turns with the camera) and the shadow that follows the view. |
 | `render/islandView` | Puts all render modules together and draws a frame. |
 
 Every module starts with a header that says what it does, what it exports and what it depends on.
@@ -63,7 +63,9 @@ Every module starts with a header that says what it does, what it exports and wh
 ## One frame
 
 ```
-input ──> view.zoomBy(input.takeZoom())   zoom is a view setting, not game state
+input ──> view.zoomBy(input.takeZoom()), view.turn(input.takeTurn(dt))
+  │          zoom and view angles are view settings, not game state
+  │      input.yaw = view.yaw   so the keys walk relative to the screen
   │
   └─> game.update(input, dt) ──> the player moves (game/movement)
                 │
@@ -95,7 +97,7 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea.
 - `tests/streaming.test.js`, `tests/ghosts.test.js` and `tests/core.test.js` test the pure logic without a browser.
 - `tests/game.test.js` tests click-to-walk and the saveable state.
-- `tests/zoom.test.js` tests the zoom limits and the zoom input (wheel, `+`/`-`, Ctrl/Cmd left to the browser).
+- `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser). Movement, ghost and streaming tests also run from turned and tilted views.
 
 Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for.
 
