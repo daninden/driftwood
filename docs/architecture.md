@@ -98,6 +98,7 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea.
 - `tests/streaming.test.js`, `tests/ghosts.test.js` and `tests/core.test.js` test the pure logic without a browser.
+- `tests/stage.test.js` checks that the shadow depth bias stays a few centimetres at every zoom level.
 - `tests/props.test.js` tests the variety of trees, pines and palms (shapes, colours, lean directions, how many withered fronds) with a recording batch.
 - `tests/game.test.js` tests click-to-walk, the running clock and the saveable state.
 - `tests/sky.test.js` tests the clock and the light of the day: sun up and down, east to west, golden hour, enough light at night, a minimum light height, smooth changes.

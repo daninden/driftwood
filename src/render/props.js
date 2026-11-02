@@ -98,10 +98,10 @@ export function addPalm(B, kit, p, r, others = []) {
   let prev = o.clone();
   for (let i = 0; i < 8; i++) { const t = (i + 1) / 8, f = lean * bend(t), q = o.clone().add(new THREE.Vector3(sd.x * f, hgt * t, sd.z * f)); B.add('palmseg', kit.seg, kit.palmTrunkMat, stickMatrix(prev, q, 0.1 - 0.035 * t), bark, { outline: 1.35 }); prev = q; }
   const nf = 8 + (r() * 3 | 0), tint = pick(r, P.frondTint);
-  for (let k = 0; k < nf; k++) { O3.position.copy(prev); O3.rotation.order = 'YZX'; O3.rotation.set(0, k / nf * Math.PI * 2 + r() * 0.3, (r() - 0.35) * 0.5); O3.scale.setScalar(0.75 + r() * 0.3); O3.updateMatrix(); B.add('frond', kit.frond, kit.frondMat, O3.matrix.clone(), shade(tint, r, 0.02, 0.06), { depthMat: kit.frondDepth }); }
+  for (let k = 0; k < nf; k++) { O3.position.copy(prev); O3.rotation.order = 'YZX'; O3.rotation.set(0, k / nf * Math.PI * 2 + r() * 0.3, (r() - 0.35) * 0.5); O3.scale.setScalar(0.75 + r() * 0.3); O3.updateMatrix(); B.add('frond', kit.frond, kit.frondMat, O3.matrix.clone(), shade(tint, r, 0.02, 0.06), { depthMat: kit.frondDepth, receive: false }); }
   if (r() < DRY_CHANCE) for (let k = 0, n = r() < 0.3 ? 2 : 1; k < n; k++) {
     O3.position.set(prev.x, prev.y - 0.06, prev.z); O3.rotation.set(0, r() * Math.PI * 2, -(0.55 + r() * 0.35)); O3.scale.setScalar(0.8 + r() * 0.2); O3.updateMatrix();
-    B.add('frondDry', kit.frond, kit.dryFrondMat, O3.matrix.clone(), pick(r, P.dryTint), { depthMat: kit.dryFrondDepth });
+    B.add('frondDry', kit.frond, kit.dryFrondMat, O3.matrix.clone(), pick(r, P.dryTint), { depthMat: kit.dryFrondDepth, receive: false });
   }
 }
 

@@ -8,6 +8,8 @@
  *   B.build(group)   // creates the meshes; each entry then has .im, .ol, .olM
  *
  * opts: outline (hull scale, omit for none), cast (default true),
+ *       receive (default true; off for thin double-sided leaves that would
+ *       shadow themselves in stripes),
  *       depthMat (custom shadow depth material), order (renderOrder)
  *
  * Depends on: three
@@ -27,7 +29,7 @@ export class Batch {
     this.map.forEach(b => {
       const im = new THREE.InstancedMesh(b.geo, b.mat, b.list.length); im.frustumCulled = false;
       b.list.forEach((it, i) => { im.setMatrixAt(i, it.m); im.setColorAt(i, col.setHex(it.c)); });
-      im.castShadow = b.opts.cast !== false; im.receiveShadow = true;
+      im.castShadow = b.opts.cast !== false; im.receiveShadow = b.opts.receive !== false;
       if (b.opts.depthMat) im.customDepthMaterial = b.opts.depthMat;
       if (b.opts.order) im.renderOrder = b.opts.order;
       group.add(im); b.im = im;
