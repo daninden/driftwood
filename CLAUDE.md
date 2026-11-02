@@ -9,6 +9,7 @@ Read `docs/design.md` (what the game is) and `docs/architecture.md` (how the cod
 - **Explore in conversation, decide in the repository.** Exploring (style rounds, ideas) happens in the session. Decisions and results go into `docs/design.md`, and into `docs/architecture.md` when they affect the code. Keep both current.
 - **Everything in English:** game text, code, comments, documentation and commit messages.
 - **No personal data** in the repository: no names, e-mail addresses, private links or account details.
+- **Work directly on `main`.** No feature branches or pull requests. Every push to `main` goes live (see `docs/architecture.md`), so run `npm test` (and for visual changes the smoke test) before pushing.
 
 ## Code
 
