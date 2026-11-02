@@ -4,8 +4,13 @@
  * 40 × 40 grid, 128 px texture, low-poly crowns and rocks. These fill the
  * view wherever no detailed tile is ready yet, and everything beyond.
  *
- * buildFarTiles(world, colorAt, kit, scene, progress?) -> Promise<Map<tile, Group>>
- * updateFarTiles(map, isVisible(tile)) sets group visibility each frame
+ * buildFarTiles(world, colorAt, kit, scene, progress?, first?) -> Promise<far>
+ *   far: { map: Map<tile, Group>, rest: tiles still to build }
+ *   Only the tiles for which first(tile) is true (those in view at the
+ *   start) are built before the game starts; the rest wait in far.rest.
+ * pumpFarTiles(far, inView(tile), ms) builds waiting tiles within about ms,
+ *   tiles in view first, otherwise in order (nearest the start first)
+ * updateFarTiles(far, isVisible(tile)) sets group visibility each frame
  *
  * Depends on: three, core/noise, core/slicer, render/*
  */
@@ -34,13 +39,22 @@ function buildFarTile(w, colorAt, kit, tile) {
   return grp;
 }
 
-export async function buildFarTiles(w, colorAt, kit, scene, progress) {
-  const map = new Map(), list = w.tiles.filter(t => t.hmax > -6.5);
-  for (let i = 0; i < list.length; i++) {
-    const grp = buildFarTile(w, colorAt, kit, list[i]); scene.add(grp); map.set(list[i], grp);
-    if (progress && i % 6 === 0) await progress('far tiles', i / list.length);
+export async function buildFarTiles(w, colorAt, kit, scene, progress, first = () => true) {
+  const map = new Map(), all = w.tiles.filter(t => t.hmax > -6.5), now = all.filter(first), rest = all.filter(t => !first(t));
+  const make = tile => { const grp = buildFarTile(w, colorAt, kit, tile); scene.add(grp); map.set(tile, grp); };
+  for (let i = 0; i < now.length; i++) {
+    make(now[i]);
+    if (progress && i % 6 === 0) await progress('far tiles', i / now.length);
   }
-  return map;
+  return { map, rest, make };
 }
 
-export function updateFarTiles(map, isVisible) { map.forEach((g, tile) => { g.visible = isVisible(tile); }); }
+export function pumpFarTiles(far, inView, ms) {
+  const t0 = performance.now();
+  while (far.rest.length && performance.now() - t0 < ms) {
+    let i = far.rest.findIndex(inView); if (i < 0) i = 0;
+    far.make(far.rest.splice(i, 1)[0]);
+  }
+}
+
+export function updateFarTiles(far, isVisible) { far.map.forEach((g, tile) => { g.visible = isVisible(tile); }); }

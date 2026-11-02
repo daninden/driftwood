@@ -3,8 +3,11 @@
  * read-only object with query functions. This is the only entry point the
  * render and game layers use.
  *
- * generateWorld(seed, { progress }) -> Promise<World>
+ * generateWorld(seed, { progress, heightfield }) -> Promise<World>
  *   progress(label, fraction) is optional and awaited between steps.
+ *   heightfield(seed, progress) -> Promise<{ HG, LG }> is optional: a faster
+ *   way to build the height grids (main runs them in Web Workers); it must
+ *   give exactly what buildHeightfield gives.
  *
  * World
  *   seed, noise, SC, HL, rivers, tiles
@@ -37,14 +40,15 @@ import { HALF, GR, NG } from './constants.js';
 
 export const tierAt = L => Math.max(0, Math.min(4, Math.floor(L)));
 
-export async function generateWorld(seed, { progress } = {}) {
+export async function generateWorld(seed, { progress, heightfield } = {}) {
   const p = progress || (async () => {});
   const noise = createNoise(seed);
   const { vnoise } = noise;
   await p('shape', 0);
   const shp = createShape(noise, seed);
   const terrain = createTerrain(noise);
-  const { HG, LG } = await buildHeightfield(shp, terrain, (l, f) => p('heights', f));
+  const hp = (l, f) => p('heights', f);
+  const { HG, LG } = heightfield ? await heightfield(seed, hp) : await buildHeightfield(shp, terrain, hp);
   await p('rivers', 0);
   const { rivers, RD, RT, RI } = computeRivers({ HG, LG, noise, HL: shp.HL });
 

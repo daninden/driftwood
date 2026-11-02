@@ -10,12 +10,13 @@ world/    the island as data          uses core (and only the curve maths of thr
 game/     rules and game state        uses core and world
 render/   everything you see          uses core, world (read only) and three
 main.js   wires it all together       the only place that knows every layer
+heightWorker.js, parallelHeights.js   build the height grids in Web Workers for main (use core and world)
 ```
 
 Rules:
 
 - **Arrows point one way.** `world` does not know `game` or `render`. `game` does not know `render`. `render` reads the world and the player state but never changes them.
-- **`world` and `game` are pure.** They touch neither the DOM nor WebGL, so they run in Node (the tests) and could later run in a Web Worker.
+- **`world` and `game` are pure.** They touch neither the DOM nor WebGL, so they run in Node (the tests) and in Web Workers (the height grids, see Loading).
 - **Everything follows from the seed.** The same number gives the same island, the same trees and the same colours. Every tile has its own generator (seed, tx, tz), so the order in which tiles are built does not matter.
 - **No interface.** There is deliberately no HUD, map or menu. What you see is the island.
 
@@ -48,7 +49,7 @@ Rules:
 | `render/batch` | Many small objects into a few InstancedMeshes with outlines. |
 | `render/props` | Detailed trees, palms, roots and lianas, beach finds, the tide line. Trees, pines and palms each pick a shape and colours from the tile generator. |
 | `render/terrainTile` | Ground mesh and painted texture of one tile. |
-| `render/farTiles` | A cheap version of every tile, always present. |
+| `render/farTiles` | A cheap version of every tile. Those in view at the start are built before the game starts; the rest follow in the background, about 3 ms per frame, tiles in view first. |
 | `render/nearTile` | The full-detail version of one tile. |
 | `render/streaming` | Which detailed tiles exist for the current view; building one at a time, dropping old ones. |
 | `render/ghosts` | Making crowns between camera and castaway see-through, from any view angle. |
@@ -84,9 +85,9 @@ input ──> view.zoomBy(input.takeZoom()), view.turn(input.takeTurn(dt))
 
 ## Loading
 
-`generateWorld` takes a few seconds in the browser (mostly the height grid). Then `islandView` builds the water and the far tiles. `main.js` lets the browser breathe between the steps and fills the loading bar from the step reports (`core/loading`). When the first frame is drawn, the loader fades out and the island fades in.
+Loading takes about 2 seconds on a 4-core laptop. The height grids are the heaviest part (8.3 million points): `main.js` has them built in Web Workers, one per spare core (`src/heightWorker.js` computes strips of rows with `world/heightfield` `fillRows`, `src/parallelHeights.js` hands out the strips and puts the grids together). The result is exactly what a build on the main thread gives (tested); if workers are not available, `main` falls back to that. Then `islandView` builds the water and only the far tiles around the start; the others follow while playing. `main.js` lets the browser breathe between the steps and fills the loading bar from the step reports (`core/loading`). When the first frame is drawn, the loader fades out and the island fades in.
 
-A Web Worker is not needed yet: nothing stutters while playing, because detailed tiles are built in slices of about 9 ms per frame. Because `world` is pure, it can move to a worker later if loading gets too slow.
+Nothing stutters while playing, because detailed tiles are built in slices of about 9 ms per frame and the remaining far tiles in slices of about 3 ms.
 
 ## Testing
 
@@ -99,6 +100,7 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea; trunks, palms and boulders must stop you while you slide past them, small stones must not.
 - `tests/streaming.test.js`, `tests/ghosts.test.js` and `tests/core.test.js` test the pure logic without a browser.
+- `tests/heights.test.js` checks that building the height grids in strips (as the workers do) gives exactly the same grids, and that a failing worker lets `main` fall back.
 - `tests/loading.test.js` tests the loading bar: steps in order, never backwards, ends full. The smoke test also saves the loader halfway (`smoke-0.png`) and checks the bar ends full.
 - `tests/stage.test.js` checks that the shadow depth bias stays a few centimetres at every zoom level.
 - `tests/props.test.js` tests the variety of trees, pines and palms (shapes, colours, lean directions, how many withered fronds) with a recording batch.

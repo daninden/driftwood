@@ -8,24 +8,33 @@
  * buildHeightfield(shape, terrain, progress?) -> Promise<{ HG, LG }>
  *   progress(label, fraction) is awaited every few rows so a browser can
  *   breathe while this runs (it is the slowest step, a few seconds).
+ * fillRows(shape, terrain, hg, lg, j0, j1, base)   computes rows j0..j1-1;
+ *   the work unit for building the grids in parallel (see heightWorker)
  * sampleGrid(arr, x, z)  bilinear sample of any NG × NG grid
  *
  * Depends on: world/constants
  */
 import { HALF, GR, NG } from './constants.js';
 
-export async function buildHeightfield({ shape, SC }, { terrH }, progress) {
+export async function buildHeightfield(shp, terrain, progress) {
   const HG = new Float32Array(NG * NG), LG = new Float32Array(NG * NG);
-  for (let j = 0; j < NG; j++) {
-    if (progress && j % 144 === 0) await progress('heights', j / NG);
-    const z = -HALF + j * GR;
-    for (let i = 0; i < NG; i++) {
-      const x = -HALF + i * GR, s = shape(x, z), sea = s[0] < 0 || s[1] < 0, m = Math.min(s[0], s[1]), L = sea ? m : s[1] * SC;
-      LG[j * NG + i] = L;
-      HG[j * NG + i] = terrH(x, z, sea ? m : s[0], L);
-    }
+  for (let j = 0; j < NG; j += 144) {
+    if (progress) await progress('heights', j / NG);
+    fillRows(shp, terrain, HG, LG, j, Math.min(NG, j + 144), 0);
   }
   return { HG, LG };
+}
+
+/** Rows j0..j1-1 of both grids, written into hg/lg from row `base` on (0 for full grids, j0 for a strip). */
+export function fillRows({ shape, SC }, { terrH }, hg, lg, j0, j1, base) {
+  for (let j = j0; j < j1; j++) {
+    const z = -HALF + j * GR, o = (j - base) * NG;
+    for (let i = 0; i < NG; i++) {
+      const x = -HALF + i * GR, s = shape(x, z), sea = s[0] < 0 || s[1] < 0, m = Math.min(s[0], s[1]), L = sea ? m : s[1] * SC;
+      lg[o + i] = L;
+      hg[o + i] = terrH(x, z, sea ? m : s[0], L);
+    }
+  }
 }
 
 export function sampleGrid(arr, x, z) {

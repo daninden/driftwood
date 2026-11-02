@@ -23,10 +23,16 @@ export function createNoise(seed) {
     h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
     return (h >>> 0) / 4294967296;
   }
+  // vnoise is the hottest function of world generation. It computes exactly
+  // what hash2 at the four corners would (Math.imul wraps like int32, so
+  // imul(i + 1, K) === (imul(i, K) + K) | 0), with the seed term hoisted.
+  const KX = 374761393, KY = 668265263, KS = Math.imul(seed | 0, 1442695041);
+  const mix = h => { h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
   function vnoise(x, y) {
     const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
     const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-    const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+    const ax = Math.imul(xi | 0, KX), bx = (ax + KX) | 0, ay = Math.imul(yi | 0, KY) ^ KS, by = (Math.imul(yi | 0, KY) + KY | 0) ^ KS;
+    const a = mix(ax ^ ay), b = mix(bx ^ ay), c = mix(ax ^ by), d = mix(bx ^ by);
     return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
   }
   function fbm(x, y) {

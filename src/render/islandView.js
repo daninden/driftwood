@@ -1,7 +1,9 @@
 /**
  * render/islandView — puts all render modules together for one world.
  *
- * createIslandView(world, container, progress?) -> Promise<view>
+ * createIslandView(world, container, progress?, start?) -> Promise<view>
+ *   start { x, z }: where the game begins, so only the far tiles in view
+ *   there are built before it starts (the rest follow in the background)
  *   view.render(player, frameInfo, dt)
  *     frameInfo: { distance, terrain, time } from game.update
  *     follows the player with camera and sun, sets the light for the time
@@ -15,7 +17,8 @@
  *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
  *   view.settle(player)  build all wanted detailed tiles at once (tests only)
  *
- * Frame budget: at most ~9 ms per frame goes to building detailed tiles.
+ * Frame budget: at most ~9 ms per frame goes to building detailed tiles,
+ * and about FAR_MS to the far tiles still waiting.
  *
  * Depends on: every render/* module, core/slicer
  */
@@ -24,7 +27,9 @@ import { createStage } from './stage.js';
 import { createKit } from './geometry.js';
 import { createTerrainColor } from './terrainColor.js';
 import { buildWater } from './water.js';
-import { buildFarTiles, updateFarTiles } from './farTiles.js';
+import { buildFarTiles, pumpFarTiles, updateFarTiles } from './farTiles.js';
+import { SUMMIT_MAX } from './camera.js';
+import { T } from '../world/constants.js';
 import { buildNearTile, disposeGroup } from './nearTile.js';
 import { createStreamer, tileInView } from './streaming.js';
 import { createGhosts } from './ghosts.js';
@@ -34,16 +39,19 @@ import { createCamera } from './camera.js';
 import { createMood } from './mood.js';
 import { skyAt } from './sky.js';
 
-const BUILD_MS = 9;
+const BUILD_MS = 9, FAR_MS = 3;
 
-export async function createIslandView(world, container, progress) {
+export async function createIslandView(world, container, progress, start) {
   const p = progress || (async () => {});
   const stage = createStage(container), { scene, renderer } = stage;
   const kit = createKit(world.noise), colorAt = createTerrainColor(world);
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   await p('water', 0);
   buildWater(world, kit, scene);
-  const far = await buildFarTiles(world, colorAt, kit, scene, (l, f) => p('far tiles', f));
+  const aspect0 = window.innerWidth / window.innerHeight;   // at the start: in view at the widest zoom, from any angle
+  const first = start ? tile => Math.hypot(tile.x0 + T / 2 - start.x, tile.z0 + T / 2 - start.z) < SUMMIT_MAX * Math.max(aspect0, 1) * 2 + 80 : undefined;
+  const far = await buildFarTiles(world, colorAt, kit, scene, (l, f) => p('far tiles', f), first);
+  if (start) far.rest.sort((a, b) => Math.hypot(a.x0 - start.x, a.z0 - start.z) - Math.hypot(b.x0 - start.x, b.z0 - start.z));
   const slicer = createSlicer();
   const ghosts = createGhosts(scene, kit);
   const near = new Map();   // tile -> { group, trees }
@@ -67,6 +75,7 @@ export async function createIslandView(world, container, progress) {
     const { yaw, pitch } = cam;
     streamer.update(player, cam.zoom, aspect, yaw, pitch);
     streamer.pump(BUILD_MS);
+    pumpFarTiles(far, tile => tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch), FAR_MS);
     updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
     ghosts.update(nearTrees(), player, yaw, pitch);
     const sky = skyAt(info.time);
