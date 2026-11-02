@@ -12,17 +12,22 @@
  *   addPalm(B, kit, t, r, others?)   bent trunk in one of PALM_SHAPES + tinted fronds,
  *                                    sometimes withered fronds (DRY_CHANCE); others are
  *                                    the tile's palms, so close neighbours lean apart
+ *   addBush(B, kit, t, r)            a loose clump in the style of its tier (dune scrub,
+ *                                    lowland shrub, rain forest leaf fans, heath, summit
+ *                                    tufts), sized by world/vegetation bushSize
  *   addRoots(B, kit, w, t, r)        roots curling over a wall edge, lianas in arcs
  *   addBeach(B, kit, w, tile, r)     coconuts under palms, bleached driftwood logs
  *   addTideLine(B, kit, w, tile, r, slicer)   generator: seaweed band with shells
  *   rockColor(r, dk?)
  *
- * Depends on: three, core/noise, render/palette, render/geometry, world/constants
+ * Depends on: three, core/noise, render/palette, render/geometry, world/constants,
+ *   world/vegetation
  */
 import * as THREE from 'three';
 import { pick } from '../core/noise.js';
-import { P } from './palette.js';
+import { P, BUSHC } from './palette.js';
 import { T } from '../world/constants.js';
+import { bushSize } from '../world/vegetation.js';
 import { stickMatrix, mat4 } from './geometry.js';
 
 export function rockColor(r, dk) { return new THREE.Color(r() < 0.5 ? P.rock : P.rock2).offsetHSL(0, 0, -0.03 - r() * (dk || 0.07)).getHex(); }
@@ -102,6 +107,47 @@ export function addPalm(B, kit, p, r, others = []) {
   if (r() < DRY_CHANCE) for (let k = 0, n = r() < 0.3 ? 2 : 1; k < n; k++) {
     O3.position.set(prev.x, prev.y - 0.06, prev.z); O3.rotation.set(0, r() * Math.PI * 2, -(0.55 + r() * 0.35)); O3.scale.setScalar(0.8 + r() * 0.2); O3.updateMatrix();
     B.add('frondDry', kit.frond, kit.dryFrondMat, O3.matrix.clone(), pick(r, P.dryTint), { depthMat: kit.dryFrondDepth, receive: false });
+  }
+}
+
+/**
+ * Bushes: never one ball. Several smaller leaf clumps, wider than high, at
+ * different heights, with a few twigs or blades sticking out so the outline
+ * is ragged. Each tier has its own kind.
+ */
+const BUSH_KIND = [
+  { n: [4, 3], sy: 0.5, spread: 0.75, blades: 4, twigs: 0 },   // 0 coast: low, wide dune scrub with stiff blades
+  { n: [4, 3], sy: 0.62, spread: 0.85, blades: 0, twigs: 0, sprigs: 4 },   // 1 lowland: dense rounded shrub, leafy sprigs at the edge
+  { n: [2, 2], sy: 0.6, spread: 0.45, blades: 0, twigs: 0, fans: 3 },   // 2 rain forest: big leaf fans over a dark core
+  { n: [5, 3], sy: 0.42, spread: 0.85, blades: 3, twigs: 0 },  // 3 plateau: flat heath cushions with wiry sprigs
+  { n: [2, 2], sy: 0.5, spread: 0.6, blades: 2, twigs: 0 },    // 4 summit: small grey-green tufts
+];
+export function addBush(B, kit, t, r) {
+  const k = Math.min(4, Math.max(0, t.k | 0)), K = BUSH_KIND[k], R = bushSize(t), pal = BUSHC[k];
+  const base = pick(r, pal), n = K.n[0] + (r() * K.n[1] | 0), a0 = r() * 6;
+  for (let i = 0; i < n; i++) {
+    const a = a0 + i / n * Math.PI * 2 + (r() - 0.5) * 0.8, d = (i === 0 ? 0 : 0.35 + r() * 0.4) * R * K.spread * 1.3;
+    const s = R * (i === 0 ? 0.78 : 0.48 + r() * 0.26), y = t.y + s * K.sy * 0.45 + (i === 0 ? s * 0.15 : r() * s * 0.25);
+    const c = new THREE.Color(r() < 0.6 ? base : pick(r, pal)).offsetHSL((r() - 0.5) * 0.03, 0, (r() - 0.5) * 0.1 + (i === 0 ? -0.04 : 0.02)).getHex();
+    B.add('bush', kit.bush, kit.canopyMat, mat4(t.x + Math.cos(a) * d, y, t.z + Math.sin(a) * d, s, s * K.sy, s, r() * 6), c, { outline: 1.1 });
+  }
+  const top = t.y + R * K.sy * 0.75;
+  for (let i = 0; i < (K.fans || 0); i++) {
+    const a = a0 + i * 2.1 + r() * 0.6, sc = R * (2.2 + r() * 0.8);
+    B.add('bushfan', kit.fern, kit.fernMat, mat4(t.x + Math.cos(a) * R * 0.25, t.y + R * 0.25 + i * 0.06, t.z + Math.sin(a) * R * 0.25, sc, sc * (1.2 + r() * 0.5), sc, r() * 6), new THREE.Color(pick(r, [0x4f7a3a, 0x5a8540, 0x46703a])).offsetHSL(0, 0, (r() - 0.5) * 0.06).getHex(), {});
+  }
+  for (let i = 0; i < (K.sprigs || 0); i++) {   // small leaf fans in the bush's own green, so the edge is leafy, not smooth
+    const a = a0 + 0.5 + i * (Math.PI * 2 / K.sprigs) + r() * 0.6, d = R * (0.7 + r() * 0.3), sc = R * (1.4 + r() * 0.5);
+    B.add('bushsprig', kit.fern, kit.fernMat, mat4(t.x + Math.cos(a) * d, t.y + R * 0.05, t.z + Math.sin(a) * d, sc, sc * 1.6, sc, r() * 6), new THREE.Color(base).offsetHSL(0, 0.04, -0.06).getHex(), { cast: false });
+  }
+  for (let i = 0; i < K.blades; i++) {
+    const a = r() * 6, d = r() * R * 0.6, sc = R * (1.6 + r() * 0.8);
+    B.add('bushblade', kit.reed, kit.grassMat, mat4(t.x + Math.cos(a) * d, t.y + R * 0.1, t.z + Math.sin(a) * d, sc, sc * 0.9, sc, r() * 6), new THREE.Color(base).offsetHSL(0, 0.05, 0.06).getHex(), { cast: false });
+  }
+  for (let i = 0; i < K.twigs; i++) {
+    const a = r() * 6, from = new THREE.Vector3(t.x + Math.cos(a) * R * 0.3, top - R * 0.3, t.z + Math.sin(a) * R * 0.3);
+    const to = from.clone().add(new THREE.Vector3(Math.cos(a) * R * (0.4 + r() * 0.3), R * (0.35 + r() * 0.3), Math.sin(a) * R * (0.4 + r() * 0.3)));
+    B.add('bushtwig', kit.seg, kit.trunkMat, stickMatrix(from, to, 0.012), pick(r, [0x6a4c34, 0x7a5a3e]), { outline: 1.4, cast: false });
   }
 }
 

@@ -62,3 +62,15 @@ describe('palms', () => {
     expect(away / 200).toBeGreaterThan(0.55);
   });
 });
+
+describe('bushes', () => {
+  it('are a clump of several pieces, never one ball', async () => {
+    const { addBush } = await import('../src/render/props.js');
+    const r = mulberry32(23);
+    for (let k = 0; k < 5; k++) for (let i = 0; i < 20; i++) {
+      const b = batch(); addBush(b, kit, { x: i * 3.1, y: 1, z: k * 2.7, k }, r);
+      expect(keys(b).filter(x => x === 'bush').length).toBeGreaterThanOrEqual(2);
+      expect(b.list.length).toBeGreaterThanOrEqual(4);
+    }
+  });
+});

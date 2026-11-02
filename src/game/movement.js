@@ -9,7 +9,8 @@
  *     (scree, ravine, bench, beside a waterfall, roots) where you scramble
  *     at 42 % up to steepness 3.2. The short steps of a bench and a root
  *     wall can be steeper (up to 4.8); you haul yourself up at 30 %.
- *   - Wading slows you down.
+ *   - Wading slows you down, and so does pushing through a bush (more in its
+ *     middle than at its edge; not on a climbing route).
  *   - Tree trunks (broadleaf, rain forest, pine, palm), boulders of at least
  *     STONE_MIN and crags block; you collide with the trunk, not the crown.
  *     Bushes, grass, roots, small stones and beach finds do not block, nor do
@@ -24,6 +25,7 @@
  * stepFactor(world, from, x, z) -> 0 (blocked) or a speed factor 0..1
  * obstaclesNear(world, x, z) -> [{ x, z, r }] blocking circles from the tiles
  *   around (x, z); r already includes the castaway's own radius (BODY)
+ * bushFactor(world, x, z) -> speed factor 0..1 from bushes at (x, z)
  * pushOut(world, from, x, z) -> { x, z } moved back onto the rim of any
  *   obstacle that stepping from `from` to (x, z) would enter
  * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase }
@@ -33,15 +35,17 @@
  * stepPlayer(world, player, dir, dt, run) -> { moved, distance, blocked }
  *   Mutates player. `phase` advances with distance (for the walk cycle).
  *
- * Depends on: core/view, world/constants
+ * Depends on: core/view, world/constants, world/vegetation
  */
 import { YAW, basis } from '../core/view.js';
 import { HALF, T, NT } from '../world/constants.js';
+import { bushSize } from '../world/vegetation.js';
 
 export const WALK_SPEED = 2.9;
 export const RUN_SPEED = 3.9;
 export const BODY = 0.2;        // the castaway's radius
 export const STONE_MIN = 0.35;  // smaller stones are stepped over
+export const BUSH_SLOW = 0.45;  // in the middle of a bush you go at 55 %
 
 const cache = new WeakMap();
 function tileObstacles(w, tile) {
@@ -56,6 +60,33 @@ function tileObstacles(w, tile) {
   for (const t of tile.crags) if (!onRoute(t)) list.push({ x: t.x, z: t.z, r: t.s * 1.1 + BODY });
   cache.set(tile, list);
   return list;
+}
+
+const bushCache = new WeakMap();
+function tileBushes(tile) {
+  let list = bushCache.get(tile);
+  if (!list) { list = tile.bushes.map(b => ({ x: b.x, z: b.z, r: bushSize(b) + BODY * 0.5 })); bushCache.set(tile, list); }
+  return list;
+}
+export function bushFactor(w, x, z) {
+  const tile = w.tiles[Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T)];
+  let f = 1;
+  if (!tile) return f;
+  for (const t of [tile, ...neighbours(w, tile, x, z)]) for (const b of tileBushes(t)) {
+    const d = Math.hypot(x - b.x, z - b.z); if (d >= b.r) continue;
+    const p = Math.min(1, Math.max(0, (1 - d / b.r - 0.25) / 0.5)), e = p * p * (3 - 2 * p);   // eases in: brushing the edge costs (almost) nothing
+    f = Math.min(f, 1 - BUSH_SLOW * e);
+  }
+  return f;
+}
+function neighbours(w, tile, x, z) {
+  const out = [], fx = (x + HALF) / T - tile.tx, fz = (z + HALF) / T - tile.tz, m = 1 / T;   // within a metre of an edge
+  const dx = fx < m ? -1 : fx > 1 - m ? 1 : 0, dz = fz < m ? -1 : fz > 1 - m ? 1 : 0;
+  for (const [ax, az] of [[dx, 0], [0, dz], [dx, dz]]) {
+    if (!ax && !az) continue;
+    const t = w.tiles[(tile.tz + az) * NT + tile.tx + ax]; if (t && Math.abs(t.tx - tile.tx) <= 1) out.push(t);
+  }
+  return out;
 }
 
 const REACH = 1.6;   // larger than any obstacle radius
@@ -103,6 +134,7 @@ export function stepFactor(w, a, x, z) {
     if (steep < 3.2) f = 0.42; else if (steep < limit) f = 0.3; else return 0;
   } else return 0;
   if (b.depth > 0.05) f *= b.depth > 0.4 ? 0.45 : 0.7;
+  if (w.tiles && b.climb <= 0.25) f *= bushFactor(w, x, z);
   return f;
 }
 

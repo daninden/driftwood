@@ -38,7 +38,7 @@ export const TG = Object.freeze([
   { o: hex(0x8f8b82), o2: hex(0x9a968a), f: hex(0x858179), f2: hex(0x9b9a7e) },   // 4 summit, rock and lichen
 ]);
 
-export const BUSHC = Object.freeze([[0x8a9a52, 0x9aa45a], P.bush, [0x4f7038, 0x5a7a3c, 0x46683a], [0x857a5c, 0x7d7f52, 0x86766a], [0x7d8452, 0x8a8a5a]]);
+export const BUSHC = Object.freeze([[0x8a9a52, 0x9aa45a], P.bush, [0x4f7038, 0x5a7a3c, 0x46683a], [0x7d7f52, 0x8a8752, 0x6f7448, 0x857a5c], [0x7d8452, 0x8a8a5a]]);
 
 export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8a7558, hair: 0x4a3222, hat: 0xc9b07a, staff: 0x7a5a3a });
 

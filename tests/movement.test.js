@@ -3,8 +3,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { passageSpots, startSpot } from '../src/world/spots.js';
-import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt, obstaclesNear, pushOut, WALK_SPEED, RUN_SPEED, STONE_MIN } from '../src/game/movement.js';
+import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt, obstaclesNear, pushOut, bushFactor, WALK_SPEED, RUN_SPEED, STONE_MIN, BUSH_SLOW } from '../src/game/movement.js';
 import { CAMDIR, basis } from '../src/core/view.js';
+import { bushSize } from '../src/world/vegetation.js';
 
 let w, spots;
 beforeAll(async () => { w = await generateWorld(1337); spots = passageSpots(w); }, 120000);
@@ -128,5 +129,28 @@ describe('obstacles', () => {
     const o = all('trees').find(clear), p = createPlayer({ x: o.x + 0.05, y: o.y, z: o.z });
     walk(p, { x: 1, z: 0 }, 1);
     expect(p.x - o.x).toBeGreaterThan(1);
+  });
+});
+
+describe('bushes', () => {
+  const bushes = () => w.tiles.flatMap(t => t.bushes).filter(b => terrainAt(w, b.x, b.z).s < 0.3 && terrainAt(w, b.x, b.z).climb < 0.05
+    && w.tiles.flatMap(t => t.bushes).filter(q => Math.hypot(q.x - b.x, q.z - b.z) < 3).length === 1).slice(0, 12);
+  it('slows you most in the middle and hardly at the edge', () => {
+    const list = bushes(); expect(list.length).toBeGreaterThan(5);
+    for (const b of list) {
+      const R = bushSize(b);
+      expect(bushFactor(w, b.x, b.z)).toBeCloseTo(1 - BUSH_SLOW);
+      expect(bushFactor(w, b.x + R, b.z)).toBeGreaterThan(0.9);   // brushing the edge
+      expect(bushFactor(w, b.x + R + 0.5, b.z)).toBe(1);
+    }
+  });
+  it('lets you push through a bush, slower than on open ground', () => {
+    const b = bushes().find(b => obstaclesNear(w, b.x, b.z).every(o => Math.hypot(o.x - b.x, o.z - b.z) > 2.5));
+    const p = createPlayer({ x: b.x - 0.02, y: b.y, z: b.z }), res = stepPlayer(w, p, { x: 1, z: 0 }, 0.05);
+    expect(res.moved).toBe(true);
+    expect(res.distance).toBeLessThan(WALK_SPEED * 0.05 * 0.7);
+  });
+  it('gives every bush a size from its place, the same every time', () => {
+    for (const b of bushes()) { const s = bushSize(b); expect(s).toBe(bushSize({ ...b })); expect(s).toBeGreaterThan(0.2); expect(s).toBeLessThan(0.75); }
   });
 });

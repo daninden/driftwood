@@ -12,13 +12,22 @@
  *     palms  [{ x, y, z }]           beach
  *     crags  [{ x, y, z, s }]        rocks set into steep walls
  *     rocks  [{ x, y, z, s, moss? }] loose boulders (also mark passages)
- *     bushes [{ x, y, z, k }]        k = tier
+ *     bushes [{ x, y, z, k }]        k = tier; size from bushSize
  *     roots  [{ x, y, z }]           spots where roots drape over a wall
+ *
+ * bushSize(bush) -> radius in metres, a fixed function of the bush's place
+ *   and tier, so drawing (render/props) and walking (game/movement) agree
  *
  * Depends on: core/noise, world/constants; reads world queries
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from './constants.js';
+
+const BUSH_R = [[0.35, 0.3], [0.3, 0.28], [0.38, 0.3], [0.3, 0.25], [0.24, 0.16]];   // per tier: smallest radius, extra range
+export function bushSize(b) {
+  const u = hashInt(Math.round(b.x * 64), Math.round(b.z * 64), 17) / 4294967296, [r0, dr] = BUSH_R[b.k] || BUSH_R[1];
+  return r0 + u * dr;
+}
 
 export function scatterTiles(w) {
   const { seed, H, Lat, slope, tierAt, forestB, forestF, dryOfRiver, passAt, fallRouteAt, rcAt } = w;

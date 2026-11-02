@@ -14,12 +14,11 @@
 import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
 import { T } from '../world/constants.js';
-import { BUSHC } from './palette.js';
 import { terrainMat, outlineMat } from './materials.js';
 import { Batch } from './batch.js';
 import { mat4 } from './geometry.js';
 import { tileGeometry, tileTexture } from './terrainTile.js';
-import { addTree, addPine, addPalm, addRoots, addBeach, addTideLine, rockColor } from './props.js';
+import { addTree, addPine, addPalm, addBush, addRoots, addBeach, addTideLine, rockColor } from './props.js';
 
 const GRASS = [[0xa9b062, 0x98a356], null, [0x6a8a3c, 0x7a9446], [0xb3ab6c, 0xa39d62, 0xbfb47a], [0xa8a272, 0x9a9468]];
 
@@ -38,7 +37,7 @@ export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
   for (const t of tile.roots) { addRoots(B, kit, w, t, r); if (slicer.over()) yield; }
   addBeach(B, kit, w, tile, r);
   yield* addTideLine(B, kit, w, tile, r, slicer);
-  tile.bushes.forEach(t => { const s = (t.k === 2 ? 0.3 : 0.22) + r() * 0.25; B.add('bush', kit.bush, kit.canopyMat, mat4(t.x, t.y + s * 0.3, t.z, s, s * 0.7, s, r() * 6), pick(r, BUSHC[t.k]), { outline: 1.1 }); });
+  tile.bushes.forEach(t => addBush(B, kit, t, r));
 
   // ground cover
   const n = 89;
