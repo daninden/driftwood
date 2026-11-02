@@ -79,7 +79,7 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - Orthographic, rotated 45° and tilted 30° down: isometric without perspective.
 - Tree crowns between the camera and the castaway turn see-through.
 - No plinth while playing.
-- The camera stays far enough away that the castaway is small in a big landscape (about 5% of the screen height): zooming in too close shrinks the loneliness.
+- The camera stays far enough away that the castaway is small in a big landscape (about 6% of the screen height): zooming in too close shrinks the loneliness.
 - On a summit the camera zooms out further (1.6×), as a reward for the climb.
 - **No interface for now:** no HUD, map or menu. What you see is the island.
 

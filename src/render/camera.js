@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { PITCH, YAW } from '../core/view.js';
 
-export const GAME_ZOOM = 8, SUMMIT_ZOOM = GAME_ZOOM * 1.6;
+export const GAME_ZOOM = 7, SUMMIT_ZOOM = GAME_ZOOM * 1.6;
 const R = 400;
 
 export function createCamera() {
