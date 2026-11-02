@@ -6,6 +6,7 @@
  *     frameInfo: { distance, terrain } from game.update
  *     follows the player with camera and sun, streams detailed tiles,
  *     updates see-through crowns, footprints, mood, and draws the frame.
+ *   view.zoomBy(steps)   zoom the camera (positive = further away), see render/camera
  *   view.pickGround(clientX, clientY) -> { x, z } | null
  *   view.canvas
  *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
@@ -77,5 +78,5 @@ export async function createIslandView(world, container, progress) {
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, pickGround, canvas: renderer.domElement, stats, settle };
+  return { render, zoomBy: cam.zoomBy, pickGround, canvas: renderer.domElement, stats, settle };
 }

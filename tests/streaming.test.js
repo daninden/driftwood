@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { tileInView, createStreamer } from '../src/render/streaming.js';
 import { createSlicer } from '../src/core/slicer.js';
 import { HALF, T, NT } from '../src/world/constants.js';
-import { GAME_ZOOM, SUMMIT_ZOOM } from '../src/render/camera.js';
+import { GAME_ZOOM, MAX_ZOOM, SUMMIT_MAX } from '../src/render/camera.js';
 
 const grid = () => { const t = []; for (let tz = 0; tz < NT; tz++) for (let tx = 0; tx < NT; tx++) t.push({ tx, tz, x0: -HALF + tx * T, z0: -HALF + tz * T, hmax: 1 }); return t; };
 
@@ -17,9 +17,8 @@ describe('tileInView', () => {
     const n = grid().filter(t => tileInView(t, { x: 0, z: 0 }, GAME_ZOOM, 1.6)).length;
     expect(n).toBeGreaterThan(1); expect(n).toBeLessThan(12);
   });
-  it('still wants only a few more tiles zoomed out on a summit', () => {
-    const n = grid().filter(t => tileInView(t, { x: 0, z: 0 }, SUMMIT_ZOOM, 1.6)).length;
-    expect(n).toBeLessThan(16);
+  it('still wants only a few more tiles fully zoomed out, and on a summit', () => {
+    for (const z of [MAX_ZOOM, SUMMIT_MAX]) expect(grid().filter(t => tileInView(t, { x: 0, z: 0 }, z, 1.6)).length).toBeLessThan(16);
   });
 });
 

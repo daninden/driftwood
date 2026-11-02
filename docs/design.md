@@ -80,7 +80,8 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - Tree crowns between the camera and the castaway turn see-through.
 - No plinth while playing.
 - The camera stays far enough away that the castaway is small in a big landscape (about 6% of the screen height): zooming in too close shrinks the loneliness.
-- On a summit the camera zooms out further (1.6×), as a reward for the climb.
+- **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved. Touch is not supported for now: the target is a normal desktop browser.
+- On a summit the camera zooms out a further 1.6× on top of the player's zoom (at most 14), as a reward for the climb.
 - **No interface for now:** no HUD, map or menu. What you see is the island.
 
 ## Decisions

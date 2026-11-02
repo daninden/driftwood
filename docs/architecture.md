@@ -37,7 +37,7 @@ Rules:
 | `world/spots` | Finding places: the start spot, examples of each passage (for tests). |
 | `world/world` | Builds everything from a seed and returns one read-only object with queries. |
 | `game/movement` | Walking rules: walls block, passages let you climb, sliding along walls. |
-| `game/input` | Keys and clicks/taps to a movement intent. |
+| `game/input` | Keys and clicks/taps to a movement intent; mouse wheel and `+`/`-` to zoom steps. |
 | `game/game` | Game state (the player) and the per-frame update. |
 | `render/palette` | All colours of style C in one place, the castaway's included. |
 | `render/terrainColor` | Painted ground colour per point (pure, tested against the prototype). |
@@ -53,7 +53,7 @@ Rules:
 | `render/water` | Sea, river ribbons, surf, foam and spray at waterfalls. |
 | `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle. |
 | `render/footprints` | Footprints in the sand. |
-| `render/camera` | Orthographic camera that follows; zooms out on the summits; ground picking. |
+| `render/camera` | Orthographic camera that follows; player zoom within fixed limits; zooms out on the summits; ground picking. |
 | `render/mood` | Atmosphere per terrace: colour grading, mist, cooler light, paper grain, vignette. |
 | `render/stage` | Renderer, scene, lights and the shadow that follows the view. |
 | `render/islandView` | Puts all render modules together and draws a frame. |
@@ -63,7 +63,9 @@ Every module starts with a header that says what it does, what it exports and wh
 ## One frame
 
 ```
-input ──> game.update(input, dt) ──> the player moves (game/movement)
+input ──> view.zoomBy(input.takeZoom())   zoom is a view setting, not game state
+  │
+  └─> game.update(input, dt) ──> the player moves (game/movement)
                 │
                 └─> { distance, terrain } ──> view.render(player, info, dt)
                                                 ├ camera and sun follow
@@ -93,6 +95,7 @@ npm run smoke     opens the build in headless Chromium, walks a bit, takes scree
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea.
 - `tests/streaming.test.js`, `tests/ghosts.test.js` and `tests/core.test.js` test the pure logic without a browser.
 - `tests/game.test.js` tests click-to-walk and the saveable state.
+- `tests/zoom.test.js` tests the zoom limits and the zoom input (wheel, `+`/`-`, Ctrl/Cmd left to the browser).
 
 Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for.
 
