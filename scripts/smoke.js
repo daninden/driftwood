@@ -2,8 +2,10 @@
 // Run `npm run build` first. Usage: npm run smoke [-- x,z]
 // Loads dist/driftwood.html, waits for the world, builds the detailed tiles
 // around the start (or around x,z), walks for a moment, gathers driftwood and
-// lays it down, and saves screenshots.
-// smoke-0.png shows the loader while it is filling.
+// lays it down, waits for low water, sleeps (with Z) through the next high
+// water, and saves screenshots.
+// smoke-0.png shows the loader while it is filling; smoke-5 low water,
+// smoke-6 the castaway asleep, smoke-7 awake again with new wood on the beach.
 //
 // A headless browser here has no GPU and draws only a few frames per second,
 // so after loading the test does not play in real time: it pauses drawing,
@@ -75,6 +77,32 @@ const pile = await page.evaluate(() => {
 console.log('pile of', pile);
 if (pile !== 3) errors.push('laid down ' + pile + ' pieces instead of 3');
 await shot('smoke-4.png');
+
+// Low water: the sea falls back and a strip of wet sand lies dry.
+const sea = await page.evaluate(() => {
+  const { game, step } = window.__driftwood;
+  game.clock.time = 0.2 + 12.42 / 48; step(0.1);
+  return game.sea;
+});
+console.log('sea level at low water', sea.toFixed(2));
+if (sea > -0.35) errors.push('the sea did not fall at low water: ' + sea);
+await shot('smoke-5.png');
+
+// Sleep: Z lies down, time runs fast, the next high water brings wood.
+await page.keyboard.press('z');
+const asleep = await page.evaluate(() => { const { game, step } = window.__driftwood; step(4); return { asleep: game.sleep.asleep, lie: game.player.lie, washes: game.wood.washes }; });
+console.log('asleep', JSON.stringify(asleep));
+if (!asleep.asleep || asleep.lie < 1) errors.push('did not lie down to sleep');
+await shot('smoke-6.png');
+const woke = await page.evaluate(() => {
+  const { game, step } = window.__driftwood, t = step(60, () => !game.sleep.asleep && game.player.lie === 0);
+  return { t, rest: game.sleep.rest(), washes: game.wood.washes, fresh: game.wood.fresh.length, time: game.clock.time };
+});
+console.log('woke', JSON.stringify(woke));
+if (woke.rest < 0.95) errors.push('not rested after sleeping: ' + woke.rest);
+if (woke.washes < 1 || woke.fresh < 1) errors.push('no wood washed up while sleeping');
+await page.evaluate(() => { const { game } = window.__driftwood, l = game.wood.fresh[0]; console.log('fresh wood at', l.x.toFixed(1), l.z.toFixed(1)); });
+await shot('smoke-7.png');
 await browser.close();
 console.log('done after', secs());
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }

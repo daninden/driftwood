@@ -17,6 +17,10 @@
  * enough that the head and hat stay readable). When the castaway picks up or lays down wood, the upper
  * body bends down and up again (player.stoop).
  *
+ * To sleep (player.lie) the castaway lies down on his back with the straw
+ * hat over his face; tired (player.tired) he lets his head and shoulders
+ * hang and his arms swing less.
+ *
  * createHero(scene) -> { group, update(player, wadeDepth, load?) }
  *   update copies position and heading from the player state
  *   (game/movement) and animates the walk cycle from player.phase.
@@ -79,8 +83,9 @@ export function createHero(scene) {
   const beard = part(torso, new THREE.SphereGeometry(0.11, 12, 8), hair, 0, 0.97, 0.045); beard.scale.set(1.1, 0.85, 0.9);
   box(torso, 0.13, 0.1, 0.07, hair, 0, 0.885, 0.085);                           // long, unkempt beard over the chest
   box(torso, 0.07, 0.06, 0.05, hair, 0.01, 0.83, 0.1);
-  part(torso, new THREE.CylinderGeometry(0.24, 0.24, 0.025, 18), hatM, 0, 1.13, 0);
-  part(torso, new THREE.CylinderGeometry(0.12, 0.14, 0.13, 16), hatM, 0, 1.2, 0);
+  const hat = joint(0, 1.13, 0, torso);   // tipped over the face to sleep
+  part(hat, new THREE.CylinderGeometry(0.24, 0.24, 0.025, 18), hatM, 0, 0, 0);
+  part(hat, new THREE.CylinderGeometry(0.12, 0.14, 0.13, 16), hatM, 0, 0.07, 0);
 
   part(shR, new THREE.CylinderGeometry(0.018, 0.022, 1.35, 6), toon(HERO.staff), 0.06, -0.3, 0.1);
 
@@ -120,14 +125,18 @@ export function createHero(scene) {
   function update(p, wade = 0, load = []) {
     setLoad(load);
     group.position.set(p.x, p.y - Math.min(0.35, wade * 0.6), p.z); group.rotation.y = p.heading;
-    const sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) : 0, carry = load.length > 0;
+    const tired = p.tired || 0, lie = p.lie || 0, ly = lie * lie * (3 - 2 * lie);
+    const sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) * (1 - 0.35 * tired) : 0, carry = load.length > 0;
     const bend = Math.sin(Math.PI * Math.min(1, p.stoop || 0));   // down and up again
-    hipL.rotation.x += (sw + bend * 0.5 - hipL.rotation.x) * 0.4; hipR.rotation.x += (-sw + bend * 0.5 - hipR.rotation.x) * 0.4;
-    upper.rotation.x = bend * 0.9;
+    const sit = Math.sin(Math.PI * Math.min(1, ly * 1.6)) * (ly < 0.62 ? 1 : 0);   // knees bend on the way down and up
+    hipL.rotation.x += (sw + bend * 0.5 + sit * 0.9 - hipL.rotation.x) * 0.4; hipR.rotation.x += (-sw + bend * 0.5 + sit * 0.9 - hipR.rotation.x) * 0.4;
+    upper.rotation.x = bend * 0.9 + tired * 0.18 * (1 - ly);
+    body.rotation.x = -Math.PI / 2 * ly;   // on his back, face up, head away from where he faced
+    hat.position.set(0, 1.13 - 0.1 * ly, 0.13 * ly); hat.rotation.x = Math.PI / 2 * ly;
     shL.rotation.z = carry ? -0.35 : 0;
     shL.rotation.x += ((carry ? -0.35 : -sw * 0.8) - bend * 0.5 - shL.rotation.x) * 0.4;   // the left arm holds the bundle
     shR.rotation.x += (sw * 0.5 - 0.15 - bend * 0.6 - shR.rotation.x) * 0.4;
-    body.position.y = (p.moving ? Math.abs(Math.cos(p.phase)) * 0.03 : 0) - bend * 0.12;
+    body.position.y = (p.moving ? Math.abs(Math.cos(p.phase)) * 0.03 : 0) - bend * 0.12 + ly * 0.07;
   }
   return { group, update };
 }

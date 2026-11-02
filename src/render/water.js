@@ -4,10 +4,14 @@
  *   sea floor, two translucent sea planes
  *   river ribbons: vertex colour (white where it runs fast or falls) and a
  *     per-vertex alpha that fades at the banks and the mouth
- *   surf foam along the shore, foam and spray at the foot of waterfalls
+ *   surf foam along the shore, for each of the FOAM_LEVELS of the tide (the
+ *     levels next to the current sea level fade in), foam and spray at the
+ *     foot of waterfalls
  *   small driftwood along the beaches, visible from afar
  *
- * buildWater(world, kit, scene)
+ * buildWater(world, kit, scene) -> { setSea(level) }
+ *   setSea moves the sea planes and the surf with the tide (game/tide)
+ * FOAM_LEVELS, foamWeights(level) -> weight 0..1 per foam level, pure
  *
  * Depends on: three, core/*, render/palette, render/materials, render/batch
  */
@@ -19,6 +23,10 @@ import { P, PC } from './palette.js';
 import { toon, outlineMat } from './materials.js';
 import { Batch } from './batch.js';
 import { mat4 } from './geometry.js';
+
+export const FOAM_LEVELS = [0, -0.1, -0.2, -0.3, -0.4];
+const FOAM_STEP = 0.1;
+export const foamWeights = s => FOAM_LEVELS.map(l => Math.max(0, 1 - Math.abs(s - l) / FOAM_STEP));
 
 function perpOf(rv, k) { const a = rv.pts[Math.max(0, k - 2)], b = rv.pts[Math.min(rv.n - 1, k + 2)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1; return { x: -(b.z - a.z) / l, z: (b.x - a.x) / l }; }
 
@@ -57,16 +65,27 @@ export function buildWater(w, kit, scene) {
   w.rivers.forEach(rv => scene.add(riverRibbon(w, rv)));
 
   const foamGeo = new THREE.CircleGeometry(1, 10).rotateX(-Math.PI / 2);
-  const foamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false }), foamMat2 = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false });
+  const foamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false });
   const B = new Batch(outlineMat), r = mulberry32(w.seed + 77);
+  // the surf at each level of the tide: a ring where the sea meets the sand, a fainter one further out
+  const surf = FOAM_LEVELS.map(l => {
+    const m1 = foamMat.clone(), m2 = foamMat.clone(); m2.opacity = 0.4;
+    const g = new THREE.Group(); g.position.y = l; scene.add(g);
+    return { l, g, m1, m2, B: new Batch(outlineMat) };
+  });
   w.tiles.forEach(tl => {
     if (tl.hmax < -8.9) return; const n = 80;
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const x = tl.x0 + (i + r()) * 0.5, z = tl.z0 + (j + r()) * 0.5, y = H(x, z);
-      if (Math.abs(y) < 0.05 && r() < 0.5) B.add('f', foamGeo, foamMat, mat4(x, 0.02, z, 0.15 + r() * 0.25, 1, 0.08 + r() * 0.12, r() * 6), 0xffffff, { cast: false, order: 6 });
-      else if (y > -0.42 && y < -0.32 && r() < 0.35) B.add('f2', foamGeo, foamMat2, mat4(x, 0.02, z, 0.2 + r() * 0.3, 1, 0.06 + r() * 0.08, r() * 6), 0xffffff, { cast: false, order: 6 });
+      if (y > 0.05 || y < -0.85) continue;
+      for (const f of surf) {
+        const d = y - f.l;
+        if (Math.abs(d) < 0.05 && r() < 0.5) f.B.add('f', foamGeo, f.m1, mat4(x, 0.02, z, 0.15 + r() * 0.25, 1, 0.08 + r() * 0.12, r() * 6), 0xffffff, { cast: false, order: 6 });
+        else if (d > -0.42 && d < -0.32 && r() < 0.35) f.B.add('f2', foamGeo, f.m2, mat4(x, 0.02, z, 0.2 + r() * 0.3, 1, 0.06 + r() * 0.08, r() * 6), 0xffffff, { cast: false, order: 6 });
+      }
     }
   });
+  surf.forEach(f => f.B.build(f.g));
   const sprayMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2, depthWrite: false }), sprayGeo = new THREE.IcosahedronGeometry(1, 2);
   w.rivers.forEach(rv => rv.falls.forEach(f => {
     const pb = rv.pts[Math.min(rv.n - 1, f.base + 3)], lw = rv.LW(f.base / (rv.n - 1)) + 0.03, wd = rv.W(f.base / (rv.n - 1));
@@ -79,4 +98,11 @@ export function buildWater(w, kit, scene) {
     for (let n = 0; n < 40; n++) { const x = tl.x0 + rr() * T, z = tl.z0 + rr() * T, y = H(x, z); if (y > 0.15 && y < 0.7 && slope(x, z) < 0.4 && Lat(x, z) < 0.3 && rr() < 0.25) { const len = 0.5 + rr() * 0.9; B.add('dw', kit.driftwood, kit.smallMat, mat4(x, y + 0.04, z, 0.7 + rr() * 0.4, len, 0.7 + rr() * 0.4, rr() * 3, 0, Math.PI / 2), pick(rr, [0xb0a592, 0x9a8f7d, 0xa89b85]), { outline: 1.15 }); } }
   });
   B.build(scene);
+
+  function setSea(s) {
+    sea.position.y = s; seaTop.position.y = s + 0.005;
+    foamWeights(s).forEach((k, i) => { const f = surf[i]; f.g.visible = k > 0.001; f.m1.opacity = 0.7 * k; f.m2.opacity = 0.4 * k; });
+  }
+  setSea(0);
+  return { setSea };
 }

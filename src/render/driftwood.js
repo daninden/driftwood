@@ -7,6 +7,8 @@
  * Each log's look (colour, a side branch, a root plate) is fixed by its
  * place, so it looks the same on the beach, under the arm and on a pile.
  * Only what is on the beach has its branch and root plate drawn.
+ * Wood that a high water brings (game/wood `fresh`) fades in over FADE_IN
+ * seconds, in a group of its own, before it joins its tile.
  *
  * driftLook(log) -> { col, branch, roots }   pure; branch and roots are
  *   null or parameters
@@ -14,7 +16,8 @@
  * addPile(B, kit, H, pile)          logs stacked crosswise, two per layer
  * createWoodView(scene, world, kit, wood) -> woodView
  *   woodView.addTile(tile), woodView.dropTile(tile)   with the detailed tiles
- *   woodView.update()   rebuilds what changed since the last call (wood.version)
+ *   woodView.update(dt)   rebuilds what changed since the last call
+ *     (wood.version) and fades in freshly washed-up wood (dt in real seconds)
  *
  * Depends on: three, core/noise, render/geometry, render/nearTile (disposeGroup)
  */
@@ -22,9 +25,10 @@ import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
 import { stickMatrix } from './geometry.js';
 import { Batch } from './batch.js';
-import { outlineMat } from './materials.js';
+import { outlineMat, toon } from './materials.js';
 import { disposeGroup } from './nearTile.js';
 
+export const FADE_IN = 3;
 const COLS = [0xa8987c, 0x9a8a70, 0xb4a68c, 0x8e8068];
 
 export function driftLook(log) {
@@ -65,18 +69,33 @@ export function addPile(B, kit, H, pile) {
 
 export function createWoodView(scene, w, kit, wood) {
   const tiles = new Map();   // tile -> group of its beach logs
-  let piles = null, seen = -1;
-  const build = add => { const grp = new THREE.Group(), B = new Batch(outlineMat); add(B); B.build(grp); scene.add(grp); return grp; };
-  const tileGroup = tile => build(B => { for (const l of tile.drift) if (wood.onBeach(l)) addBeachLog(B, kit, w.H, l); });
+  let piles = null, seen = -1, washes = wood.washes, fading = null, fadeT = 0, fresh = new Set();
+  const fadeMat = toon(0xffffff, { transparent: true, opacity: 0 }), fadeOutline = outlineMat.clone(); fadeOutline.transparent = true; fadeOutline.opacity = 0;
+  const build = (add, mat = kit.smallMat, ol = outlineMat) => { const grp = new THREE.Group(), B = new Batch(ol); add(B, mat); B.build(grp); scene.add(grp); return grp; };
+  const tileGroup = tile => build(B => { for (const l of wood.beachLogs(tile)) if (!fresh.has(l)) addBeachLog(B, kit, w.H, l); });
+  const rebuildTiles = () => tiles.forEach((g, tile) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
+  const buildFading = () => {
+    if (fading) disposeGroup(fading);
+    fading = build((B, mat) => { for (const l of fresh) if (wood.onBeach(l)) addBeachLog(B, { ...kit, smallMat: mat }, w.H, l); }, fadeMat, fadeOutline);
+    fading.traverse(o => { o.castShadow = false; });   // no shadow before the wood is there
+  };
 
   function addTile(tile) { if (tile.drift && tile.drift.length && !tiles.has(tile)) tiles.set(tile, tileGroup(tile)); }
   function dropTile(tile) { const g = tiles.get(tile); if (g) { disposeGroup(g); tiles.delete(tile); } }
-  function update() {
-    if (wood.version === seen) return;
-    seen = wood.version;
-    tiles.forEach((g, tile) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
-    if (piles) disposeGroup(piles);
-    piles = build(B => { for (const p of wood.piles) addPile(B, kit, w.H, p); });
+  function update(dt = 0) {
+    if (wood.washes !== washes) { washes = wood.washes; fresh = new Set(wood.fresh); fadeT = 0; seen = -1; }
+    if (wood.version !== seen) {
+      seen = wood.version;
+      rebuildTiles();
+      if (fresh.size) buildFading();
+      if (piles) disposeGroup(piles);
+      piles = build(B => { for (const p of wood.piles) addPile(B, kit, w.H, p); });
+    }
+    if (fresh.size) {
+      fadeT += dt;
+      const k = Math.min(1, fadeT / FADE_IN); fadeMat.opacity = k; fadeOutline.opacity = k;
+      if (k >= 1) { fresh = new Set(); if (fading) { disposeGroup(fading); fading = null; } rebuildTiles(); }
+    }
   }
   return { addTile, dropTile, update };
 }

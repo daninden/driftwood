@@ -15,10 +15,15 @@
   #loader .bar { width: 200px; height: 4px; border: 1px solid rgba(46, 36, 24, 0.45); border-radius: 3px; overflow: hidden; }
   #loader .fill { height: 100%; background: #2e2418; transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease-out; }
   body.ready #loader { opacity: 0; }
+  #rest { position: fixed; left: calc(18px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); width: 26px; height: 26px; pointer-events: none; visibility: hidden; transition: opacity 1.5s ease; }
+  body.ready #rest { visibility: visible; }
+  #rest .rim { fill: none; stroke: #2e2418; stroke-opacity: 0.5; stroke-width: 1; }
+  #rest .lit { fill: #2e2418; }
 </style>
 </head>
 <body>
 <div id="island"></div>
+<svg id="rest" viewBox="-1 -1 26 26" aria-hidden="true"><circle class="rim" cx="12" cy="12" r="12"/><path class="lit"/></svg>
 <div id="loader"><div class="name">Driftwood</div><div class="bar"><div class="fill"></div></div></div>
 <script type="module" src="/src/main.js"></script>
 </body>

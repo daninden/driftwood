@@ -71,7 +71,21 @@ The first game element. Driftwood lies on the dry beach above the tide line, a f
 - **Laying down:** click or tap the castaway: everything carried goes down at the feet, on a pile close by or as a new pile. Not in water.
 - **Piles** stay where they are, and can be picked up again by clicking them (the top pieces first, as many as fit).
 - No counter, no inventory: what you carry is what you see. Wood is never solid; you walk over it.
-- Wood does not wash up again yet; the beach empties as you gather.
+- **New wood with every high water:** each high water washes up one or two new pieces per stretch of beach, on the dry sand above the tide line, each with its own look. They fade in over a few seconds. A stretch of beach never gets more loose wood than it had at the start, so the beach never fills up; your piles do not count. What you gather slowly grows back.
+- **The flood takes back** a pile laid on the wet sand of low water, below the high-water line. Wood cannot be laid down in the sea.
+
+## Ebb and flow
+
+- **Two high waters a day,** as on a real coast: the tide comes round every 12 h 25 min of game time (about 10⅓ minutes of play), so high water falls a little later each day. A game starts on a falling tide, mid-morning.
+- At high water the sea stands where it always stood, at the tide line of seaweed. At low water it is **0.4 m lower**: a strip of wet sand falls dry, and you can walk further out, onto the sandbanks of the lagoons. The surf follows the water's edge.
+- When the flood comes in round you, you can always wade back to shore; you cannot go further out. Footprints the water covers are wiped out.
+
+## Sleep
+
+- The castaway has to sleep **at least every two days** (40 minutes of play). After a day and a half he is tired: his head and shoulders hang, his arms swing less and he walks slower, down to 75 % at the limit. At two days he falls asleep where he stands.
+- **Going to sleep:** hold the castaway for about half a second (finger or mouse button), or press `Z`. A short tap on the castaway still lays wood down. You can sleep anywhere on dry land, not in the water and not on a climbing route, and at any time of day. He first lays down what he carries, then lies on his back with the straw hat over his face.
+- **A sleep lasts eight hours** of game time; meanwhile time runs **20 times as fast** (about 20 seconds), easing in and out. The sun or moon, the tide and the wood all go on: wood that washes up meanwhile lies there when you wake. A full sleep rests you completely. Any key or tap wakes you early, only partly rested.
+- **How long still:** a small moon in the bottom left corner, in the dark brown of the loading screen. Full when rested, it wanes to a thin sickle and to nothing as the two days run out, and waxes again while you sleep. It is faint most of the time and grows clearer in the last half day. No numbers.
 
 ## Day and night
 
@@ -80,7 +94,7 @@ The first game element. Driftwood lies on the dry beach above the tide line, a f
 - **Dusk and dawn** last about a minute each around the horizon: the light turns lilac and mauve, the warm coast grading fades and colours lose some saturation.
 - **Night lasts about 5 minutes and is moonlit:** cool blue, dim, with soft moon shadows, but the island stays visible. Darker nights (where only your fire gives light) can come once there is fire.
 - The light never comes from lower than about 12°, so shadows stay readable.
-- No clock on screen, no stars, moon disc or weather yet, and the day has no effect on the game yet. What the day/night cycle should mean for playing is still to be discussed.
+- No clock on screen, no stars, moon disc or weather yet. The day drives the tide (see *Ebb and flow*) and sleeping speeds it up (see *Sleep*); what else it should mean for playing is still to be discussed.
 
 ## World
 
@@ -117,16 +131,16 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - No plinth while playing.
 - The camera stays far enough away that the castaway is small in a big landscape (about 6% of the screen height): zooming in too close shrinks the loneliness.
 - **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved.
-- **Touch screens:** tap to walk to a spot, drag to steer, double tap to run there (hold and drag after the double tap to steer while running). Two fingers: pinch to zoom (same limits), twist to turn the view; the island turns with the fingers, and the castaway stops while two fingers are down. No tilting on a touch screen. The browser's own page zoom is switched off.
+- **Touch screens:** tap to walk to a spot, drag to steer, double tap to run there (hold and drag after the double tap to steer while running). Hold the castaway to sleep (see *Sleep*). Two fingers: pinch to zoom (same limits), twist to turn the view; the island turns with the fingers, and the castaway stops while two fingers are down. No tilting on a touch screen. The browser's own page zoom is switched off.
 - On a summit the camera zooms out a further 1.6× on top of the player's zoom (at most 14), as a reward for the climb.
-- **No interface for now:** no HUD, map or menu. What you see is the island. The one exception is the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
+- **Almost no interface:** no HUD, map or menu. What you see is the island. The exceptions are the faint moon that shows how long you can still go without sleep (see *Sleep*), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
 
 ## Decisions
 
 - **Language:** everything is in English: the game, the code and the documentation.
 - **Name:** Driftwood.
 - **Engine:** Three.js in the browser for now. A large tiled world works well there. Godot may come later, for example for Steam or a console.
-- **Scope of the base:** the island and walking, then atmosphere. The first game element is gathering driftwood (see above); more only after discussion.
+- **Scope of the base:** the island and walking, then atmosphere. The first game elements are gathering driftwood, ebb and flow, and sleep (see above); more only after discussion.
 - **Saving:** not built. When it comes: local in the browser first, behind one interface, so a backend can be added later without changing the game (see `architecture.md`).
 - **Working method:** see `CLAUDE.md`.
 
@@ -140,11 +154,10 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 | Digging | The ground really sinks; salt water on the beach, nails at the wreck |
 | Building | Fire (4 branches, 1 driftwood), lean-to (6 driftwood, 6 branches) |
 | Building, later | Rope from lianas or palm fibre, lashing, palisade, storage pit, raft |
-| Tide | Ebb and flow; every morning new wood washes up |
 | Day and night | At night only the light of your fire; a fire can be seen from far away |
 | Strangers | A canoe lands on a distant beach and lights a fire; within 10 m they see you and flee; they leave footprints |
 | Journal | Messages as journal lines in an 18th-century hand |
-| Basic needs | Fresh water (rain, well, river), food (coconut, fish, crab), sleep |
+| Basic needs | Fresh water (rain, well, river), food (coconut, fish, crab); sleeping in a lean-to |
 | Weather | A storm wrecks your lean-to but washes up new driftwood |
 | Map | Filled in by yourself, journal style; only what you have seen |
 | Ending | Build a raft and sail away, or stay |
@@ -154,7 +167,7 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 - Who are the strangers (mutineers, slave traders, other castaways)?
 - Saving: local only, or a backend later?
 - Mood per terrace: weather over time (mist in the rain forest, wind on the summit).
-- What should the day/night cycle mean for playing (food, sleep, strangers, fire)?
+- What else should the day/night cycle mean for playing (food, strangers, fire)?
 
 ## Known weak spots
 

@@ -6,9 +6,10 @@
  * staying for ever. A ring buffer of flat instanced ovals with a per-print
  * opacity.
  *
- * createFootprints(scene, H) -> { step(player, distance, onSand) }
- *   Call every frame with the distance walked; drops a print every 0.21
- *   units, alternating left and right foot.
+ * createFootprints(scene, H) -> { step(player, distance, onSand), wash(sea) }
+ *   Call step every frame with the distance walked; drops a print every 0.21
+ *   units, alternating left and right foot. wash(sea) wipes out the prints
+ *   the rising tide has covered (on the wet sand of low water).
  * printAlpha(age) -> opacity of the print `age` steps old (0 = newest), pure
  * MAX, FADE
  *
@@ -35,15 +36,22 @@ export function createFootprints(scene, H) {
   const zero = new THREE.Matrix4().makeScale(0, 0, 0); for (let i = 0; i < MAX; i++) im.setMatrixAt(i, zero);
   scene.add(im);
   let next = 0, side = 1, acc = 0, count = 0;
+  const ys = new Float32Array(MAX), gone = new Uint8Array(MAX);
   function step(p, distance, onSand) {
     if (!onSand) { acc = 0; return; }
     acc += distance; if (acc < SPACING) return; acc = 0;
     const px = p.x + Math.cos(p.heading) * 0.05 * side, pz = p.z - Math.sin(p.heading) * 0.05 * side;
-    im.setMatrixAt(next, mat4(px, H(px, pz) + 0.012, pz, 0.028, 1, 0.06, p.heading)); im.instanceMatrix.needsUpdate = true;
+    const y = H(px, pz); ys[next] = y; gone[next] = 0;
+    im.setMatrixAt(next, mat4(px, y + 0.012, pz, 0.028, 1, 0.06, p.heading)); im.instanceMatrix.needsUpdate = true;
     count = Math.min(MAX, count + 1);
-    for (let age = 0; age < count; age++) fade.array[(next - age + MAX) % MAX] = printAlpha(age);
+    for (let age = 0; age < count; age++) { const i = (next - age + MAX) % MAX; fade.array[i] = gone[i] ? 0 : printAlpha(age); }
     fade.needsUpdate = true;
     next = (next + 1) % MAX; side = -side;
   }
-  return { step };
+  function wash(sea) {
+    let any = false;
+    for (let i = 0; i < MAX; i++) if (!gone[i] && fade.array[i] > 0 && ys[i] < sea) { gone[i] = 1; fade.array[i] = 0; any = true; }
+    if (any) fade.needsUpdate = true;
+  }
+  return { step, wash };
 }

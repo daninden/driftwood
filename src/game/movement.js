@@ -2,7 +2,10 @@
  * game/movement — how the castaway moves over the island.
  *
  * Rules
- *   - Open sea (ground below -0.6) and deep river water (> 0.85) block.
+ *   - Open sea (ground more than 0.6 below the sea level, which goes up and
+ *     down with the tide, game/tide) and deep river water (> 0.85) block.
+ *     When the flood comes in round you, you can always wade back to shore:
+ *     only going deeper is blocked.
  *   - Gentle ground (steepness < 0.85) is walked at full speed, up to 1.25
  *     at 70 %.
  *   - Anything steeper is a wall and blocks, unless it is a natural passage
@@ -22,8 +25,10 @@
  *
  * Pure functions on a world (see world/world); no DOM, no Three.js.
  *
- * terrainAt(world, x, z) -> { y, L, s, rv, inRiver, depth, pa, fr, climb }
- * stepFactor(world, from, x, z) -> 0 (blocked) or a speed factor 0..1
+ * terrainAt(world, x, z, sea?) -> { y, L, s, rv, inRiver, depth, pa, fr, climb }
+ *   sea: the current sea level (default 0, high water); depth is the depth
+ *   of the river or the sea at (x, z)
+ * stepFactor(world, from, x, z, sea?) -> 0 (blocked) or a speed factor 0..1
  * obstaclesNear(world, x, z) -> [{ x, z, r }] blocking circles from the tiles
  *   around (x, z); r already includes the castaway's own radius (BODY)
  * bushFactor(world, x, z) -> speed factor 0..1 from bushes at (x, z)
@@ -33,8 +38,9 @@
  * moveIntent(input, player) -> unit direction { x, z } or null, from keys/target;
  *   keys walk relative to the screen, so they use input.yaw (the current
  *   view angle, see core/view; the starting view when missing)
- * stepPlayer(world, player, dir, dt, run, load?) -> { moved, distance, blocked }
- *   Mutates player. load (default 1) scales the speed, for carrying (game/wood). `phase` advances with distance (for the walk cycle).
+ * stepPlayer(world, player, dir, dt, run, load?, sea?) -> { moved, distance, blocked }
+ *   Mutates player. load (default 1) scales the speed, for carrying
+ *   (game/wood) and tiredness (game/sleep); sea is the sea level. `phase` advances with distance (for the walk cycle).
  *
  * Depends on: core/view, world/constants, world/vegetation
  */
@@ -115,16 +121,17 @@ export function pushOut(w, a, x, z) {
   return { x, z };
 }
 
-export function terrainAt(w, x, z) {
+export function terrainAt(w, x, z, sea = 0) {
   const y = w.H(x, z), L = w.Lat(x, z), s = w.slope(x, z);
   const rv = w.riverAt(x, z), inRiver = !!(rv && rv.d < rv.hw + 0.1 && y < rv.lw);
   const pa = w.passAt(x, z, L), fr = rv ? w.fallRouteAt(x, z) : 0, climb = Math.max(pa.any, fr);
-  return { y, L, s, rv, inRiver, depth: inRiver ? rv.lw - y : (y < 0 ? -y : 0), pa, fr, climb };
+  return { y, L, s, rv, inRiver, depth: inRiver ? rv.lw - y : (y < sea ? sea - y : 0), pa, fr, climb };
 }
 
-export function stepFactor(w, a, x, z) {
-  const b = terrainAt(w, x, z), dist = Math.hypot(x - a.x, z - a.z) || 1e-6, grade = (b.y - a.y) / dist;
-  if (b.y < -0.6 || b.depth > 0.85) return 0;
+export function stepFactor(w, a, x, z, sea = 0) {
+  const b = terrainAt(w, x, z, sea), dist = Math.hypot(x - a.x, z - a.z) || 1e-6, grade = (b.y - a.y) / dist;
+  const deep = sea - 0.6;   // a rising tide may have overtaken you down to RANGE deeper: from there you can wade back
+  if ((b.y < deep && (b.y <= a.y || a.y < deep - 0.5)) || (b.inRiver && b.depth > 0.85)) return 0;
   const steep = Math.max(b.s, Math.abs(grade));
   let f;
   if (steep < 0.85) f = 1;
@@ -158,14 +165,14 @@ export function moveIntent(input, player) {
 
 const DEFLECT = [0, 0.5, -0.5, 1.0, -1.0, 1.35, -1.35];
 
-export function stepPlayer(w, p, dir, dt, run = false, load = 1) {
+export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0) {
   if (!dir) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: false }; }
   const base = (run ? RUN_SPEED : WALK_SPEED) * load * dt, here = { x: p.x, z: p.z, y: p.y };
   let best = null;
   for (const da of DEFLECT) {
     const c = Math.cos(da), s = Math.sin(da), dx = dir.x * c - dir.z * s, dz = dir.x * s + dir.z * c;
-    const probe = stepFactor(w, here, here.x + dx * 0.25, here.z + dz * 0.25); if (!probe) continue;
-    const f = stepFactor(w, here, here.x + dx * base, here.z + dz * base); if (!f) continue;
+    const probe = stepFactor(w, here, here.x + dx * 0.25, here.z + dz * 0.25, sea); if (!probe) continue;
+    const f = stepFactor(w, here, here.x + dx * base, here.z + dz * base, sea); if (!f) continue;
     best = { dx, dz, f: Math.min(f, probe) * (da === 0 ? 1 : Math.cos(da) * 0.9) }; break;
   }
   if (!best) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
@@ -174,7 +181,7 @@ export function stepPlayer(w, p, dir, dt, run = false, load = 1) {
     const q = pushOut(w, here, nx, nz);
     if (q.x !== nx || q.z !== nz) {
       step = Math.hypot(q.x - p.x, q.z - p.z); nx = q.x; nz = q.z;
-      if (step < 1e-4 || !stepFactor(w, here, nx, nz)) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
+      if (step < 1e-4 || !stepFactor(w, here, nx, nz, sea)) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
       best.dx = (nx - p.x) / step; best.dz = (nz - p.z) / step;
     }
   }

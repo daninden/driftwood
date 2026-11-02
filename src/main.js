@@ -3,7 +3,10 @@
  *
  * Seed: from the page address `#seed-<n>`, otherwise 1337 (the fixed demo).
  * For tests and development only: `?spawn=x,z` starts somewhere else, and
- * `?time=t` starts at another time of day (0 midnight, 0.5 noon).
+ * `?time=t` starts at another time of day (0 midnight, 0.5 noon), and
+ * `?awake=d` as if the castaway had been awake d days.
+ *
+ * The moon mark #rest (render/restMark) shows how rested the castaway is.
  *
  * The height grids, the slowest part of generating the world, are built in
  * Web Workers (heightWorker, parallelHeights), one per spare core.
@@ -26,6 +29,7 @@ import { startSpot } from './world/spots.js';
 import { createIslandView } from './render/islandView.js';
 import { createGame } from './game/game.js';
 import { createInput } from './game/input.js';
+import { createRestMark } from './render/restMark.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
 import HeightWorker from './heightWorker.js?worker&inline';
@@ -44,16 +48,18 @@ async function boot() {
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
   const view = await createIslandView(world, container, breathe, spawn);
   await view.prepare(spawn, breathe);   // no simple stand-in tiles round the castaway at the start
-  const qt = new URLSearchParams(location.search).get('time');
-  const game = createGame(world, spawn, qt === null ? {} : { time: Number(qt) });
+  const qs = new URLSearchParams(location.search), qt = qs.get('time'), qa = qs.get('awake');
+  const game = createGame(world, spawn, { ...(qt === null ? {} : { time: Number(qt) }), ...(qa === null ? {} : { sleep: { awake: Number(qa) } }) });
+  const mark = createRestMark(document.getElementById('rest'));
+  const show = info => { mark.update(info.rest, game.sleep.asleep); return info; };
   view.setWood(game.wood);
   const input = createInput(view.canvas, view.pickGround);
 
   let last = performance.now(), paused = false;
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };
-  const draw = () => { view.settle(game.player); for (let i = 0; i < 4; i++) view.render(game.player, game.update(input, 0), 0.5); };
-  view.render(game.player, game.update(input, 0), 0);
+  const draw = () => { view.settle(game.player); for (let i = 0; i < 4; i++) view.render(game.player, show(game.update(input, 0)), 0.5); };
+  view.render(game.player, show(game.update(input, 0)), 0);
   loading.done();
   document.body.classList.add('ready');
   window.__driftwood = { world, game, view, input, ready: true, pause: on => { paused = on; }, step, draw };
@@ -63,7 +69,7 @@ async function boot() {
     view.zoomBy(input.takeZoom());
     view.turn(input.takeTurn(dt));
     input.yaw = view.yaw;
-    view.render(game.player, game.update(input, dt), dt);
+    view.render(game.player, show(game.update(input, dt)), dt);
     requestAnimationFrame(frame);
   });
 }

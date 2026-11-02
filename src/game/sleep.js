@@ -1,0 +1,69 @@
+/**
+ * game/sleep — being awake, getting tired, and sleeping.
+ *
+ * Rules
+ *   - The castaway has to sleep at least every AWAKE_MAX days (2 days, 40
+ *     minutes of play). From TIRED_AT (1½ days) on he is tired: he walks
+ *     slower, down to TIRED_SLOW at the limit. At the limit he falls asleep
+ *     where he stands.
+ *   - A sleep lasts SLEEP_DAYS (8 hours) of game time; meanwhile time runs
+ *     SPEED times as fast (about 20 seconds), easing up and down over EASE
+ *     seconds. Sleeping rests you at REST_RATE days of being awake per day
+ *     slept: a full night takes away all of it. Waking early (any key or tap)
+ *     leaves you partly rested.
+ *   - Lying down and getting up take LIE seconds; you cannot walk meanwhile.
+ *
+ * createSleep(saved?) -> sleep
+ *   sleep.awake          days since rested (0 = fully rested)
+ *   sleep.asleep         true while sleeping
+ *   sleep.lie            0 standing .. 1 lying (eased, in real seconds)
+ *   sleep.rest()         1 fully rested .. 0 has to sleep now
+ *   sleep.tired()        0 .. 1 how tired, from TIRED_AT to AWAKE_MAX
+ *   sleep.speed()        walking speed factor from tiredness (1 .. TIRED_SLOW)
+ *   sleep.start()        lie down (when awake)
+ *   sleep.wake()         get up (when asleep)
+ *   sleep.update(dt) -> game seconds to run for dt real seconds (dt × the
+ *     current time speed); also eases lie, counts the sleep down, rests or
+ *     tires the castaway, and falls asleep at the limit
+ *   sleep.state() -> { awake, asleep, left }   plain, for saving
+ *   saved: such a state, to start from
+ *
+ * Pure; no DOM, no Three.js.
+ *
+ * Depends on: game/clock
+ */
+import { DAY_SECONDS } from './clock.js';
+
+export const AWAKE_MAX = 2, TIRED_AT = 1.5, TIRED_SLOW = 0.75;
+export const SLEEP_DAYS = 8 / 24, SPEED = 20, EASE = 1.5, LIE = 1.1;
+export const REST_RATE = AWAKE_MAX / SLEEP_DAYS;
+
+export function createSleep(saved) {
+  let warp = 0, left = 0;   // warp 0..1 eases the time speed; left: days of sleep to go
+  const sleep = {
+    awake: 0, asleep: false, lie: 0,
+    rest: () => Math.max(0, 1 - sleep.awake / AWAKE_MAX),
+    tired: () => Math.min(1, Math.max(0, (sleep.awake - TIRED_AT) / (AWAKE_MAX - TIRED_AT))),
+    speed: () => 1 - (1 - TIRED_SLOW) * sleep.tired(),
+    start() { if (!sleep.asleep) { sleep.asleep = true; left = SLEEP_DAYS; } },
+    wake() { if (sleep.asleep) { sleep.asleep = false; left = 0; } },
+    update, state: () => ({ awake: sleep.awake, asleep: sleep.asleep, left }),
+  };
+  if (saved) { sleep.awake = saved.awake || 0; if (saved.asleep) { sleep.asleep = true; left = saved.left || SLEEP_DAYS; sleep.lie = 1; warp = 1; } }
+
+  function update(dt) {
+    sleep.lie = Math.min(1, Math.max(0, sleep.lie + (sleep.asleep ? 1 : -1) * dt / LIE));
+    const lying = sleep.asleep && sleep.lie >= 1;
+    warp = Math.min(1, Math.max(0, warp + (lying ? 1 : -1) * dt / EASE));
+    const e = warp * warp * (3 - 2 * warp), gameDt = dt * (1 + (SPEED - 1) * e), days = gameDt / DAY_SECONDS;
+    if (sleep.asleep) {
+      sleep.awake = Math.max(0, sleep.awake - days * REST_RATE);
+      if (lying) { left -= days; if (left <= 0) sleep.wake(); }
+    } else {
+      sleep.awake += days;
+      if (sleep.awake >= AWAKE_MAX) { sleep.awake = AWAKE_MAX; sleep.start(); }
+    }
+    return gameDt;
+  }
+  return sleep;
+}

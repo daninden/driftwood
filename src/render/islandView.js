@@ -5,11 +5,11 @@
  *   start { x, z }: where the game begins, so only the far tiles in view
  *   there are built before it starts (the rest follow in the background)
  *   view.render(player, frameInfo, dt)
- *     frameInfo: { distance, terrain, time } from game.update
+ *     frameInfo: { distance, terrain, time, sea } from game.update
  *     follows the player with camera and sun, sets the light for the time
  *     of day, streams detailed tiles, cuts the window in the vegetation round
  *     the castaway (render/cutout),
- *     footprints, mood, and draws the frame.
+ *     footprints, mood, sets the sea level of the tide, and draws the frame.
  *   view.zoomBy(steps)   zoom the camera (positive = further away), see render/camera
  *   view.turn({ yaw, pitch })   turn and tilt the view (radians), see render/camera
  *   view.yaw              the current view angle (for walking relative to the screen)
@@ -55,7 +55,7 @@ export async function createIslandView(world, container, progress, start) {
   const kit = createKit(world.noise), colorAt = createTerrainColor(world);
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   await p('water', 0);
-  buildWater(world, kit, scene);
+  const water = buildWater(world, kit, scene);
   const aspect0 = window.innerWidth / window.innerHeight;   // at the start: in view at the widest zoom, from any angle
   const first = start ? tile => Math.hypot(tile.x0 + T / 2 - start.x, tile.z0 + T / 2 - start.z) < SUMMIT_MAX * Math.max(aspect0, 1) * 2 + 80 : undefined;
   const far = await buildFarTiles(world, colorAt, kit, scene, (l, f) => p('far tiles', f), first);
@@ -75,11 +75,13 @@ export async function createIslandView(world, container, progress, start) {
 
 
   function render(player, info, dt) {
-    const t = info.terrain, aspect = window.innerWidth / window.innerHeight;
+    const t = info.terrain, aspect = window.innerWidth / window.innerHeight, sea = info.sea || 0;
     cam.follow(player, dt, t.L > 4.25);
-    if (woodView) woodView.update();
-    hero.update(player, t.inRiver ? t.depth : 0, wood ? wood.carried.map(l => ({ len: l.len, rad: l.rad, col: driftLook(l).col })) : []);
-    steps.step(player, info.distance, t.L < 0.4 && t.y > -0.05 && t.y < 1.3 && !t.inRiver);
+    water.setSea(sea);
+    if (woodView) woodView.update(dt);
+    hero.update(player, t.depth, wood ? wood.carried.map(l => ({ len: l.len, rad: l.rad, col: driftLook(l).col })) : []);
+    steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver);
+    steps.wash(sea);
     const { yaw, pitch } = cam;
     streamer.update(player, cam.zoom, aspect, yaw, pitch);
     streamer.pump(BUILD_MS);
