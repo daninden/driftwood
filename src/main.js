@@ -35,6 +35,7 @@ async function boot() {
   const q = new URLSearchParams(location.search).get('spawn');
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
   const view = await createIslandView(world, container, breathe, spawn);
+  await view.prepare(spawn, breathe);   // no simple stand-in tiles round the castaway at the start
   const qt = new URLSearchParams(location.search).get('time');
   const game = createGame(world, spawn, qt === null ? {} : { time: Number(qt) });
   const input = createInput(view.canvas, view.pickGround);

@@ -74,3 +74,16 @@ describe('bushes', () => {
     }
   });
 });
+
+describe('ground brush strokes', () => {
+  it('blend a soft ellipse into the pixels, strongest in the middle', async () => {
+    const { paintStroke } = await import('../src/render/terrainTile.js');
+    const size = 32, d = new Uint8ClampedArray(size * size * 4).fill(100), at = (x, y) => d[(y * size + x) * 4];
+    paintStroke(d, size, 16, 16, 0, 6, 2, 200, 200, 200, 0.55);
+    expect(at(15, 15)).toBe(155);                  // 100 + (200 - 100) * 0.55
+    expect(at(20, 15)).toBeGreaterThan(100);       // along the long axis
+    expect(at(15, 19)).toBe(100);                  // beyond the short radius
+    expect(at(25, 15)).toBe(100);                  // beyond the long radius
+    paintStroke(d, size, 0, 0, 0.7, 5, 2, 0, 0, 0, 1);   // clipped at the edge, no throw
+  });
+});

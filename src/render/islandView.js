@@ -15,6 +15,8 @@
  *   view.pickGround(clientX, clientY) -> { x, z } | null
  *   view.canvas
  *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
+ *   view.prepare(player, progress?)  builds the detailed tiles in view before
+ *     the game starts (async, reports progress('details', fraction))
  *   view.settle(player)  build all wanted detailed tiles at once (tests only)
  *
  * Frame budget: at most ~9 ms per frame goes to building detailed tiles,
@@ -88,10 +90,21 @@ export async function createIslandView(world, container, progress, start) {
     const rc = renderer.domElement.getBoundingClientRect();
     return cam.pick((cx - rc.left) / rc.width * 2 - 1, -(cy - rc.top) / rc.height * 2 + 1, world.H);
   }
+  /** Builds the detailed tiles in view around the player before the game starts, reporting progress('details', f). */
+  async function prepare(player, progress) {
+    const aspect = window.innerWidth / window.innerHeight, rep = progress || (async () => {});
+    streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch);
+    const total = Math.max(1, streamer.pending());
+    for (;;) {
+      streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch);
+      if (!streamer.pump(40)) break;
+      await rep('details', 1 - streamer.pending() / total);
+    }
+  }
   function settle(player) {
     const aspect = window.innerWidth / window.innerHeight;
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, pickGround, canvas: renderer.domElement, stats, settle };
+  return { render, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, pickGround, canvas: renderer.domElement, stats, settle, prepare };
 }

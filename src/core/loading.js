@@ -3,8 +3,8 @@
  *
  * World generation and the view report their steps as (label, fraction).
  * Each step owns a share of the loading bar, measured on seed 1337 (about
- * 1.9 s in all on a 4-core machine, the heightfield built in Web Workers),
- * so the bar fills at an even pace instead of jumping.
+ * 3 s in all on a 4-core machine: the heightfield built in Web Workers, then
+ * the detailed tiles round the start), so the bar fills at an even pace.
  *
  * STEPS                         [[label, share], ...] in the order they run
  * loadingFraction(label, f)     -> overall fraction 0..1 at fraction f of a step;
@@ -15,9 +15,9 @@
  * Pure: no DOM. Depends on: nothing.
  */
 export const STEPS = Object.freeze([
-  ['shape', 0.06], ['heights', 0.44], ['rivers', 0.05], ['vegetation', 0.1], ['done', 0.03],
-  ['water', 0.05], ['far tiles', 0.12],
-]);   // the last 0.15 is the first frame, filled by done()
+  ['shape', 0.05], ['heights', 0.27], ['rivers', 0.03], ['vegetation', 0.07], ['done', 0.015],
+  ['water', 0.025], ['far tiles', 0.08], ['details', 0.38],
+]);   // the last 0.08 is the first frame, filled by done()
 
 export function loadingFraction(label, f = 0) {
   let start = 0;
