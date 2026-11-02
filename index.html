@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Driftwood</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { overflow: hidden; background: linear-gradient(#efe0c2, #cdb48c); color-scheme: light; }
+  #island { position: fixed; inset: 0; }
+  #island canvas { display: block; width: 100%; height: 100%; touch-action: none; opacity: 0; transition: opacity 1.2s ease; }
+  body.ready #island canvas { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="island"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

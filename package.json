@@ -1,0 +1,21 @@
+{
+  "name": "driftwood",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A stylised, diorama-like game on an uninhabited island.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/inline.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "node scripts/smoke.js"
+  },
+  "dependencies": {
+    "three": "0.128.0"
+  },
+  "devDependencies": {
+    "vite": "6.4.5",
+    "vitest": "3.2.7"
+  }
+}
