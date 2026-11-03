@@ -39,17 +39,22 @@ const at = (x, z) => ({ x, z, y: w.H(x, z) });
 const ids = (from, n) => logs.slice(from, from + n).map(l => l.id);
 const fireAt = (x, z, fuel = 4 * BURN) => ({ id: 0, x, z, fuel, embers: EMBERS, lit: 0, fed: 4 });
 // a game at E with things placed relative to him; wood: { carried: n, pile: n }, fires, torches ...
-function scene({ carried = 0, pile = 0, fire, torch, torches, fibre = 0, thirst, at: where = E, pileAt = [0.5, 0], time } = {}) {
+function scene({ carried = 0, pile = 0, fire, torch, torches, fibre = 0, thirst, at: where = E, pileAt = [0.5, 0], time, awake = 1 } = {}) {
   const piles = pile ? [{ x: where.x + pileAt[0], z: where.z + pileAt[1], logs: ids(10, pile) }] : [];
   return createGame(w, at(where.x, where.z), {
     wood: { carried: ids(40, carried), piles }, fibre: { carried: fibre },
-    fire: { fires: fire ? [fire] : [], torch: torch ? { left: TORCH_DAYS } : null, torches: torches || [], attempts: 0, nextId: 5 }, ...(thirst ? { thirst } : {}), ...(time === undefined ? {} : { time }),
+    fire: { fires: fire ? [fire] : [], torch: torch ? { left: TORCH_DAYS } : null, torches: torches || [], attempts: 0, nextId: 5 }, sleep: { awake }, ...(thirst ? { thirst } : {}), ...(time === undefined ? {} : { time }),
   });
 }
 const kinds = g => { const a = g.action(); return [a.tap && a.tap.kind, a.hold && a.hold.kind]; };
 const wetLog = (g, n) => ({ ...logs[n], id: 9000 + n, t: g.clock.total });   // just washed up
 
 describe('the empty spot', () => {
+  it('offers no sleep before half a day awake', () => {
+    expect(kinds(scene({ awake: 0.3 }))).toEqual([null, null]);
+    const g = scene({ awake: 0.3 }); press(g, 'hold', 1); expect(g.sleep.asleep).toBe(false);
+    expect(kinds(scene({ awake: 0.5 }))).toEqual([null, 'sleep']);
+  });
   it('has nothing to do but sleep', () => {
     expect(E).toBeTruthy();
     expect(kinds(scene())).toEqual([null, 'sleep']);

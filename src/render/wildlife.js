@@ -12,11 +12,11 @@
  *   crab    about 12 cm wide: an orange-red body, two claws, six little legs, two
  *           black eyes; one baked mesh; it runs sideways, its legs a little
  *           shaky while it moves, and sinks into / rises from its hole by scale
- *   bird    a white seabird (about 60 cm long, a metre across the wings), grey wing
+ *   bird    a white seabird (0.17.3: about 30 cm long, half a metre across the wings), grey wing
  *           tips and tail, an orange beak and legs: a body and two wings that flap
  *           or glide (wings spread, tips up a little) or are folded back on the
  *           ground; a standing bird pecks by pitching its head down
- *   fish    a dark elongated shadow lying on the water (a soft flat shape with a
+ *   fish    a dark elongated shadow (0.45 to 0.8 m, darker and bigger since 0.17.3) lying on the water (a soft flat shape with a
  *           tail, a little wiggle), drawn over the water so it reads under the
  *           surface; it fades by shrinking and by turning pale
  *   jump    a small silver fish on an arc, with a splash where it goes in and where
@@ -36,7 +36,8 @@ import { toon, outlineMat } from './materials.js';
 import { WILD } from './palette.js';
 import { SPLASH_TIME } from '../game/wildlife.js';
 
-export const MAX_CRABS = 96, MAX_BIRDS = 40, MAX_FISH = 64, MAX_HOLES = 160;
+export const MAX_CRABS = 96, MAX_BIRDS = 40, MAX_FISH = 128, MAX_HOLES = 160;
+export const BIRD_SCALE = 0.5;   // 0.17.3: gulls half as big (30 cm long, half a metre across the wings)
 const CRAB_RISE = 0.02;   // the crab's body centre above the sand
 
 /** Wing angle (radians, up positive) at time t: a flapping burst, or a shallow V while gliding. */
@@ -95,7 +96,8 @@ export function birdGeometries() {
     { geo: rod(4), at: [0.02, -0.075, -0.03], s: [0.006, 0.08, 0.006], color: B.leg }, { geo: rod(4), at: [0.02, -0.075, 0.03], s: [0.006, 0.08, 0.006], color: B.leg },
   ]);
   const wing = side => bake([{ geo: ball(12, 6), at: [0, 0, 0], s: [0.13, 0.014, 0.5], color: (x, y, z) => z * side > 0.3 ? B.tip : B.body }]);
-  return { body, right: wing(1), left: wing(-1) };
+  const k = BIRD_SCALE;
+  return { body: body.scale(k, k, k), right: wing(1).scale(k, k, k), left: wing(-1).scale(k, k, k) };
 }
 
 /** The fish shadow's shape: a soft flat body with a tail, white on transparent, the head at the right. Needs a browser (a canvas). */
@@ -118,8 +120,8 @@ export function createWildlifeView(scene, wl) {
   const crabG = crabGeometry(), crab = pool(crabG, lit, MAX_CRABS), crabO = pool(crabG, outlineMat, MAX_CRABS);
   const bg = birdGeometries(), body = pool(bg.body, lit, MAX_BIRDS), bodyO = pool(bg.body, outlineMat, MAX_BIRDS);
   const wingR = pool(bg.right, lit, MAX_BIRDS), wingRO = pool(bg.right, outlineMat, MAX_BIRDS), wingL = pool(bg.left, lit, MAX_BIRDS), wingLO = pool(bg.left, outlineMat, MAX_BIRDS);
-  const shadow = new THREE.MeshBasicMaterial({ map: fishTexture(), transparent: true, opacity: 0.62, depthWrite: false });
-  const fish = pool(new THREE.PlaneGeometry(1, 0.32).rotateX(-Math.PI / 2), shadow, MAX_FISH, 5);
+  const shadow = new THREE.MeshBasicMaterial({ map: fishTexture(), transparent: true, opacity: 0.82, depthWrite: false });
+  const fish = pool(new THREE.PlaneGeometry(1, 0.36).rotateX(-Math.PI / 2), shadow, MAX_FISH, 5);
   const dark = new THREE.Color(WILD.fish.shadow), pale = new THREE.Color(WILD.fish.pale), tint = new THREE.Color();
   fish.setColorAt(0, dark);   // creates the instance colours
 
@@ -169,10 +171,10 @@ export function createWildlifeView(scene, wl) {
       mA.copy(dummy.matrix); place(body, i, mA);
       mB.copy(mA).multiply(mS.makeScale(1.2, 1.2, 1.2)); place(bodyO, i, mB);
       for (const side of [1, -1]) {   // 1: the right wing (+z)
-        mC.copy(mA).multiply(mS.makeTranslation(0.02, 0.02, 0));
+        mC.copy(mA).multiply(mS.makeTranslation(0.02 * BIRD_SCALE, 0.02 * BIRD_SCALE, 0));
         if (ground) { mC.multiply(mS.makeRotationY(-side * 1.4)); mC.multiply(mS.makeRotationX(side * 0.15)); mC.multiply(mS.makeScale(1, 1, 0.55)); }
         else mC.multiply(mS.makeRotationX(-side * flapAngle(clock, b.ph, b.glide)));
-        mC.multiply(mS.makeTranslation(0, 0, side * 0.5));
+        mC.multiply(mS.makeTranslation(0, 0, side * 0.5 * BIRD_SCALE));
         place(side > 0 ? wingR : wingL, i, mC);
         place(side > 0 ? wingRO : wingLO, i, mB.copy(mC).multiply(mS.makeScale(1.25, 2.6, 1.08)));
       }

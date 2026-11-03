@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.17.3 "Restless" — 2026-11-03
+
+- Fish: why the user saw none (checked on seed 1337): only 23 groups on the whole island, 2 within 30 m of the start beach (the nearest 18.7 m away, outside the view) and 3 within 30 m of the brook at (-77, 180), none in the open sea, and small (30 to 45 cm), light (opacity 0.62) shadows. Drawing was not the problem: the fish plane lies 1.5 cm above the river surface and 3 cm above the sea, drawn after the water meshes (render order 5, no depth write), and fish are listed within 30 m as designed.
+- Now 337 groups (15 river, 32 lagoon, 290 sea; 11 within 30 m of the start beach, 13 within 30 m of the brook): river groups about every 9th point (was 14, 80 % kept, was 55 %), lagoon tiles keep 50 % (was 25 %), up to 4 per tile. New in the open sea: groups of 3 to 6 over a bed 0.55 to 3 m below high water (`SEA_FISH`), beyond the surf, with a PRNG of their own (the others keep their rules), drifting like lagoon fish and darting when he wades within 2 m. Fish are 45 to 65 cm (sea 50 to 75), the shadow colour is darker (`0x0f2830`), opacity 0.82, a slightly wider shape; the pool holds 128. World generation and the seed 1337 fixture are untouched.
+- Gulls half as big, on the ground and in the air (`BIRD_SCALE` 0.5 in `render/wildlife`; a landed gull stands `BIRD_H` 0.06 m above the ground); behaviour unchanged.
+- Sleep: he can only choose to sleep after half a day awake (`SLEEP_AFTER` 0.5, `sleep.canLie()`): no sleep hold on the action button and `Z` does nothing before that; collapsing (exhaustion, thirst) is unchanged. A cold sleep without fire or lean-to lasts 3 hours (`COLD_SLEEP`, was 4) and leaves him 40 % rested from empty: `COLD_REST` (16/15) makes that sleep rest 1.067 times as fast as `REST_RATE` (0.8 day of being awake in 3 hours). A lean-to sleep stays 6 hours and three quarters, a fire sleep the whole night. Saving a sleep in progress is unchanged.
+- Tests: fish near the start and the brook, sea fish in shallow coastal water and their darting, fish sizes, gull sizes, no sleep before half a day (button and Z), allowed after, collapse, cold sleep 3 h / 40 %, lean-to and fire sleep, save of a sleep. Existing tests that sleep from a fresh game now start with half a day awake. The smoke test tops up the walk to 0.6 day before its `Z` (the new rule blocked it) and expects a 3 hour cold sleep; new shot `smoke-28.png` (fish by day at the default zoom, also in the quick run); the flock shot stands 5.5 m from the gulls and zooms in, as they are small now.
+
 ## 0.17.2 "Many lights" — 2026-11-03
 
 - Fix: only the strongest fire or torch near the castaway lit the ground, plus the torch in his hand; the others were only a glow. Now every burning fire and torch in the ground near him lights its surroundings.

@@ -7,7 +7,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
-import { coloniesOfTile, fishOfTile, birdCell, CELL } from '../src/game/habitats.js';
+import { coloniesOfTile, fishOfTile, birdCell, CELL, SEA_FISH } from '../src/game/habitats.js';
 import { createWildlife, ALIVE, SCARE, SAFE, HIDE, DART, BACK_TIME, FLUSH, FLOCK_FIRST } from '../src/game/wildlife.js';
 import { RANGE } from '../src/game/tide.js';
 import { crabGeometry, birdGeometries, flapAngle } from '../src/render/wildlife.js';
@@ -43,14 +43,15 @@ describe('where the animals live', () => {
     expect(colonies.some(dry)).toBe(true);
     expect(new Set(colonies.flatMap(c => c.crabs.map(k => k.id))).size).toBe(colonies.reduce((a, c) => a + c.crabs.length, 0));   // every crab has its own id
   });
-  it('has fish groups of 2 to 5 over water, in rivers and in lagoons', () => {
+  it('has fish groups of 2 to 6 over water, in rivers, in lagoons and in the sea', () => {
     expect(groups.some(g => g.kind === 'river')).toBe(true);
     expect(groups.some(g => g.kind === 'lagoon')).toBe(true);
+    expect(groups.some(g => g.kind === 'sea')).toBe(true);
     for (const g of groups) {
-      expect(g.fish.length).toBeGreaterThanOrEqual(2); expect(g.fish.length).toBeLessThanOrEqual(5);
+      expect(g.fish.length).toBeGreaterThanOrEqual(2); expect(g.fish.length).toBeLessThanOrEqual(6);
       for (const f of g.fish) {
         const x = g.x + (g.kind === 'river' ? Math.cos(g.dir) * f.ox - Math.sin(g.dir) * f.oz : f.ox), z = g.z + (g.kind === 'river' ? Math.sin(g.dir) * f.ox + Math.cos(g.dir) * f.oz : f.oz);
-        if (g.kind === 'river') expect(g.lw - w.H(x, z)).toBeGreaterThanOrEqual(0.1); else { expect(w.Lat(x, z)).toBeLessThan(0); expect(w.H(x, z)).toBeLessThan(-0.2); }
+        if (g.kind === 'river') expect(g.lw - w.H(x, z)).toBeGreaterThanOrEqual(0.1); else if (g.kind === 'lagoon') { expect(w.Lat(x, z)).toBeLessThan(0); expect(w.H(x, z)).toBeLessThan(-0.2); } else { expect(w.Lat(x, z)).toBeLessThan(0); expect(w.H(x, z)).toBeLessThan(SEA_FISH[1]); expect(w.H(x, z)).toBeGreaterThan(SEA_FISH[0] - 0.5); }
       }
     }
   });
@@ -153,6 +154,33 @@ describe('fish', () => {
   });
 });
 
+describe('fish you can see (0.17.3)', () => {
+  const where = g => g.fish.map(f => ({ x: g.x + (g.kind === 'river' ? Math.cos(g.dir) * f.ox - Math.sin(g.dir) * f.oz : f.ox), z: g.z + (g.kind === 'river' ? Math.sin(g.dir) * f.ox + Math.cos(g.dir) * f.oz : f.oz) }));
+  const dist = (g, p) => Math.min(...where(g).map(q => Math.hypot(q.x - p.x, q.z - p.z)));
+  const BROOK = { x: -77, z: 180 };
+  it('has fish groups within 30 m of the start beach and of the brook (it had 2 and 3 before)', () => {
+    expect(groups.filter(g => dist(g, spawn) <= 30).length).toBeGreaterThanOrEqual(6);
+    expect(groups.filter(g => dist(g, BROOK) <= 30).length).toBeGreaterThanOrEqual(6);
+  });
+  it('has sea fish in shallow coastal water, close to the start beach, and many along the coast', () => {
+    const sea = groups.filter(g => g.kind === 'sea');
+    expect(sea.length).toBeGreaterThan(100);
+    expect(sea.some(g => dist(g, spawn) <= 20)).toBe(true);
+    for (const g of sea) for (const q of where(g)) { expect(w.Lat(q.x, q.z)).toBeLessThan(0); expect(w.H(q.x, q.z)).toBeLessThanOrEqual(SEA_FISH[1]); expect(w.H(q.x, q.z)).toBeGreaterThanOrEqual(SEA_FISH[0] - 0.4); }
+  });
+  it('are a little bigger than before (0.45 m and up)', () => {
+    for (const g of groups) for (const f of g.fish) { expect(f.len).toBeGreaterThanOrEqual(0.45); expect(f.len).toBeLessThanOrEqual(0.76); }
+  });
+  it('are listed near the start beach by day, and a sea group darts off when he wades within 2 m', () => {
+    const wl = createWildlife(w); run(wl, 1, ctx(spawn.x, spawn.z)); expect(wl.fish().length).toBeGreaterThan(0);
+    const g = groups.filter(k => k.kind === 'sea').sort((a, b) => dist(a, spawn) - dist(b, spawn))[0], q = where(g)[0], wl2 = createWildlife(w);
+    const mine = () => wl2.fish().filter(f => Math.floor(f.id / 8) === g.id);
+    run(wl2, 1, ctx(q.x, q.z + 6)); expect(mine().length).toBeGreaterThanOrEqual(2);
+    const wade = ctx(q.x, q.z + 1, { wading: true }); run(wl2, 0.4, wade); expect(mine().every(f => f.a < 1)).toBe(true);
+    run(wl2, 1.5, wade); expect(mine().length).toBe(0);
+  });
+});
+
 describe('birds', () => {
   it('circle high over the coast by day, none at night', () => {
     const c = cells[0], wl = createWildlife(w);
@@ -237,11 +265,11 @@ describe('the shapes', () => {
     const g = crabGeometry(), b = box(g); expect(g.attributes.color.count).toBe(g.attributes.position.count);
     expect(b.max.x - b.min.x).toBeGreaterThan(0.1); expect(b.max.x - b.min.x).toBeLessThan(0.17); expect(b.max.y - b.min.y).toBeLessThan(0.06);
   });
-  it('a bird is a body of about 60 cm and wings of half a metre each', () => {
+  it('a bird is half the size of before: a body of about 30 cm and wings of a quarter metre each', () => {
     const { body, right, left } = birdGeometries(), bb = box(body), br = box(right), bl = box(left);
-    expect(bb.max.x - bb.min.x).toBeGreaterThan(0.5); expect(bb.max.x - bb.min.x).toBeLessThan(0.7);
-    expect(br.max.z - br.min.z).toBeGreaterThan(0.9); expect(br.max.z - br.min.z).toBeLessThan(1.05); expect(bl.max.z - bl.min.z).toBeGreaterThan(0.9);
-    const tip = (g, s) => { const c = g.attributes.color, p = g.attributes.position; let grey = 0; for (let i = 0; i < p.count; i++) if (p.getZ(i) * s > 0.4 && c.getX(i) < 0.6) grey++; return grey; };
+    expect(bb.max.x - bb.min.x).toBeGreaterThan(0.25); expect(bb.max.x - bb.min.x).toBeLessThan(0.35);
+    expect(br.max.z - br.min.z).toBeGreaterThan(0.45); expect(br.max.z - br.min.z).toBeLessThan(0.53); expect(bl.max.z - bl.min.z).toBeGreaterThan(0.45);
+    const tip = (g, s) => { const c = g.attributes.color, p = g.attributes.position; let grey = 0; for (let i = 0; i < p.count; i++) if (p.getZ(i) * s > 0.2 && c.getX(i) < 0.6) grey++; return grey; };
     expect(tip(right, 1)).toBeGreaterThan(0); expect(tip(left, -1)).toBeGreaterThan(0);   // grey tips at the outer ends
   });
   it('wings flap or glide', () => {

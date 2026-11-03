@@ -59,12 +59,12 @@ describe('label and version', () => {
     expect(devLabel('0.10', 'Wet wood', 30, 9, false, 10)).toBe('v0.10 · Wet wood · 30 fps · 9 ms');   // zoom only beyond 10
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.17.2'); expect(NAME).toBe('Many lights');
+    expect(VERSION).toBe('0.17.3'); expect(NAME).toBe('Restless');
   });
   it('shows the quality level after the zoom and before idle, only when known', () => {
-    expect(devLabel('0.17.2', 'Many lights', 30, 9, false, 0, 1)).toBe('v0.17.2 · Many lights · 30 fps · 9 ms · q1');
-    expect(devLabel('0.17.2', 'Many lights', 30, 9, true, 18, 0)).toBe('v0.17.2 · Many lights · 30 fps · 9 ms · zoom 18 · q0 · idle');
-    expect(devLabel('0.17.2', 'Many lights', 30, 9, false, 0, null)).toBe('v0.17.2 · Many lights · 30 fps · 9 ms');
+    expect(devLabel('0.17.3', 'Restless', 30, 9, false, 0, 1)).toBe('v0.17.3 · Restless · 30 fps · 9 ms · q1');
+    expect(devLabel('0.17.3', 'Restless', 30, 9, true, 18, 0)).toBe('v0.17.3 · Restless · 30 fps · 9 ms · zoom 18 · q0 · idle');
+    expect(devLabel('0.17.3', 'Restless', 30, 9, false, 0, null)).toBe('v0.17.3 · Restless · 30 fps · 9 ms');
   });
   it('starts visible for now', () => { expect(DEV_PANEL_VISIBLE).toBe(true); });
 });

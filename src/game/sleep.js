@@ -12,8 +12,12 @@
  *     slept: a full night takes away all of it. Waking early (any key or tap)
  *     leaves you partly rested.
  *   - Lying down and getting up take LIE seconds; you cannot walk meanwhile.
+ *   - He can only lie down by choice after SLEEP_AFTER (half a day) awake (the moon
+ *     still three quarters full): canLie(). Collapsing (the limit, thirst) needs no
+ *     such time. start() itself does not check; the game asks canLie() first.
  *   - Sleeping without the warmth of a fire close by is cold: he wakes after
- *     COLD_SLEEP (four hours), only half rested. By a fire he sleeps the
+ *     COLD_SLEEP (three hours), only 40 % rested (COLD_REST makes the rest of a cold sleep
+ *     without a lean-to a little faster than REST_RATE: 0.8 day of being awake in 3 hours). By a fire he sleeps the
  *     whole night through. If the fire goes out while he sleeps, the cold
  *     wakes him once he has slept COLD_SLEEP.
  *
@@ -28,6 +32,7 @@
  *   sleep.rest()         1 fully rested .. 0 has to sleep now
  *   sleep.tired()        0 .. 1 how tired, from TIRED_AT to AWAKE_MAX
  *   sleep.speed()        walking speed factor from tiredness (1 .. TIRED_SLOW)
+ *   sleep.canLie()       true once he has been awake SLEEP_AFTER (0.5 day): the earliest he may choose to sleep
  *   sleep.start()        lie down (when awake)
  *   sleep.wake()         get up (when asleep)
  *   sleep.tire(days)     hard work: as if awake days longer (not past the limit)
@@ -53,7 +58,9 @@ import { DAY_SECONDS } from './clock.js';
 export const AWAKE_MAX = 2, TIRED_AT = 1.5, TIRED_SLOW = 0.60;
 export const SLEEP_DAYS = 8 / 24, SPEED = 20, EASE = 1.5, LIE = 1.1;
 export const REST_RATE = AWAKE_MAX / SLEEP_DAYS;
-export const COLD_SLEEP = 4 / 24;   // without a fire he wakes after four hours
+export const COLD_SLEEP = 3 / 24;   // without a fire he wakes after three hours
+export const COLD_REST = 0.8 / (COLD_SLEEP * REST_RATE);   // 40 % rested after a cold sleep: 0.8 of the 2 days of being awake, in three hours
+export const SLEEP_AFTER = 0.5;   // he can only choose to sleep after half a day awake
 export const SHELTER_SLEEP = 6 / 24;   // under a lean-to, after six hours
 export const SHELTER_REST = 1.25;   // by a fire under a lean-to he rests this much faster
 
@@ -64,6 +71,7 @@ export function createSleep(saved) {
     rest: () => Math.max(0, 1 - sleep.awake / AWAKE_MAX),
     tired: () => Math.min(1, Math.max(0, (sleep.awake - TIRED_AT) / (AWAKE_MAX - TIRED_AT))),
     speed: () => 1 - (1 - TIRED_SLOW) * sleep.tired(),
+    canLie: () => sleep.awake >= SLEEP_AFTER,
     start() { if (!sleep.asleep) { sleep.asleep = true; left = SLEEP_DAYS; sleep.slept = 0; } },
     wake() { if (sleep.asleep) { sleep.asleep = false; left = 0; } },
     tire(days) { if (!sleep.asleep) sleep.awake = Math.min(AWAKE_MAX, sleep.awake + days); },
@@ -77,7 +85,7 @@ export function createSleep(saved) {
     warp = Math.min(1, Math.max(0, warp + (lying ? 1 : -1) * dt / EASE));
     const e = warp * warp * (3 - 2 * warp), gameDt = dt * (1 + (SPEED - 1) * e), days = gameDt / DAY_SECONDS;
     if (sleep.asleep) {
-      sleep.awake = Math.max(0, sleep.awake - days * REST_RATE * (warm && shelter ? SHELTER_REST : 1));
+      sleep.awake = Math.max(0, sleep.awake - days * REST_RATE * (warm ? (shelter ? SHELTER_REST : 1) : (shelter ? 1 : COLD_REST)));
       if (lying) { left -= days; sleep.slept += days; if (left <= 0 || (!warm && sleep.slept >= (shelter ? SHELTER_SLEEP : COLD_SLEEP))) sleep.wake(); }
     } else {
       sleep.awake += days * (thirst.drain || 1);

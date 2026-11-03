@@ -71,8 +71,8 @@
  *     pile of at least FIRE_MIN beside him, on dry ground, with a torch in
  *     his hand or fibre carried: he walks to its side and kneels to drill fire,
  *     costing rest and the fibre, or pushes the torch in, game/fire kindle) and
- *     otherwise 'sleep' (on dry, walkable ground). F lights the pile beside
- *     him the same way, Z lies down to sleep. Both are null while he sleeps,
+ *     otherwise 'sleep' (on dry, walkable ground, and only once he has been awake half a day, sleep.canLie()). F lights the pile beside
+ *     him the same way, Z lies down to sleep (same rule). Both are null while he sleeps,
  *     lies down or kneels.
  *     Thirst makes him a
  *     little slower, very thirsty makes rest run out twice as fast, and after
@@ -223,7 +223,7 @@ export function createGame(world, spawn, opts = {}) {
       else if (load) tap = swim ? null : { kind: 'lay' };
     }
     const b = buildable(), l = b ? null : lightable();
-    return { tap, hold: b || l || (sleepable() ? { kind: 'sleep' } : null) };
+    return { tap, hold: b || l || (sleepable() && sleep.canLie() ? { kind: 'sleep' } : null) };
   }
 
   function startLight(l, input) {   // walk to the pile's side, kneel there and light it (F or the held button)
@@ -291,7 +291,7 @@ export function createGame(world, spawn, opts = {}) {
     else if (slept) { slept = false; thirst.revive(); }
   }
 
-  function canSleep() { return sleepable() && !player.stoop; }
+  function canSleep() { return sleepable() && !player.stoop && sleep.canLie(); }   // collapsing (sleep.update) needs neither
 
   function update(input, dt) {
     const wantWake = input.takeWake ? input.takeWake() : false, held = input.takeHold ? input.takeHold() : null;

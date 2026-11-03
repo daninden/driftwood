@@ -35,7 +35,7 @@ const at = (x, z) => ({ x, z, y: w.H(x, z) });
 // a game standing next to a pile of n dry pieces (the first beach logs), carrying fibre
 const withPile = (n = FIRE_MIN, o = {}) => {
   const p = { x: spawn.x + 0.4, z: spawn.z };
-  return createGame(w, spawn, { wood: { carried: [], piles: [{ ...p, logs: logs.slice(0, n).map(l => l.id) }] }, fibre: { carried: 2 }, ...o });
+  return createGame(w, spawn, { wood: { carried: [], piles: [{ ...p, logs: logs.slice(0, n).map(l => l.id) }] }, fibre: { carried: 2 }, sleep: { awake: 1 }, ...o });
 };
 // how many earlier attempts make the next one catch (or fail) with dry wood
 const attemptsFor = catches => { for (let k = 0; k < 50; k++) if (!!createFire(w, { attempts: k }).attempt(0, 0, logs.slice(0, 4), 1, 0, 0) === catches) return k; };

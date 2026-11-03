@@ -77,7 +77,7 @@ describe('restoring a game', () => {
   });
   it('restores a sleep part way through', () => {
     const { g, input } = busyGame();
-    input.sleep = true; run(g, input, 8);
+    g.sleep.awake = 1; input.sleep = true; run(g, input, 8);
     expect(g.sleep.asleep).toBe(true); expect(g.sleep.slept).toBeGreaterThan(0);
     const g2 = createGame(w, spawn, through(g));
     expect(g2.state()).toEqual(g.state());

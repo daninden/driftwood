@@ -13,7 +13,7 @@
  * been more than SAFE (5 m) away. More are out at low water (45 % of each
  * colony at high water, all of it at low water), and a crab whose hole the sea
  * covers is in it. Also at night.
- * Fish: groups in shallow river and lagoon water; when he WADES within DART
+ * Fish: groups in shallow river, lagoon and sea water (0.17.3); when he WADES within DART
  * (2 m) they dart off and fade in DART_TIME, stay away HIDE_FISH (8 to 16 s,
  * counted while he is further than 2.5 m) and come back slowly (BACK_TIME).
  * A fish jumps every JUMP_EVERY (30 to 90 s) just beyond the surf when the
@@ -53,7 +53,7 @@ import { coloniesOfTile, fishOfTile, birdCell, CELL } from './habitats.js';
 
 export const ALIVE = 30, SCARE = 3, SAFE = 5, HIDE = [10, 20], DART = 2, DART_TIME = 0.7, BACK_TIME = 4, HIDE_FISH = [8, 16], FISH_CLEAR = 2.5;
 export const JUMP_EVERY = [30, 90], JUMP_TIME = 0.9, SPLASH_TIME = 0.9, FLOCK_EVERY = [150, 300], FLOCK_FIRST = [90, 180], FLOCK_DIST = [11.5, 18.5], FLUSH = 4;
-export const ARRIVE = [0.2, 0.27], LEAVE = [0.69, 0.76], FLOCK_DAY = [0.27, 0.62], BIRD_H = 0.12;
+export const ARRIVE = [0.2, 0.27], LEAVE = [0.69, 0.76], FLOCK_DAY = [0.27, 0.62], BIRD_H = 0.06;
 const OUT_MIN = 0.45, CRAB_RUN = 0.7, CRAB_HOME = 0.9, CRAB_FLEE = 2.4;
 const SKY_AWAY = 220;   // metres the circling birds go out along the way to the rocky shore while arriving and leaving
 

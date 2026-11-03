@@ -222,9 +222,9 @@ describe('sleeping under a lean-to', () => {
     const g = sleepOut(shelterGame());
     expect(g.sleep.slept * 24).toBeCloseTo(6, 0); expect(g.sleep.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.72); expect(g.sleep.rest()).toBeLessThan(0.8);
   });
-  it('outside it the cold sleep is still four hours, about half rested', () => {
+  it('outside it the cold sleep is three hours, about 40 % rested', () => {
     const g = sleepOut(createGame(w, spawn, { sleep: { awake: 2 }, leantos: { list: [{ id: 0, x: spawn.x + 3, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } }));
-    expect(g.sleep.slept).toBeCloseTo(COLD_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.45); expect(g.sleep.rest()).toBeLessThan(0.55);
+    expect(g.sleep.slept).toBeCloseTo(COLD_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.38); expect(g.sleep.rest()).toBeLessThan(0.42);
   });
   it('a half-built one gives nothing', () => {
     const g = sleepOut(shelterGame({ leantos: { list: [{ id: 0, x: spawn.x + 0.5, z: spawn.z, heading: 0, progress: 0.9 }], nextId: 1 } }));

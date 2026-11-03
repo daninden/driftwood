@@ -21,6 +21,7 @@
 // smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
 // smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
+// smoke-28 fish by day on the start beach at the default zoom (0.17.3, also in the quick run).
 //
 // The browser is the full Chromium (channel 'chromium', new headless mode), which uses the real graphics
 // card (ANGLE on Direct3D 11 on Windows) where there is one. Without a usable card (a CI machine, or the
@@ -177,7 +178,9 @@ console.log('sea level at low water', sea.toFixed(2));
 if (sea > -0.35) errors.push('the sea did not fall at low water: ' + sea);
 await shot('smoke-5.png');
 
-// Sleep: Z lies down, time runs fast, the next high water brings wood.
+// Sleep: Z lies down, time runs fast, the next high water brings wood. Since 0.17.3 he can only choose to
+// sleep after half a day awake, so the walk so far is topped up to 0.6 day first (Z is ignored before that).
+await page.evaluate(() => { window.__driftwood.game.sleep.awake = 0.6; });
 await page.keyboard.press('z');
 const asleep = await page.evaluate(() => { const { game, step } = window.__driftwood; step(4); return { asleep: game.sleep.asleep, lie: game.player.lie, washes: game.wood.washes }; });
 console.log('asleep', JSON.stringify(asleep));
@@ -190,7 +193,7 @@ const woke = await page.evaluate(() => {
   return { t, slept, rest: game.sleep.rest(), washes: game.wood.washes, fresh: game.wood.fresh.length, time: game.clock.time };
 });
 console.log('woke', JSON.stringify(woke));
-if (woke.slept < 0.15 || woke.slept > 0.2) errors.push('a cold sleep without a fire lasted ' + (woke.slept * 24).toFixed(1) + ' h instead of 4');
+if (woke.slept < 0.11 || woke.slept > 0.14) errors.push('a cold sleep without a fire lasted ' + (woke.slept * 24).toFixed(1) + ' h instead of 3');
 if (woke.rest < 0.8) errors.push('not rested after sleeping: ' + woke.rest);
 if (woke.washes < 1 || woke.fresh < 1) errors.push('no wood washed up at the next high water');
 await page.evaluate(() => { const { game } = window.__driftwood, l = game.wood.fresh[0]; console.log('fresh wood at', l.x.toFixed(1), l.z.toFixed(1)); });
@@ -304,7 +307,7 @@ if (!(ring > 0 && ring < 226)) errors.push('the ring does not fill while the but
 // Branches and the lean-to (0.16): branches under the nearest tree (smoke-21), picked up and
 // carried (the row shows a twig each), two piles of six, the action button's lean-to icon
 // (smoke-24), F builds it (smoke-22 half built, smoke-23 finished, by day), and a cold sleep
-// under it lasts six hours instead of four.
+// under it lasts six hours instead of three.
 const trees = await page.evaluate(start => {
   const { world, game, input, step } = window.__driftwood, p = game.player;
   const all = world.tiles.flatMap(t => game.branches.groundBranches(t)).sort((a, b) => Math.hypot(a.x - start.x, a.z - start.z) - Math.hypot(b.x - start.x, b.z - start.z));
@@ -387,15 +390,32 @@ console.log('crabs at low water', JSON.stringify(crabsShot));
 if (crabsShot.sea > -0.3) errors.push('not at low water for the crabs: ' + crabsShot.sea);
 if (crabsShot.crabs < 2) errors.push('too few crabs out at low water: ' + crabsShot.crabs);
 await shot('smoke-25.png');
+// Fish (0.17.3): by day at the default zoom on the start beach, the nearest sea fish listed (smoke-28, also in the
+// quick run). The player stands at the start, or a few metres on land towards the fish if they are further than 12 m.
+const fishShot = await page.evaluate(start => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, wl = game.wildlife, c = game.clock;
+  c.day += 1; c.time = 0.45; game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0; game.fire.torch = null; game.wood.carried.length = 0;
+  p.x = start.x; p.z = start.z; p.y = world.H(p.x, p.z); step(1);
+  const pose = view.pose; view.setPose({ yaw: pose.yaw, tilt: pose.tilt, zoom: 7 });
+  const sea = wl.fish().filter(f => f.kind === 'sea').sort((a, b) => Math.hypot(a.x - start.x, a.z - start.z) - Math.hypot(b.x - start.x, b.z - start.z));
+  const f = sea[0]; if (!f) return { sea: 0, listed: wl.fish().length };
+  const dx = f.x - start.x, dz = f.z - start.z, l = Math.hypot(dx, dz) || 1;
+  if (l > 12) { p.x = start.x + dx / l * (l - 8); p.z = start.z + dz / l * (l - 8); p.y = world.H(p.x, p.z); }
+  step(3);
+  return { sea: sea.length, listed: wl.fish().length, nearest: Math.round(l), fish: [f.x, f.z].map(v => +v.toFixed(1)), player: [p.x, p.z].map(v => +v.toFixed(1)) };
+}, start);
+console.log('fish by day', JSON.stringify(fishShot));
+if (!fishShot.sea) errors.push('no sea fish within 30 m of the start beach: ' + JSON.stringify(fishShot));
+await shot('smoke-28.png', { quick: true });
 const flockShot = await page.evaluate(start => {
   const { world, game, step, view } = window.__driftwood, p = game.player, wl = game.wildlife, c = game.clock;
   c.day += 1; c.time = 0.45; p.x = start.x + 2; p.z = start.z + 1.5; p.y = world.H(p.x, p.z); game.wood.carried.length = 0;
   step(0.1); const called = wl.callFlock(); step(15, () => wl.flock && wl.flock.phase === 'ground');
   const f = wl.flock; if (!f) return { called, phase: null };
   const dx = p.x - f.site.x, dz = p.z - f.site.z, l = Math.hypot(dx, dz) || 1;
-  p.x = f.site.x + dx / l * 7; p.z = f.site.z + dz / l * 7; p.y = world.H(p.x, p.z);   // 7 m from the flock: close, but not yet within 4 m
-  step(0.5); view.zoomBy(2);
-  return { called, phase: f.phase, birds: wl.birds().filter(b => b.mode === 'ground').length, dist: Math.round(l) };
+  p.x = f.site.x + dx / l * 5.5; p.z = f.site.z + dz / l * 5.5; p.y = world.H(p.x, p.z);   // 5.5 m from the flock: close, but not yet within 4 m (the gulls are half as big since 0.17.3)
+  step(0.5); view.zoomBy(-3);
+  return { called, phase: f.phase, birds: wl.birds().filter(b => b.mode === 'ground').length, dist: Math.round(l), rel: wl.birds().filter(b => b.mode === 'ground').slice(0, 3).map(b => [+(b.x - p.x).toFixed(1), +(b.z - p.z).toFixed(1)]) };
 }, start);
 console.log('flock landed', JSON.stringify(flockShot));
 if (!flockShot.called || flockShot.phase !== 'ground' || flockShot.birds < 5) errors.push('the flock did not land: ' + JSON.stringify(flockShot));

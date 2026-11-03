@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
-import { createSleep, AWAKE_MAX, TIRED_AT, TIRED_SLOW, SLEEP_DAYS, SPEED, LIE } from '../src/game/sleep.js';
+import { createSleep, AWAKE_MAX, TIRED_AT, TIRED_SLOW, SLEEP_DAYS, SPEED, LIE, SLEEP_AFTER, COLD_SLEEP, SHELTER_SLEEP } from '../src/game/sleep.js';
 import { createGame } from '../src/game/game.js';
 import { createInput, HOLD_MS } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
@@ -69,7 +69,7 @@ describe('a night of sleep', () => {
 
 describe('sleeping in the game', () => {
   it('lies down, lays down what is carried, stays put while time runs fast, and gets up again', () => {
-    const g = createGame(w, spawn), input = makeInput({ sleep: true });
+    const g = createGame(w, spawn, { sleep: { awake: 1 } }), input = makeInput({ sleep: true });
     g.wood.take({ kind: 'log', log: w.tiles.flatMap(t => t.drift)[0] });
     const t0 = g.clock.total;
     g.update(input, 1 / 30);
@@ -126,6 +126,47 @@ describe('sleeping in the game', () => {
     const g = createGame(w, spawn, { sleep: { awake: 1 } });
     expect(g.update(makeInput(), 0).rest).toBeCloseTo(0.5);
     const s = g.state(); expect(s.sleep.awake).toBe(1); expect(typeof s.day).toBe('number');
+  });
+});
+
+describe('sleeping only after a while awake (0.17.3)', () => {
+  it('can be chosen after half a day awake, the moon still three quarters full', () => {
+    expect(SLEEP_AFTER).toBe(0.5);
+    expect(createSleep().canLie()).toBe(false);
+    expect(createSleep({ awake: 0.49 }).canLie()).toBe(false);
+    const s = createSleep({ awake: SLEEP_AFTER }); expect(s.canLie()).toBe(true); expect(s.rest()).toBeCloseTo(0.75, 6);
+  });
+  it('offers no sleep hold and ignores Z before that, but allows both after', () => {
+    const g = createGame(w, spawn, { sleep: { awake: 0.3 } });
+    expect(g.action().hold).toBeNull();
+    g.update(makeInput({ sleep: true }), 1 / 30); expect(g.sleep.asleep).toBe(false);
+    const h = createGame(w, spawn, { sleep: { awake: 0.6 } });
+    expect(h.action().hold).toEqual({ kind: 'sleep' });
+    h.update(makeInput({ sleep: true }), 1 / 30); expect(h.sleep.asleep).toBe(true);
+  });
+  it('collapsing from exhaustion or thirst still puts him to sleep, at any time awake', () => {
+    const g = createGame(w, spawn, { sleep: { awake: AWAKE_MAX - 0.0001 } });
+    run(dt => g.update(makeInput(), dt), 1); expect(g.sleep.asleep).toBe(true);
+    const s = createSleep({ awake: 0.1 }); s.update(0.1, true, true, { faint: true }); expect(s.asleep).toBe(true);
+  });
+  it('a cold sleep without fire or lean-to lasts 3 hours and leaves him 40 % rested from empty', () => {
+    expect(COLD_SLEEP * 24).toBeCloseTo(3, 6);
+    const s = createSleep({ awake: AWAKE_MAX }); s.start();
+    let guard = 0; while (s.asleep && guard++ < 100000) s.update(1 / 30, true, false);
+    expect(s.slept * 24).toBeCloseTo(3, 1); expect(s.rest()).toBeGreaterThan(0.39); expect(s.rest()).toBeLessThan(0.41);
+  });
+  it('a sleep under a lean-to without fire is still 6 hours and three quarters; by a fire it goes on the whole night', () => {
+    const s = createSleep({ awake: AWAKE_MAX }); s.start();
+    let guard = 0; while (s.asleep && guard++ < 100000) s.update(1 / 30, true, false, {}, true);
+    expect(s.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(s.rest()).toBeGreaterThan(0.74); expect(s.rest()).toBeLessThan(0.76);
+    const f = createSleep({ awake: AWAKE_MAX }); f.start();
+    guard = 0; while (f.asleep && guard++ < 100000) f.update(1 / 30, true, true);
+    expect(f.slept).toBeCloseTo(SLEEP_DAYS, 1); expect(f.rest()).toBeGreaterThan(0.99);
+  });
+  it('a sleep in progress is saved and restored', () => {
+    const g = createGame(w, spawn, { sleep: { awake: 1 } }); g.update(makeInput({ sleep: true }), 1 / 30); run(dt => g.update(makeInput(), dt), 4);
+    const st = JSON.parse(JSON.stringify(g.state())), g2 = createGame(w, spawn, { sleep: st.sleep });
+    expect(g2.sleep.asleep).toBe(true); expect(g2.sleep.slept).toBeCloseTo(g.sleep.slept, 6); expect(g2.sleep.awake).toBeCloseTo(g.sleep.awake, 6);
   });
 });
 
