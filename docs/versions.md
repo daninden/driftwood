@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.16.2 "Light load" — 2026-11-03
+
+- The game lowers its own quality on a slow device (a laptop with an integrated chip drew 10 to 12 fps with the 4096 px shadow map, the 16 x 4 tap filter and 1.5 times pixel ratio). New `src/render/quality.js` (pure): five levels, one step at a time: 0 as before, 1 shadow map 2048, 2 the lighter filter (16 plain taps, radius 1.5), 3 pixel ratio 1, 4 the ground casts no shadows. After the island has faded in, the mean time between non-idle frames is measured over 3 s; slower than 1/27 s steps down one level, 2 s of settling, measure again; the first 4 s, idle frames, the frame after idling and gaps are ignored; never steps up. Steps that change nothing on the device are skipped (touch devices already start at 2048).
+- Remembered per device in `localStorage` (`driftwood-quality`); the next start begins there. `?quality=N` forces a level and stops adapting (tests). The dev panel shows `qN`.
+- Stage: `applyQuality(settings)` changes the shadow map size (disposed and rebuilt), pixel ratio and terrain shadow casting live; the filter is switched through the shadow map type (both filters live in the shader chunk: bilinear in PCF, light in PCF_SOFT) plus `needsUpdate` on the scene's materials. Terrain meshes are tagged `userData.terrain`.
+- `scripts/smoke.js` takes `--quality=N`. README: a plain note for slow computers. Tests: `tests/quality.test.js`, the dev panel label.
+
 ## 0.16.1 "Heavy legs" — 2026-11-03
 
 - Needs slow him clearly: tired down to 60 % at two days awake (`TIRED_SLOW`, was 75 %), thirsty down to 65 % at the point of collapse (`THIRST_SLOW`, was 85 %), hungry down to 75 % at four days (`HUNGER_SLOW`, was 90 %). Each still eases in from its own threshold; they multiply together (at the worst about 29 %) and with the load.

@@ -1,5 +1,6 @@
 // Smoke test of the built game in a real (headless) browser.
 // Run `npm run build` first. Usage: npm run smoke [-- x,z]   (quick, about a minute)
+//                                    npm run smoke -- --quality=N   (forces a quality level 0 to 4)
 //                                    npm run smoke:full [-- x,z]   (every shot, for visual versions)
 // Loads dist/driftwood.html, waits for the world, builds the detailed tiles
 // around the start (or around x,z), walks for a moment, gathers driftwood and
@@ -42,7 +43,9 @@ const { chromium } = require('playwright');
 const file = fileURLToPath(new URL('../dist/driftwood.html', import.meta.url));
 const args = process.argv.slice(2), full = args.includes('--full');
 const spawnArg = args.find(a => !a.startsWith('--'));
-const spawn = spawnArg ? '?spawn=' + spawnArg : '';
+const qualityArg = args.find(a => a.startsWith('--quality='));   // --quality=N forces a quality level (?quality=N)
+const qualityQuery = qualityArg ? 'quality=' + qualityArg.slice(10) : '';
+const query = [spawnArg ? 'spawn=' + spawnArg : '', qualityQuery].filter(Boolean).join('&').replace(/^(?=.)/, '?');
 const SMALL = { width: 640, height: 400 }, BIG = { width: 1280, height: 800 };
 
 // Prefer the real graphics card: the full Chromium in new headless mode (on Windows it picks ANGLE on
@@ -71,12 +74,12 @@ const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 const t0 = Date.now(), secs = () => ((Date.now() - t0) / 1000).toFixed(1) + ' s';
-await page.goto('file://' + file + spawn, { waitUntil: 'commit', timeout: 0 });
+await page.goto('file://' + file + query, { waitUntil: 'commit', timeout: 0 });
 const barAt = () => page.evaluate(() => { const f = document.querySelector('#loader .fill'); return f ? new DOMMatrix(getComputedStyle(f).transform).a : -1; });
 await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || document.body.dataset.error || new DOMMatrix(getComputedStyle(f).transform).a > 0.25; }, null, { timeout: 300000, polling: 100 });
 await page.screenshot({ path: 'smoke-0.png' });   // the loader: only checked, small
 // A real start of an island asks for a name (src/render/namePrompt): leave it empty (the castaway).
-if (!spawn) {   // with ?spawn (a test parameter) the question is skipped
+if (!spawnArg) {   // with ?spawn (a test parameter) the question is skipped
   await page.waitForSelector('#ask:not([hidden]) input', { timeout: 10000 });
   await page.press('#ask input', 'Enter');
 }
@@ -365,7 +368,7 @@ if (slept.rest < 0.7) errors.push('not three quarters rested under the lean-to: 
 // The same on a phone: a touch-only screen with the thumb stick, the button just above it (day and night).
 const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: full ? 2 : 1, hasTouch: true, isMobile: true });
 phone.on('pageerror', e => errors.push('phone: ' + e.message));
-await phone.goto('file://' + file + '?spawn=' + start.x.toFixed(1) + ',' + start.z.toFixed(1), { waitUntil: 'commit', timeout: 0 });
+await phone.goto('file://' + file + '?spawn=' + start.x.toFixed(1) + ',' + start.z.toFixed(1) + (qualityQuery ? '&' + qualityQuery : ''), { waitUntil: 'commit', timeout: 0 });
 await phone.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
 await phone.evaluate(() => {
   window.__driftwood.pause(true);

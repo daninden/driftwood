@@ -5,6 +5,8 @@
  * rocks, roots and lianas, the tide line, and ground cover
  * (grass, ferns, reeds, pebbles, shells).
  *
+ * The ground mesh is tagged userData.terrain, so render/stage can stop or start its shadows (render/quality).
+ *
  * (The driftwood and coconuts that can be picked up are drawn by
  * render/driftwood and render/coconuts.)
  *
@@ -27,7 +29,7 @@ export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
   const { H, Lat, slope, tierAt, riverAt, forestB, forestF } = w;
   const group = new THREE.Group(), B = new Batch(outlineMat);
   const geo = yield* tileGeometry(w, tile, 160, slicer), tex = yield* tileTexture(w, colorAt, tile, 1024, slicer, anisotropy);
-  const mesh = new THREE.Mesh(geo, terrainMat(tex)); mesh.receiveShadow = true; mesh.castShadow = true; group.add(mesh);
+  const mesh = new THREE.Mesh(geo, terrainMat(tex)); mesh.receiveShadow = true; mesh.castShadow = true; mesh.userData.terrain = true; group.add(mesh);
   const r = mulberry32(hashInt(w.seed + 11, tile.tx, tile.tz));
 
   for (const t of tile.trees) { addTree(B, kit, t, r); if (slicer.over()) yield; }

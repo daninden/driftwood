@@ -4,10 +4,10 @@
  * 40 × 40 grid, 128 px texture, low-poly crowns and rocks. These fill the
  * view wherever no detailed tile is ready yet, and everything beyond.
  *
- * buildFarTiles(world, colorAt, kit, scene, progress?, first?) -> Promise<far>
+ * buildFarTiles(world, colorAt, kit, scene, progress?, first?, onMake?) -> Promise<far>
  *   far: { map: Map<tile, Group>, rest: tiles still to build }
  *   Only the tiles for which first(tile) is true (those in view at the
- *   start) are built before the game starts; the rest wait in far.rest.
+ *   start) are built before the game starts (onMake(group) is called for every tile built, before it is added: islandView sets its shadow casting); the rest wait in far.rest.
  * pumpFarTiles(far, inView(tile), ms) builds waiting tiles within about ms,
  *   tiles in view first, otherwise in order (nearest the start first)
  * updateFarTiles(far, isVisible(tile)) sets group visibility each frame
@@ -28,7 +28,7 @@ import { tileGeometry, tileTexture } from './terrainTile.js';
 function buildFarTile(w, colorAt, kit, tile) {
   const grp = new THREE.Group(), r = mulberry32(hashInt(w.seed + 9, tile.tx, tile.tz));
   const mesh = new THREE.Mesh(drain(tileGeometry(w, tile, 40)), terrainMat(drain(tileTexture(w, colorAt, tile, 128))));
-  mesh.receiveShadow = true; mesh.castShadow = true; grp.add(mesh);
+  mesh.receiveShadow = true; mesh.castShadow = true; mesh.userData.terrain = true; grp.add(mesh);
   const B = new Batch(outlineMat);
   tile.trees.forEach(t => { const k = t.jungle ? 'jungle' : 'tree', h = treeHeight(t, k), cs = (t.jungle ? 1.5 : 1.05) * Math.pow(treeScale(t, k), 0.7); B.add('c', kit.canopyLod, kit.canopyMat, mat4(t.x, t.y + h + 0.2, t.z, cs, cs * 0.8, cs, r() * 6), new THREE.Color(pick(r, t.jungle ? P.jungle : P.canopy)).getHex(), { outline: 1.05 }); });
   tile.pines.forEach(t => B.add('p', kit.pineLod, kit.canopyMat, mat4(t.x, t.y + treeHeight(t, 'pine') * 0.6, t.z, 0.6 * Math.pow(treeScale(t, 'pine'), 0.6), treeHeight(t, 'pine') * 1.1, 0.6 * Math.pow(treeScale(t, 'pine'), 0.6), r() * 6), pick(r, P.pine), { outline: 1.06 }));
@@ -40,9 +40,9 @@ function buildFarTile(w, colorAt, kit, tile) {
   return grp;
 }
 
-export async function buildFarTiles(w, colorAt, kit, scene, progress, first = () => true) {
+export async function buildFarTiles(w, colorAt, kit, scene, progress, first = () => true, onMake = () => {}) {
   const map = new Map(), all = w.tiles.filter(t => t.hmax > -6.5), now = all.filter(first), rest = all.filter(t => !first(t));
-  const make = tile => { const grp = buildFarTile(w, colorAt, kit, tile); scene.add(grp); map.set(tile, grp); };
+  const make = tile => { const grp = buildFarTile(w, colorAt, kit, tile); onMake(grp); scene.add(grp); map.set(tile, grp); };
   for (let i = 0; i < now.length; i++) {
     make(now[i]);
     if (progress && i % 6 === 0) await progress('far tiles', i / now.length);

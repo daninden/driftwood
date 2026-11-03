@@ -94,6 +94,10 @@ Lie down on dry land whenever you like: hold the button where there is no pile t
 
 A day lasts twenty minutes. The sun rises in the east and sets in the west, with golden light low in the sky and lilac light at dusk and dawn. The night is dim and moonlit; a fire or torch lights its surroundings. The small marks on screen (the moon, the drop, the row of what you carry, the thumb stick, the action button, the name line) are dark brown by day and turn pale at night.
 
+### Slow computers
+
+On a slow computer the game lowers the quality of its shadows (and, as a last step, how sharply it draws) by itself, a step at a time, until it runs smoothly. It remembers this on that device. There is nothing to set.
+
 ## Controls
 
 - **W A S D** or arrow keys: walk; **Shift**: run
@@ -105,7 +109,7 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)
 - **Enter** (or the arrow): confirm your name at the start of an island
 - **Shift + `**: start over (forget this island's save and begin again; the name is asked again)
-- **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame); while it is shown you can zoom out further, to 25
+- **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame, quality level `q0` to `q4`); while it is shown you can zoom out further, to 25
 
 ## More
 

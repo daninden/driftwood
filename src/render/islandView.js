@@ -1,7 +1,8 @@
 /**
  * render/islandView — puts all render modules together for one world.
  *
- * createIslandView(world, container, progress?, start?, { touch }?) -> Promise<view>
+ * createIslandView(world, container, progress?, start?, { touch, settings }?) -> Promise<view>
+ *   settings: the quality settings to start with (render/quality settingsFor)
  *   start { x, z }: where the game begins, so only the far tiles in view
  *   there are built before it starts (the rest follow in the background)
  *   view.render(player, frameInfo, dt)
@@ -28,6 +29,7 @@
  *     the ground under the screen point; on a piece of beach driftwood as drawn (its trunk, a branch or the
  *     roots standing up, with a finger a little wider) a point on that piece,
  *     rather than the ground behind it
+ *   view.setQuality(settings)   changes the quality live (render/stage applyQuality)
  *   view.canvas
  *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
  *   view.prepare(player, progress?)  builds the detailed tiles in view before
@@ -67,14 +69,14 @@ const BUILD_MS = 9, FAR_MS = 3;
 
 export async function createIslandView(world, container, progress, start, opts = {}) {
   const p = progress || (async () => {});
-  const stage = createStage(container, { touch: !!opts.touch }), { scene, renderer } = stage;
+  const stage = createStage(container, { touch: !!opts.touch, settings: opts.settings }), { scene, renderer } = stage;
   const kit = createKit(world.noise), colorAt = createTerrainColor(world);
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   await p('water', 0);
   const water = buildWater(world, kit, scene);
   const aspect0 = window.innerWidth / window.innerHeight;   // at the start: in view at the widest zoom, from any angle
   const first = start ? tile => Math.hypot(tile.x0 + T / 2 - start.x, tile.z0 + T / 2 - start.z) < SUMMIT_MAX * Math.max(aspect0, 1) * 2 + 80 : undefined;
-  const far = await buildFarTiles(world, colorAt, kit, scene, (l, f) => p('far tiles', f), first);
+  const far = await buildFarTiles(world, colorAt, kit, scene, (l, f) => p('far tiles', f), first, stage.tagTerrain);
   if (start) far.rest.sort((a, b) => Math.hypot(a.x0 - start.x, a.z0 - start.z) - Math.hypot(b.x0 - start.x, b.z0 - start.z));
   const slicer = createSlicer();
   const near = new Map();   // tile -> { group }
@@ -82,7 +84,7 @@ export async function createIslandView(world, container, progress, start, opts =
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso),
-    onReady: (tile, v) => { scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); } },
+    onReady: (tile, v) => { stage.tagTerrain(v.group); scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); } },
     onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); } },
   });
   const hero = createHero(scene), steps = createFootprints(scene, world.H), cam = createCamera();
@@ -162,5 +164,5 @@ export async function createIslandView(world, container, progress, start, opts =
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, canvas: renderer.domElement, scene, stats, settle, prepare };
+  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: stage.applyQuality, canvas: renderer.domElement, scene, stats, settle, prepare };
 }

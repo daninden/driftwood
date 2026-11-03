@@ -55,6 +55,18 @@ No two trees look alike, but all stay within the style and the calm palette (no 
 - **Bushes:** never one green ball, but a loose clump of smaller leaf clumps in the style of the tier: low, wide dune scrub with stiff blades on the coast, leafy shrubs in the lowland, big leaf fans over a dark core in the rain forest, flat olive heath cushions with wiry sprigs on the plateau, small grey-green tufts on the summit.
 - **Pines:** two to four tiers, slim or wide, some leaning a little, in greens from warm to grey-blue.
 
+### Quality that adapts (0.16.2, built)
+
+The look is the same on every device, but the game lowers its own quality when it runs slowly (a laptop with an integrated graphics chip drew 10 to 12 frames a second with the finest shadows). There is no menu and no setting; the only trace is `qN` in the developer panel. Levels, from best, one step at a time:
+
+0. As designed: shadow map 4096 px (2048 on touch-only devices), bilinear shadow filter, drawing at up to 1.5 times the screen's pixel ratio, the ground casts shadows.
+1. Shadow map 2048 px.
+2. A lighter shadow filter (16 plain taps, the soft edge of 0.13.1 to 0.14.1).
+3. Pixel ratio 1.
+4. The ground no longer casts shadows (trees, props and the castaway still do).
+
+After the island has faded in, the game measures the time between frames over 3 seconds of normal play (not while idling); below 27 frames a second (30 with a tolerance) it steps down one level, waits 2 seconds for things to settle, and measures again, until it is fine or at level 4. The first 4 seconds are ignored (tiles are still being built). It never steps back up within a session. The level is remembered per device and the next start begins there (and may step further down). A step that changes nothing on this device is skipped (touch devices start at 2048 anyway). The numbers are in `render/quality`.
+
 ## The castaway
 
 A small blocky figure with outlines, dressed for a tropical island after a long time alone: a straw hat, shaggy dark hair and a long, unkempt beard, a yellowed shirt with ripped short sleeves, holes and a ragged hem, frayed short trousers, bare sun-tanned legs and bare feet, and a staff. Because the figure is small on screen, the detail lives in the silhouette and in flat colour areas (skin against cloth), not in small parts.

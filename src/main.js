@@ -53,13 +53,19 @@
  * no input, awake). Input of any kind ends that at once. The game's dt is the
  * time since the last drawn frame.
  *
+ * Quality (render/quality): the game lowers its own quality on a slow device. Once the island is
+ * in, a governor watches the time between drawn, non-idle frames and steps down one level (smaller
+ * shadow map, lighter shadow filter, pixel ratio 1, no terrain shadows) when it is slower than about
+ * 27 fps; the level is kept per device in localStorage (`driftwood-quality`) and the next start begins
+ * there. `?quality=N` (0 to 4) forces a level and stops the adapting (tests). The dev panel shows `qN`.
+ *
  * The height grids, the slowest part of generating the world, are built in
  * Web Workers (heightWorker, parallelHeights), one per spare core.
  *
  * While loading, the bar in #loader (index.html) shows how far it is
  * (core/loading); it fades out with the class `ready` on <body>.
  *
- * window.__driftwood exposes { world, game, view, input, ready } for the smoke
+ * window.__driftwood exposes { world, game, view, input, ready, quality } for the smoke
  * test (and `frames`, a read-only count of drawn frames, for checking the pacing), plus three hooks so it does not have to play in real time (a
  * headless browser without a GPU draws only a few frames per second):
  *   pause(on)              stop or restart drawing in the frame loop
@@ -89,6 +95,7 @@ import { shouldAsk, dayNumber, dayLine, wakeLine } from './game/castaway.js';
 import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
 import { VERSION, NAME } from './version.js';
 import { zoomMax } from './core/view.js';
+import { settingsFor, parseQuality, pickStart, loadLevel, saveLevel, createGovernor } from './render/quality.js';
 import { createSaveStore, parseHash, withoutNew, isResetKey, momentKey, createViewSaver, SAVE_EVERY } from './save.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
@@ -112,7 +119,9 @@ async function boot() {
   const world = await generateWorld(seed, { progress: breathe, heightfield: parallel }).catch(err => { console.warn('height workers unavailable, building on the main thread', err); return generateWorld(seed, { progress: breathe }); });
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
   const at = saved ? { x: saved.player.x, z: saved.player.z, y: world.H(saved.player.x, saved.player.z) } : spawn;   // where the view opens
-  const view = await createIslandView(world, container, breathe, at, { touch: touchOnly(window.matchMedia ? q => window.matchMedia(q) : null) });   // touch-only: a 2048 px shadow map
+  const touch = touchOnly(window.matchMedia ? q => window.matchMedia(q) : null), dpr = window.devicePixelRatio || 1;
+  const start = pickStart({ param: parseQuality(location.search), stored: loadLevel() });   // forced by ?quality=N, else remembered, else 0
+  const view = await createIslandView(world, container, breathe, at, { touch, settings: settingsFor(start.level, { touch }) });   // touch-only: a 2048 px shadow map
   view.setZoomMax(zoomMax(DEV_PANEL_VISIBLE));   // the dev panel (visible at the start) allows zooming out to 25
   if (saved && saved.view) view.setPose(saved.view);   // silently, in the saved pose (before the tiles in view are chosen)
   await view.prepare(at, breathe);   // no simple stand-in tiles round the castaway at the start
@@ -124,6 +133,7 @@ async function boot() {
   const half = createHungerMark(document.getElementById('hunger'));
   const carry = createCarryMark(document.getElementById('carry'));
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
+  dev.setQuality(start.level);
   const who = createDayLine(document.getElementById('who')), wakes = createWakeLine(document.getElementById('wake'));
   const ink = createInk(document.documentElement);
   let name = saved && typeof saved.name === 'string' ? saved.name : '';   // set from the prompt below when asked
@@ -154,7 +164,7 @@ async function boot() {
   window.addEventListener('pagehide', save);
   window.addEventListener('keydown', e => { if (isResetKey(e)) { stopSaving = true; store.clear(); location.reload(); } });
   let last = performance.now(), paused = false, frames = 0;
-  const cap = touchOnly(window.matchMedia ? q => window.matchMedia(q) : null) ? FRAME_CAP_TOUCH : 0;   // 0: no cap
+  const cap = touch ? FRAME_CAP_TOUCH : 0;   // 0: no cap
   const quiet = createIdleTracker(undefined, last);
   let anchor = -Infinity;   // where the frame schedule stands (render/framePacer)
   const woken = () => { const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
@@ -169,7 +179,8 @@ async function boot() {
     view.render(game.player, show(game.update(input, 0)), 0);   // once more, with the name
   }
   document.body.classList.add('ready');
-  window.__driftwood = { world, game, view, input, ready: true, get frames() { return frames; }, pause: on => { paused = on; }, step, draw };
+  const governor = createGovernor({ level: start.level, adapt: start.adapt, touch, dpr });   // starts measuring now, the island has faded in
+  window.__driftwood = { world, game, view, input, ready: true, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     requestAnimationFrame(frame);
     if (paused) { last = now; return; }
@@ -187,6 +198,8 @@ async function boot() {
     frames++;
     if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input })) quiet.poke(now);
     dev.frame(real, performance.now() - t0, idle, view.zoom);
+    const lower = governor.frame(real, idle);
+    if (lower !== null) { view.setQuality(settingsFor(lower, { touch })); dev.setQuality(lower); if (!testing) saveLevel(lower); }
   });
 }
 
