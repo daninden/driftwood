@@ -5,8 +5,8 @@
  * Full when he is rested, it wanes like the moon to a thin sickle and then
  * to nothing as the two days run out (game/sleep `rest`), and waxes again
  * while he sleeps. It is quiet (faint) most of the time and grows clearer
- * in the last half day (CLEAR_BELOW). Dark brown like the loading screen;
- * no numbers.
+ * in the last half day (CLEAR_BELOW). Ink (`--ink`, dark brown by day, pale at
+ * night, see render/ink); no numbers.
  *
  * moonPath(f, r) -> SVG path of the lit part of a moon of radius r centred
  *   on (r, r), lit fraction f 0..1 (lit from the right); '' when dark. Pure.

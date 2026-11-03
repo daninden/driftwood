@@ -2,7 +2,7 @@
  * render/devPanel — the small developer panel, top right, one line such as
  * `v0.7 · Quiet frames · 30 fps · 9 ms · idle`: version and name (src/version),
  * the frames per second drawn, the work time per frame in ms (update + render,
- * not the interval) and `idle` while the frame pacer idles (render/framePacer). Same dark brown ink as the moon mark, faint, no box. It is a
+ * not the interval) and `idle` while the frame pacer idles (render/framePacer). Same ink as the moon mark (`--ink`, pale at night, render/ink), faint, with a quiet backing (`--ink-back`) that turns dark at night. It is a
  * developer aid, not part of the game: visible for now, to be hidden later
  * by flipping DEV_PANEL_VISIBLE to false. The backtick key toggles it at any
  * time; the choice is not remembered between sessions.

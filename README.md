@@ -22,6 +22,8 @@ There is no goal, no map and no menu. What you see is the island.
 
 The game remembers where you were. It saves itself as you play, one save per island, in this browser on this device, and picks up where you left off the next time. Nothing to press, nothing to show.
 
+The first time you start an island, the loading screen asks *What is your name?*. Type a name and press Enter (or tap the small arrow); leave it empty and you are the castaway. The name is kept with the island and not asked again; starting over asks again. A small line top left always says who you are and which day it is, such as `Dave, day 1`; it grows clearer for a moment when a new day begins. The day turns at midnight, also while you sleep.
+
 ### The island
 
 You are alone. The island rises in terraces, divided by rock walls. A wall stops you, but nature leaves passages: a scree slope, a ravine, rock benches, roots and lianas in the rain forest, or a mossy route beside a waterfall. Nothing marks them; look for loose stones, bare ground and moss. Tree trunks, big boulders and the open sea stop you too. Bushes only slow you down.
@@ -54,11 +56,11 @@ A burning fire needs wood now and then: feed it by laying a piece on it. When th
 
 The moon in the bottom left corner shows how rested you are: full when rested, a thin sickle when you are worn out. After a day and a half you grow tired and slower. After two days you fall asleep where you stand.
 
-Lie down on dry land whenever you like. Sleeping next to a fire lasts the whole night and you wake fully rested. Without a fire the cold wakes you after four hours, only half rested. A click, a tap or a walking key wakes you early. The rising flood wakes you too.
+Lie down on dry land whenever you like. Sleeping next to a fire lasts the whole night and you wake fully rested. Without a fire the cold wakes you after four hours, only half rested. A click, a tap or a walking key wakes you early. The rising flood wakes you too. However a sleep ends, a short line fades in and out in the middle of the screen, such as *Dave wakes. Day 3.*
 
 ### Day and night
 
-A day lasts twenty minutes. The sun rises in the east and sets in the west, with golden light low in the sky and lilac light at dusk and dawn. The night is dim and moonlit; a fire or torch lights its surroundings.
+A day lasts twenty minutes. The sun rises in the east and sets in the west, with golden light low in the sky and lilac light at dusk and dawn. The night is dim and moonlit; a fire or torch lights its surroundings. The small marks on screen (the moon, the row of what you carry, the thumb stick, the name line) are dark brown by day and turn pale at night.
 
 ## Controls
 
@@ -72,7 +74,8 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 - A left click, a tap or a walking key wakes him; the view controls do not
 - **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom
-- **Shift + `**: start over (forget this island's save and begin again)
+- **Enter** (or the arrow): confirm your name at the start of an island
+- **Shift + `**: start over (forget this island's save and begin again; the name is asked again)
 - **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame)
 
 ## More
@@ -80,5 +83,6 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 - [docs/design.md](docs/design.md): what the game is, the art style, the world and the decisions
 - [docs/architecture.md](docs/architecture.md): layers, modules, testing and saving
 - [docs/versions.md](docs/versions.md): the release log, every version with its short name and what changed
+- [docs/handover.md](docs/handover.md): the planning: what is live, what is being built and what is agreed next
 - [CLAUDE.md](CLAUDE.md): working agreements
 - [prototypes/](prototypes/): the prototypes the game grew out of

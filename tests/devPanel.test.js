@@ -56,7 +56,7 @@ describe('label and version', () => {
     expect(devLabel('0.7', 'Quiet frames', 15, 0, false)).toBe('v0.7 · Quiet frames · 15 fps · 0 ms');
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.8'); expect(NAME).toBe('Wider light');
+    expect(VERSION).toBe('0.9'); expect(NAME).toBe('Name');
   });
   it('starts visible for now', () => { expect(DEV_PANEL_VISIBLE).toBe(true); });
 });

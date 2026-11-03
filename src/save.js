@@ -8,8 +8,15 @@
  * blocked or full storage (private mode) just means nothing is saved.
  *
  * SAVE_VERSION (1), SAVE_EVERY (10 seconds of play between saves)
+ * The format stays v: 1. Since 0.9 a save may also carry two optional fields
+ * beside game.state(): `name` (string, at most 40 characters; '' is an answer:
+ * "the castaway") and `startDay` (whole number, the clock's day on which the
+ * game started, so that day is day 1). Saves from before 0.9 have neither: no
+ * `name` means the name is asked once (game/castaway shouldAsk), no `startDay`
+ * means 0. Optional fields need no migration and no new format number; a wrong
+ * type makes the whole save unusable like any other broken field.
  * saveKey(seed) -> 'driftwood-save-<seed>'
- * serialise(state) -> string          state: game.state(); adds the format number `v`
+ * serialise(state) -> string          state: game.state() (plus name, startDay); adds the format number `v`
  * parseSave(text, seed) -> state | null
  *   The state for createGame, or null for anything else: not JSON, another
  *   format number, another seed, or a shape the game parts cannot read.
@@ -45,6 +52,8 @@ function valid(s, seed) {
   if (!num(s.time) || s.time < 0 || s.time >= 1 || !Number.isInteger(s.day) || s.day < 0) return false;
   const p = s.player; if (!obj(p) || !num(p.x) || !num(p.z) || !num(p.heading)) return false;
   const sl = s.sleep; if (!obj(sl) || !num(sl.awake) || typeof sl.asleep !== 'boolean' || !num(sl.left) || !num(sl.slept)) return false;
+  if (s.name !== undefined && (typeof s.name !== 'string' || s.name.length > 40)) return false;
+  if (s.startDay !== undefined && (!Number.isInteger(s.startDay) || s.startDay < 0)) return false;
   const w = s.wood; if (!obj(w) || !arr(w.carried) || !arr(w.piles) || !optArr(w, 'washed') || !optArr(w, 'lost')) return false;
   if (!w.carried.every(Number.isInteger) || !w.piles.every(q => obj(q) && num(q.x) && num(q.z) && arr(q.logs) && q.logs.every(Number.isInteger))) return false;
   if (w.washed && !w.washed.every(l => obj(l) && [l.id, l.x, l.y, l.z, l.len, l.a, l.rad].every(num) && (l.t === undefined || num(l.t)))) return false;

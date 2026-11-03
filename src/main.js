@@ -16,8 +16,19 @@
  * `?time=t` starts at another time of day (0 midnight, 0.5 noon), and
  * `?awake=d` as if the castaway had been awake d days.
  *
+ * The name (0.9): at the first start of an island (no test parameters, no save
+ * with a name) the loading screen asks "What is your name?" (render/namePrompt,
+ * texts in game/castaway). Loading goes on meanwhile; the island fades in once
+ * the answer is in. The name and the day the game started (`startDay`) are
+ * saved with the island (src/save, optional fields). With the test parameters
+ * the question is skipped and he is "the castaway". Top left #who always shows
+ * `Dave, day 3` (render/nameLines), and each time a sleep ends #wake shows
+ * `Dave wakes. Day 3.` for a few seconds. Day 1 is the day the game started.
+ *
  * The moon mark #rest (render/restMark) shows how rested the castaway is;
  * the row #carry next to it (render/carryMark) shows what he carries loose.
+ * All ink marks take their colour from `--ink` on <html>, which render/ink
+ * turns pale at night (from sky.day).
  *
  * On touch-only devices the thumb stick #stick (render/thumbStick) bottom right
  * walks and runs through the same input object.
@@ -58,6 +69,11 @@ import { createRestMark } from './render/restMark.js';
 import { createCarryMark } from './render/carryMark.js';
 import { createThumbStick, touchOnly } from './render/thumbStick.js';
 import { createDevPanel } from './render/devPanel.js';
+import { createNamePrompt } from './render/namePrompt.js';
+import { createDayLine, createWakeLine } from './render/nameLines.js';
+import { createInk } from './render/ink.js';
+import { skyAt } from './render/sky.js';
+import { shouldAsk, dayNumber, dayLine, wakeLine } from './game/castaway.js';
 import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
 import { VERSION, NAME } from './version.js';
 import { createSaveStore, parseHash, withoutNew, isResetKey, momentKey, SAVE_EVERY } from './save.js';
@@ -73,15 +89,15 @@ async function boot() {
   const { seed, fresh } = parseHash(location.hash);
   const store = createSaveStore(seed);
   if (fresh) { store.clear(); try { history.replaceState(null, '', location.pathname + location.search + withoutNew(location.hash)); } catch (e) { /* keep the address */ } }
+  const qs = new URLSearchParams(location.search), q = qs.get('spawn'), qt = qs.get('time'), qa = qs.get('awake');
+  const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no question, no loading, no saving
+  const saved = testing ? null : store.load();
+  const asking = shouldAsk({ testing, saved }) ? createNamePrompt(document.getElementById('ask')) : null;   // asked while the island loads
   const container = document.getElementById('island');
   const cores = (navigator.hardwareConcurrency || 4), parallel = createParallelHeights(() => new HeightWorker(), Math.max(2, Math.min(8, cores - 1)));
   // the height grids in Web Workers when the browser allows it, else on this thread (same result)
   const world = await generateWorld(seed, { progress: breathe, heightfield: parallel }).catch(err => { console.warn('height workers unavailable, building on the main thread', err); return generateWorld(seed, { progress: breathe }); });
-  const q = new URLSearchParams(location.search).get('spawn');
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
-  const qs = new URLSearchParams(location.search), qt = qs.get('time'), qa = qs.get('awake');
-  const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no loading, no saving
-  const saved = testing ? null : store.load();
   const at = saved ? { x: saved.player.x, z: saved.player.z, y: world.H(saved.player.x, saved.player.z) } : spawn;   // where the view opens
   const view = await createIslandView(world, container, breathe, at);
   await view.prepare(at, breathe);   // no simple stand-in tiles round the castaway at the start
@@ -91,13 +107,27 @@ async function boot() {
   const mark = createRestMark(document.getElementById('rest'));
   const carry = createCarryMark(document.getElementById('carry'));
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
-  const show = info => { mark.update(info.rest, game.sleep.asleep); carry.update({ fibre: game.fibre.carried }, performance.now() / 1000); return info; };
+  const who = createDayLine(document.getElementById('who')), wakes = createWakeLine(document.getElementById('wake'));
+  const ink = createInk(document.documentElement);
+  let name = saved && typeof saved.name === 'string' ? saved.name : '';   // set from the prompt below when asked
+  const startDay = saved && Number.isInteger(saved.startDay) ? saved.startDay : (saved ? 0 : game.clock.day);   // day 1 is the day the game started
+  let wasAsleep = game.sleep.asleep;
+  const show = info => {
+    const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
+    mark.update(info.rest, game.sleep.asleep); carry.update({ fibre: game.fibre.carried }, now);
+    ink.update(skyAt(info.time).day);
+    who.update(dayLine(name, day), now);
+    if (wasAsleep && !game.sleep.asleep) wakes.show(wakeLine(name, day), now);   // any end of a sleep
+    wasAsleep = game.sleep.asleep;
+    wakes.update(now);
+    return info;
+  };
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
 
   createThumbStick(document.getElementById('stick'), input);
-  let stopSaving = testing, sinceSave = 0, moment = momentKey(game);
-  const save = () => { if (!stopSaving) { store.save(game.state()); sinceSave = 0; } };
+  let stopSaving = testing || !!asking, sinceSave = 0, moment = momentKey(game);
+  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay }); sinceSave = 0; } };
   const autosave = dt => { sinceSave += dt; const m = momentKey(game); if (m !== moment || sinceSave >= SAVE_EVERY) { moment = m; save(); } };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
   window.addEventListener('pagehide', save);
@@ -113,6 +143,10 @@ async function boot() {
   const draw = () => { view.settle(game.player); for (let i = 0; i < 4; i++) view.render(game.player, show(game.update(input, 0)), 0.5); };
   view.render(game.player, show(game.update(input, 0)), 0);
   loading.done();
+  if (asking) {   // the island waits quietly for the answer; until then nothing is saved (a save without a name would count as an answer)
+    name = await asking.done; asking.dispose(); stopSaving = false; save();
+    view.render(game.player, show(game.update(input, 0)), 0);   // once more, with the name
+  }
   document.body.classList.add('ready');
   window.__driftwood = { world, game, view, input, ready: true, get frames() { return frames; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {

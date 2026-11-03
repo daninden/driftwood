@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.9 "Name" — 2026-11-03
+
+- At the first start of an island the loading screen asks "What is your name?". Enter, or the small arrow, confirms; an empty answer means the castaway. The name is saved with the island, and starting over asks again.
+- A small line top left always says who you are and which day it is, such as `Dave, day 1`; it grows clearer for a few seconds when a new day begins.
+- When a sleep ends, a short line fades in and out in the middle of the screen, such as `Dave wakes. Day 3.`
+- All the ink on screen (the moon, the row, the thumb stick, the lines of writing, the developer panel) turns pale at night.
+
 ## 0.8 "Wider light" — 2026-11-03
 
 - The firelight reaches further, about 14 m round a fire and 9 m round a torch; the torch lights the ground at its flame.

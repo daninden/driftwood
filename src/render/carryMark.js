@@ -5,7 +5,7 @@
  * his hands or on the ground and never in the row. Later items (nails, a
  * knife, ...) add a key to ITEMS and a drawing to DRAWINGS.
  *
- * Same dark brown ink as the moon, journal-style strokes, no boxes, frames,
+ * Same ink as the moon (`--ink`, render/ink), journal-style strokes, no boxes, frames,
  * numbers or labels, and no placeholders: with nothing carried the row is
  * empty. It is faint most of the time, clear for a few seconds after
  * something is added or used up, then fades back.

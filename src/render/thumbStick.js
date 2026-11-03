@@ -2,7 +2,7 @@
  * render/thumbStick — the thumb stick: a thin ink ring with a dot, fixed
  * bottom right, on touch-only devices, to walk and steer with one thumb.
  *
- * In the style of the moon mark: a dark brown ring and a dot, no fills,
+ * In the style of the moon mark, in its ink (`--ink`, render/ink): a ring and a dot, no fills,
  * arrows or labels. Faint most of the time, clearer while a thumb is on it;
  * the dot follows the thumb inside the ring and springs back on release.
  * The touch area is a little larger than the ring. The finger's offset from

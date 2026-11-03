@@ -6,7 +6,8 @@
 // without a fire, waits for the next high water to bring wood, husks a coconut, lights a fire with the drill (F), takes a torch
 // out of it, and saves
 // screenshots.
-// smoke-0.png shows the loader while it is filling; smoke-5 low water,
+// The question "What is your name?" is answered with an empty Enter at the start.
+// smoke-0.png shows the loader while it is filling (with the question); smoke-5 low water,
 // smoke-6 the castaway asleep, smoke-7 awake with new wood on the beach,
 // smoke-8 husking a coconut, smoke-9 drilling fire, smoke-10 the fire by day,
 // smoke-11 the fire at night, smoke-12 walking away from it with a torch.
@@ -33,12 +34,19 @@ await page.goto('file://' + file + spawn, { waitUntil: 'commit', timeout: 0 });
 const barAt = () => page.evaluate(() => { const f = document.querySelector('#loader .fill'); return f ? new DOMMatrix(getComputedStyle(f).transform).a : -1; });
 await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || document.body.dataset.error || new DOMMatrix(getComputedStyle(f).transform).a > 0.25; }, null, { timeout: 300000, polling: 100 });
 await page.screenshot({ path: 'smoke-0.png' });
+// A real start of an island asks for a name (src/render/namePrompt): leave it empty (the castaway).
+if (!spawn) {   // with ?spawn (a test parameter) the question is skipped
+  await page.waitForSelector('#ask:not([hidden]) input', { timeout: 10000 });
+  await page.press('#ask input', 'Enter');
+}
 await page.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
 // The bar eases to full with a short CSS transition; without a GPU the first
 // frames are slow, so give it time instead of reading it after a fixed wait.
 await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || new DOMMatrix(getComputedStyle(f).transform).a >= 0.99; }, null, { timeout: 10000, polling: 100 }).catch(() => {});
 const bar = await barAt();
 if (bar < 0.99) errors.push('loading bar ended at ' + bar);
+const who = await page.evaluate(() => document.getElementById('who').textContent);
+if (who !== 'The castaway, day 1') errors.push('name line says ' + JSON.stringify(who));
 const err = await page.evaluate(() => document.body.dataset.error);
 if (err) { console.error('boot failed:', err); process.exit(1); }
 console.log('ready after', secs());
