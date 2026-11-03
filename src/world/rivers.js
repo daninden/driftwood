@@ -40,6 +40,7 @@ import { sampleGrid } from './heightfield.js';
 const CG = 4, NC = Math.round(S / CG) + 1;
 export const FORD_DEPTH = 0.22;   // water depth over a ford's bed
 export const FORD_HALF = 4;       // a ford is 2 * FORD_HALF + 1 samples (4 m) long
+export const MOUTH_FADE = 16;     // samples (8 m) past the mouth over which the carved bed fades out into the sea floor
 export const FORD_RAMP = 3;       // samples over which the bed eases down on either side
 /** Bed depth below the water at the river's centre, from its width: shallow where it is narrow. */
 export const bedDepth = w => 0.3 + 0.1 * w - 0.14 * ss(1.45, 0.95, w);
@@ -136,7 +137,9 @@ export function computeRivers({ HG, LG, noise, HL }) {
     const d = RD[id]; if (d > 13) continue;
     const rv = rivers[RI[id]], t = RT[id], w = rv.W(t), hw = w / 2, L = rv.L(t), dep = lerp(bedDepth(w), FORD_DEPTH, rv.fordAt(t * (rv.n - 1)));
     const cy = d < hw ? L - dep * (1 - (d / hw) ** 2) + 0.08 * (d / hw) ** 2 : L + 0.08 + (d - hw) * 0.75;
-    if (cy < HG[id]) HG[id] = cy;
+    // past the mouth the bed fades out into the sea floor (no trough offshore)
+  const mf = 1 - ss(rv.kMouth, rv.kMouth + MOUTH_FADE, t * (rv.n - 1));
+  if (cy < HG[id]) HG[id] = lerp(HG[id], cy, mf);
     for (const fl of rv.falls) {
       const t0 = (fl.top - 10) / (rv.n - 1), t1 = (fl.base + 10) / (rv.n - 1); if (t < t0 || t > t1 || d < hw + 0.2 || d > hw + 4.5) continue;
       const x = -HALF + (id % NG) * GR, z = -HALF + Math.floor(id / NG) * GR, pr = (t - t0) / (t1 - t0);

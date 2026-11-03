@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.17.1 "River mouth" — 2026-11-03
+
+- Fix: beyond a river mouth the carved bed ran on into the sea as a deep, dark trough (up to 2 m deeper than the sea floor, with a rounded end), clearly visible through the water. The river's path continues out to sea and the carve followed it. Now the carve fades out over `MOUTH_FADE` (16 samples, 8 m) past the mouth (`world/rivers`), so the bed flattens into the sea floor and the shallows run on smoothly. The banks that were cut away beside the offshore path are land again, so a mouth has sand on both sides.
+- Changed cells: only within 26 m of a mouth (1330 cells of 0.5 m on seed 1337, all raised, none lowered). Rivers on land (fords, falls, banks, `riverAt`) are unchanged.
+- The style prototype (`prototypes/island-generator/generator.html`) got the same change. The 400 random fixture points do not lie near a mouth, so they stay the same; `make-golden.js` now also exports the ground height along each river past its mouth (`mouthH`) and `tests/world.test.js` compares it, and checks that no trough is left.
+- Habitats: a lagoon fish is only placed over sea water (`Lat < 0`), which the changed mouth floor exposed as an edge case.
+
 ## 0.17 "Wildlife" — 2026-11-03
 
 - Crabs, fish and birds, atmosphere only (nothing to do with them, no sound, nothing saved), all alive only within 30 m of the castaway.

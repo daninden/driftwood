@@ -33,7 +33,7 @@ Rules:
 | `world/shape` | Island outline and scattered highlands; scale to terrace level L. |
 | `world/terrain` | From L to height: terraces, rock walls and the natural passages. |
 | `world/heightfield` | The height and level grids, and bilinear sampling. |
-| `world/rivers` | Rivers (Dijkstra, smooth curve), waterfalls, 2 to 4 fords per river along the middle reach (`rv.fords`, `rv.fordAt(k)`, `FORD_DEPTH`), carving beds and banks (shallow where a river is narrow, `bedDepth`; the bed rises to `FORD_DEPTH` on a ford). |
+| `world/rivers` | Rivers (Dijkstra, smooth curve), waterfalls, 2 to 4 fords per river along the middle reach (`rv.fords`, `rv.fordAt(k)`, `FORD_DEPTH`), carving beds and banks (shallow where a river is narrow, `bedDepth`; the bed rises to `FORD_DEPTH` on a ford; past the mouth the carve fades out over `MOUTH_FADE` samples so the bed flattens into the sea floor). |
 | `world/vegetation` | Per tile: trees, palms, rocks, bushes, root spots, and what can be gathered: driftwood and the coconuts under the palms (each with its own PRNG and an id per piece) (data only). |
 | `world/occlusion` | Darker ground under crowns and in hollows. |
 | `world/spots` | Finding places: the start spot, examples of each passage (for tests). |
@@ -148,7 +148,7 @@ npm run smoke     quick check (about 15 seconds with a graphics card, about 35 s
 npm run smoke:full  the same with every screenshot (about 20 seconds with a card, a few minutes with software drawing); the shots a person looks at are 1280x800 (the phone at scale 2), the ones that only check something stay 640x400. Use it for visual versions
 ```
 
-- `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
+- `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Past each river mouth the ground height along the river (`mouthH`) is compared too. Any change to the generation shows up here.
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea; trunks, palms and boulders must stop you while you slide past them, small stones must not; rivers stop you at waist depth, every ford can be crossed, the deep reach cannot, and upstream brooks can be waded anywhere.
 - `tests/streaming.test.js`, `tests/render.test.js` (window round the castaway, fading footprints, the moon mark, the carry row, the surf levels) and `tests/core.test.js` test the pure logic without a browser.
 - `tests/devPanel.test.js` tests the dev panel: fps averaging (calm, at most twice a second, odd frames ignored), the work time, the label (ms, idle), the backtick toggle (not with Shift) and the version.

@@ -159,7 +159,7 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
   - in the rain forest, **roots and lianas** over a lower wall
 
   You recognise a passage only by nature itself: loose stones, less vegetation, moss. The higher the terrace, the scarcer the passages.
-- **Rivers:** run from a highland to the sea. Where they leave a terrace, a waterfall forms. Sometimes a tributary joins.
+- **Rivers:** run from a highland to the sea. Where they leave a terrace, a waterfall forms. Sometimes a tributary joins. At the mouth the bed flattens out into the sea floor (the carve fades out over 8 m past the mouth, 0.17.1), so the shallows run on smoothly and there is no dark trough offshore.
 - **Wading (built):** the castaway wades at most up to his waist, about **0.35 m**; deeper water stops him as the sea does, and he never sinks further than his waist. Upstream, where a river is still a narrow brook, it is shallow and can be waded anywhere. Along the middle reach each river gets **2 to 4 fords**: shallow stretches where the bed rises, recognisable only by nature (stones sticking out of the water, gravel, white rippling water; no markers). The wide, deep stretch towards the sea cannot be waded. So a river is a real border you have to learn. The fords are carved into the bed by the world generation (a deliberate change of seed 1337); the stones and gravel on them are drawn only and never block.
 - **Coast:** beaches with palms, rocky shores and lagoons with sandbanks.
 

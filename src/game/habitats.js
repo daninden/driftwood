@@ -123,7 +123,7 @@ export function fishOfTile(w, tile) {
       for (let i = 0; i < nf; i++) {
         const ox = (r() - 0.5) * 2.4, oz = (r() - 0.5) * 2.4;
         const fy = w.H(x + ox, z + oz);
-        if (fy > -0.2 || fy < -1.0) continue;
+        if (fy > -0.2 || fy < -1.0 || w.Lat(x + ox, z + oz) >= 0) continue;   // only over the sea
         fish.push({ ox, oz, ph: r() * 6.28, len: 0.3 + r() * 0.15 });
       }
       if (fish.length < 2) continue;

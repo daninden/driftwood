@@ -25,7 +25,7 @@ await page.waitForFunction(() => window.__done, null, { timeout: 300000, polling
 const g = await page.evaluate(() => {
   const q = window.__q; let a = 12345; const rr = () => (a = (a * 16807) % 2147483647) / 2147483647; const pts = [];
   for (let i = 0; i < 400; i++) { const x = (rr() - 0.5) * 600, z = (rr() - 0.5) * 600, rv = q.riverAt(x, z), pa = q.passAt(x, z), c = q.colorAt(x, z); pts.push({ x, z, h: q.H(x, z), L: q.Lat(x, z), s: q.slope(x, z), rd: rv ? rv.d : null, pass: pa.any, fr: q.fallRouteAt(x, z), col: c }); }
-  return { seed: 1337, SC: q.SC, hl: q.HL.length, rivers: q.RIVERS.map(r => ({ n: r.n, kMouth: r.kMouth, falls: r.falls.map(f => [f.top, f.base, f.drop]), p0: r.pts[0], pEnd: r.pts[r.n - 1] })),
+  return { seed: 1337, SC: q.SC, hl: q.HL.length, rivers: q.RIVERS.map(r => ({ n: r.n, kMouth: r.kMouth, falls: r.falls.map(f => [f.top, f.base, f.drop]), p0: r.pts[0], pEnd: r.pts[r.n - 1], mouthH: Array.from({ length: 13 }, (_, i) => { const p = r.pts[Math.min(r.n - 1, r.kMouth + 4 * i)]; return +q.H(p.x, p.z).toFixed(4); }) })),
     tiles: q.TILES.map(t => [t.tx, t.tz, +t.hmax.toFixed(4), t.trees.length, t.pines.length, t.palms.length, t.crags.length, t.rocks.length, t.bushes.length, t.roots.length]), pts };
 });
 await browser.close(); unlinkSync(tmp);
