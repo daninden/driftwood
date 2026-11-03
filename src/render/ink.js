@@ -7,8 +7,9 @@
  * paper at night, blending through dusk and dawn on the same curve as the
  * light of the world (render/sky `day`). The dev panel's faint backing
  * (`--ink-back`) turns the other way, from light sand to dark brown, so its
- * text stays readable. The day line and the waking line also get a soft glow
- * behind the letters in the opposite colour (`--ink-glow`: pale paper by day, dark brown
+ * text stays readable. The day line and the waking line, and since 0.13.3 every
+ * mark (action button, thumb stick, moon, drop, fibre, tally marks), also get a soft glow
+ * behind the letters or strokes in the opposite colour (`--ink-glow`: pale paper by day, dark brown
  * at night), no frame. The loading screen keeps its own dark brown.
  *
  * INK_DAY (0x2e2418), INK_NIGHT (0xefe0c2), BACK_ALPHA (0.4), GLOW_ALPHA (0.85)

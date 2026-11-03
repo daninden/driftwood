@@ -2,6 +2,10 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.13.3 "Clear marks" — 2026-11-03
+
+- Every interface element is now readable on light and dark ground, by day and at night. The action button has a soft glow in the opposite colour of the ink behind ring and icon, a faint paper disc inside the ring (pale by day, dark at night), thicker strokes (2.2 px) and larger icons, and is clearer (0.45 empty, 0.95 with an action). The thumb stick, the moon, the drop, the fibre tufts and the tally marks get the same glow and thicker strokes; the moon, drop and fibre row rest at 0.5 instead of 0.3. No frames or boxes.
+
 ## 0.13.2 "Chosen shadows" — 2026-11-03
 
 - The shadows settle on fine steps with soft edges: the shadow light turns in steps of 1/32 degree (was 1/16), never comes from lower than 15 degrees, the own soft filter has a radius of 1.5 texels, and the shadow camera keeps the tight fit. The user compared the variants by eye on a phone and chose these.

@@ -140,6 +140,7 @@ describe('the ink', () => {
   it('gives the day and waking lines a glow in the opposite colour', () => {
     expect(inkGlow(STEPS)).toBe('rgba(239, 224, 194, 0.85)');   // pale paper by day
     expect(inkGlow(0)).toBe('rgba(46, 36, 24, 0.85)');          // dark at night
+    expect(inkColor(STEPS)).toBe('#2e2418'); expect(inkColor(0)).toBe('#efe0c2');   // the glow is always the other one (0.13.3: all marks use it)
     expect(inkGlow(STEPS / 2)).not.toBe(inkGlow(STEPS));
   });
   it('writes the style only when the step changes', () => {

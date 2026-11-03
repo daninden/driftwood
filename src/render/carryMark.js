@@ -5,7 +5,7 @@
  * his hands or on the ground and never in the row. Later items (nails, a
  * knife, ...) add a key to ITEMS and a drawing to DRAWINGS.
  *
- * Same ink as the moon (`--ink`, render/ink), journal-style strokes, no boxes, frames,
+ * Same ink as the moon (`--ink`, render/ink), strokes 2 px with the glow `--halo` behind them (index.html, 0.13.3), journal-style strokes, no boxes, frames,
  * numbers or labels, and no placeholders: with nothing carried the row is
  * empty. It is faint most of the time, clear for a few seconds after
  * something is added or used up, then fades back.
@@ -25,7 +25,7 @@
 import { ss } from '../core/math.js';
 
 export const ITEMS = ['fibre'];
-export const REST_OPACITY = 0.3, PEAK_OPACITY = 0.85;
+export const REST_OPACITY = 0.5, PEAK_OPACITY = 0.95;
 export const HOLD = 3, EASE = 2;   // seconds held clear, then easing back
 
 export function carryItems(state) {

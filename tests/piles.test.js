@@ -7,7 +7,7 @@ import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createWood, PILE_MAX, PILE_JOIN, PILE_NEXT } from '../src/game/wood.js';
 import { BURN, FUEL_MAX, TORCH_DRY } from '../src/game/fire.js';
-import { tallyDrawing, fireTally, pileTally, createTallyView, BESIDE } from '../src/render/tallyMarks.js';
+import { tallyDrawing, fireTally, pileTally, createTallyView, BESIDE, STROKE_WIDTH, GLOW_WIDTH } from '../src/render/tallyMarks.js';
 import { pieces } from '../src/render/fire.js';
 import { FIRST_HIGH, PERIOD } from '../src/game/tide.js';
 
@@ -174,7 +174,8 @@ describe('the tally view', () => {
       upd(0.1, 1); expect(layer.children.length).toBe(1);
       const m = layer.children[0]; expect(+m.style.opacity).toBeGreaterThan(0); expect(+m.style.opacity).toBeLessThan(1);
       upd(1, 1); expect(+m.style.opacity).toBe(1);
-      expect(m.children[0].attrs.d).toBe(tallyDrawing(7).d); expect(m.children[0].attrs.stroke).toBe('var(--ink)');
+      expect(m.children[0].attrs.d).toBe(tallyDrawing(7).d); expect(m.children[0].attrs.stroke).toBe('var(--ink-glow)');   // glow under the ink
+      expect(m.children[1].attrs.d).toBe(tallyDrawing(7).d); expect(m.children[1].attrs.stroke).toBe('var(--ink)');
       upd(0.2, 4); expect(+m.style.opacity).toBeLessThan(1);               // walking away fades
       upd(1, 4); expect(layer.children.length).toBe(0);
       expect(BESIDE).toBeGreaterThan(1.2);
@@ -190,5 +191,11 @@ describe('the tally view', () => {
       view.update(1, { game, camera: c, H: () => 0, player });
       expect(layer.children.length).toBe(0);
     } finally { restore(); }
+  });
+});
+
+describe('tally marks on any ground (0.13.3)', () => {
+  it('the glow stroke under the ink is clearly wider than the ink', () => {
+    expect(STROKE_WIDTH).toBeGreaterThanOrEqual(1.7); expect(GLOW_WIDTH).toBeGreaterThan(STROKE_WIDTH * 2);
   });
 });

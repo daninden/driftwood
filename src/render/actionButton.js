@@ -1,20 +1,25 @@
 /**
- * render/actionButton — the action button: a thin ink ring, drawn like the
- * thumb stick, with a small ink icon of what a press would do.
+ * render/actionButton — the action button: an ink ring, drawn like the
+ * thumb stick, with an ink icon of what a press would do. Readable on any
+ * ground (0.13.3): a soft glow in the opposite colour behind ring and icon
+ * (`--halo` in index.html, a drop-shadow of `--ink-glow`), a faint paper disc
+ * inside the ring (fill `--ink-glow` at 0.29, pale by day, dark at night),
+ * icon strokes of 2.2 px that keep their width at any icon scale
+ * (non-scaling-stroke).
  *
  * Space on the keyboard does the same (game/input). On touch-only devices
  * (the thumb stick's test, render/thumbStick `touchOnly`) it sits bottom
  * right just above the thumb stick, inside the safe area; on a desktop it
  * sits in the bottom right corner and can also be clicked (positions in
  * index.html). In the ink of the other marks (`--ink`, pale at night, render/ink).
- * Faint (0.3) and empty when there is nothing to do, clearer (0.75) with an icon
- * when there is, a little clearer still under a finger. Beside something he
+ * Faint (0.45) and empty when there is nothing to do, clear (0.95) with an icon
+ * when there is, fully opaque under a finger. Beside something he
  * could light or when a hold is the only thing to do, a ring round the icon
  * fills while the button is held (game/input HOLD_MS).
  *
  * A short press and a hold: when both do something the icon of the short
  * press is large and that of the hold small beside it; when only a hold does
- * something, its icon is large. The icons (thin strokes, like the moon and the
+ * something, its icon is large. The icons (strokes like the moon and the
  * drop): wood with an arrow up (pickup), wood with an arrow down (lay), the
  * fibre tuft (husk), a flame over a piece of wood (feed), a torch (torch), a
  * torch with a stroke of ground (plant), the drop (drink), a flame (light, hold)
@@ -24,11 +29,12 @@
  * to input.actionStart/actionEnd and never reaches the world (no walk tap, no
  * steering, no part of a two-finger gesture) nor the thumb stick.
  *
+ * MAIN_ALONE, MAIN_WITH_SIDE, SIDE   the icon scales (1.8, 1.25, 0.6)
  * ICONS            { key: inner SVG } in a -12..12 box, stroked with the ink
  * ICON_OF          the icon key of each action kind of game/game `action`
  * buttonIcons(action) -> { main, side }   the icon keys (null when empty) for what
  *   game.action() returned: { tap, hold }. Pure.
- * buttonOpacity(icons, down) -> 0.3 | 0.75 | 0.9   Pure.
+ * buttonOpacity(icons, down) -> 0.45 | 0.95 | 1   Pure.
  * ringOffset(fill) -> stroke-dashoffset of the filling ring, fill 0..1 in steps of 1/FILL_STEPS. Pure.
  * createActionButton(el, input) -> { update(action, fill), dispose() }
  *   el: the #action element (index.html), holding an <svg> with .fill, .main
@@ -43,7 +49,8 @@ import { DROP_PATH } from './thirstMark.js';
 
 export const FILL_STEPS = 40;
 export const RING_R = 36, CIRC = +(2 * Math.PI * RING_R).toFixed(2);   // the filling ring round the icon
-export const FAINT = 0.3, CLEAR = 0.75, HELD = 0.9;
+export const FAINT = 0.45, CLEAR = 0.95, HELD = 1;
+export const MAIN_ALONE = 1.8, MAIN_WITH_SIDE = 1.25, SIDE = 0.6;   // icon scales (icons are drawn in a -12..12 box)
 
 const LOG = '<path d="M-9.56 7.08L7.44 2.08A2 2 0 0 1 8.56 5.92L-8.44 10.92A2 2 0 0 1 -9.56 7.08Z"/>';
 const FLAME = '<path d="M0 -11C1 -7 5 -5 5 -0.5A5 5 0 0 1 -5 -0.5C-5 -3 -3 -4.5 -2 -7C-1 -5.5 -0.5 -4 0 -4C1 -6 1 -8.5 0 -11Z"/>';
@@ -94,8 +101,8 @@ export function createActionButton(el, input) {
     const icons = buttonIcons(action), k = (icons.main || '') + '|' + (icons.side || '');
     if (k !== key) {
       key = k;
-      main.innerHTML = icons.side ? placed(icons.main, -6, -3, 1.0) : placed(icons.main, 0, 0, 1.5);
-      side.innerHTML = placed(icons.side, 17, 14, 0.5);
+      main.innerHTML = icons.side ? placed(icons.main, -6, -3, MAIN_WITH_SIDE) : placed(icons.main, 0, 0, MAIN_ALONE);
+      side.innerHTML = placed(icons.side, 16, 13, SIDE);
       el.classList.toggle('on', !!icons.main);
     }
     const f = action && action.hold ? ringOffset(fill) : ringOffset(0);

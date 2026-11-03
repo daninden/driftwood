@@ -3,7 +3,7 @@
  * while the castaway stands beside it (0.12).
  *
  * Journal style, in the ink of the other marks (`--ink`, pale at night,
- * render/ink): strokes in groups of five, four upright strokes with a diagonal
+ * render/ink), with a soft glow behind them (a wider stroke of `--ink-glow`, GLOW_WIDTH 3.8) so they read on any ground (0.13.3): strokes in groups of five, four upright strokes with a diagonal
  * fifth across them, each stroke a little off the true. A pile (game/wood)
  * shows one stroke per piece, up to PILE_MAX (12), with a double line under
  * it when it is full. A fire (game/fire) shows the pieces still on it, up to
@@ -16,7 +16,7 @@
  * he walks away (or the pile is gone). Nothing is drawn while no pile or fire
  * is near him.
  *
- * BESIDE, FADE_IN, FADE_OUT
+ * BESIDE, FADE_IN, FADE_OUT, STROKE_WIDTH (1.7), GLOW_WIDTH (3.8)
  * tallyDrawing(count, part, full) -> { width, height, d }   the strokes as SVG path
  *   data in a box of width × height units: count whole strokes, part: a short
  *   stroke after them, full: the double line under. Pure.
@@ -35,6 +35,7 @@ import { PILE_MAX } from '../game/wood.js';
 import { BURN, FUEL_MAX } from '../game/fire.js';
 
 export const BESIDE = 1.8;       // how close to the middle of a pile or fire counts as beside it (F reaches 1.2 from his feet, plus the reach of a pile)
+export const STROKE_WIDTH = 1.7, GLOW_WIDTH = 3.8;   // ink stroke and the glow stroke under it, in drawing units
 export const FADE_IN = 0.35, FADE_OUT = 0.6;
 const FIRE_MAX = Math.round(FUEL_MAX / BURN);
 const SIZE = 2.1;                // pixels per drawing unit
@@ -77,16 +78,18 @@ export function createTallyView(container) {
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden;';
   layer.setAttribute('aria-hidden', 'true');
   container.appendChild(layer);
-  const marks = new Map();   // pile or fire -> { el, path, key, alpha, x, y, z, shown, pos }
+  const marks = new Map();   // pile or fire -> { el, path, glow, key, alpha, x, y, z, shown, pos }
   const v = new THREE.Vector3();
 
   function make() {
-    const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const ns = 'http://www.w3.org/2000/svg', el = document.createElementNS(ns, 'svg'), path = document.createElementNS(ns, 'path'), glow = document.createElementNS(ns, 'path');
     el.style.cssText = 'position:absolute;left:0;top:0;overflow:visible;opacity:0;will-change:transform;';
-    path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'var(--ink)'); path.setAttribute('stroke-width', '1.5');
-    path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
-    el.appendChild(path); layer.appendChild(el);
-    return { el, path, key: '', alpha: 0, x: 0, y: 0, z: 0, w: 0, h: 0, shown: '', pos: '' };
+    for (const [p, c, w] of [[glow, 'var(--ink-glow)', GLOW_WIDTH], [path, 'var(--ink)', STROKE_WIDTH]]) {
+      p.setAttribute('fill', 'none'); p.setAttribute('stroke', c); p.setAttribute('stroke-width', w);
+      p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+    }
+    el.appendChild(glow); el.appendChild(path); layer.appendChild(el);
+    return { el, path, glow, key: '', alpha: 0, x: 0, y: 0, z: 0, w: 0, h: 0, shown: '', pos: '' };
   }
 
   function update(dt, { game, camera, H: ground, player }) {
@@ -107,7 +110,7 @@ export function createTallyView(container) {
       if (key !== m.key) {
         m.key = key;
         const d = tallyDrawing(t.count, t.part, t.full);
-        m.path.setAttribute('d', d.d); m.w = d.width * SIZE; m.h = d.height * SIZE;
+        m.path.setAttribute('d', d.d); m.glow.setAttribute('d', d.d); m.w = d.width * SIZE; m.h = d.height * SIZE;
         m.el.setAttribute('width', m.w.toFixed(1)); m.el.setAttribute('height', m.h.toFixed(1)); m.el.setAttribute('viewBox', `0 0 ${d.width.toFixed(1)} ${d.height.toFixed(1)}`);
         m.empty = t.count === 0 && !t.part;
       }

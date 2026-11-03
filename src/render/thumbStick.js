@@ -3,7 +3,7 @@
  * bottom right, on touch-only devices, to walk and steer with one thumb.
  *
  * In the style of the moon mark, in its ink (`--ink`, render/ink): a ring and a dot, no fills,
- * arrows or labels. Faint most of the time, clearer while a thumb is on it;
+ * arrows or labels. Since 0.13.3 readable on any ground: ring 2.2 px with the glow `--halo` (index.html, `--ink-glow` behind the strokes). Faint (0.55) most of the time, clearer (0.95) while a thumb is on it;
  * the dot follows the thumb inside the ring and springs back on release.
  * The touch area is a little larger than the ring. The finger's offset from
  * the centre goes to game/input (stickStart, stickMove, stickEnd), which

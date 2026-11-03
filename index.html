@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Driftwood</title>
 <style>
-  :root { --ink: #2e2418; --ink-back: rgba(239, 224, 194, 0.4); --ink-glow: rgba(239, 224, 194, 0.85); }   /* the ink of the marks; render/ink turns it pale at night */
+  :root { --ink: #2e2418; --ink-back: rgba(239, 224, 194, 0.4); --ink-glow: rgba(239, 224, 194, 0.85); --halo: drop-shadow(0 0 1.5px var(--ink-glow)) drop-shadow(0 0 4px var(--ink-glow)); }   /* the ink of the marks; render/ink turns it pale at night */
   html, body { height: 100%; margin: 0; touch-action: none; }
   body { overflow: hidden; background: linear-gradient(#efe0c2, #cdb48c); color-scheme: light; }
   #island { position: fixed; inset: 0; }
@@ -23,36 +23,37 @@
   #loader .ask input { width: 190px; box-sizing: border-box; margin: 0; padding: 4px 2px; border: 0; border-bottom: 1px solid #2e2418; border-radius: 0; outline: none; background: transparent; color: #2e2418; caret-color: #2e2418; font: 20px Georgia, 'Times New Roman', serif; text-align: center; -webkit-appearance: none; appearance: none; user-select: text; -webkit-user-select: text; touch-action: manipulation; }
   #loader .ask button { margin: 0 -4px 0 0; padding: 8px 10px; border: 0; background: transparent; color: #2e2418; font: 20px Georgia, 'Times New Roman', serif; line-height: 1; cursor: pointer; opacity: 0.7; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   body.ready #loader { opacity: 0; }
-  #rest { position: fixed; left: calc(18px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); width: 26px; height: 26px; pointer-events: none; visibility: hidden; transition: opacity 1.5s ease; }
+  #rest { position: fixed; left: calc(18px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); width: 26px; height: 26px; pointer-events: none; visibility: hidden; transition: opacity 1.5s ease; filter: var(--halo); }
   body.ready #rest { visibility: visible; }
-  #rest .rim { fill: none; stroke: var(--ink); stroke-opacity: 0.5; stroke-width: 1; }
+  #rest .rim { fill: none; stroke: var(--ink); stroke-opacity: 0.7; stroke-width: 1.8; }
   #rest .lit { fill: var(--ink); }
-  #stick { position: fixed; right: calc(14px + env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); width: 150px; height: 150px; display: none; opacity: 0.3; transition: opacity 0.5s ease; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; visibility: hidden; }
+  #stick { position: fixed; right: calc(14px + env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); width: 150px; height: 150px; display: none; opacity: 0.55; transition: opacity 0.5s ease; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; visibility: hidden; }
   @media (pointer: coarse) and (not (any-pointer: fine)) { #stick { display: block; } }
   body.ready #stick { visibility: visible; }
-  #stick.active { opacity: 0.75; transition-duration: 0.15s; }
-  #stick svg { width: 100%; height: 100%; display: block; pointer-events: none; overflow: visible; }
-  #stick .ring { fill: none; stroke: var(--ink); stroke-width: 1.3; }
+  #stick.active { opacity: 0.95; transition-duration: 0.15s; }
+  #stick svg { width: 100%; height: 100%; display: block; pointer-events: none; overflow: visible; filter: var(--halo); }
+  #stick .ring { fill: none; stroke: var(--ink); stroke-width: 2.2; }
   #stick .knob { fill: var(--ink); transition: transform 0.18s ease-out; }
   #stick .knob.held { transition: none; }
-  #action { position: fixed; right: calc(18px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); width: 84px; height: 84px; opacity: 0.3; transition: opacity 0.5s ease; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; visibility: hidden; }
+  #action { position: fixed; right: calc(18px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); width: 84px; height: 84px; opacity: 0.45; transition: opacity 0.5s ease; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; visibility: hidden; }
   @media (pointer: coarse) and (not (any-pointer: fine)) { #action { right: calc(47px + env(safe-area-inset-right)); bottom: calc(150px + env(safe-area-inset-bottom)); } }
   body.ready #action { visibility: visible; }
   #action.on { cursor: pointer; }
-  #action svg { width: 100%; height: 100%; display: block; pointer-events: none; overflow: visible; }
-  #action .ring { fill: none; stroke: var(--ink); stroke-width: 1.3; }
-  #action .fill { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
-  #action .main, #action .side { fill: none; stroke: var(--ink); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+  #action svg { width: 100%; height: 100%; display: block; pointer-events: none; overflow: visible; filter: var(--halo); }
+  #action .ring { fill: var(--ink-glow); fill-opacity: 0.29; stroke: var(--ink); stroke-width: 2.2; }
+  #action .fill { fill: none; stroke: var(--ink); stroke-width: 2.8; stroke-linecap: round; }
+  #action .main, #action .side { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   #action .side { stroke-width: 2.4; }
+  #action .main *, #action .side * { vector-effect: non-scaling-stroke; }
   #row { position: fixed; left: calc(18px + 26px + 14px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); height: 26px; display: flex; align-items: flex-end; gap: 16px; pointer-events: none; }
   #needs { display: flex; align-items: flex-end; gap: 10px; }
-  #thirst { width: 16px; height: 24px; opacity: 0.3; visibility: hidden; transition: opacity 0.5s ease; }
+  #thirst { width: 16px; height: 24px; opacity: 0.5; filter: var(--halo); visibility: hidden; transition: opacity 0.5s ease; }
   body.ready #thirst { visibility: visible; }
-  #thirst .rim { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linejoin: round; }
+  #thirst .rim { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
   #thirst .lit { fill: var(--ink); fill-opacity: 0.8; }
-  #carry { height: 26px; display: flex; align-items: flex-end; gap: 2px; opacity: 0.3; visibility: hidden; transition: opacity 0.5s ease; }
+  #carry { height: 26px; display: flex; align-items: flex-end; gap: 2px; opacity: 0.5; visibility: hidden; transition: opacity 0.5s ease; }
   body.ready #carry { visibility: visible; }
-  #carry svg { height: 24px; width: auto; fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+  #carry svg { height: 24px; width: auto; fill: none; stroke: var(--ink); stroke-width: 2; filter: var(--halo); stroke-linecap: round; stroke-linejoin: round; }
   #dev { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); color: var(--ink); opacity: 0.75; padding: 2px 7px; border-radius: 9px; background: var(--ink-back); font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.02em; white-space: nowrap; pointer-events: none; user-select: none; visibility: hidden; }
   #who { position: fixed; top: calc(14px + env(safe-area-inset-top)); left: calc(18px + env(safe-area-inset-left)); color: var(--ink); opacity: 0.55; font: 15px/1.2 Georgia, 'Times New Roman', serif; letter-spacing: 0.04em; text-shadow: 0 0 4px var(--ink-glow), 0 0 9px var(--ink-glow); white-space: nowrap; pointer-events: none; user-select: none; visibility: hidden; transition: opacity 0.5s ease; }
   body.ready #who { visibility: visible; }

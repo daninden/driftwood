@@ -54,11 +54,11 @@ describe('rest mark', () => {
     expect(moonPath(0)).toBe('');
   });
   it('stays faint, and grows clearer in the last half day', () => {
-    expect(markOpacity(1, false)).toBeCloseTo(0.3);
-    expect(markOpacity(CLEAR_BELOW + 0.01, false)).toBeCloseTo(0.3);
-    expect(markOpacity(0, false)).toBeCloseTo(0.85);
-    expect(markOpacity(0.1, false)).toBeGreaterThan(0.3);
-    expect(markOpacity(1, true)).toBeGreaterThan(0.3);
+    expect(markOpacity(1, false)).toBeCloseTo(0.5);
+    expect(markOpacity(CLEAR_BELOW + 0.01, false)).toBeCloseTo(0.5);
+    expect(markOpacity(0, false)).toBeCloseTo(0.95);
+    expect(markOpacity(0.1, false)).toBeGreaterThan(0.5);
+    expect(markOpacity(1, true)).toBeGreaterThan(0.5);
   });
 });
 

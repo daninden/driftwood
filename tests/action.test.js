@@ -10,7 +10,7 @@ import { CARRY_MAX, PILE_MAX } from '../src/game/wood.js';
 import { createInput, HOLD_MS } from '../src/game/input.js';
 import { terrainAt } from '../src/game/movement.js';
 import { freshWater } from '../src/game/water.js';
-import { buttonIcons, buttonOpacity, ringOffset, createActionButton, ICONS, ICON_OF, FAINT, CLEAR, HELD, CIRC, FILL_STEPS } from '../src/render/actionButton.js';
+import { MAIN_ALONE, MAIN_WITH_SIDE, SIDE, buttonIcons, buttonOpacity, ringOffset, createActionButton, ICONS, ICON_OF, FAINT, CLEAR, HELD, CIRC, FILL_STEPS } from '../src/render/actionButton.js';
 
 if (!globalThis.window) globalThis.window = new EventTarget();
 let w, spawn, logs, cocos, E;   // E: an empty dry spot, nothing within 5 m
@@ -374,9 +374,11 @@ describe('the button: icons, opacity and the DOM', () => {
     expect(buttonIcons({ tap: { kind: 'torch' } }).main).toBe('torch'); expect(buttonIcons({ tap: { kind: 'plant' } }).main).toBe('plant');
   });
   it('is faint and empty with nothing to do, clearer with an icon, clearest under a finger', () => {
-    expect([FAINT, CLEAR, HELD]).toEqual([0.3, 0.75, 0.9]);
-    expect(buttonOpacity({ main: null, side: null })).toBe(0.3); expect(buttonOpacity({ main: null, side: null }, true)).toBe(0.3);
-    expect(buttonOpacity({ main: 'lay', side: null })).toBe(0.75); expect(buttonOpacity({ main: 'lay', side: null }, true)).toBe(0.9);
+    expect([FAINT, CLEAR, HELD]).toEqual([0.45, 0.95, 1]);
+    expect([MAIN_ALONE, MAIN_WITH_SIDE, SIDE]).toEqual([1.8, 1.25, 0.6]);   // 0.13.3: larger icons
+    expect(MAIN_ALONE * 24).toBeGreaterThan(40);   // fills most of the ring (radius 30)
+    expect(buttonOpacity({ main: null, side: null })).toBe(0.45); expect(buttonOpacity({ main: null, side: null }, true)).toBe(0.45);
+    expect(buttonOpacity({ main: 'lay', side: null })).toBe(0.95); expect(buttonOpacity({ main: 'lay', side: null }, true)).toBe(1);
   });
   it('fills its ring in steps', () => {
     expect(ringOffset(0)).toBe(CIRC); expect(ringOffset(1)).toBe(0); expect(ringOffset(2)).toBe(0); expect(ringOffset(-1)).toBe(CIRC);
@@ -393,9 +395,9 @@ describe('the button: icons, opacity and the DOM', () => {
   const ev = (el, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); let stopped = false; e.stopPropagation = () => { stopped = true; }; el.dispatchEvent(e); return { e, stopped }; };
   it('draws what a press would do, and only touches the DOM when it changes', () => {
     const { el, parts } = fakeEl(), input = createInput(new EventTarget(), () => null), b = createActionButton(el, input);
-    b.update({ tap: null, hold: null }); expect(el.style.opacity).toBe('0.30'); expect(parts['.main'].innerHTML).toBe(''); expect(el.classList.has('on')).toBe(false);
+    b.update({ tap: null, hold: null }); expect(el.style.opacity).toBe('0.45'); expect(parts['.main'].innerHTML).toBe(''); expect(el.classList.has('on')).toBe(false);
     b.update({ tap: { kind: 'pickup' }, hold: { kind: 'light' } });
-    expect(el.style.opacity).toBe('0.75'); expect(parts['.main'].innerHTML).toContain('<path'); expect(parts['.side'].innerHTML).toContain('<path'); expect(el.classList.has('on')).toBe(true);
+    expect(el.style.opacity).toBe('0.95'); expect(parts['.main'].innerHTML).toContain('<path'); expect(parts['.side'].innerHTML).toContain('<path'); expect(el.classList.has('on')).toBe(true);
     const html = parts['.main'].innerHTML; parts['.main'].innerHTML = 'kept';
     b.update({ tap: { kind: 'pickup' }, hold: { kind: 'light' } }); expect(parts['.main'].innerHTML).toBe('kept');   // unchanged: not redrawn
     b.update({ tap: { kind: 'lay' }, hold: null }); expect(parts['.main'].innerHTML).not.toBe(html); expect(parts['.side'].innerHTML).toBe('');
