@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.17.2 "Many lights" — 2026-11-03
+
+- Fix: only the strongest fire or torch near the castaway lit the ground, plus the torch in his hand; the others were only a glow. Now every burning fire and torch in the ground near him lights its surroundings.
+- A fixed pool of point lights in `render/fire` (`POOL` 4, always in the scene, so no shader is rebuilt; unused ones at intensity 0), given each frame to the nearest fires and torches (within 60 m); the carried torch keeps its own light. `pickLights` and `stepPool` are pure. A light that changes the fire it serves fades out over 0.3 s (`FADE`) and only then fades in on the new one, so nothing pops. Ranges, decay and positions are as before (14 m, 9 m, 1.5, at the flame).
+- Quality: `settingsFor` has `fireLights` (4 at levels 0 and 1, 2 at 2 to 4). The pool is sized once at the start of the session from the starting level; when the level drops, `view.setQuality` calls `fireView.setActive`, which gives out fewer lights while the rest stay in the scene dark, so nothing is recompiled.
+- The glow over the picture follows every light that is on (pool and carried), scaled by its fade.
+- Cost: 3 more point lights per lit material. On the desktop card here a frame at night with a fire and four torches took 3.9 ms with the pool and 3.9 ms with the old two lights (no measurable difference).
+- Tests: `tests/lights.test.js`; the smoke test has a night shot with a fire and two torches (`smoke-27.png`, also in the quick run). README: a line on torches lighting the ground.
+
 ## 0.17.1 "River mouth" — 2026-11-03
 
 - Fix: beyond a river mouth the carved bed ran on into the sea as a deep, dark trough (up to 2 m deeper than the sea floor, with a rounded end), clearly visible through the water. The river's path continues out to sea and the carve followed it. Now the carve fades out over `MOUTH_FADE` (16 samples, 8 m) past the mouth (`world/rivers`), so the bed flattens into the sea floor and the shallows run on smoothly. The banks that were cut away beside the offshore path are land again, so a mouth has sand on both sides.

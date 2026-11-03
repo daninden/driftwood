@@ -9,10 +9,14 @@
  *   - Smoke rises and drifts away: thin over a good fire, thicker over embers
  *     and wet wood. A failed attempt (game/fire `puffs`) leaves a short puff;
  *     drilling (player.work) raises a thin wisp near the end.
- *   - One warm point light stands over the strongest fire (or torch in the
- *     ground) near the castaway, brighter at night. At night a soft warm glow
- *     is also laid over the picture round the nearest GLOWS lights (a DOM layer above the night grading of render/mood,
- *     which would otherwise darken the firelight with everything else).
+ *   - Warm point lights stand over the nearest burning fires and torches in the
+ *     ground (0.17.2): a fixed pool, always in the scene (so no shader is
+ *     rebuilt), of which `active` are given out each frame, brighter at night.
+ *     A light that changes the fire it serves first fades out and then fades
+ *     in on the new one (FADE seconds), so nothing pops. At night a soft warm
+ *     glow is laid over the picture round every light that is on (a DOM layer
+ *     above the night grading of render/mood, which would otherwise darken the
+ *     firelight with everything else).
  *
  *   - A burnt place (game/fire `burnt`) is what a fire leaves when it goes out: a
  *     patch of ash and a few charred ends on the ground, no flame, smoke or
@@ -23,15 +27,23 @@
  * pieces(fire) -> 1..8 the pieces the tepee is laid with (one per piece still on the
  *   fire, so it grows when wood is laid on and sinks as it burns; 3 for embers), pure
  * smokeAmount(fire, strength) -> 0..1 how much smoke a fire gives, pure
+ * pickLights(lights, at, active) -> { carried, picks }   pure: of the lights ({ key, x, z, carried? }) within
+ *   NEAR of `at`, the carried one (always, it has its own point light) and the `active` nearest others
+ * stepPool(slots, picks, dt)   pure: gives the picked lights to slots ({ key, k, src }) with a fade: a slot keeps its
+ *   light while it is picked; one that is not picked fades out over FADE seconds and only then takes a new light,
+ *   which fades in; nothing jumps
  *   - A torch (game/fire) is a short charred stick with a small flame; stuck
  *     in the sand it stands slightly askew. It lights its surroundings like a
- *     small fire: a second point light follows the torch in his hand.
+ *     small fire: a point light of its own follows the torch in his hand.
  *
  * makeTorch() -> Group   a torch, foot at its origin; userData.flicker(time)
  * FLAME_LOCAL, flameWorld(torch, out)   where the flame is, in the torch's
  *   space and in the world (with the tilt of a held or askew torch); the
  *   torch lights and their glow sit exactly there
- * createFireView(scene, container, fire) -> fireView
+ * createFireView(scene, container, fire, { pool, active }?) -> fireView
+ *   pool: how many point lights for fires and torches in the ground (default POOL, fixed for the session);
+ *   active: how many of them are given out (default pool; fireView.setActive(n) lowers it with the quality,
+ *   the rest stay in the scene at intensity 0); fireView.lights is the number of point lights in the scene
  *   fireView.update(dt, { total, day, camera, player, H, heroFlame })
  *     total: days on the clock; day: 1 by day .. 0 at night (render/sky);
  *     camera: for the glow on screen; player: for the lights, the wisp and
@@ -47,10 +59,29 @@ import { FIRE } from './palette.js';
 import { DAY_SECONDS } from '../game/clock.js';
 import { EMBERS, BURNT_DAYS, BURN, FUEL_MAX } from '../game/fire.js';
 
-const PUFF_SECONDS = 7, WISPS = 7, LIGHT_RANGE = 14, NEAR = 60, GLOWS = 3;
+const PUFF_SECONDS = 7, WISPS = 7, LIGHT_RANGE = 14, NEAR = 60;
+export const POOL = 4, FADE = 0.3;   // point lights for fires and torches in the ground; seconds to fade a light out or in
 const TORCH_POW = 0.55, TORCH_RANGE = 9;
 // Gentler than the inverse square (decay 2): the light is the same one metre from the flame, but reaches further, so the wider range shows.
 const LIGHT_DECAY = 1.5;
+
+/** Of the lights within NEAR of `at`: the carried one, and the `active` nearest others (pure). */
+export function pickLights(lights, at, active) {
+  const d = l => Math.hypot(l.x - at.x, l.z - at.z), near = lights.filter(l => d(l) < NEAR);
+  return { carried: near.find(l => l.carried) || null, picks: near.filter(l => !l.carried).sort((a, b) => d(a) - d(b)).slice(0, Math.max(0, active)) };
+}
+
+/** Gives the picked lights to the slots with a fade, in place (pure; see the header). */
+export function stepPool(slots, picks, dt) {
+  const keys = new Set(picks.map(l => l.key));
+  for (const s of slots) {
+    const want = s.key !== null && keys.has(s.key);
+    if (want) s.src = picks.find(l => l.key === s.key);
+    s.k = want ? Math.min(1, s.k + dt / FADE) : Math.max(0, s.k - dt / FADE);
+    if (!want && s.k <= 0) { s.key = null; s.src = null; }
+  }
+  for (const l of picks) if (!slots.some(s => s.key === l.key)) { const free = slots.find(s => s.key === null); if (free) { free.key = l.key; free.src = l; free.k = 0; } }
+}
 
 export const BURNT_PEAK = 0.8, BURNT_FLOOR = 0.12;   // opacity of a fresh burnt place, and just before it is gone
 export const burntOpacity = left => BURNT_FLOOR + (BURNT_PEAK - BURNT_FLOOR) * Math.min(1, Math.max(0, left / BURNT_DAYS));
@@ -144,15 +175,18 @@ function buildBurnt(b) {
   return { g, mats, shown: -1 };
 }
 
-export function createFireView(scene, container, fire) {
+export function createFireView(scene, container, fire, opts = {}) {
   const views = new Map();   // fire -> its meshes
   const burnt = new Map();   // burnt place -> its meshes
   const puffs = new Map();   // failed attempt -> smoke
   // always there, so no shader is rebuilt when a fire is lit or a torch taken
-  const light = new THREE.PointLight(FIRE.light, 0, LIGHT_RANGE, LIGHT_DECAY), handLight = new THREE.PointLight(FIRE.light, 0, TORCH_RANGE, LIGHT_DECAY); scene.add(light); scene.add(handLight);
-  const place = (pl, l, night) => {
-    if (!l) { pl.intensity = 0; return; }
-    pl.position.set(l.x, l.y, l.z); pl.intensity = l.pow * 1.1 * night * night * (1 + 0.08 * l.fl);   // by day the sun drowns it
+  // the number of point lights in the scene never changes for the session; a lower quality only gives out fewer
+  const pool = Math.max(1, Math.floor(opts.pool ?? POOL)); let active = Math.min(pool, Math.max(0, Math.floor(opts.active ?? pool)));
+  const handLight = new THREE.PointLight(FIRE.light, 0, TORCH_RANGE, LIGHT_DECAY); scene.add(handLight);
+  const slots = Array.from({ length: pool }, () => { const light = new THREE.PointLight(FIRE.light, 0, LIGHT_RANGE, LIGHT_DECAY); scene.add(light); return { light, key: null, k: 0, src: null }; });
+  const place = (pl, l, night, k = 1) => {
+    if (!l || k <= 0) { pl.intensity = 0; return; }
+    pl.position.set(l.x, l.y, l.z); pl.intensity = l.pow * 1.1 * night * night * (1 + 0.08 * l.fl) * k;   // by day the sun drowns it
     pl.distance = l.range * (0.6 + 0.4 * l.pow);
   };
   const torchView = createTorches(scene);
@@ -216,7 +250,7 @@ export function createFireView(scene, container, fire) {
       emberMat.opacity = 1;
       vw.embers.forEach((m, i) => { m.visible = true; m.scale.y = 0.035 * (0.8 + 0.2 * Math.sin(clock * 2 + i)) * glowE; });
       vw.smoke.update(dt, f.x, y + (s > 0 ? 0.3 + 0.5 * s : 0.05), f.z, smokeAmount(f, s));
-      lights.push({ x: f.x, y: y + 0.6, z: f.z, pow: s > 0 ? s : 0.2 * glowE, range: LIGHT_RANGE, fl });
+      lights.push({ key: f, x: f.x, y: y + 0.6, z: f.z, pow: s > 0 ? s : 0.2 * glowE, range: LIGHT_RANGE, fl });
     });
     // failed attempts: a short puff of smoke
     for (const p of fire.puffs) if (!puffs.has(p) && (total - p.at) * DAY_SECONDS < PUFF_SECONDS) puffs.set(p, createSmoke(scene, p.at * 97));
@@ -231,24 +265,24 @@ export function createFireView(scene, container, fire) {
     else wisp.update(dt, 0, 0, 0, 0);
     // torches: stuck in the ground, and the one he carries (drawn by render/hero)
     torchView.update(fire.torches, clock, H);
-    for (const t of fire.torches) { const p = torchView.flame(t, flame); if (p) lights.push({ x: p.x, y: p.y, z: p.z, pow: TORCH_POW, range: TORCH_RANGE, fl: Math.sin(clock * 11 + t.id), exact: true }); }
+    for (const t of fire.torches) { const p = torchView.flame(t, flame); if (p) lights.push({ key: t, x: p.x, y: p.y, z: p.z, pow: TORCH_POW, range: TORCH_RANGE, fl: Math.sin(clock * 11 + t.id), exact: true }); }
     if (player.torch && heroFlame && heroFlame(flame)) lights.push({ x: flame.x, y: flame.y, z: flame.z, pow: TORCH_POW, range: TORCH_RANGE, fl: Math.sin(clock * 12), carried: true, exact: true });
-    // the point lights: the carried torch, and the strongest other light near the castaway
-    const near = lights.filter(l => Math.hypot(l.x - player.x, l.z - player.z) < NEAR);
-    const weight = l => l.pow / (1 + Math.hypot(l.x - player.x, l.z - player.z) * 0.05);
-    const carried = near.find(l => l.carried), other = near.filter(l => !l.carried).sort((a, b) => weight(b) - weight(a))[0];
-    place(light, other, night); place(handLight, carried, night);
-    // at night a warm glow round the nearest lights, over the night grading
+    // the point lights: the carried torch, and the nearest fires and torches in the ground (faded, never jumping)
+    const { carried, picks } = pickLights(lights, player, active);
+    stepPool(slots, picks, dt);
+    place(handLight, carried, night);
+    for (const s of slots) place(s.light, s.src, night, s.k);
+    // at night a warm glow round every light that is on, over the night grading
     const rc = container.getBoundingClientRect(), [r, g, b] = FIRE.glow, grads = [];
-    for (const l of near.sort((a, b) => weight(b) - weight(a)).slice(0, GLOWS)) {
+    for (const l of [...(carried ? [{ ...carried, k: 1 }] : []), ...slots.filter(s => s.src && s.k > 0).map(s => ({ ...s.src, k: s.k }))]) {
       v.set(l.x, l.exact ? l.y : l.y - 0.3, l.z).project(camera);
       const sx = ((v.x + 1) / 2 * rc.width).toFixed(0), sy = (1 - v.y) / 2 * rc.height, px = l.range * (0.6 + 0.4 * l.pow) / (camera.top - camera.bottom) * rc.height * 0.5;
-      const k = l.pow * (0.8 + 0.2 * l.fl), a = x => (x * k).toFixed(3);
+      const k = l.pow * (0.8 + 0.2 * l.fl) * l.k, a = x => (x * k).toFixed(3);
       grads.push(`radial-gradient(circle ${(px * 0.12).toFixed(0)}px at ${sx}px ${(sy - px * 0.05).toFixed(0)}px, rgba(255,214,140,${a(0.95)}), rgba(255,170,90,${a(0.5)}) 55%, rgba(255,170,90,0) 100%)`);
       grads.push(`radial-gradient(circle ${px.toFixed(0)}px at ${sx}px ${sy.toFixed(0)}px, rgba(${r},${g},${b},${a(0.6)}), rgba(${r},${g},${b},${a(0.22)}) 30%, rgba(${r},${g},${b},${a(0.06)}) 65%, rgba(${r},${g},${b},0) 100%)`);
     }
     glow.style.background = grads.join(',') || 'none';
     glow.style.opacity = (night * night).toFixed(3);
   }
-  return { update };
+  return { update, setActive(n) { active = Math.min(pool, Math.max(0, Math.floor(n))); }, get lights() { return pool + 1; } };
 }

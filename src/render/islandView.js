@@ -29,7 +29,7 @@
  *     the ground under the screen point; on a piece of beach driftwood as drawn (its trunk, a branch or the
  *     roots standing up, with a finger a little wider) a point on that piece,
  *     rather than the ground behind it
- *   view.setQuality(settings)   changes the quality live (render/stage applyQuality)
+ *   view.setQuality(settings)   changes the quality live (render/stage applyQuality; render/fire gives out fewer lights)
  *   view.canvas
  *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
  *   view.prepare(player, progress?)  builds the detailed tiles in view before
@@ -81,6 +81,7 @@ export async function createIslandView(world, container, progress, start, opts =
   if (start) far.rest.sort((a, b) => Math.hypot(a.x0 - start.x, a.z0 - start.z) - Math.hypot(b.x0 - start.x, b.z0 - start.z));
   const slicer = createSlicer();
   const near = new Map();   // tile -> { group }
+  const startLights = opts.settings ? opts.settings.fireLights : undefined; let fireLights = startLights;   // the pool of fire lights is sized once, by the quality at the start
   let woodView = null, cocoView = null, branchView = null, leantoView = null, fireView = null, tallyView = null, wildView = null, game = null;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
@@ -122,7 +123,7 @@ export async function createIslandView(world, container, progress, start, opts =
     woodView = createWoodView(scene, world, kit, g.wood); cocoView = createCocoView(scene, world, kit, g.fibre);
     branchView = createBranchView(scene, world, kit, g.branches); leantoView = createLeantoView(scene, world, kit, g.leantos);
     near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); });
-    fireView = createFireView(scene, container, g.fire);
+    fireView = createFireView(scene, container, g.fire, { pool: startLights, active: fireLights });
     tallyView = createTallyView(container);
     wildView = createWildlifeView(scene, g.wildlife);
   }
@@ -167,5 +168,5 @@ export async function createIslandView(world, container, progress, start, opts =
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: stage.applyQuality, canvas: renderer.domElement, scene, stats, settle, prepare };
+  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: next => { stage.applyQuality(next); if (next && next.fireLights !== undefined) { fireLights = next.fireLights; if (fireView) fireView.setActive(fireLights); } }, canvas: renderer.domElement, scene, stats, settle, prepare };
 }

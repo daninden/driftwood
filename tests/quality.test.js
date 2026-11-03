@@ -7,11 +7,11 @@ import { lightPcf, softPcf, LIGHT_RADIUS, SOFT_RADIUS } from '../src/render/stag
 
 describe('level table', () => {
   it('lowers one thing at a time, from best down', () => {
-    expect(settingsFor(0)).toEqual({ shadowSize: 4096, filter: 'bilinear', pixelRatioMax: 1.5, terrainShadows: true });
-    expect(settingsFor(1)).toEqual({ shadowSize: 2048, filter: 'bilinear', pixelRatioMax: 1.5, terrainShadows: true });
-    expect(settingsFor(2)).toEqual({ shadowSize: 2048, filter: 'plain', pixelRatioMax: 1.5, terrainShadows: true });
-    expect(settingsFor(3)).toEqual({ shadowSize: 2048, filter: 'plain', pixelRatioMax: 1, terrainShadows: true });
-    expect(settingsFor(4)).toEqual({ shadowSize: 2048, filter: 'plain', pixelRatioMax: 1, terrainShadows: false });
+    expect(settingsFor(0)).toEqual({ shadowSize: 4096, filter: 'bilinear', pixelRatioMax: 1.5, terrainShadows: true, fireLights: 4 });
+    expect(settingsFor(1)).toEqual({ shadowSize: 2048, filter: 'bilinear', pixelRatioMax: 1.5, terrainShadows: true, fireLights: 4 });
+    expect(settingsFor(2)).toEqual({ shadowSize: 2048, filter: 'plain', pixelRatioMax: 1.5, terrainShadows: true, fireLights: 2 });
+    expect(settingsFor(3)).toEqual({ shadowSize: 2048, filter: 'plain', pixelRatioMax: 1, terrainShadows: true, fireLights: 2 });
+    expect(settingsFor(4)).toEqual({ shadowSize: 2048, filter: 'plain', pixelRatioMax: 1, terrainShadows: false, fireLights: 2 });
     expect(MAX_LEVEL).toBe(4);
   });
   it('starts touch devices at 2048 already, so their level 0 is level 1', () => {

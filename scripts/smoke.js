@@ -20,13 +20,14 @@
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
 // smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
+// smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
 //
 // The browser is the full Chromium (channel 'chromium', new headless mode), which uses the real graphics
 // card (ANGLE on Direct3D 11 on Windows) where there is one. Without a usable card (a CI machine, or the
 // full Chromium not installed) it falls back to the headless shell with software drawing (SwiftShader),
 // which costs time in proportion to pixels. The renderer in use is logged once at the start.
 // Two sizes are used to keep that fallback bearable. The quick run
-// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to), 26 (the flock) and 19 (on a phone) at 640x400 (the phone at scale 1).
+// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to), 26 (the flock), 27 (many lights) and 19 (on a phone) at 640x400 (the phone at scale 1).
 // The full run (--full) takes every shot; those a person looks at are 1280x800 (the phone at
 // scale 2), the ones that only check something (smoke-0, 2, 3, 4, 7, 18) stay at 640x400.
 // All the checks on the game state run in both. Pixels are checked without a PNG: right
@@ -399,6 +400,24 @@ const flockShot = await page.evaluate(start => {
 console.log('flock landed', JSON.stringify(flockShot));
 if (!flockShot.called || flockShot.phase !== 'ground' || flockShot.birds < 5) errors.push('the flock did not land: ' + JSON.stringify(flockShot));
 await shot('smoke-26.png', { quick: true });
+
+// Many lights (0.17.2): a night shot with a fire and two torches in the ground, all lighting the sand
+// round them (smoke-27, also in the quick run). Set up directly; the lights are counted from the scene.
+const lightsShot = await page.evaluate(start => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, c = game.clock, f = game.fire;
+  c.day += 1; c.time = 0.97; game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0; f.torch = null; f.fires.length = 0; f.torches.length = 0; game.wood.carried.length = 0;
+  const at = (dx, dz) => ({ x: start.x + dx, z: start.z + dz });
+  p.x = start.x; p.z = start.z - 2; p.y = world.H(p.x, p.z); p.heading = 0;
+  f.fires.push({ id: 900, ...at(0, 1), fuel: 0.2, embers: 0.06, lit: c.total, fed: 4 });
+  f.torches.push({ id: 901, ...at(-4.5, 3), left: 0.08 }, { id: 902, ...at(4.5, 3), left: 0.08 });
+  f.version++; step(1.5); view.zoomBy(-3); step(0.5);
+  window.__driftwood.draw();
+  let on = 0; view.scene.traverse(o => { if (o.isPointLight && o.intensity > 0.05) on++; });
+  return { on };
+}, start);
+console.log('lights on at night', JSON.stringify(lightsShot));
+if (lightsShot.on < 3) errors.push('a fire and two torches should give three point lights, got ' + lightsShot.on);
+await shot('smoke-27.png', { quick: true });
 
 // The same on a phone: a touch-only screen with the thumb stick, the button just above it (day and night).
 const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: full ? 2 : 1, hasTouch: true, isMobile: true });
