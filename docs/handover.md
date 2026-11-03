@@ -10,10 +10,11 @@ Everything up to 0.12 "Piles" is live: piles hold at most 12 pieces and one kind
 
 In this order, each with its decisions in `docs/design.md`:
 
-1. **0.13 "Moving water"**: stylised and subtle, in the existing water shaders only (no extra objects). The river gets light streaks and flecks drifting downstream, faster on steep stretches, fords and falls; the white water at fords and falls moves. The sea gets slow glints and lines (a long swell); the surf breathes a little up and down the beach over a few seconds, on top of the tide. Lagoons are calmer. At night only faint moon glints, warm near fire and torch. Moving water does not count as "something happening" for the 15 fps idle rate. See *Art style* and *Quiet frames* in `docs/design.md`.
-2. **0.14 "Coconut"**: hunger, eating the nut when husking, the half-coconut mark. See *Basic needs* in `docs/design.md`.
-3. **0.15 "Lean-to"**: branches, the lean-to, sleeping under it. The lean-to now needs two piles close together, one with at least 6 driftwood and one with at least 6 branches (hold either to build). See *Basic needs* in `docs/design.md`.
-4. **0.16 "Wildlife"**: crabs, fish and birds, atmosphere only. See *Wildlife* in `docs/design.md`.
+1. **0.13 "Action"**: clicking and tapping only walks (on a thing he walks to beside it and does nothing); every action goes through one action button: Space, and an ink ring bottom right (above the thumb stick on touch screens, in the corner on a desktop, also clickable) with a small ink icon of what it will do. A short press does the obvious thing for what he stands beside; holding it lights a pile (drill or torch) or sleeps, with a ring that fills while held. F and Z stay as shortcuts. Includes the agreed fix that a full fire takes no more wood. See *The action button* in `docs/design.md`.
+2. **0.14 "Moving water"**: stylised and subtle, in the existing water shaders only (no extra objects). The river gets light streaks and flecks drifting downstream, faster on steep stretches, fords and falls; the white water at fords and falls moves. The sea gets slow glints and lines (a long swell); the surf breathes a little up and down the beach over a few seconds, on top of the tide. Lagoons are calmer. At night only faint moon glints, warm near fire and torch. Moving water does not count as "something happening" for the 15 fps idle rate. See *Art style* and *Quiet frames* in `docs/design.md`.
+3. **0.15 "Coconut"**: hunger, eating the nut when husking, the half-coconut mark. See *Basic needs* in `docs/design.md`.
+4. **0.16 "Lean-to"**: branches, the lean-to, sleeping under it. The lean-to now needs two piles close together, one with at least 6 driftwood and one with at least 6 branches (hold either to build). See *Basic needs* in `docs/design.md`.
+5. **0.17 "Wildlife"**: crabs, fish and birds, atmosphere only. See *Wildlife* in `docs/design.md`.
 
 ## Open, not decided
 
@@ -21,7 +22,7 @@ See *Open questions* in `docs/design.md`: loneliness without a fire (to be thoug
 
 ## Bugs, later
 
-- **Agreed fix, with the next version:** a full fire (8 pieces) takes no more wood. Tapping it while carrying wood does nothing, and he keeps the piece (it is now wasted). See *Fire* in `docs/design.md`.
+- **Agreed fix, with 0.13 "Action":** a full fire (8 pieces) takes no more wood. Tapping it while carrying wood does nothing, and he keeps the piece (it is now wasted). See *Fire* in `docs/design.md`.
 
 - Only the nearest torch shines brightly: with several torches burning at once only one gives full light (`render/fire` uses one point light for the strongest light near the castaway plus the carried torch). Every torch (and fire) nearby should light its surroundings.
 - The first frame's dt can be slightly negative (rAF timestamp before the `performance.now()` taken at boot); in headless runs it briefly sets `sleep.lie` and clears a tap in the first frame.
