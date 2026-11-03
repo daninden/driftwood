@@ -16,6 +16,12 @@
  *                          tilting or zooming the view does not wake him
  *   double tap             run to that spot (touch: hold and drag to steer
  *                          while running)
+ *   thumb stick            (touch screens only, render/thumbStick) drag from
+ *                          the centre to walk in that direction relative to
+ *                          the screen; to the rim to run; release to stop;
+ *                          wakes him like a walking key. A finger on the
+ *                          stick is no tap, hold or steering and does not
+ *                          count towards two fingers
  *   two fingers            pinch to zoom, twist to turn the view; walking
  *                          stops while two fingers are down
  *   mouse wheel, + / -     zoom out and in (with Ctrl or Cmd the browser's
@@ -23,8 +29,18 @@
  *   Q / E (hold)           turn the view around
  *   right mouse drag       left/right turns the view, up/down tilts it
  *
+ * STICK_DEAD (0.12), STICK_RUN (0.85): the dead zone and the run rim, as
+ *   fractions of the stick's radius
+ * stickIntent(dx, dy, radius, yaw?) -> { x, z, run } | null   pure: the thumb
+ *   offset in pixels from the stick's centre (dy down the screen) to a unit
+ *   direction on the island, relative to the view like the walking keys; null
+ *   inside the dead zone; run past the run rim
+ *
  * createInput(element, pickGround, now?) -> input
- *   input: { up, down, left, right, run, target, yaw }  read by game/game
+ *   input: { up, down, left, right, run, stick, target, yaw }  read by game/game
+ *     stick: { x, z } unit direction while the thumb stick is held (follows
+ *     the current yaw), else null; moveIntent prefers it to keys and target.
+ *     run is true for Shift or the stick pushed to its rim
  *     target: { x, z, run?, tap?, touch?, hero? }; run is set by a double tap;
  *     tap marks the spot of a click or tap itself (not of steering after it),
  *     touch that it was a finger, hero that it was on the castaway
@@ -48,24 +64,37 @@
  *     pressed spot), or { key: true } when F was pressed; otherwise null
  *   input.pressing() -> true while a press is still being held still (it
  *     may yet become a hold), so the game can wait before picking up
+ *   input.stickStart(id), stickMove(id, dx, dy, radius), stickEnd(id)   called
+ *     by render/thumbStick for the finger `id` on the stick
  *   input.clearTarget()   called by the game when the target is reached
  *   input.dispose()
  *
- * Depends on: nothing
+ * Depends on: core/view
  */
+
+import { YAW, basis } from '../core/view.js';
 
 const TURN_RATE = 1.0, DRAG_YAW = 0.005, DRAG_PITCH = 0.002;   // rad/s for Q/E, rad per pixel for dragging
 const PINCH = 1 / Math.log(1.1);   // zoom steps per e-fold of finger distance (render/camera zooms 1.1x per step)
 export const HOLD_MS = 550;   // holding the castaway this long lies down to sleep
 const DOUBLE_TAP_MS = 300, DOUBLE_TAP_PX = 40, STEER_PX = 12;   // a finger that moves less than STEER_PX still taps
+export const STICK_DEAD = 0.12, STICK_RUN = 0.85;
 const ZOOM_KEYS = { Equal: -1, NumpadAdd: -1, Minus: 1, NumpadSubtract: 1 };
 const KEYS = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right' };
+
+export function stickIntent(dx, dy, radius, yaw = YAW) {
+  const l = Math.hypot(dx, dy), f = l / radius;
+  if (!(f >= STICK_DEAD)) return null;
+  const { cam, right } = basis(yaw), u = -dy / l, r = dx / l;   // up on the screen is away from the camera
+  return { x: -cam.x * u + right.x * r, z: -cam.z * u + right.z * r, run: f > STICK_RUN };
+}
 
 export function createInput(element, pickGround, now = () => performance.now()) {
   const touches = new Map();   // pointerId -> { x, y } for fingers on the screen
   let pinch = null, lastTap = null, running = false, downAt = null, steering = false;
   let hold = null, sleepKey = false, lightKey = false, woke = false;   // hold: { t, x, y, hero, at } while a press is held still
   let pointerDown = false, dragging = false, zoom = 0, dragYaw = 0, dragPitch = 0, turnL = false, turnR = false;
+  let stickId = null, stickVec = null, keyRun = false;   // stickVec: { dx, dy, radius } of the thumb on the stick
   const takeZoom = () => { const z = zoom; zoom = 0; return z; };
   const takeTurn = dt => {
     const t = { yaw: ((turnL ? 1 : 0) - (turnR ? 1 : 0)) * TURN_RATE * dt + dragYaw, pitch: dragPitch };
@@ -82,7 +111,19 @@ export function createInput(element, pickGround, now = () => performance.now()) 
   };
   const pressing = () => !!hold;
   const takeWake = () => { const k = woke; woke = false; return k; };
-  const input = { up: false, down: false, left: false, right: false, run: false, target: null, clearTarget() { input.target = null; }, takeZoom, takeTurn, takeSleep, takeWake, takeHold, pressing, dispose };
+  const stickNow = () => stickVec && stickIntent(stickVec.dx, stickVec.dy, stickVec.radius, input.yaw);
+  const input = { up: false, down: false, left: false, right: false, target: null, yaw: undefined,
+    get run() { const s = stickNow(); return keyRun || !!(s && s.run); }, set run(v) { keyRun = !!v; },
+    get stick() { const s = stickNow(); return s ? { x: s.x, z: s.z } : null; },
+    stickStart(id) { if (stickId === null) { stickId = id; stickVec = null; hold = null; } },
+    stickMove(id, dx, dy, radius) {
+      if (id !== stickId) return;
+      const was = !!stickVec && !!stickNow();
+      stickVec = { dx, dy, radius };
+      if (stickNow()) { input.target = null; hold = null; if (!was) woke = true; }
+    },
+    stickEnd(id) { if (id === stickId) { stickId = null; stickVec = null; } },
+    clearTarget() { input.target = null; }, takeZoom, takeTurn, takeSleep, takeWake, takeHold, pressing, dispose };
 
   const onKey = down => e => {
     const k = KEYS[e.code];
@@ -90,7 +131,7 @@ export function createInput(element, pickGround, now = () => performance.now()) 
     if (down && !e.repeat && e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey) sleepKey = true;
     if (down && !e.repeat && e.code === 'KeyF' && !e.ctrlKey && !e.metaKey) lightKey = true;
     if (k) { input[k] = down; if (down) input.target = null; e.preventDefault(); }
-    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.run = down;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keyRun = down;
     if (e.code === 'KeyQ') turnL = down;
     if (e.code === 'KeyE') turnR = down;
     if (down && ZOOM_KEYS[e.code] && !e.ctrlKey && !e.metaKey) { zoom += ZOOM_KEYS[e.code]; e.preventDefault(); }
@@ -100,7 +141,7 @@ export function createInput(element, pickGround, now = () => performance.now()) 
     zoom += e.deltaY / (e.deltaMode === 1 ? 3 : e.deltaMode === 2 ? 1 : 100); e.preventDefault();
   };
   const keydown = onKey(true), keyup = onKey(false);
-  const blur = () => { hold = null; input.up = input.down = input.left = input.right = input.run = turnL = turnR = dragging = pointerDown = false; touches.clear(); pinch = null; };
+  const blur = () => { hold = null; input.up = input.down = input.left = input.right = keyRun = turnL = turnR = dragging = pointerDown = false; touches.clear(); pinch = null; stickId = null; stickVec = null; };
   const setTarget = (e, tap) => {
     const touch = e.pointerType === 'touch', g = pickGround(e.clientX, e.clientY, touch); if (!g) return;
     const t = { x: g.x, z: g.z }; if (running) t.run = true;
@@ -145,6 +186,7 @@ export function createInput(element, pickGround, now = () => performance.now()) 
   };
   const drag = e => { if (dragging) { dragYaw -= (e.movementX || 0) * DRAG_YAW; dragPitch += (e.movementY || 0) * DRAG_PITCH; } };
   const pup = e => {
+    if (e.pointerId !== undefined && e.pointerId === stickId) return;   // the thumb stick has its own end (stickEnd)
     hold = null;
     if (e.pointerType === 'touch') {
       touches.delete(e.pointerId);

@@ -39,7 +39,7 @@ describe('label and version', () => {
     expect(devLabel('0.4', 'Dev panel', null)).toBe('v0.4 · Dev panel · – fps');
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.4'); expect(NAME).toBe('Dev panel');
+    expect(VERSION).toBe('0.5'); expect(NAME).toBe('Thumb stick');
   });
   it('starts visible for now', () => { expect(DEV_PANEL_VISIBLE).toBe(true); });
 });

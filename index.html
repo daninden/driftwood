@@ -19,6 +19,14 @@
   body.ready #rest { visibility: visible; }
   #rest .rim { fill: none; stroke: #2e2418; stroke-opacity: 0.5; stroke-width: 1; }
   #rest .lit { fill: #2e2418; }
+  #stick { position: fixed; right: calc(14px + env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); width: 150px; height: 150px; display: none; opacity: 0.3; transition: opacity 0.5s ease; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; visibility: hidden; }
+  @media (pointer: coarse) and (not (any-pointer: fine)) { #stick { display: block; } }
+  body.ready #stick { visibility: visible; }
+  #stick.active { opacity: 0.75; transition-duration: 0.15s; }
+  #stick svg { width: 100%; height: 100%; display: block; pointer-events: none; overflow: visible; }
+  #stick .ring { fill: none; stroke: #2e2418; stroke-width: 1.3; }
+  #stick .knob { fill: #2e2418; transition: transform 0.18s ease-out; }
+  #stick .knob.held { transition: none; }
   #carry { position: fixed; left: calc(18px + 26px + 14px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); height: 26px; display: flex; align-items: flex-end; gap: 2px; opacity: 0.3; pointer-events: none; visibility: hidden; transition: opacity 0.5s ease; }
   body.ready #carry { visibility: visible; }
   #carry svg { height: 24px; width: auto; fill: none; stroke: #2e2418; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
@@ -30,6 +38,7 @@
 <body>
 <div id="island"></div>
 <svg id="rest" viewBox="-1 -1 26 26" aria-hidden="true"><circle class="rim" cx="12" cy="12" r="12"/><path class="lit"/></svg>
+<div id="stick" aria-hidden="true"><svg viewBox="-75 -75 150 150"><circle class="ring" cx="0" cy="0" r="55"/><circle class="knob" cx="0" cy="0" r="6"/></svg></div>
 <div id="carry" aria-hidden="true"></div>
 <div id="dev" aria-hidden="true"></div>
 <div id="loader"><div class="name">Driftwood</div><div class="bar"><div class="fill"></div></div></div>

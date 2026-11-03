@@ -37,7 +37,8 @@
  * pushOut(world, from, x, z) -> { x, z } moved back onto the rim of any
  *   obstacle that stepping from `from` to (x, z) would enter
  * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase, stoop }
- * moveIntent(input, player) -> unit direction { x, z } or null, from keys/target;
+ * moveIntent(input, player) -> unit direction { x, z } or null, from the thumb
+ *   stick (input.stick, already a direction on the island), keys or target;
  *   keys walk relative to the screen, so they use input.yaw (the current
  *   view angle, see core/view; the starting view when missing)
  * stepPlayer(world, player, dir, dt, run, load?, sea?) -> { moved, distance, blocked }
@@ -155,9 +156,10 @@ export function createPlayer(spot) {
 
 /**
  * input: { up, down, left, right } booleans, yaw, and/or target { x, z }, and
- * the player position. Keys win over a target. Returns null when standing still.
+ * the player position. The stick wins over keys, keys over a target. Returns null when standing still.
  */
 export function moveIntent(input, player) {
+  if (input.stick) return { x: input.stick.x, z: input.stick.z };
   const u = (input.up ? 1 : 0) - (input.down ? 1 : 0), r = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   let x = 0, z = 0;
   if (u || r) { const { cam, right } = basis(input.yaw === undefined ? YAW : input.yaw); x = -cam.x * u + right.x * r; z = -cam.z * u + right.z * r; }

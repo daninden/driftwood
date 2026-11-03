@@ -9,6 +9,9 @@
  * The moon mark #rest (render/restMark) shows how rested the castaway is;
  * the row #carry next to it (render/carryMark) shows what he carries loose.
  *
+ * On touch-only devices the thumb stick #stick (render/thumbStick) bottom right
+ * walks and runs through the same input object.
+ *
  * The dev panel #dev (render/devPanel, src/version) shows version, name and
  * fps top right; the backtick key toggles it. It is fed the real frame time.
  *
@@ -35,6 +38,7 @@ import { createGame } from './game/game.js';
 import { createInput } from './game/input.js';
 import { createRestMark } from './render/restMark.js';
 import { createCarryMark } from './render/carryMark.js';
+import { createThumbStick } from './render/thumbStick.js';
 import { createDevPanel } from './render/devPanel.js';
 import { VERSION, NAME } from './version.js';
 import { createLoading } from './core/loading.js';
@@ -64,6 +68,7 @@ async function boot() {
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
 
+  createThumbStick(document.getElementById('stick'), input);
   let last = performance.now(), paused = false;
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };

@@ -68,6 +68,7 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 - **Hold** a pile (or press **F** beside it) to light it
 - **Hold** the castaway (or press **Z**) to sleep
 - A left click, a tap or a walking key wakes him; the view controls do not
+- **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom
 - **`** (backtick): show or hide the developer panel (version, name, frame rate)
 
