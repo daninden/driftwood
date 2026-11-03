@@ -21,7 +21,8 @@
  *     the driftwood of game/wood (beach logs with the detailed tiles, piles,
  *     the castaway's load, drying: render/driftwood), the coconuts
  *     (game/fibre, render/coconuts), and the fires
- *     (game/fire, render/fire), with the tally marks of piles and fires while
+ *     (game/fire, render/fire), the branches under the trees (game/branches,
+ *     render/branches), the lean-tos (game/leanto, render/leanto), with the tally marks of piles and fires while
  *     he stands beside them (render/tallyMarks)
  *   view.pickGround(clientX, clientY, touch?) -> { x, z } | null
  *     the ground under the screen point; on a piece of beach driftwood as drawn (its trunk, a branch or the
@@ -56,6 +57,8 @@ import { createMood } from './mood.js';
 import { skyAt } from './sky.js';
 import { createWoodView, driftColor, woodLook, logParts } from './driftwood.js';
 import { createCocoView } from './coconuts.js';
+import { createBranchView } from './branches.js';
+import { createLeantoView } from './leanto.js';
 import { createFireView } from './fire.js';
 import { createTallyView } from './tallyMarks.js';
 import { dryness } from '../game/wood.js';
@@ -75,12 +78,12 @@ export async function createIslandView(world, container, progress, start, opts =
   if (start) far.rest.sort((a, b) => Math.hypot(a.x0 - start.x, a.z0 - start.z) - Math.hypot(b.x0 - start.x, b.z0 - start.z));
   const slicer = createSlicer();
   const near = new Map();   // tile -> { group }
-  let woodView = null, cocoView = null, fireView = null, tallyView = null, game = null;
+  let woodView = null, cocoView = null, branchView = null, leantoView = null, fireView = null, tallyView = null, game = null;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso),
-    onReady: (tile, v) => { scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); } },
-    onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); } },
+    onReady: (tile, v) => { scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); } },
+    onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); } },
   });
   const hero = createHero(scene), steps = createFootprints(scene, world.H), cam = createCamera();
   const mood = createMood({ stage, canvas: renderer.domElement, container });
@@ -92,7 +95,7 @@ export async function createIslandView(world, container, progress, start, opts =
     cam.follow(player, dt, t.L > 4.25);
     water.setSea(sea);
     const total = game ? game.clock.total : 0;
-    if (woodView) { woodView.update(dt, total); cocoView.update(); }
+    if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); leantoView.update(); }
     hero.update(player, t.depth, game ? game.wood.carried.map(l => { const d = dryness(l, total); return { len: l.len, rad: l.rad, col: driftColor(l, d), wet: woodLook(d).sheen }; }) : []);
     steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver);
     steps.wash(sea);
@@ -113,7 +116,8 @@ export async function createIslandView(world, container, progress, start, opts =
   function setGame(g) {
     game = g;
     woodView = createWoodView(scene, world, kit, g.wood); cocoView = createCocoView(scene, world, kit, g.fibre);
-    near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); });
+    branchView = createBranchView(scene, world, kit, g.branches); leantoView = createLeantoView(scene, world, kit, g.leantos);
+    near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); });
     fireView = createFireView(scene, container, g.fire);
     tallyView = createTallyView(container);
   }

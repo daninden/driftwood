@@ -28,15 +28,15 @@ The first time you start an island, the loading screen asks *What is your name?*
 
 ### The action button
 
-Clicking or tapping only walks. Click the ground and he walks there; click a piece of driftwood, a pile, a coconut or a fire and he walks to beside it and stands there, doing nothing. Everything he does is done with the **action button**: press **Space**, or the small ring in the bottom right corner (on a phone or tablet it sits just above the thumb stick). The ring is faint and empty when there is nothing to do, and clearer with a small drawing inside when there is:
+Clicking or tapping only walks. Click the ground and he walks there; click a piece of driftwood, a branch, a pile, a coconut or a fire and he walks to beside it and stands there, doing nothing. Everything he does is done with the **action button**: press **Space**, or the small ring in the bottom right corner (on a phone or tablet it sits just above the thumb stick). The ring is faint and empty when there is nothing to do, and clearer with a small drawing inside when there is:
 
 - wood with an arrow up: pick it up (a piece, or from a pile); wood with an arrow down: lay down what you carry
-- a tuft of fibre: husk the coconut
+- a half coconut: husk and eat the coconut
 - a flame over a piece of wood: lay a piece on the fire
 - a torch: take a burning brand from the fire, or take up a torch stuck in the ground; a torch with a stroke of ground: stick the torch in the ground
 - a drop: drink
 
-A short press does the obvious thing for what you stand beside: what is in your hands decides first, then what is nearest, and laying down comes last. Some things take a **hold** (about half a second): hold the button to light a pile of wood (a flame) or to lie down and sleep (a crescent moon). A thin ring fills round the drawing while you hold, so a short press never starts them by accident. When a short press and a hold both do something, the drawing of the short press is large and the one of the hold small beside it. Pressing the button also wakes you.
+A short press does the obvious thing for what you stand beside: what is in your hands decides first, then what is nearest, and laying down comes last. Some things take a **hold** (about half a second): hold the button to light a pile of wood (a flame) to build a lean-to (a small lean-to), or to lie down and sleep (a crescent moon). A thin ring fills round the drawing while you hold, so a short press never starts them by accident. When a short press and a hold both do something, the drawing of the short press is large and the one of the hold small beside it. Pressing the button also wakes you.
 
 ### The island
 
@@ -54,9 +54,15 @@ Pick up driftwood and carry at most three pieces; each one slows you down, and w
 
 Every high water washes up some new wood, and the sea takes back piles laid on the wet sand of low water. Fresh wood is wet: it looks dark and a little glossy, with a damp patch in the sand under it, and stays that way until it is dry enough to burn; then it quickly bleaches to its own colour. A wet piece will not light a fire, so gather ahead.
 
+### Branches and the lean-to
+
+Under about half of the trees in the lowland and the rain forest lie a few dry branches, thinner and shorter than driftwood and dark, with a twig or two and some dry leaves. Pick them up like driftwood: wood and branches together, at most three at a time, and each one slows you down the same. Each branch you carry also shows as a small twig next to the moon. They are never wet. Lay them on piles of their own (a pile of branches never mixes with driftwood; twelve at most; tally marks as for driftwood). A branch grows back at the same spot after four to eight days. Branches burn too, but half as long as a piece of driftwood: you can feed them to a fire, and a pile of at least four can be lit like a pile of driftwood.
+
+To build a **lean-to**, make a pile of at least six pieces of driftwood and a pile of at least six branches, close together (their middles within two metres). Stand beside either one and hold the button (or press **F**): he builds instead of lighting a fire. It takes six pieces of each out of the piles (the rest stays) and about a minute of play, and it costs about as much of your rest as two attempts to drill a fire. First two forked posts rise, then a ridge pole, then branches lean against it as a sloping roof. The open side faces the way the camera looks when you start, and stays that way. If you walk off, the half-built lean-to stays where it is; stand beside it and hold the button to go on building. It is not solid: you walk through it. You can build more than one. The flood takes a lean-to built on the wet sand of low water.
+
 ### Coconut fibre
 
-Coconuts lie under the palms. Stand beside one and press the button: he kneels and husks it, and you get a tuft of fibre (and you eat the nut, see Hunger). You can carry at most three tufts. They show as small drawings next to the moon: faint most of the time, clearer for a moment when the number changes.
+Coconuts lie under the palms. Stand beside one and press the button: he kneels and husks it, and you eat the nut (see Hunger); you also get a tuft of fibre, as long as you have room for it. You can carry at most three tufts; with three he still eats the nut, but gets no fourth tuft. They show as small drawings next to the moon: faint most of the time, clearer for a moment when the number changes.
 
 ### Thirst
 
@@ -68,7 +74,7 @@ Drink at a river: stand in the water or on its bank and press the button; you kn
 
 After about two days without eating you are hungry: a little slower, and drilling a fire costs more of your rest. After four days you are starving and your rest runs out faster, so you fall asleep exhausted sooner (and if you are thirsty as well, faster still). You never die of it, and it never gets worse than that.
 
-The food is the coconut. Husking one now takes a little longer, about four seconds: first the husk comes off (you get your tuft of fibre), then you eat the nut. One nut takes away a third of the way to starving and a bit of thirst too, also when you are not hungry. Walk off before you are done and nothing happens; the nut stays. A small half coconut next to the drop shows your hunger: full after a meal, emptying as you get hungry. Coconuts grow back after a few days, so you move along the palms.
+The food is the coconut. Husking one now takes a little longer, about four seconds: first the husk comes off (you get your tuft of fibre if you have room), then you eat the nut. One nut takes away a third of the way to starving and a bit of thirst too, also when you are not hungry. Walk off before you are done and nothing happens; the nut stays. A small half coconut next to the drop shows your hunger: full after a meal, emptying as you get hungry. Coconuts grow back after a few days, so you move along the palms.
 
 ### Fire
 
@@ -82,7 +88,7 @@ A burning fire needs wood now and then: stand beside it with wood in your arms a
 
 The moon in the bottom left corner shows how rested you are: full when rested, a thin sickle when you are worn out. After a day and a half you grow tired and slower. After two days you fall asleep where you stand.
 
-Lie down on dry land whenever you like: hold the button where there is no pile to light (or press **Z**). Sleeping next to a fire lasts the whole night and you wake fully rested. Without a fire the cold wakes you after four hours, only half rested. A click, a tap, the button or a walking key wakes you early. The rising flood wakes you too. However a sleep ends, a short line fades in and out in the middle of the screen, such as *Dave wakes. Day 3.*
+Lie down on dry land whenever you like: hold the button where there is no pile to light (or press **Z**). Sleeping next to a fire lasts the whole night and you wake fully rested. Without a fire the cold wakes you after four hours, only half rested. Lie down within about a metre of a finished lean-to and the cold sleep lasts six hours and you wake three quarters rested; with a fire close by you sleep the whole night as before, and you recover a quarter faster than by a fire alone. A click, a tap, the button or a walking key wakes you early. The rising flood wakes you too. However a sleep ends, a short line fades in and out in the middle of the screen, such as *Dave wakes. Day 3.*
 
 ### Day and night
 
@@ -91,9 +97,9 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 ## Controls
 
 - **W A S D** or arrow keys: walk; **Shift**: run
-- **Click or tap** the ground to walk there; double tap to run. Clicking or tapping a thing (driftwood, a pile, a coconut, a fire, a torch in the ground) walks to beside it and does nothing else
-- **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks (and eats) a coconut, feeds a fire, takes or sticks a torch, or drinks, whatever the drawing in the ring shows
-- **Hold** the action button (about half a second) to light a pile beside you (or press **F** there), or to sleep (or press **Z**)
+- **Click or tap** the ground to walk there; double tap to run. Clicking or tapping a thing (driftwood, a branch, a pile, a coconut, a fire, a torch in the ground) walks to beside it and does nothing else
+- **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks (and eats) a coconut, picks up a branch, feeds a fire, takes or sticks a torch, or drinks, whatever the drawing in the ring shows
+- **Hold** the action button (about half a second) to light a pile beside you (or press **F** there), to build a lean-to beside a pile of driftwood and a pile of branches that are close together (or press **F** there), or to sleep (or press **Z**)
 - A left click, a tap, the action button or a walking key wakes him; the view controls do not
 - **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, drinking, drilling a fire), like walking off
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)

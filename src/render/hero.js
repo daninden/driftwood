@@ -158,7 +158,7 @@ export function createHero(scene) {
 
   function update(p, wade = 0, load = []) {
     setLoad(load); clock += 1 / 60;
-    const wk = p.work, kneel = wk ? Math.min(1, wk.f * (wk.kind === 'drill' ? 14 : wk.kind === 'drink' ? 4 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && wk.kind === 'drink';
+    const wk = p.work, kneel = wk ? Math.min(1, wk.f * (wk.kind === 'drill' || wk.kind === 'build' ? 14 : wk.kind === 'drink' ? 4 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && wk.kind === 'drink';
     staff.visible = !drilling; drill.visible = drilling;
     const lit = !!p.torch && !(p.lie > 0); torch.visible = lit; if (lit) torch.userData.flicker(clock);
     group.position.set(p.x, p.y - Math.min(0.35, wade * 0.6), p.z); group.rotation.y = p.heading;

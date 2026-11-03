@@ -13,7 +13,8 @@
  *     dryness of the pile, game/wood `dryness`, squared) and with tiredness
  *     (down to TIRED_CATCH of it at the limit). Wet wood never catches. A
  *     failed attempt leaves only a puff of smoke.
- *   - Each piece burns BURN days (wet wood half as long); a fire holds at
+ *   - Each piece burns BURN days (wet wood half as long); a branch (a log with
+ *     `branch: true`, game/branches) burns BRANCH_BURN (half) as long as a piece of driftwood; a fire holds at
  *     most FUEL_MAX of fuel. When the wood is gone the fire sinks to embers
  *     for EMBERS days and goes out. Wood laid on a fire or on its embers,
  *     one piece at a time, keeps it going.
@@ -40,6 +41,7 @@
  * Pure data; no DOM, no Three.js.
  *
  * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, TIRED_CATCH, BURN, FUEL_MAX, EMBERS,
+ * BRANCH_BURN, fuelOf(logs) -> the fuel in days of a list of pieces (a branch counts BRANCH_BURN of a piece)
  * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS
  * full(f) -> true when fire f holds as much as it can (FUEL_MAX)
  * catchChance(dry, tired) -> 0..CATCH   dry: mean dryness 0..1, tired 0..1 (game/sleep)
@@ -65,7 +67,8 @@
  *     not catch (logs: the pile's pieces, dry: their mean dryness)
  *   fire.kindle(x, z, logs, dry, total) -> the new fire lit with the torch carried,
  *     or null (no torch, or the wood too wet: a puff of smoke)
- *   fire.feed(f, dry) -> true when a piece of dryness dry went on fire f (false: not a fire of ours, or it is full)
+ *   fire.feed(f, dry, burn?) -> true when a piece of dryness dry went on fire f (false: not a fire of ours, or it is full);
+ *     burn: 1 for driftwood, BRANCH_BURN for a branch
  *   fire.update(days)      burns down by days of game time; embers and torches go out
  *   fire.flood(sea) -> number of fires (and torches in the sand) the sea put out
  *   fire.strength(f) -> 0..1 how big the flames are (0 for embers)
@@ -81,6 +84,8 @@ export const DRILL_TIME = 14;                 // seconds of twirling
 export const DRILL_COST = 0.08;               // days of rest a whole attempt costs
 export const CATCH = 0.6, TIRED_CATCH = 0.5;  // the best chance, and how much of it is left worn out
 export const BURN = 2.5 / 24;                 // a dry piece burns two and a half hours
+export const BRANCH_BURN = 0.5;                // a branch burns half as long as a piece of driftwood
+export const fuelOf = logs => logs.reduce((s, l) => s + (l.branch ? BRANCH_BURN : 1), 0) * BURN;
 export const FUEL_MAX = 8 * BURN;
 export const EMBERS = 1.5 / 24;               // embers glow on for an hour and a half
 export const TORCH_DAYS = 2 / 24;             // a torch burns two hours
@@ -143,19 +148,19 @@ export function createFire(w, saved) {
       fire.puffs.push({ x, z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift();
       fire.version++; return null;
     }
-    const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, logs.length * BURN), embers: EMBERS, lit: total, fed: logs.length };
+    const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, fuelOf(logs)), embers: EMBERS, lit: total, fed: logs.length };
     fire.fires.push(f); clearBurnt(x, z); fire.version++; return f;
   }
   function kindle(x, z, logs, dry, total) {
     if (!fire.torch) return null;
     if (dry < TORCH_DRY) { fire.puffs.push({ x, z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift(); fire.version++; return null; }
-    const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, logs.length * BURN), embers: EMBERS, lit: total, fed: logs.length };
+    const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, fuelOf(logs)), embers: EMBERS, lit: total, fed: logs.length };
     fire.fires.push(f); clearBurnt(x, z); fire.torch = null; fire.version++; return f;
   }
   function clearBurnt(x, z) { fire.burnt = fire.burnt.filter(b => Math.hypot(b.x - x, b.z - z) >= BURNT_R); }
-  function feed(f, dry = 1) {
+  function feed(f, dry = 1, burn = 1) {
     if (!fire.fires.includes(f) || full(f)) return false;
-    f.fuel = Math.min(FUEL_MAX, f.fuel + BURN * (0.5 + 0.5 * dry)); f.embers = EMBERS; f.fed++;
+    f.fuel = Math.min(FUEL_MAX, f.fuel + BURN * burn * (0.5 + 0.5 * dry)); f.embers = EMBERS; f.fed++;
     fire.version++; return true;
   }
   function update(days) {

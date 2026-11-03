@@ -21,9 +21,9 @@
  * press is large and that of the hold small beside it; when only a hold does
  * something, its icon is large. The icons (strokes like the moon and the
  * drop): wood with an arrow up (pickup), wood with an arrow down (lay), the
- * fibre tuft (husk), a flame over a piece of wood (feed), a torch (torch), a
+ * half coconut (husk), a flame over a piece of wood (feed), a torch (torch), a
  * torch with a stroke of ground (plant), the drop (drink), a flame (light, hold)
- * and the crescent moon (sleep, hold).
+ * a small lean-to (build, hold) and the crescent moon (sleep, hold).
  *
  * The pointer handling is the button's own: a finger or the mouse on it goes
  * to input.actionStart/actionEnd and never reaches the world (no walk tap, no
@@ -46,6 +46,7 @@
  */
 import { DRAWINGS } from './carryMark.js';
 import { DROP_PATH } from './thirstMark.js';
+import { SHELL_PATH, RIM_PATH } from './hungerMark.js';
 
 export const FILL_STEPS = 40;
 export const RING_R = 36, CIRC = +(2 * Math.PI * RING_R).toFixed(2);   // the filling ring round the icon
@@ -60,14 +61,16 @@ export const ICONS = {
   pickup: LOG + '<path d="M0 1V-11M-3.5 -7.5L0 -11L3.5 -7.5"/>',
   lay: LOG + '<path d="M0 -11V0M-3.5 -3.5L0 0L3.5 -3.5"/>',
   fibre: `<g transform="translate(-9 -11.7) scale(0.9)">${DRAWINGS.fibre}</g>`,
+  coconut: `<g transform="translate(-12 -12)"><path d="${SHELL_PATH}"/><path d="${RIM_PATH}"/></g>`,
   feed: '<g transform="translate(0 -1.5) scale(0.8)">' + FLAME + '</g><g transform="translate(0 4.5)">' + LOG + '</g>',
   torch: '<path d="M-5 11.5L2.2 -1"/><g transform="translate(3.2 1)">' + TORCH_HEAD + '</g>',
   plant: '<path d="M0 8V-3"/>' + TORCH_HEAD + '<path d="M-9 8H9M-6 11L-3 8M3 8L6 11"/>',
   drop: `<g transform="translate(-8 -12)"><path d="${DROP_PATH}"/></g>`,
   flame: '<g transform="translate(0 2) scale(1.15)">' + FLAME + '</g>',
+  leanto: '<path d="M-11 11H11"/><path d="M-7 -6V11M6 6.3V11"/><path d="M-11 -9L11 4V8L-11 -5Z"/>',
   moon: '<path d="M3 -10.5A10 10 0 1 0 10.5 3A7.5 7.5 0 0 1 3 -10.5Z"/>',
 };
-export const ICON_OF = { pickup: 'pickup', lay: 'lay', husk: 'fibre', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', sleep: 'moon' };
+export const ICON_OF = { pickup: 'pickup', lay: 'lay', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon' };
 
 export function buttonIcons(action) {
   const tap = action && action.tap ? ICON_OF[action.tap.kind] || null : null, hold = action && action.hold ? ICON_OF[action.hold.kind] || null : null;

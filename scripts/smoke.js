@@ -15,14 +15,16 @@
 // smoke-13 tally marks beside the fire at night, smoke-14 the same by day,
 // smoke-15 beside a pile of twelve, smoke-16 the action button beside a pile with fibre (by day),
 // smoke-17 beside the fire with dry wood (at night), smoke-18 its ring filling while held,
-// smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night).
+// smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night),
+// smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
+// smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots).
 //
 // The browser is the full Chromium (channel 'chromium', new headless mode), which uses the real graphics
 // card (ANGLE on Direct3D 11 on Windows) where there is one. Without a usable card (a CI machine, or the
 // full Chromium not installed) it falls back to the headless shell with software drawing (SwiftShader),
 // which costs time in proportion to pixels. The renderer in use is logged once at the start.
 // Two sizes are used to keep that fallback bearable. The quick run
-// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button) and 19 (on a phone) at 640x400 (the phone at scale 1).
+// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to) and 19 (on a phone) at 640x400 (the phone at scale 1).
 // The full run (--full) takes every shot; those a person looks at are 1280x800 (the phone at
 // scale 2), the ones that only check something (smoke-0, 2, 3, 4, 7, 18) stay at 640x400.
 // All the checks on the game state run in both. Pixels are checked without a PNG: right
@@ -293,6 +295,72 @@ if (full) await page.screenshot({ path: 'smoke-18.png' });
 await page.evaluate(() => { const { input } = window.__driftwood; performance.now = window.__ringClock; input.cancelAction(); input.actionEnd('smoke'); });
 console.log('ring while held', ring);
 if (!(ring > 0 && ring < 226)) errors.push('the ring does not fill while the button is held: ' + ring);
+
+// Branches and the lean-to (0.16): branches under the nearest tree (smoke-21), picked up and
+// carried (the row shows a twig each), two piles of six, the action button's lean-to icon
+// (smoke-24), F builds it (smoke-22 half built, smoke-23 finished, by day), and a cold sleep
+// under it lasts six hours instead of four.
+const trees = await page.evaluate(start => {
+  const { world, game, input, step } = window.__driftwood, p = game.player;
+  const all = world.tiles.flatMap(t => game.branches.groundBranches(t)).sort((a, b) => Math.hypot(a.x - start.x, a.z - start.z) - Math.hypot(b.x - start.x, b.z - start.z));
+  const b0 = all[0], cluster = all.filter(b => Math.hypot(b.x - b0.x, b.z - b0.z) < 12).sort((a, b) => Math.hypot(a.x - b0.x, a.z - b0.z) - Math.hypot(b.x - b0.x, b.z - b0.z));
+  game.clock.time = 0.5; game.fire.torch = null; game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0;
+  p.x = b0.x + 1.6; p.z = b0.z + 1.6; p.y = world.H(p.x, p.z); step(0.1);
+  window.__driftwood.view.zoomBy(-5);   // as close as the game allows, to see them
+  window.__cluster = cluster.slice(0, 3).map(b => ({ x: b.x, z: b.z }));
+  return { total: all.length, near: Math.hypot(b0.x - start.x, b0.z - start.z), cluster: cluster.length };
+}, start);
+console.log('branches', JSON.stringify(trees));
+if (trees.total < 50) errors.push('only ' + trees.total + ' branches on the island');
+await shot('smoke-21.png');
+const carriedB = await page.evaluate(() => {
+  const { game, input, step } = window.__driftwood, p = game.player;
+  for (const c of window.__cluster) { input.target = { x: c.x, z: c.z, tap: true }; step(30, () => !input.target && !p.stoop); if (!game.action().tap || game.action().tap.kind !== 'pickup') continue; window.__press(); step(0.05); step(2, () => !p.stoop); }
+  window.__driftwood.draw();
+  return { n: game.wood.carried.length, branches: game.wood.carried.filter(l => l.branch).length, row: document.querySelectorAll('#carry svg').length - game.fibre.carried };
+});
+console.log('carrying branches', JSON.stringify(carriedB));
+if (carriedB.branches < 2 || carriedB.row !== carriedB.branches) errors.push('branches picked up: ' + JSON.stringify(carriedB));
+const piled = await page.evaluate(start => {
+  const { world, game, step } = window.__driftwood, p = game.player, w = game.wood, tot = game.clock.total;
+  p.x = start.x + 2.5; p.z = start.z + 1.5; p.y = world.H(p.x, p.z);   // the two piles go in the open, on the start beach, where nothing hides the lean-to
+  const grab = list => { const out = []; for (const l of list) { w.take({ kind: 'log', log: l }, tot); if (w.carried.length === 3) out.push(...w.carried.splice(0)); } out.push(...w.carried.splice(0)); return out; };
+  w.carried.length = 0; w.piles.length = 0;   // only the two piles below (the earlier ones are far away)
+  const near = world.tiles.flatMap(t => game.branches.groundBranches(t)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z)).slice(0, 6);
+  const beach = world.tiles.flatMap(t => t.drift).filter(l => w.onBeach(l)).slice(0, 6);
+  const px = p.x + 0.7, pz = p.z - 0.2;
+  w.piles.push({ x: px, z: pz, kind: 'driftwood', logs: grab(beach) }, { x: px, z: pz + 1.2, kind: 'branch', logs: grab(near) });
+  w.version++; p.x = px - 0.5; p.z = pz + 0.6; p.y = world.H(p.x, p.z); step(0.1);
+  return w.piles.map(q => q.kind + ':' + q.logs.length);
+}, start);
+console.log('piles', JSON.stringify(piled));
+if (piled.join() !== 'driftwood:6,branch:6') errors.push('piles are ' + piled.join());
+await shot('smoke-24.png', { settle: 800 });
+const buildIcon = await iconOf();
+console.log('action button by the two piles', JSON.stringify(buildIcon));
+if (!buildIcon.on || !buildIcon.main) errors.push('the action button shows no lean-to icon beside the two piles');
+await pressF();
+const half = await page.evaluate(() => { const { game, step } = window.__driftwood; step(30, () => game.leantos.list[0] && game.leantos.list[0].progress >= 0.5); return { n: game.leantos.list.length, progress: game.leantos.list[0] && game.leantos.list[0].progress, work: game.player.work && game.player.work.kind, piles: game.wood.piles.length }; });
+console.log('half built', JSON.stringify(half));
+if (half.n !== 1 || half.work !== 'build' || half.piles !== 0) errors.push('building did not start: ' + JSON.stringify(half));
+await shot('smoke-22.png');
+const built = await page.evaluate(() => { const { game, step } = window.__driftwood; step(80, () => !game.player.work); return { progress: game.leantos.list[0].progress, work: game.player.work }; });
+console.log('built', JSON.stringify(built));
+if (built.progress < 1) errors.push('the lean-to did not get finished: ' + built.progress);
+await page.evaluate(() => { const { game, step } = window.__driftwood, p = game.player, l = game.leantos.list[0]; p.x = l.x + 2.4 * Math.sin(l.heading); p.z = l.z + 2.4 * Math.cos(l.heading); p.y = window.__driftwood.world.H(p.x, p.z); step(0.1); });
+await shot('smoke-23.png', { quick: true });
+// Cold sleep under it: six hours, three quarters rested.
+const under = await page.evaluate(() => {
+  const { game, step, world } = window.__driftwood, p = game.player, l = game.leantos.list[0];
+  p.x = l.x; p.z = l.z; p.y = world.H(p.x, p.z); game.sleep.awake = 2; step(0.1);
+  return { asleep: game.sleep.asleep, sheltered: game.leantos.shelter(p.x, p.z) };
+});
+await page.keyboard.press('z');
+const slept = await page.evaluate(() => { const { game, step } = window.__driftwood; step(4); const was = game.sleep.asleep; step(60, () => !game.sleep.asleep && game.player.lie === 0); return { was, slept: game.sleep.slept, rest: game.sleep.rest() }; });
+console.log('sleeping under the lean-to', JSON.stringify({ ...under, ...slept }));
+if (!under.sheltered) errors.push('not sheltered at the centre of the lean-to');
+if (slept.slept < 0.24 || slept.slept > 0.27) errors.push('a cold sleep under the lean-to lasted ' + (slept.slept * 24).toFixed(1) + ' h instead of 6');
+if (slept.rest < 0.7) errors.push('not three quarters rested under the lean-to: ' + slept.rest);
 
 // The same on a phone: a touch-only screen with the thumb stick, the button just above it (day and night).
 const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: full ? 2 : 1, hasTouch: true, isMobile: true });

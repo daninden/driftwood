@@ -84,12 +84,15 @@ describe('what a short press does', () => {
     const l = logs[0], g = createGame(w, at(l.x + 0.3, l.z), { wood: { carried: ids(40, 1), piles: [] } });
     expect(g.action().tap.kind).toBe('pickup'); press(g); expect(g.wood.carried.length).toBe(2);
   });
-  it('husks a coconut within reach, kneeling, for one tuft of fibre; not with three tufts', () => {
+  it('husks a coconut within reach, kneeling, for one tuft of fibre; with three tufts he still eats it, without another tuft', () => {
     const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z));
     expect(g.action().tap).toMatchObject({ kind: 'husk' });
     press(g, 'tap', 0.3); expect(g.player.work.kind).toBe('husk'); run(g, makeInput(), HUSK_TIME + 0.2); expect(g.fibre.carried).toBe(1);
     const full = createGame(w, at(c.x + 0.3, c.z), { fibre: { carried: 3 } });
-    expect(full.action().tap).toBeNull();
+    expect(full.action().tap).toMatchObject({ kind: 'husk' });   // husking is eating too
+    full.hunger.days = 3; full.thirst.days = 1;
+    press(full, 'tap', 0.3); run(full, makeInput(), HUSK_TIME + 0.2);
+    expect(full.fibre.carried).toBe(3); expect(full.hunger.days).toBeLessThan(2); expect(full.thirst.days).toBeLessThan(1); expect(full.fibre.onGround(c)).toBe(false);
   });
   it('lays one dry piece on a fire, the top dry one; wet wood stays with him', () => {
     const g = scene({ carried: 1, fire: fireAt(E.x + 0.8, E.z, 2 * BURN) }), f = g.fire.fires[0];
@@ -358,14 +361,15 @@ describe('the action input', () => {
 
 describe('the button: icons, opacity and the DOM', () => {
   it('has a drawing for every kind of action, in the ink', () => {
-    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'sleep']).toContain(kind); }
-    expect(Object.keys(ICON_OF).length).toBe(9);
+    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'build', 'sleep']).toContain(kind); }
+    expect(Object.keys(ICON_OF).length).toBe(10);
+    expect(buttonIcons({ tap: null, hold: { kind: 'build' } })).toEqual({ main: 'leanto', side: null });
     for (const svg of Object.values(ICONS)) expect(svg).not.toMatch(/fill="(?!none)/);
   });
   it('shows the short press large and the hold small beside it, or a lone hold large', () => {
     expect(buttonIcons({ tap: { kind: 'pickup' }, hold: { kind: 'light' } })).toEqual({ main: 'pickup', side: 'flame' });
     expect(buttonIcons({ tap: { kind: 'lay' }, hold: { kind: 'sleep' } })).toEqual({ main: 'lay', side: 'moon' });
-    expect(buttonIcons({ tap: { kind: 'husk' }, hold: null })).toEqual({ main: 'fibre', side: null });
+    expect(buttonIcons({ tap: { kind: 'husk' }, hold: null })).toEqual({ main: 'coconut', side: null });   // the half coconut, as the hunger mark
     expect(buttonIcons({ tap: null, hold: { kind: 'sleep' } })).toEqual({ main: 'moon', side: null });
     expect(buttonIcons({ tap: null, hold: null })).toEqual({ main: null, side: null });
     expect(buttonIcons(null)).toEqual({ main: null, side: null });

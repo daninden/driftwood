@@ -1,7 +1,8 @@
 /**
  * render/carryMark — the quiet row of small ink drawings next to the moon
  * mark that shows what the castaway carries loose. For now only the tufts
- * of coconut fibre (game/fibre `carried`, 0..3); wood and the torch are in
+ * of coconut fibre (game/fibre `carried`, 0..3) and, since 0.16, one twig with a
+ * leaf for each branch carried (`branch`); driftwood and the torch are in
  * his hands or on the ground and never in the row. Later items (nails, a
  * knife, ...) add a key to ITEMS and a drawing to DRAWINGS.
  *
@@ -24,7 +25,7 @@
  */
 import { ss } from '../core/math.js';
 
-export const ITEMS = ['fibre'];
+export const ITEMS = ['fibre', 'branch'];
 export const REST_OPACITY = 0.5, PEAK_OPACITY = 0.95;
 export const HOLD = 3, EASE = 2;   // seconds held clear, then easing back
 
@@ -48,6 +49,7 @@ export function carryOpacity(since) {
 // each drawing is the inner SVG of a 0 0 20 26 box: a few loose curved
 // strokes tied together at one end (round caps, no fill)
 export const DRAWINGS = {
+  branch: '<path d="M4 23C7 17 11 11 16 3"/><path d="M8.6 17C11 16.5 13.5 17.5 15 19.5"/><path d="M12 10.8C10.5 8.6 8 8 5.5 8.8"/><path d="M13.6 7C15.5 6 17.5 6.5 18.5 8"/>',
   fibre: '<path d="M10 20C8 14 4.5 10 3 5.5"/><path d="M10 20C9.5 14 8 9 7.5 3.5"/><path d="M10 20C10.5 13 11.5 9 12.5 3"/><path d="M10 20C12 14 15 10 17 6"/><path d="M10 20C11 16 14 14 16 12.5"/><path d="M8.2 19.6L11.8 21.4M8.4 21.6L11.6 23.4"/>',
 };
 const svg = key => `<svg viewBox="0 0 20 26" aria-hidden="true">${DRAWINGS[key]}</svg>`;

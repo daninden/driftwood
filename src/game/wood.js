@@ -10,13 +10,16 @@
  *     top pieces are taken first, as many as fit.
  *   - Laying down puts everything carried at the castaway's feet: on the
  *     nearest pile within PILE_JOIN that has room (a pile holds PILE_MAX
- *     pieces) and is of the same kind (a pile has a kind, 'driftwood' for now;
- *     branches will have their own piles), otherwise as a new pile a step in
+ *     pieces) and is of the same kind (a pile has a kind, 'driftwood' or
+ *     'branch'; what is carried is laid down kind by kind), otherwise as a new pile a step in
  *     front (FRONT). A pile never goes in water: when the spot in front is wet
  *     (wetAt), the first dry spot round him is used, and when there is none he
  *     keeps the wood (drop returns false). What does not fit on a pile goes into a new pile
  *     right next to it (PILE_NEXT away, not in water, clear of other piles),
  *     so 3 pieces on a pile of 11 put 1 on it and 2 on a new pile.
+ *   - Branches (game/branches) are pieces of wood too: they lie under the trees, are
+ *     carried with driftwood (CARRY_MAX together, the same slowing), are always dry, and
+ *     go on piles of their own. A pile of branches or driftwood is never mixed.
  *   - Piles stay where they are. Nothing is solid: you walk over wood.
  *   - Every high water (game/tide) washes up new wood on the dry beach above
  *     the tide line: at most WASH_MAX pieces per beach tile, and never more
@@ -31,7 +34,8 @@
  *
  * Pure data on a world (world/vegetation `tile.drift`); no DOM, no Three.js.
  *
- * createWood(world, saved?) -> wood
+ * createWood(world, saved?, branches?) -> wood
+ *   branches: game/branches, for the branches on the ground (none without)
  *   wood.carried            [log]  what the castaway carries (bottom first)
  *   wood.piles              [{ x, z, kind, logs: [log] }]  (bottom first)
  *   wood.version            goes up with every change, for the renderer
@@ -46,7 +50,9 @@
  *     the nearest thing within reach of (x, z); x, z is its nearest point, d its
  *     distance from (x, z) (to a pile's edge); only: 'log' or 'pile' to look for
  *     that kind alone
- *   wood.take(thing) -> number of pieces picked up (0 when the hands are full)
+ *   wood.take(thing, total?) -> number of pieces picked up (0 when the hands are full);
+ *     total: the days on the clock, for when a branch taken from the ground grows back
+ *   wood.consume(pile, n) -> the top n pieces of a pile, taken off the island (to build, game/leanto)
  *   wood.drop(x, z, heading, inWater?, wetAt?) -> true when something was laid down
  *     (wetAt(x, z) -> true for water, to keep a new pile out of it)
  *   wood.washUp(n, avoid?) -> the logs high water number n brought (none
@@ -60,18 +66,19 @@
  *     lost: [id], tide, nextId }   plain, for saving
  *   saved: such a state, to start from
  * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, WASH_MAX, DRY_DAYS
- * kindOf(log) -> 'driftwood' (the kind of pile a piece goes on)
+ * kindOf(log) -> 'branch' for a branch, else 'driftwood' (the kind of pile a piece goes on)
  *   An older save may hold a pile of more than PILE_MAX: it is loaded as it is
  *   (it takes no more wood, and can be picked up from as usual).
  * dryness(log, total) -> 0 (just washed up) .. 1 (dry), total: days on the clock
  * logsNear(world, x, z, reach) -> the first logs of the tiles within reach of (x, z)
  * distToLog(log, x, z) -> { d, x, z }  distance to the log's axis and the nearest point on it
  *
- * Depends on: core/noise, world/constants, game/tide
+ * Depends on: core/noise, world/constants, game/tide, game/branches (ids only)
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 import { FIRST_HIGH, PERIOD } from './tide.js';
+import { BRANCH_ID0 } from './branches.js';
 
 export const CARRY_MAX = 3;
 export const CARRY_SLOW = 0.12;   // per piece: three pieces walk at 64 %
@@ -85,7 +92,7 @@ export const WASH_MAX = 2;        // at most this many new pieces per beach tile
 const WASH_GAP = 1.3;             // a new piece keeps this far from other wood
 export const DRY_DAYS = 1;        // washed-up wood is dry after a day
 
-export const kindOf = () => 'driftwood';   // branches will come with the lean-to
+export const kindOf = log => log && log.branch ? 'branch' : 'driftwood';
 
 export const dryness = (log, total) => log.t === undefined ? 1 : Math.max(0, Math.min(1, (total - log.t) / DRY_DAYS));
 
@@ -105,20 +112,20 @@ export function logsNear(w, x, z, reach) {
 
 const tileOf = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
 
-export function createWood(w, saved) {
+export function createWood(w, saved, branches = null) {
   const byId = new Map();
   let nextId = 0;
   for (const t of w.tiles) if (t.drift) for (const l of t.drift) { byId.set(l.id, l); nextId = Math.max(nextId, l.id + 1); }
   const taken = new Set(), lost = new Set();   // lost: first logs the sea took back
   const washed = new Map();                      // tile index -> [log] washed up since the start
-  const wood = { carried: [], piles: [], version: 0, fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, take, drop, washUp, flood, takePile, giveOne, state };
+  const wood = { carried: [], piles: [], version: 0, fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, take, drop, washUp, flood, takePile, giveOne, consume, state };
   const addWashed = l => { const k = tileOf(l.x, l.z); if (!washed.has(k)) washed.set(k, []); washed.get(k).push(l); byId.set(l.id, l); };
   if (saved) {
     for (const l of saved.washed || []) addWashed({ ...l });
     nextId = Math.max(nextId, saved.nextId || 0);
     if (saved.tide !== undefined && saved.tide !== null) wood.tide = saved.tide;
     for (const id of saved.lost || []) if (byId.has(id)) { taken.add(id); lost.add(id); }
-    const get = id => { const l = byId.get(id); if (l) taken.add(id); return l; };
+    const get = id => { if (id >= BRANCH_ID0) return branches ? branches.piece(id) : null; const l = byId.get(id); if (l) taken.add(id); return l; };
     wood.carried = (saved.carried || []).map(get).filter(Boolean).slice(0, CARRY_MAX);
     wood.piles = (saved.piles || []).map(p => ({ x: p.x, z: p.z, kind: p.kind || 'driftwood', logs: p.logs.map(get).filter(Boolean) })).filter(p => p.logs.length);
   }
@@ -131,6 +138,7 @@ export function createWood(w, saved) {
   }
   function near(x, z, reach) {
     const out = logsNear(w, x, z, reach), m = reach + 1.2;
+    if (branches) out.push(...branches.near(x, z, reach));
     for (const k of new Set([tileOf(x - m, z - m), tileOf(x + m, z - m), tileOf(x - m, z + m), tileOf(x + m, z + m)])) { const more = washed.get(k); if (more) out.push(...more); }
     return out;
   }
@@ -148,10 +156,11 @@ export function createWood(w, saved) {
     return best;
   }
 
-  function take(thing) {
+  function take(thing, total = 0) {
     const room = CARRY_MAX - wood.carried.length;
     if (room <= 0 || !thing) return 0;
     if (thing.kind === 'log') {
+      if (thing.log.branch) { if (!branches || !branches.take(thing.log, total)) return 0; wood.carried.push(thing.log); wood.version++; return 1; }
       if (taken.has(thing.log.id)) return 0;
       taken.add(thing.log.id); wood.carried.push(thing.log); wood.version++; return 1;
     }
@@ -164,22 +173,33 @@ export function createWood(w, saved) {
 
   function drop(x, z, heading, inWater = false, wetAt = null) {
     if (!wood.carried.length || inWater) return false;
-    const kind = kindOf(wood.carried[0]);
+    let left = [], laid = false;   // each kind is laid down on piles of its own
+    for (const kind of ['driftwood', 'branch']) {
+      const mine = wood.carried.filter(l => kindOf(l) === kind); if (!mine.length) continue;
+      const rest = layKind(kind, mine, x, z, heading, wetAt);
+      if (rest.length < mine.length) laid = true;
+      left.push(...rest);
+    }
+    if (!laid) return false;   // nowhere to lay it
+    wood.carried = wood.carried.filter(l => left.includes(l));
+    wood.version++; return true;
+  }
+
+  // lay pieces of one kind on the nearest pile of that kind with room, then on new piles; returns the pieces that found no place (bottom first)
+  function layKind(kind, mine, x, z, heading, wetAt) {
     let pile = null, bd = PILE_JOIN, close = null, cd = PILE_JOIN;   // pile: the nearest that can take more; close: the nearest of any kind or fullness
     for (const p of wood.piles) {
       const d = Math.hypot(p.x - x, p.z - z);
       if (d < cd) { cd = d; close = p; }
       if (d < bd && p.kind === kind && p.logs.length < PILE_MAX) { bd = d; pile = p; }
     }
-    const pieces = [...wood.carried].reverse();
+    const pieces = [...mine].reverse();
     if (pile) pile.logs.push(...pieces.splice(0, PILE_MAX - pile.logs.length));
     if (pieces.length) {   // a new pile: a step in front, or right next to the pile that was full
       const c = pile || close, spot = c ? spotAround(c.x, c.z, PILE_NEXT, heading, wetAt) : spotAround(x, z, FRONT, heading, wetAt);
       if (spot) { wood.piles.push({ x: spot.x, z: spot.z, kind, logs: pieces.splice(0) }); }
     }
-    if (pieces.length === wood.carried.length) return false;   // nowhere to lay it
-    wood.carried = pieces.reverse();
-    wood.version++; return true;
+    return pieces.reverse();
   }
 
   // a spot for a new pile, dist away from (cx, cz) (a pile, or the castaway): first in the direction he faces, then round it; dry and clear of other piles
@@ -212,7 +232,8 @@ export function createWood(w, saved) {
     return brought;
   }
 
-  const gone = l => {   // a log leaves the island for good
+  const gone = l => {   // a log leaves the island for good (a branch just stops existing: its spot grows another)
+    if (l.branch) return;
     const more = washed.get(tileOf(l.x, l.z)), j = more ? more.indexOf(l) : -1;
     if (j >= 0) { more.splice(j, 1); byId.delete(l.id); } else lost.add(l.id);
   };
@@ -231,6 +252,13 @@ export function createWood(w, saved) {
     const i = wood.piles.indexOf(p); if (i < 0) return [];
     wood.piles.splice(i, 1); p.logs.forEach(gone); wood.version++;
     return p.logs;
+  }
+  function consume(p, n) {
+    if (!wood.piles.includes(p)) return [];
+    const got = p.logs.splice(Math.max(0, p.logs.length - n));
+    got.forEach(gone);
+    if (!p.logs.length) wood.piles.splice(wood.piles.indexOf(p), 1);
+    wood.version++; return got;
   }
   function giveOne(ok) {
     let i = wood.carried.length - 1; while (i >= 0 && ok && !ok(wood.carried[i])) i--;

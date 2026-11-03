@@ -28,6 +28,8 @@
  * dampPatch(log, dry) -> { opacity, scale } | null   pure; the damp patch under a
  *   beach log at dryness dry: null once it is dry enough to burn
  * dryStep(dry) -> dry rounded down to DRY_STEPS steps a day
+ * A branch (game/branches, `log.branch`) is dark bark whatever its dryness (driftColor) and
+ * is drawn thin in piles; on the ground and under the arm see render/branches and render/hero.
  * driftLook(log) -> { col, branch, roots }   pure; branch and roots are
  *   null or parameters
  * driftColor(log, dry?) -> its colour at dryness dry (0 wet .. 1 dry), pure
@@ -52,7 +54,7 @@ import { stickMatrix } from './geometry.js';
 import { Batch } from './batch.js';
 import { outlineMat, toon } from './materials.js';
 import { disposeGroup } from './nearTile.js';
-import { DRIFT } from './palette.js';
+import { DRIFT, BRANCH } from './palette.js';
 import { dryness, DRY_DAYS } from '../game/wood.js';
 import { TORCH_DRY } from '../game/fire.js';
 import { FIRST_HIGH, PERIOD } from '../game/tide.js';
@@ -82,6 +84,7 @@ export function dampPatch(log, dry) {
 
 /** The colour of a log at a dryness 0..1: dark and wet until it will burn, then bleaching. */
 export function driftColor(log, dry = 1) {
+  if (log.branch) return BRANCH.bark[hashInt(log.id, 5, 83) % BRANCH.bark.length];   // a branch is dark bark, always dry
   const col = driftLook(log).col; if (dry >= 1) return col;
   return new THREE.Color(col).lerp(WET, woodLook(dryStep(dry)).wet * WET_MIX).getHex();
 }
@@ -128,11 +131,11 @@ export function addPile(B, kit, H, pile, total = 0) {
   const a0 = (hashInt(Math.round(pile.x * 64), Math.round(pile.z * 64), 59) / 4294967296) * Math.PI;
   const g = H(pile.x, pile.z);
   pile.logs.forEach((log, i) => {
-    const layer = i >> 1, a = a0 + (layer % 2) * Math.PI / 2 + ((i * 0.37) % 0.2 - 0.1), ca = Math.cos(a), sa = Math.sin(a);
-    const off = (i % 2 ? 1 : -1) * 0.15, cx = pile.x - sa * off, cz = pile.z + ca * off, cy = g + 0.08 + layer * 0.19, h = log.len / 2;
+    const layer = i >> 1, a = a0 + (layer % 2) * Math.PI / 2 + ((i * 0.37) % 0.2 - 0.1), ca = Math.cos(a), sa = Math.sin(a), thin = log.branch;   // branches are thin: closer layers
+    const off = (i % 2 ? 1 : -1) * (thin ? 0.1 : 0.15), cx = pile.x - sa * off, cz = pile.z + ca * off, cy = g + (thin ? 0.05 + layer * 0.095 : 0.08 + layer * 0.19), h = log.len / 2;
     const A = new THREE.Vector3(cx - ca * h, cy, cz - sa * h), Bv = new THREE.Vector3(cx + ca * h, cy + 0.02, cz + sa * h);
     const dry = dryness(log, total), [mat, sfx] = matFor(kit, dry);
-    B.add('pile' + sfx, kit.driftwood, mat, stickMatrix(A, Bv, log.rad / 0.09), driftColor(log, dry), { outline: 1.12 });
+    B.add((log.branch ? 'bpile' : 'pile') + sfx, kit.driftwood, mat, stickMatrix(A, Bv, log.rad / 0.09), driftColor(log, dry), { outline: 1.12 });
   });
 }
 

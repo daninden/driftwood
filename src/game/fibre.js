@@ -24,6 +24,8 @@
  *   fibre.find(x, z, reach) -> { kind: 'coco', coco, x, z, d } | null   the nearest (d: distance)
  *   fibre.take(coco, total) -> true when it gave a tuft (false: hands full or gone)
  *     total: the days on the clock (game/clock), for when it grows back
+ *   fibre.husk(coco, total) -> true when the nut was taken off the ground: it gives a tuft only
+ *     when there is room (FIBRE_MAX), else none (he still eats it; game/game); false: gone already
  *   fibre.use() -> true when a tuft was used up
  *   fibre.update(total)      lets taken nuts fall again when their time has come
  *   fibre.state() -> { carried, taken: [[id, total]] }   plain, for saving
@@ -43,7 +45,7 @@ export function createFibre(w, saved) {
   const byId = new Map();
   for (const t of w.tiles) for (const c of t.cocos || []) byId.set(c.id, c);
   const taken = new Map();   // id -> the day it was taken
-  const fibre = { carried: 0, version: 0, onGround, groundCocos, find, take, use, update, state };
+  const fibre = { carried: 0, version: 0, onGround, groundCocos, find, take, husk, use, update, state };
   if (saved) {
     fibre.carried = Math.max(0, Math.min(FIBRE_MAX, saved.carried | 0));
     for (const [id, at] of saved.taken || []) if (byId.has(id)) taken.set(id, at);
@@ -68,6 +70,10 @@ export function createFibre(w, saved) {
   function take(c, total) {
     if (fibre.carried >= FIBRE_MAX || !c || taken.has(c.id)) return false;
     taken.set(c.id, total); fibre.carried++; fibre.version++; return true;
+  }
+  function husk(c, total) {
+    if (!c || taken.has(c.id)) return false;
+    taken.set(c.id, total); if (fibre.carried < FIBRE_MAX) fibre.carried++; fibre.version++; return true;
   }
   function use() { if (fibre.carried <= 0) return false; fibre.carried--; fibre.version++; return true; }
   function update(total) {
