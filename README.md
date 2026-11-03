@@ -20,7 +20,7 @@ Another island: add `#seed-2024` to the address. Start an island over: add `new`
 
 There is no goal, no map and no menu. What you see is the island.
 
-The game remembers where you were. It saves itself as you play, one save per island, in this browser on this device, and picks up where you left off the next time. Nothing to press, nothing to show.
+The game remembers where you were. It saves itself as you play, one save per island, in this browser on this device, and picks up where you left off the next time. Nothing to press, nothing to show. The view is remembered too: how far you turned and tilted it and how far you zoomed come back as you left them.
 
 The first time you start an island, the loading screen asks *What is your name?*. Type a name and press Enter (or tap the small arrow); leave it empty and you are the castaway. The name is kept with the island and not asked again; starting over asks again. A small line top left always says who you are and which day it is, such as `Dave, day 1`; it grows clearer for a moment when a new day begins. The day turns at midnight, also while you sleep.
 
@@ -36,9 +36,9 @@ The tide comes in and goes out twice a day. At low water there is more beach to 
 
 ### Driftwood
 
-Pick up driftwood and carry at most three pieces; each one slows you down. Lay it down at your feet, alone or on a pile. A pile stays where it is, and you can pick it up again.
+Pick up driftwood and carry at most three pieces; each one slows you down, and with three you take shorter steps and stoop a little. Lay it down at your feet, alone or on a pile. A pile stays where it is, and you can pick it up again.
 
-Every high water washes up some new wood, and the sea takes back piles laid on the wet sand of low water. Fresh wood is wet: it dries to its own colour over a day.
+Every high water washes up some new wood, and the sea takes back piles laid on the wet sand of low water. Fresh wood is wet: it looks dark and a little glossy, with a damp patch in the sand under it, and stays that way until it is dry enough to burn; then it quickly bleaches to its own colour. A wet piece will not light a fire, so gather ahead.
 
 ### Coconut fibre
 
@@ -73,10 +73,10 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 - **Hold** the castaway (or press **Z**) to sleep
 - A left click, a tap or a walking key wakes him; the view controls do not
 - **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop
-- **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom
+- **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)
 - **Enter** (or the arrow): confirm your name at the start of an island
 - **Shift + `**: start over (forget this island's save and begin again; the name is asked again)
-- **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame)
+- **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame); while it is shown you can zoom out further, to 25
 
 ## More
 

@@ -15,12 +15,22 @@
  * `name` means the name is asked once (game/castaway shouldAsk), no `startDay`
  * means 0. Optional fields need no migration and no new format number; a wrong
  * type makes the whole save unusable like any other broken field.
+ * Since 0.10 a save may also carry `view: { yaw, tilt, zoom }`, the camera's turn,
+ * tilt and zoom (radians, radians, zoom level), restored silently at start-up. It
+ * is made safe on reading (core/view `clampView`: the turn wrapped into 0..2π,
+ * tilt and zoom clamped to their limits; a zoom beyond 10 is kept up to 25 here
+ * and clamped to 10 by the camera unless the dev panel is visible); a `view` that is not three numbers is
+ * dropped, the rest of the save still loads (default view). Nothing else changes.
  * saveKey(seed) -> 'driftwood-save-<seed>'
  * serialise(state) -> string          state: game.state() (plus name, startDay); adds the format number `v`
  * parseSave(text, seed) -> state | null
  *   The state for createGame, or null for anything else: not JSON, another
  *   format number, another seed, or a shape the game parts cannot read.
  *   Never throws.
+ * createViewSaver(settle?) -> { update(pose, dt) -> bool }   true once when the view
+ *   (camera.pose) has changed and then stayed still for `settle` seconds (default
+ *   VIEW_SETTLE, 1.5): the moment to save, so a save does not happen every frame
+ *   while turning or zooming. The first pose it sees is the baseline.
  * momentKey(game) -> string           changes when something worth saving
  *   happens: wood laid down or taken from a pile, a fire lit or gone out, a
  *   torch stuck in the ground or taken up, falling asleep or waking up
@@ -32,10 +42,13 @@
  *   getStorage returns a Storage (default: window.localStorage). load gives
  *   the parsed state or null; save and clear return true when they worked.
  *
- * Depends on: nothing
+ * Depends on: core/view (clampView)
  */
+import { clampView, ZOOM_DEV_MAX } from './core/view.js';
+
 export const SAVE_VERSION = 1;
 export const SAVE_EVERY = 10;
+export const VIEW_SETTLE = 1.5;   // seconds of a still view before it is saved
 export const DEFAULT_SEED = 1337;
 
 export const saveKey = seed => `driftwood-save-${seed}`;
@@ -67,8 +80,27 @@ function valid(s, seed) {
 export function parseSave(text, seed) {
   try {
     const s = JSON.parse(text);
-    return valid(s, seed) ? s : null;
+    if (!valid(s, seed)) return null;
+    // the camera clamps the zoom again to what the dev panel allows
+    if (s.view !== undefined) { const v = clampView(s.view, ZOOM_DEV_MAX); if (v) s.view = v; else delete s.view; }
+    return s;
   } catch (e) { return null; }
+}
+
+export function createViewSaver(settle = VIEW_SETTLE) {
+  let key = null, still = 0, dirty = false;
+  const keyOf = p => p ? [p.yaw.toFixed(3), p.tilt.toFixed(3), p.zoom.toFixed(2)].join() : '';
+  return {
+    update(pose, dt) {
+      const k = keyOf(pose);
+      if (key === null) { key = k; return false; }
+      if (k !== key) { key = k; still = 0; dirty = true; return false; }
+      if (!dirty) return false;
+      still += dt;
+      if (still < settle) return false;
+      dirty = false; still = 0; return true;
+    },
+  };
 }
 
 export function momentKey(game) {

@@ -5,7 +5,8 @@
  * not the interval) and `idle` while the frame pacer idles (render/framePacer). Same ink as the moon mark (`--ink`, pale at night, render/ink), faint, with a quiet backing (`--ink-back`) that turns dark at night. It is a
  * developer aid, not part of the game: visible for now, to be hidden later
  * by flipping DEV_PANEL_VISIBLE to false. The backtick key toggles it at any
- * time; the choice is not remembered between sessions.
+ * time; the choice is not remembered between sessions. While it is visible the
+ * furthest zoom is 25 instead of 10 (a developer aid, see main).
  *
  * DEV_PANEL_VISIBLE            whether the panel is shown at the start
  * FPS_WINDOW                   seconds the frame rate is averaged over (0.5)
@@ -17,18 +18,18 @@
  *   first), ms() the latest average work time rounded to a whole ms (null
  *   without any). Frames longer than a second (a hidden tab, a pause) are
  *   not counted.
- * devLabel(version, name, fps, ms?, idle?) -> string   e.g.
+ * devLabel(version, name, fps, ms?, idle?, zoom?) -> string   e.g.
  *   'v0.7 · Quiet frames · 30 fps · 9 ms · idle' ('– fps' while there is no
- *   value yet; ' · N ms' only with ms, ' · idle' only when idle). Pure.
+ *   value yet; ' · N ms' only with ms, ' · zoom 18' only when zoom is beyond 10, the normal limit; ' · idle' only when idle). Pure.
  * isToggleKey(e) -> bool       true for the backtick key (code 'Backquote',
  *   not repeating, no Shift/Ctrl/Cmd/Alt: Shift+backtick starts the game over, see src/save). Pure.
- * createDevPanel(el, version, name, visible?) -> { frame(dt, workMs?, idle?), toggle(), visible() }
+ * createDevPanel(el, version, name, visible?) -> { frame(dt, workMs?, idle?, zoom?), toggle(), visible() }
  *   el: the #dev element (index.html); frame is called for every drawn frame
  *   with the real time since the previous drawn frame, the ms its update and
  *   render took, and whether the pacer is idling; it touches the DOM only when the text changed;
  *   listens for the backtick key on window.
  *
- * Depends on: nothing
+ * Depends on: nothing (main passes it the zoom; the 25 limit while visible is core/view `zoomMax`)
  */
 export const DEV_PANEL_VISIBLE = true;
 export const FPS_WINDOW = 0.5;
@@ -51,15 +52,15 @@ export function createFpsMeter(window = FPS_WINDOW) {
   };
 }
 
-export const devLabel = (version, name, fps, ms = null, idle = false) =>
-  `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (idle ? ' \u00b7 idle' : '');
+export const devLabel = (version, name, fps, ms = null, idle = false, zoom = 0) =>
+  `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (zoom > 10.5 ? ` \u00b7 zoom ${Math.round(zoom)}` : '') + (idle ? ' \u00b7 idle' : '');
 
 export const isToggleKey = e => e.code === 'Backquote' && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
 
 export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
   const meter = createFpsMeter();
-  let shown = visible, text = null, idling = false;
-  const refresh = () => set(devLabel(version, name, meter.fps(), meter.ms(), idling));
+  let shown = visible, text = null, idling = false, zoomed = 0;
+  const refresh = () => set(devLabel(version, name, meter.fps(), meter.ms(), idling, zoomed));
   const set = t => { if (t !== text) { text = t; el.textContent = t; } };
   const apply = () => { if (el.hidden === shown) el.hidden = !shown; };
   set(devLabel(version, name, null)); apply();
@@ -67,7 +68,10 @@ export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
   function toggle() { shown = !shown; apply(); }
   window.addEventListener('keydown', key);
   return {
-    frame(dt, workMs, idle = false) { const f = meter.add(dt, workMs); if (f !== null || idle !== idling) { idling = idle; refresh(); } },
+    frame(dt, workMs, idle = false, zoom = 0) {
+      const f = meter.add(dt, workMs), z = zoom > 10.5 ? Math.round(zoom) : 0;
+      if (f !== null || idle !== idling || z !== zoomed) { idling = idle; zoomed = z; refresh(); }
+    },
     toggle,
     visible: () => shown,
   };

@@ -14,7 +14,9 @@
  * (SIL_OPACITY, one flat shape, no pattern) shows through, so you never lose it.
  *
  * Carried driftwood is held under the left arm, at its real length (low
- * enough that the head and hat stay readable). When the castaway picks up or lays down wood, the upper
+ * enough that the head and hat stay readable). A load (0.10) shortens his steps
+ * (the swing gets smaller by CARRY_STRIDE per piece) and bends him slightly
+ * forward, LEAN radians per piece, eased in and out. When the castaway picks up or lays down wood, the upper
  * body bends down and up again (player.stoop).
  *
  * To sleep (player.lie) the castaway lies down on his back with the straw
@@ -32,16 +34,18 @@
  *   update copies position and heading from the player state
  *   (game/movement) and animates the walk cycle from player.phase. In water
  *   he sinks by wadeDepth * 0.6, but never deeper than 0.35 (his waist).
- *   load: the carried pieces as [{ len, rad, col }] (bottom first); the
+ *   load: the carried pieces as [{ len, rad, col, wet? }] (bottom first; wet:
+ *   still looks wet, so it gets the wet sheen, render/materials wetToon); the
  *   bundle is rebuilt when it changes.
  *   flame(out) -> out | null: the flame of the torch in his hand in world
  *   space (null without a torch), for the light of render/fire.
  *   The figure faces +z in its own space.
  *
- * Depends on: three, render/materials, render/palette, render/fire
+ * Depends on: three, render/materials, render/palette, render/fire, game/wood (CARRY_STRIDE)
  */
 import * as THREE from 'three';
-import { toon, outlineMat } from './materials.js';
+import { toon, wetToon, outlineMat } from './materials.js';
+import { CARRY_STRIDE } from '../game/wood.js';
 import { HERO } from './palette.js';
 import { makeTorch, flameWorld } from './fire.js';
 
@@ -51,6 +55,7 @@ import { makeTorch, flameWorld } from './fire.js';
 // stays in the opaque pass (custom blending), so renderOrder puts it before
 // the figure, which then covers it.
 export const SIL_OPACITY = 0.42;
+export const LEAN = 0.05;   // forward lean per carried piece, radians (three pieces: about 9 degrees)
 const silMat = new THREE.MeshBasicMaterial({
   color: HERO.silhouette, opacity: SIL_OPACITY, depthFunc: THREE.GreaterDepth, depthWrite: false,
   blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
@@ -131,14 +136,14 @@ export function createHero(scene) {
   // The bundle under the left arm, in metres (undoing the body scale).
   const bundle = new THREE.Group(); bundle.position.set(-0.27, 0.66 - HIP, 0); bundle.scale.setScalar(1 / 0.62); upper.add(bundle);
   const logGeo = new THREE.CylinderGeometry(1, 0.8, 1, 7), axis = new THREE.Vector3(0.04, -0.1, 1).normalize(), up = new THREE.Vector3(0, 1, 0);
-  let loadKey = '', clock = 0;
+  let loadKey = '', clock = 0, lean = 0;
   function setLoad(load) {
-    const key = load.map(l => l.len.toFixed(3) + l.col).join();
+    const key = load.map(l => l.len.toFixed(3) + l.col + (l.wet ? 'w' : '')).join();
     if (key === loadKey) return;
     loadKey = key;
     for (const c of [...bundle.children]) { bundle.remove(c); c.traverse(o => { if (o.isMesh && o.material !== outlineMat && o.material !== silMat) o.material.dispose(); }); }
     load.forEach((l, i) => {
-      const m = new THREE.Mesh(logGeo, toon(l.col)); m.castShadow = true;
+      const m = new THREE.Mesh(logGeo, l.wet ? wetToon(l.col) : toon(l.col)); m.castShadow = true;
       m.position.set(-l.rad * 0.6 - (i % 2) * 0.05, (i >> 1) * 0.07 - (i % 2) * 0.02, (i - 1) * 0.07 - l.len * 0.1);
       m.quaternion.setFromUnitVectors(up, axis); m.scale.set(l.rad, l.len, l.rad);
       const o = new THREE.Mesh(logGeo, outlineMat); o.scale.set(1.18, 1.02, 1.18); m.add(o);
@@ -154,12 +159,13 @@ export function createHero(scene) {
     const lit = !!p.torch && !(p.lie > 0); torch.visible = lit; if (lit) torch.userData.flicker(clock);
     group.position.set(p.x, p.y - Math.min(0.35, wade * 0.6), p.z); group.rotation.y = p.heading;
     const tired = p.tired || 0, lie = p.lie || 0, ly = lie * lie * (3 - 2 * lie);
-    const sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) * (1 - 0.35 * tired) : 0, carry = load.length > 0;
+    const sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) * (1 - 0.35 * tired) * (1 - CARRY_STRIDE * load.length) : 0, carry = load.length > 0;
     const bend = Math.sin(Math.PI * Math.min(1, p.stoop || 0));   // down and up again
     const sit = Math.sin(Math.PI * Math.min(1, ly * 1.6)) * (ly < 0.62 ? 1 : 0);   // knees bend on the way down and up
     const kn = kneel * kneel * (3 - 2 * kneel), rub = wk ? Math.sin(clock * (drilling ? 16 : 9)) : 0;
     hipL.rotation.x += (sw + bend * 0.5 + sit * 0.9 + kn * 0.75 - hipL.rotation.x) * 0.4; hipR.rotation.x += (-sw + bend * 0.5 + sit * 0.9 + kn * 0.55 - hipR.rotation.x) * 0.4;   // squatting
-    upper.rotation.x = bend * 0.9 + tired * 0.18 * (1 - ly) + kn * (drilling ? 0.3 : 0.6);
+    lean += (LEAN * load.length - lean) * 0.12;   // the weight pulls him forward a little
+    upper.rotation.x = lean * (1 - ly) + bend * 0.9 + tired * 0.18 * (1 - ly) + kn * (drilling ? 0.3 : 0.6);
     body.rotation.x = -Math.PI / 2 * ly;   // on his back, face up, head away from where he faced
     hat.position.set(0, 1.13 - 0.1 * ly, 0.13 * ly); hat.rotation.x = Math.PI / 2 * ly;
     if (kn > 0) {   // both hands forward, working: tearing the husk, or rubbing the drill between the palms

@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, STOOP, AIM } from '../src/game/game.js';
-import { createWood, distToLog, CARRY_MAX, CARRY_SLOW } from '../src/game/wood.js';
+import { createWood, distToLog, CARRY_MAX, CARRY_SLOW, CARRY_STRIDE } from '../src/game/wood.js';
 import { WALK_SPEED, terrainAt } from '../src/game/movement.js';
 
 let w, spawn, logs;
@@ -71,7 +71,18 @@ describe('picking up and carrying', () => {
     const a = makeInput({ up: true }), b = makeInput({ up: true });
     free.update(a, 1 / 60); loaded.update(b, 1 / 60);
     expect(free.player.speed).toBeCloseTo(WALK_SPEED, 1);
+    expect(CARRY_SLOW).toBe(0.12);
     expect(loaded.player.speed / free.player.speed).toBeCloseTo(1 - 3 * CARRY_SLOW, 2);
+    expect(loaded.player.speed / free.player.speed).toBeCloseTo(0.64, 2);   // three pieces: 64 %
+  });
+  it('takes shorter steps with a load: the walk cycle advances faster per metre', () => {
+    const wood = createWood(w);
+    for (const l of logs.slice(0, 3)) wood.take({ kind: 'log', log: l });
+    const free = createGame(w, spawn), loaded = createGame(w, spawn, { wood: wood.state() });
+    const a = makeInput({ up: true }), b = makeInput({ up: true }), x0 = { x: free.player.x, z: free.player.z };
+    for (let i = 0; i < 20; i++) { free.update(a, 1 / 60); loaded.update(b, 1 / 60); }
+    const perMetre = (g, from) => g.player.phase / Math.hypot(g.player.x - from.x, g.player.z - from.z);
+    expect(perMetre(loaded, x0) / perMetre(free, x0)).toBeCloseTo(1 / (1 - 3 * CARRY_STRIDE), 1);
   });
 });
 

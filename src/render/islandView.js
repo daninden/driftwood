@@ -10,7 +10,11 @@
  *     of day, streams detailed tiles,
  *     footprints, mood, sets the sea level of the tide, and draws the frame.
  *   view.zoomBy(steps)   zoom the camera (positive = further away), see render/camera
+ *   view.setZoomMax(max)   the furthest zoom (dev panel: 25, else 10), see render/camera
  *   view.turn({ yaw, pitch })   turn and tilt the view (radians), see render/camera
+ *   view.pose / view.setPose(pose)   the chosen view { yaw, tilt, zoom } (for the save), and
+ *     putting the camera straight into one, without easing (before prepare)
+ *   view.zoom             the current (eased) zoom level
  *   view.yaw              the current view angle (for walking relative to the screen)
  *   view.settling         true while the camera is still easing (position, zoom, angles)
  *   view.setGame(game)   from then on draws what can be gathered and made:
@@ -50,7 +54,7 @@ import { createFootprints } from './footprints.js';
 import { createCamera } from './camera.js';
 import { createMood } from './mood.js';
 import { skyAt } from './sky.js';
-import { createWoodView, driftColor, logParts } from './driftwood.js';
+import { createWoodView, driftColor, woodLook, logParts } from './driftwood.js';
 import { createCocoView } from './coconuts.js';
 import { createFireView } from './fire.js';
 import { dryness } from '../game/wood.js';
@@ -88,7 +92,7 @@ export async function createIslandView(world, container, progress, start) {
     water.setSea(sea);
     const total = game ? game.clock.total : 0;
     if (woodView) { woodView.update(dt, total); cocoView.update(); }
-    hero.update(player, t.depth, game ? game.wood.carried.map(l => ({ len: l.len, rad: l.rad, col: driftColor(l, dryness(l, total)) })) : []);
+    hero.update(player, t.depth, game ? game.wood.carried.map(l => { const d = dryness(l, total); return { len: l.len, rad: l.rad, col: driftColor(l, d), wet: woodLook(d).sheen }; }) : []);
     steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver);
     steps.wash(sea);
     const { yaw, pitch } = cam;
@@ -156,5 +160,5 @@ export async function createIslandView(world, container, progress, start) {
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, setGame, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, get settling() { return cam.settling; }, pickGround, canvas: renderer.domElement, scene, stats, settle, prepare };
+  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, canvas: renderer.domElement, scene, stats, settle, prepare };
 }

@@ -54,9 +54,12 @@ describe('label and version', () => {
     expect(devLabel('0.7', 'Quiet frames', 30, 9)).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
     expect(devLabel('0.7', 'Quiet frames', 30, 9, true)).toBe('v0.7 · Quiet frames · 30 fps · 9 ms · idle');
     expect(devLabel('0.7', 'Quiet frames', 15, 0, false)).toBe('v0.7 · Quiet frames · 15 fps · 0 ms');
+    expect(devLabel('0.10', 'Wet wood', 30, 9, false, 18.4)).toBe('v0.10 · Wet wood · 30 fps · 9 ms · zoom 18');
+    expect(devLabel('0.10', 'Wet wood', 30, 9, true, 18)).toBe('v0.10 · Wet wood · 30 fps · 9 ms · zoom 18 · idle');
+    expect(devLabel('0.10', 'Wet wood', 30, 9, false, 10)).toBe('v0.10 · Wet wood · 30 fps · 9 ms');   // zoom only beyond 10
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.9'); expect(NAME).toBe('Name');
+    expect(VERSION).toBe('0.10'); expect(NAME).toBe('Wet wood');
   });
   it('starts visible for now', () => { expect(DEV_PANEL_VISIBLE).toBe(true); });
 });
@@ -93,6 +96,13 @@ describe('panel element', () => {
     expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
     p.frame(1 / 15, 4, true); expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms · idle');
     p.frame(1 / 30, 9, false); expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
+  });
+  it('shows the zoom only beyond 10', () => {
+    const el = fakeEl(), p = createDevPanel(el, '0.7', 'Quiet frames', true);
+    for (let i = 0; i < 16; i++) p.frame(1 / 30, 9, false, 8);
+    expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
+    p.frame(1 / 30, 9, false, 18); expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms · zoom 18');
+    p.frame(1 / 30, 9, false, 10); expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
   });
   it('can start hidden', () => {
     const el = fakeEl(); createDevPanel(el, '0.4', 'Dev panel', false);

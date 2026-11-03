@@ -70,7 +70,7 @@
  */
 import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
-import { createWood, CARRY_SLOW, dryness } from './wood.js';
+import { createWood, CARRY_SLOW, CARRY_STRIDE, dryness } from './wood.js';
 import { seaLevel, highWaters } from './tide.js';
 import { createSleep } from './sleep.js';
 import { createFibre, FIBRE_MAX } from './fibre.js';
@@ -200,7 +200,7 @@ export function createGame(world, spawn, opts = {}) {
         const dir = moveIntent(input, player);
         if (!dir && input.target) input.clearTarget();
         const load = (1 - CARRY_SLOW * wood.carried.length) * sleep.speed();
-        res = stepPlayer(world, player, dir, dt, input.run || !!(input.target && input.target.run), load, game.sea);
+        res = stepPlayer(world, player, dir, dt, input.run || !!(input.target && input.target.run), load, game.sea, 1 - CARRY_STRIDE * wood.carried.length);
         if (res.blocked && input.target) { blockedFor += dt; if (blockedFor > 0.5) input.clearTarget(); } else blockedFor = 0;
       }
     }

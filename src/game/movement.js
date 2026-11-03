@@ -47,9 +47,11 @@
  *   stick (input.stick, already a direction on the island), keys or target;
  *   keys walk relative to the screen, so they use input.yaw (the current
  *   view angle, see core/view; the starting view when missing)
- * stepPlayer(world, player, dir, dt, run, load?, sea?) -> { moved, distance, blocked }
+ * stepPlayer(world, player, dir, dt, run, load?, sea?, stride?) -> { moved, distance, blocked }
  *   Mutates player. load (default 1) scales the speed, for carrying
- *   (game/wood) and tiredness (game/sleep); sea is the sea level. `phase` advances with distance (for the walk cycle).
+ *   (game/wood) and tiredness (game/sleep); sea is the sea level. `phase` advances with distance (for the walk cycle);
+ *   stride (default 1) is the length of his step: a load makes it shorter
+ *   (game/wood CARRY_STRIDE), so the phase advances faster per metre.
  *
  * Depends on: core/view, world/constants, world/vegetation
  */
@@ -197,7 +199,7 @@ export function moveIntent(input, player) {
 
 const DEFLECT = [0, 0.5, -0.5, 1.0, -1.0, 1.35, -1.35];
 
-export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0) {
+export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0, stride = 1) {
   if (!dir) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: false }; }
   const base = (run ? RUN_SPEED : WALK_SPEED) * load * dt, here = { x: p.x, z: p.z, y: p.y };
   let best = null;
@@ -220,6 +222,6 @@ export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0) {
   p.x = nx; p.z = nz; p.y = w.H(p.x, p.z);
   p.moving = true; p.speed = dt > 0 ? step / dt : 0;
   const ta = Math.atan2(best.dx, best.dz); let d = ta - p.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); p.heading += d * Math.min(1, dt * 12);
-  p.phase += step * 5.2;
+  p.phase += step * 5.2 / Math.max(0.3, stride);
   return { moved: true, distance: step, blocked: false };
 }

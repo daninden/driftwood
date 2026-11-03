@@ -2,6 +2,9 @@
  * render/materials — toon shading, outlines and the painted terrain shader.
  *
  * toon(color, opts)   MeshToonMaterial with the shared 3-step gradient map
+ * wetToon(color, opts)  toon material for wet wood: the same, plus a thin, hard-edged
+ *                     lighter band where the surface mirrors the first directional
+ *                     light towards the eye (a slight wet sheen, in the toon style)
  * outlineMat          dark brown back-face hull, scaled copies give outlines
  * terrainMat(map)     toon material for a terrain tile; in the shader, steep
  *                     faces get painted rock: strata, cracks and ledges,
@@ -17,6 +20,23 @@ const gradMap = (() => {
 })();
 
 export const toon = (color, o) => new THREE.MeshToonMaterial(Object.assign({ color: color === undefined ? 0xffffff : color, gradientMap: gradMap }, o || {}));
+
+/** A toon material with a small, hard-edged highlight (wet wood); the band follows the sun or moon and fades with its light. */
+export const wetToon = (color, o) => {
+  const m = toon(color, o);
+  m.onBeforeCompile = sh => {
+    sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;', `vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;
+    #if NUM_DIR_LIGHTS > 0
+    {
+      vec3 hv = normalize(directionalLights[0].direction + vec3(0.0, 0.0, 1.0));
+      float sheen = smoothstep(0.90, 0.93, dot(normal, hv));
+      outgoingLight += sheen * directionalLights[0].color * 0.10;
+    }
+    #endif`);
+  };
+  m.customProgramCacheKey = () => 'wetToon';
+  return m;
+};
 export const outlineMat = new THREE.MeshBasicMaterial({ color: 0x2e2418, side: THREE.BackSide });
 
 const ROCK_GLSL = `#include <map_fragment>

@@ -8,12 +8,18 @@
  * On the summits it zooms out a further 1.6x, up to SUMMIT_MAX, as a reward
  * for the climb.
  *
- * stepZoom(level, steps) -> the new zoom level after some zoom steps
- *   (positive = further away), clamped to MIN_ZOOM..MAX_ZOOM. Pure.
+ * stepZoom(level, steps, max?) -> the new zoom level after some zoom steps
+ *   (positive = further away), clamped to MIN_ZOOM..max (default MAX_ZOOM). Pure.
+ * setZoomMax(max) sets the furthest zoom (main: core/view `zoomMax`, 25 while
+ *   the dev panel is visible, else 10); a level beyond it eases back to it.
  * turnView(angles, turn) -> new { yaw, pitch } after a turn { yaw, pitch }
  *   (radians), with the pitch clamped to PITCH_MIN..PITCH_MAX. Pure.
  * createCamera() -> { camera, follow(target, dt, onSummit), zoomBy(steps),
- *   turn({ yaw, pitch }), zoom, yaw, pitch, target, settling, pick(ndcX, ndcY, H) }
+ *   turn({ yaw, pitch }), pose, setPose(pose), setZoomMax(max), zoom, yaw, pitch, target, settling, pick(ndcX, ndcY, H) }
+ *   pose is the view the player has chosen, { yaw, tilt, zoom } (the goals
+ *   the camera eases towards, the turn wrapped into 0..2π, the zoom the player's
+ *   level without the summit's extra), for the save (0.10). setPose(pose) puts
+ *   the camera straight into such a pose, clamped, without easing (start-up).
  *   settling is true while position, zoom and angles are still easing towards
  *   their goals (main uses it to tell a quiet scene from a moving one).
  *   yaw and pitch are the current (eased) angles, for everything else that
@@ -25,12 +31,12 @@
  * Depends on: three, core/view
  */
 import * as THREE from 'three';
-import { PITCH, YAW, PITCH_MIN, PITCH_MAX } from '../core/view.js';
+import { PITCH, YAW, PITCH_MIN, PITCH_MAX, ZOOM_START, ZOOM_MIN, ZOOM_MAX, clampView } from '../core/view.js';
 
-export const GAME_ZOOM = 7, MIN_ZOOM = 5, MAX_ZOOM = 10, SUMMIT_FACTOR = 1.6, SUMMIT_MAX = 14;
+export const GAME_ZOOM = ZOOM_START, MIN_ZOOM = ZOOM_MIN, MAX_ZOOM = ZOOM_MAX, SUMMIT_FACTOR = 1.6, SUMMIT_MAX = 14;
 const R = 400, STEP = 1.1;
 
-export const stepZoom = (level, steps) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, level * Math.pow(STEP, steps)));
+export const stepZoom = (level, steps, max = MAX_ZOOM) => Math.min(max, Math.max(MIN_ZOOM, level * Math.pow(STEP, steps)));
 export const summitZoom = level => Math.min(SUMMIT_MAX, level * SUMMIT_FACTOR);
 export const turnView = (a, t) => ({ yaw: a.yaw + t.yaw, pitch: Math.min(PITCH_MAX, Math.max(PITCH_MIN, a.pitch + t.pitch)) });
 
@@ -38,7 +44,7 @@ export function createCamera() {
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 4000);
   const at = new THREE.Vector3(), goal = new THREE.Vector3();
   const state = { zoom: GAME_ZOOM, level: GAME_ZOOM, yaw: YAW, pitch: PITCH, ready: false, zoomGoal: GAME_ZOOM };
-  let aim = { yaw: YAW, pitch: PITCH };
+  let aim = { yaw: YAW, pitch: PITCH }, limit = MAX_ZOOM;
 
   function place() {
     const a = window.innerWidth / window.innerHeight, z = state.zoom;
@@ -51,7 +57,7 @@ export function createCamera() {
   function follow(target, dt, onSummit) {
     goal.set(target.x, target.y + 0.5, target.z);
     if (!state.ready) { at.copy(goal); state.ready = true; } else at.lerp(goal, Math.min(1, dt * 6));
-    state.zoomGoal = onSummit ? summitZoom(state.level) : state.level;
+    state.zoomGoal = onSummit ? Math.max(state.level, summitZoom(state.level)) : state.level;
     state.zoom += (state.zoomGoal - state.zoom) * Math.min(1, dt * 4);
     const k = Math.min(1, dt * 6); state.yaw += (aim.yaw - state.yaw) * k; state.pitch += (aim.pitch - state.pitch) * k;
     place();
@@ -68,9 +74,15 @@ export function createCamera() {
     for (let k = 0; k < 18; k++) { const m = (a + b) / 2; if (o.y + d.y * m < ground(o.x + d.x * m, o.z + d.z * m)) b = m; else a = m; }
     return { x: o.x + d.x * b, z: o.z + d.z * b };
   }
-  function zoomBy(steps) { if (steps) state.level = stepZoom(state.level, steps); }
+  function zoomBy(steps) { if (steps) state.level = stepZoom(state.level, steps, limit); }
+  function setZoomMax(max) { limit = Math.max(MAX_ZOOM, max); state.level = Math.min(state.level, limit); }
   function turn(t) { if (t && (t.yaw || t.pitch)) aim = turnView(aim, t); }
+  const pose = () => clampView({ yaw: aim.yaw, tilt: aim.pitch, zoom: state.level }, limit);
+  function setPose(p) {
+    const v = clampView(p, limit); if (!v) return;
+    aim = { yaw: v.yaw, pitch: v.tilt }; state.yaw = v.yaw; state.pitch = v.tilt; state.level = v.zoom; state.zoom = v.zoom; state.zoomGoal = v.zoom;
+  }
   /** True while the position, zoom or angles are still easing towards where they are going (or a new goal is set). */
   const settling = () => at.distanceToSquared(goal) > 1e-5 || Math.abs(state.zoomGoal - state.zoom) > 1e-3 || Math.abs(aim.yaw - state.yaw) > 1e-4 || Math.abs(aim.pitch - state.pitch) > 1e-4;
-  return { camera, follow, zoomBy, turn, pick, get settling() { return settling(); }, get yaw() { return state.yaw; }, get pitch() { return state.pitch; }, get zoom() { return state.zoom; }, get target() { return at; } };
+  return { camera, follow, zoomBy, turn, pick, setPose, setZoomMax, get pose() { return pose(); }, get settling() { return settling(); }, get yaw() { return state.yaw; }, get pitch() { return state.pitch; }, get zoom() { return state.zoom; }, get target() { return at; } };
 }

@@ -4,7 +4,8 @@
  *
  * Rules
  *   - The castaway carries at most CARRY_MAX pieces. Each piece carried
- *     slows walking and running by CARRY_SLOW (game/movement).
+ *     slows walking and running by CARRY_SLOW (game/movement) and shortens
+ *     his steps by CARRY_STRIDE (the walk cycle, render/hero).
  *   - A piece is picked up from the beach or from a pile; from a pile the
  *     top pieces are taken first, as many as fit.
  *   - Laying down puts everything carried at the castaway's feet: on a pile
@@ -48,6 +49,7 @@
  *   wood.state() -> { carried: [id], piles: [{ x, z, logs: [id] }], washed: [log],
  *     lost: [id], tide, nextId }   plain, for saving
  *   saved: such a state, to start from
+ * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, WASH_MAX, DRY_DAYS
  * dryness(log, total) -> 0 (just washed up) .. 1 (dry), total: days on the clock
  * logsNear(world, x, z, reach) -> the first logs of the tiles within reach of (x, z)
  * distToLog(log, x, z) -> { d, x, z }  distance to the log's axis and the nearest point on it
@@ -59,7 +61,8 @@ import { HALF, T, NT } from '../world/constants.js';
 import { FIRST_HIGH, PERIOD } from './tide.js';
 
 export const CARRY_MAX = 3;
-export const CARRY_SLOW = 0.06;   // per piece: three pieces walk at 82 %
+export const CARRY_SLOW = 0.12;   // per piece: three pieces walk at 64 %
+export const CARRY_STRIDE = 0.07; // per piece: his step gets this much shorter (three pieces: 79 %)
 export const PILE_JOIN = 1.0;     // laying down this close to a pile adds to it
 const PILE_R = 0.45;              // how far a pile reaches round its centre
 export const WASH_MAX = 2;        // at most this many new pieces per beach tile and high water

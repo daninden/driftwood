@@ -9,7 +9,10 @@
  * Saving (src/save): the game is saved to localStorage every SAVE_EVERY
  * seconds of play, when wood is laid down, a fire is lit or goes out, a torch
  * is planted or taken, or he falls asleep or wakes, and when the page is
- * hidden or closed. At start-up a valid save is laid over the generated
+ * hidden or closed, and shortly after the view (turn, tilt, zoom) stops
+ * changing (createViewSaver). The view is saved with it and restored at start-up
+ * straight into its pose, before the first tiles are chosen (no easing from the
+ * default). At start-up a valid save is laid over the generated
  * island, silently. With `?spawn`, `?time` or `?awake` (tests) nothing is
  * loaded or saved.
  * For tests and development only: `?spawn=x,z` starts somewhere else, and
@@ -36,6 +39,8 @@
  * The dev panel #dev (render/devPanel, src/version) shows version, name, fps,
  * the work time per frame and `idle` top right; the backtick key toggles it.
  * It is fed the real time between drawn frames and the ms update + render took.
+ * While it is visible the furthest zoom is 25 (core/view zoomMax), else 10; the
+ * panel then shows `zoom N` when the zoom is beyond 10.
  *
  * Frame pacing (render/framePacer): the loop runs at the screen's rate but
  * only updates and draws a frame when it is due: at most 30 a second on
@@ -68,7 +73,7 @@ import { createInput } from './game/input.js';
 import { createRestMark } from './render/restMark.js';
 import { createCarryMark } from './render/carryMark.js';
 import { createThumbStick, touchOnly } from './render/thumbStick.js';
-import { createDevPanel } from './render/devPanel.js';
+import { createDevPanel, DEV_PANEL_VISIBLE } from './render/devPanel.js';
 import { createNamePrompt } from './render/namePrompt.js';
 import { createDayLine, createWakeLine } from './render/nameLines.js';
 import { createInk } from './render/ink.js';
@@ -76,7 +81,8 @@ import { skyAt } from './render/sky.js';
 import { shouldAsk, dayNumber, dayLine, wakeLine } from './game/castaway.js';
 import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
 import { VERSION, NAME } from './version.js';
-import { createSaveStore, parseHash, withoutNew, isResetKey, momentKey, SAVE_EVERY } from './save.js';
+import { zoomMax } from './core/view.js';
+import { createSaveStore, parseHash, withoutNew, isResetKey, momentKey, createViewSaver, SAVE_EVERY } from './save.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
 import HeightWorker from './heightWorker.js?worker&inline';
@@ -100,6 +106,8 @@ async function boot() {
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
   const at = saved ? { x: saved.player.x, z: saved.player.z, y: world.H(saved.player.x, saved.player.z) } : spawn;   // where the view opens
   const view = await createIslandView(world, container, breathe, at);
+  view.setZoomMax(zoomMax(DEV_PANEL_VISIBLE));   // the dev panel (visible at the start) allows zooming out to 25
+  if (saved && saved.view) view.setPose(saved.view);   // silently, in the saved pose (before the tiles in view are chosen)
   await view.prepare(at, breathe);   // no simple stand-in tiles round the castaway at the start
   const opts = { ...(qt === null ? {} : { time: Number(qt) }), ...(qa === null ? {} : { sleep: { awake: Number(qa) } }) };
   let game;
@@ -124,11 +132,13 @@ async function boot() {
   };
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
+  input.yaw = view.yaw;
 
   createThumbStick(document.getElementById('stick'), input);
   let stopSaving = testing || !!asking, sinceSave = 0, moment = momentKey(game);
-  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay }); sinceSave = 0; } };
-  const autosave = dt => { sinceSave += dt; const m = momentKey(game); if (m !== moment || sinceSave >= SAVE_EVERY) { moment = m; save(); } };
+  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, view: view.pose }); sinceSave = 0; } };
+  const viewSaver = createViewSaver();
+  const autosave = dt => { sinceSave += dt; if (viewSaver.update(view.pose, dt)) save(); const m = momentKey(game); if (m !== moment || sinceSave >= SAVE_EVERY) { moment = m; save(); } };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
   window.addEventListener('pagehide', save);
   window.addEventListener('keydown', e => { if (isResetKey(e)) { stopSaving = true; store.clear(); location.reload(); } });
@@ -157,6 +167,7 @@ async function boot() {
     anchor = due.anchor;
     const real = (now - last) / 1000, dt = Math.min(maxDt(idle), real); last = now;
     const t0 = performance.now();
+    view.setZoomMax(zoomMax(dev.visible()));
     view.zoomBy(input.takeZoom());
     view.turn(input.takeTurn(dt));
     input.yaw = view.yaw;
@@ -164,7 +175,7 @@ async function boot() {
     autosave(dt);
     frames++;
     if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input })) quiet.poke(now);
-    dev.frame(real, performance.now() - t0, idle);
+    dev.frame(real, performance.now() - t0, idle, view.zoom);
   });
 }
 

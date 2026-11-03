@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.10 "Wet wood" — 2026-11-03
+
+- Wood that the sea has just brought looks wet until it is dry enough to burn: a dark, cool grey-brown with a slight sheen, on the beach, in a pile and under his arm. Then it bleaches to its own colour within a couple of minutes.
+- Under fresh wood on the beach lies a dark damp patch in the sand; it shrinks and fades as the wood dries and is gone when the wood will burn.
+- Carrying slows you more: 12 % per piece (three pieces: 64 %), with shorter steps and a slight stoop.
+- The view (turn, tilt and zoom) is remembered per island and comes back exactly as you left it; starting over, or an old save, gives the default view.
+- Dev: while the developer panel is visible you can zoom out to 25 instead of 10 (the panel then shows `zoom N` beyond 10); with the panel hidden the normal limit applies again.
+
 ## 0.9 "Name" — 2026-11-03
 
 - At the first start of an island the loading screen asks "What is your name?". Enter, or the small arrow, confirms; an empty answer means the castaway. The name is saved with the island, and starting over asks again.

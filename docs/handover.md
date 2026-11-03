@@ -4,16 +4,16 @@ Where the work stands, for the next session. Read `CLAUDE.md`, `docs/design.md` 
 
 ## Done and live on `main`
 
-Everything up to 0.9 "Name" is live: the fire and the torch, sleeping by the fire, wading, the inventory row, the name asked at the first start, the day line top left (`Dave, day 1`), the waking line, and the ink turning pale at night. Each version with its details is in `docs/versions.md`, the release log.
+Everything up to 0.10 "Wet wood" is live: wet wood that looks wet until it will burn (dark, cool, a slight sheen) with a damp patch in the sand, carrying that slows more (12 % a piece) with shorter steps and a stoop, and the view kept per island. Before that, up to 0.9 "Name": the fire and the torch, sleeping by the fire, wading, the inventory row, the name asked at the first start, the day line top left (`Dave, day 1`), the waking line, and the ink turning pale at night. Each version with its details is in `docs/versions.md`, the release log.
 
 ## Next, agreed with the user
 
 In this order, each with its decisions in `docs/design.md`:
 
-1. **0.10 "Wet wood"**: wood stays clearly wet until it is dry enough to burn, then bleaches quickly; a damp patch in the sand under fresh wood shrinks and disappears; carrying slows 12 % per piece (three pieces: 64 %) with shorter steps and a slight stoop; the view is saved per island; starting over or an old save starts in the default view. See `docs/design.md`, *Gathering driftwood* and *Camera and view*.
-2. **0.11 "Water"**: thirst and drinking, the drop mark, and the burnt fire place that stays visible about two days. See `docs/design.md`, *Basic needs*.
-3. **0.12 "Coconut"**: hunger, eating the nut when husking, the half-coconut mark. See `docs/design.md`, *Basic needs*.
-4. **0.13 "Lean-to"**: branches, the lean-to, sleeping under it. See `docs/design.md`, *Basic needs*.
+1. **0.11 "Water"**: thirst and drinking, the drop mark, and the burnt fire place that stays visible about two days. See `docs/design.md`, *Basic needs*.
+2. **0.12 "Coconut"**: hunger, eating the nut when husking, the half-coconut mark. See `docs/design.md`, *Basic needs*.
+3. **0.13 "Lean-to"**: branches, the lean-to, sleeping under it. See `docs/design.md`, *Basic needs*.
+4. **0.14 "Wildlife"**: crabs, fish and birds, atmosphere only (see *Wildlife* in `docs/design.md`).
 
 ## Open, not decided
 
