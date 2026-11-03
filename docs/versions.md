@@ -2,6 +2,11 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.13.2 "Chosen shadows" — 2026-11-03
+
+- The shadows settle on fine steps with soft edges: the shadow light turns in steps of 1/32 degree (was 1/16), never comes from lower than 15 degrees, the own soft filter has a radius of 1.5 texels, and the shadow camera keeps the tight fit. The user compared the variants by eye on a phone and chose these.
+- The temporary `?shadows=step,min,soft,fit` comparison parameter is gone, together with the alternatives it switched between (old hard filter, old loose and roomier shadow cameras, softer filter).
+
 ## 0.13.1 "Soft shadows" — 2026-11-03
 
 - Fixed: the shadow edges are no longer jagged and restless. The shadow map (still 2048 px) now covers only what is seen, measured across the light, so its texels are about 3 times finer on the sand with a low sun (the old square covered far more than the view). Its size changes in steps of 5 %, so zooming or turning does not make the edges shift, and it still snaps to whole texels so walking does not shimmer.

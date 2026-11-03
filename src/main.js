@@ -17,10 +17,7 @@
  * loaded or saved.
  * For tests and development only: `?spawn=x,z` starts somewhere else, and
  * `?time=t` starts at another time of day (0 midnight, 0.5 noon), and
- * `?awake=d` as if the castaway had been awake d days. Temporary:
- * `?shadows=step,min,soft,fit` (degrees, degrees, 0..2, 0..2) tries other shadow
- * settings (render/sky), e.g. `?shadows=0.25,11.54,0,0` is the 0.11.1 look and
- * `?shadows=0.03125,15,0,0` the 0.12.1 one (hard edges, loose shadow camera).
+ * `?awake=d` as if the castaway had been awake d days.
  *
  * The name (0.9): at the first start of an island (no test parameters, no save
  * with a name) the loading screen asks "What is your name?" (render/namePrompt,
@@ -86,7 +83,7 @@ import { createDevPanel, DEV_PANEL_VISIBLE } from './render/devPanel.js';
 import { createNamePrompt } from './render/namePrompt.js';
 import { createDayLine, createWakeLine } from './render/nameLines.js';
 import { createInk } from './render/ink.js';
-import { skyAt, setShadowLight, parseShadowParam } from './render/sky.js';
+import { skyAt } from './render/sky.js';
 import { shouldAsk, dayNumber, dayLine, wakeLine } from './game/castaway.js';
 import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
 import { VERSION, NAME } from './version.js';
@@ -105,7 +102,6 @@ async function boot() {
   const store = createSaveStore(seed);
   if (fresh) { store.clear(); try { history.replaceState(null, '', location.pathname + location.search + withoutNew(location.hash)); } catch (e) { /* keep the address */ } }
   const qs = new URLSearchParams(location.search), q = qs.get('spawn'), qt = qs.get('time'), qa = qs.get('awake');
-  const shadows = parseShadowParam(qs.get('shadows')); if (shadows) setShadowLight(shadows);   // temporary: compare shadow variants, `?shadows=step,min,soft,fit`
   const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no question, no loading, no saving
   const saved = testing ? null : store.load();
   const asking = shouldAsk({ testing, saved }) ? createNamePrompt(document.getElementById('ask')) : null;   // asked while the island loads

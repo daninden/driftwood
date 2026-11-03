@@ -15,27 +15,26 @@
  *
  * Shadow edges: three.js's PCF is replaced once, at start, by an own filter
  * (softPcf): 16 taps on a rotated spiral disc of a radius in texels
- * (SOFT_RADIUS), turned per screen pixel, which turns the jagged texel edges
- * into a narrow soft band. `?shadows=` soft 0 keeps the old hard PCF.
+ * (SOFT_RADIUS, 1.5), turned per screen pixel, which turns the jagged texel edges
+ * into a narrow soft band.
  *
  * createStage(container) -> { renderer, scene, hemi, sun, resize(), followSun(view, dir) }
  *   view { target, yaw, pitch, zoom, aspect } as for fitShadow; dir: unit vector { x, y, z } towards the light
  * snapToTexels(p, dir, texel, texelUp) -> { x, y, z }: p moved onto the texel grid of a light shining along dir (render/shadowFit)
  * shadowBias(far) -> depth bias worth BIAS metres for a shadow camera reaching to far
  * softPcf(chunk, radius) -> the three.js shadow chunk with its PCF branch replaced by the own filter (radius in texels)
- * SOFT_RADIUS -> filter radius in texels for soft 1 and 2
+ * SOFT_RADIUS -> filter radius in texels (1.5)
  *
- * Depends on: three, render/sky, render/shadowFit
+ * Depends on: three, render/shadowFit
  */
 import * as THREE from 'three';
-import { shadowLight } from './sky.js';
 import { fitShadow, snapToTexels } from './shadowFit.js';
 
 export { snapToTexels };
 export const BIAS = 0.04;   // metres along the light
 /** Depth bias for a shadow camera from near 1 to `far`: always BIAS metres. */
 export const shadowBias = far => -BIAS / (far - 1);
-export const SOFT_RADIUS = [0, 1.5, 2.5];   // by shadowLight.soft: 0 = three.js's hard PCF
+export const SOFT_RADIUS = 1.5;   // texels
 const PCF_OLD = /#if defined\( SHADOWMAP_TYPE_PCF \)[\s\S]*?(?=#elif defined\( SHADOWMAP_TYPE_PCF_SOFT \))/;
 /** The shadow chunk with its PCF branch replaced: 16 taps on a spiral disc of `radius` texels, turned per screen pixel (no pattern, no crawl). */
 export function softPcf(chunk, radius) {
@@ -57,14 +56,14 @@ export function softPcf(chunk, radius) {
 }
 let softDone = false;
 function installSoft(radius) {
-  if (softDone || !(radius > 0)) return; softDone = true;
+  if (softDone) return; softDone = true;
   THREE.ShaderChunk.shadowmap_pars_fragment = softPcf(THREE.ShaderChunk.shadowmap_pars_fragment, radius);   // before any material compiles
 }
 
 export function createStage(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0);
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; installSoft(SOFT_RADIUS[shadowLight.soft]);   // soft: temporary ?shadows= variant
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; installSoft(SOFT_RADIUS);
   container.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   const hemi = new THREE.HemisphereLight(0xe2ebf0, 0x8a7458, 0.6); scene.add(hemi);
@@ -78,7 +77,7 @@ export function createStage(container) {
   const st = new THREE.Vector3(), dir = new THREE.Vector3();
   function followSun(view, d) {
     dir.set(d.x, d.y, d.z).normalize();
-    const { centre, ha, hb } = fitShadow(view, dir, shadowLight.fit), size = sun.shadow.mapSize.x;
+    const { centre, ha, hb } = fitShadow(view, dir), size = sun.shadow.mapSize.x;
     const q = snapToTexels(centre, dir, ha * 2 / size, hb * 2 / size); st.set(q.x, q.y, q.z);
     const half = Math.max(ha, hb);
     sun.target.position.copy(st); const dist = half * 3 + 200;   // far enough that a low light still stands above the summits (casters are found by depth, not by the box)

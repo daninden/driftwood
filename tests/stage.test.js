@@ -50,18 +50,13 @@ describe('texel snapping with different texel sizes across and up', () => {
 describe('shadow camera fit', () => {
   const dir = (el, az) => ({ x: Math.cos(el) * Math.cos(az), y: Math.sin(el), z: Math.cos(el) * Math.sin(az) });
   const view = (o = {}) => ({ target: { x: 10, y: 1, z: -4 }, yaw: Math.PI / 4, pitch: Math.PI / 6, zoom: 7, aspect: 1.6, ...o });
-  it('keeps the old square fit as fit 0', () => {
-    const f = fitShadow(view(), dir(0.3, 1), 0);
-    expect(f.ha).toBe(24); expect(f.hb).toBe(24); expect(f.centre).toEqual({ x: 10, y: 1, z: -4 });
-    expect(fitShadow(view({ zoom: 25 }), dir(0.3, 1), 0).ha).toBe(80); expect(fitShadow(view({ zoom: 40 }), dir(0.3, 1), 0).hb).toBe(90);
-  });
   it('is much shorter across the up axis of a low sun, and no bigger than the old fit at normal zoom', () => {
-    const f = fitShadow(view(), dir(15 * Math.PI / 180, 1), 1);
+    const f = fitShadow(view(), dir(15 * Math.PI / 180, 1));
     expect(f.hb).toBeLessThan(f.ha / 2); expect(f.ha).toBeLessThanOrEqual(24);
   });
   it('covers the ground corners of the view (and the corners high above it) with room to spare', () => {
-    for (const el of [15, 40, 62]) for (const yaw of [0.3, 1.9, 4.4]) for (const fit of [1, 2]) {
-      const v = view({ yaw, zoom: 9 }), dr = dir(el * Math.PI / 180, 2.2), f = fitShadow(v, dr, fit), { r, u } = lightAxes(dr);
+    for (const el of [15, 40, 62]) for (const yaw of [0.3, 1.9, 4.4]) {
+      const v = view({ yaw, zoom: 9 }), dr = dir(el * Math.PI / 180, 2.2), f = fitShadow(v, dr), { r, u } = lightAxes(dr);
       const c = f.centre, cx = c.x * r[0] + c.z * r[2], cy = c.x * u[0] + c.y * u[1] + c.z * u[2];
       const cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
@@ -71,14 +66,13 @@ describe('shadow camera fit', () => {
       }
     }
   });
-  it('is bigger with fit 2 than fit 1, and grows with the zoom', () => {
+  it('grows with the zoom', () => {
     const d = dir(0.5, 1);
-    expect(fitShadow(view(), d, 2).ha).toBeGreaterThan(fitShadow(view(), d, 1).ha);
-    expect(fitShadow(view({ zoom: 10 }), d, 1).ha).toBeGreaterThan(fitShadow(view({ zoom: 5 }), d, 1).ha);
+    expect(fitShadow(view({ zoom: 10 }), d).ha).toBeGreaterThan(fitShadow(view({ zoom: 5 }), d).ha);
   });
   it('rounds the sizes up in steps, so the texel size holds while the view turns a little', () => {
     expect(roundUp(10)).toBeGreaterThanOrEqual(10); expect(roundUp(10)).toBeLessThan(10 * GROW + 1e-9); expect(roundUp(roundUp(10))).toBeCloseTo(roundUp(10), 9);
-    const d = dir(0.5, 1), a = fitShadow(view({ yaw: 0.7 }), d, 1), b = fitShadow(view({ yaw: 0.7001 }), d, 1);
+    const d = dir(0.5, 1), a = fitShadow(view({ yaw: 0.7 }), d), b = fitShadow(view({ yaw: 0.7001 }), d);
     expect(b.ha).toBe(a.ha); expect(b.hb).toBe(a.hb);
   });
 });
@@ -86,12 +80,12 @@ describe('shadow camera fit', () => {
 describe('own soft shadow filter', () => {
   const chunk = THREE.ShaderChunk.shadowmap_pars_fragment;
   it('replaces the PCF branch of the r128 chunk and nothing else', () => {
-    const out = softPcf(chunk, SOFT_RADIUS[1]);
+    const out = softPcf(chunk, SOFT_RADIUS);
     expect(out).not.toBe(chunk); expect(out).toContain('16.0'); expect(out).toContain('gl_FragCoord');
     expect(out).toContain('SHADOWMAP_TYPE_PCF_SOFT'); expect(out).toContain('VSMShadow'); expect(out).toContain('float getShadow');
-    expect(out).toContain((SOFT_RADIUS[1]).toFixed(3));
+    expect(out).toContain((SOFT_RADIUS).toFixed(3));
     expect(out.match(/texture2DCompare\( shadowMap, shadowCoord\.xy \+ vec2\( dx0, dy0 \)/g)).toBeNull();   // the 17 hard taps are gone
   });
   it('leaves a chunk without a PCF branch alone', () => { expect(softPcf('nothing here', 1.5)).toBe('nothing here'); });
-  it('is softer at 2 than at 1', () => { expect(SOFT_RADIUS[2]).toBeGreaterThan(SOFT_RADIUS[1]); expect(SOFT_RADIUS[0]).toBe(0); });
+  it('has a radius of 1.5 texels', () => { expect(SOFT_RADIUS).toBe(1.5); });
 });

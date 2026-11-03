@@ -15,20 +15,18 @@
  * same while the view turns or zooms a little; the centre is snapped to whole
  * texels (snapToTexels) so shadows do not shimmer while walking.
  *
- * FIT_OLD, FIT_TIGHT, FIT_LOOSE   the fit variants (`?shadows=` fourth value)
  * lightAxes(dir) -> { r, u }      the shadow camera's right and up axes ([x, y, z]) for a light towards dir
  * snapToTexels(p, dir, texel, texelUp = texel) -> { x, y, z }: p moved onto the texel grid of a light shining along dir
  * roundUp(x) -> x rounded up to the next step of GROW
- * fitShadow(view, dir, fit) -> { centre: {x, y, z}, ha, hb }
+ * fitShadow(view, dir) -> { centre: {x, y, z}, ha, hb }
  *   view { target, yaw, pitch, zoom, aspect }: the ortho view (radians; zoom is its half height in metres)
- *   dir: unit vector towards the light; fit: 0, 1 or 2
+ *   dir: unit vector towards the light
  *   centre: where the shadow camera looks (not yet snapped), ha / hb: half sizes across the light (right, up)
  *
  * Depends on: nothing
  */
-export const FIT_OLD = 0, FIT_TIGHT = 1, FIT_LOOSE = 2;
 export const GROW = 1.05;
-const BELOW = [3, 6], ABOVE = [0.8, 1.6], ABOVE_MIN = [5, 10], ABOVE_MAX = [20, 36], MARGIN = [0.4, 2];   // per fit 1 / 2 (index fit - 1): metres below the target, above it (times the zoom, limits), margin
+const BELOW = 3, ABOVE = 0.8, ABOVE_MIN = 5, ABOVE_MAX = 20, MARGIN = 0.4;   // metres below the target, above it (times the zoom, with limits), margin
 
 /** The shadow camera's right and up axes for a light towards `dir` (unit): right is up (0,1,0) x dir, up is dir x right. */
 export function lightAxes(dir) {
@@ -48,17 +46,12 @@ export function snapToTexels(p, dir, texel, texelUp = texel) {
 /** Round x up to the next power of GROW (so sizes change in steps of 5 %, not continuously). */
 export function roundUp(x) { return Math.pow(GROW, Math.ceil(Math.log(x) / Math.log(GROW) - 1e-9)); }
 
-export function fitShadow(view, dir, fit) {
+export function fitShadow(view, dir) {
   const { target, yaw, pitch, zoom, aspect } = view;
-  if (fit === FIT_OLD) {   // the 0.12.1 fit: a square round the target, 3.2 times the zoom
-    const half = Math.max(24, Math.min(90, zoom * 3.2));
-    return { centre: { x: target.x, y: target.y, z: target.z }, ha: half, hb: half };
-  }
-  const k = fit === FIT_LOOSE ? 1 : 0;
   const { r, u } = lightAxes(dir);
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   const right = [Math.cos(yaw), 0, -Math.sin(yaw)], up = [-sp * Math.sin(yaw), cp, -sp * Math.cos(yaw)], toCam = [cp * Math.sin(yaw), sp, cp * Math.cos(yaw)];
-  const below = BELOW[k], above = Math.max(ABOVE_MIN[k], Math.min(ABOVE_MAX[k], zoom * ABOVE[k]));
+  const below = BELOW, above = Math.max(ABOVE_MIN, Math.min(ABOVE_MAX, zoom * ABOVE));
   let amin = Infinity, amax = -Infinity, bmin = Infinity, bmax = -Infinity;
   for (const h of [-below, above]) for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
     const x = sx * zoom * aspect, y = sy * zoom, t = (h - y * cp) / sp;   // along the view ray until it reaches height h above the target
@@ -69,6 +62,6 @@ export function fitShadow(view, dir, fit) {
   const ac = (amin + amax) / 2, bc = (bmin + bmax) / 2, c = target.x * dir.x + target.y * dir.y + target.z * dir.z;
   return {
     centre: { x: ac * r[0] + bc * u[0] + c * dir.x, y: ac * r[1] + bc * u[1] + c * dir.y, z: ac * r[2] + bc * u[2] + c * dir.z },
-    ha: roundUp((amax - amin) / 2 + MARGIN[k]), hb: roundUp((bmax - bmin) / 2 + MARGIN[k]),
+    ha: roundUp((amax - amin) / 2 + MARGIN), hb: roundUp((bmax - bmin) / 2 + MARGIN),
   };
 }
