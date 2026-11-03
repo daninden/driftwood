@@ -30,7 +30,9 @@ const barAt = () => page.evaluate(() => { const f = document.querySelector('#loa
 await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || document.body.dataset.error || new DOMMatrix(getComputedStyle(f).transform).a > 0.25; }, null, { timeout: 300000, polling: 100 });
 await page.screenshot({ path: 'smoke-0.png' });
 await page.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
-await page.waitForTimeout(400);
+// The bar eases to full with a short CSS transition; without a GPU the first
+// frames are slow, so give it time instead of reading it after a fixed wait.
+await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || new DOMMatrix(getComputedStyle(f).transform).a >= 0.99; }, null, { timeout: 10000, polling: 100 }).catch(() => {});
 const bar = await barAt();
 if (bar < 0.99) errors.push('loading bar ended at ' + bar);
 const err = await page.evaluate(() => document.body.dataset.error);
