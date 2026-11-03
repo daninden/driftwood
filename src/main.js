@@ -9,6 +9,9 @@
  * The moon mark #rest (render/restMark) shows how rested the castaway is;
  * the row #carry next to it (render/carryMark) shows what he carries loose.
  *
+ * The dev panel #dev (render/devPanel, src/version) shows version, name and
+ * fps top right; the backtick key toggles it. It is fed the real frame time.
+ *
  * The height grids, the slowest part of generating the world, are built in
  * Web Workers (heightWorker, parallelHeights), one per spare core.
  *
@@ -32,6 +35,8 @@ import { createGame } from './game/game.js';
 import { createInput } from './game/input.js';
 import { createRestMark } from './render/restMark.js';
 import { createCarryMark } from './render/carryMark.js';
+import { createDevPanel } from './render/devPanel.js';
+import { VERSION, NAME } from './version.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
 import HeightWorker from './heightWorker.js?worker&inline';
@@ -54,6 +59,7 @@ async function boot() {
   const game = createGame(world, spawn, { ...(qt === null ? {} : { time: Number(qt) }), ...(qa === null ? {} : { sleep: { awake: Number(qa) } }) });
   const mark = createRestMark(document.getElementById('rest'));
   const carry = createCarryMark(document.getElementById('carry'));
+  const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
   const show = info => { mark.update(info.rest, game.sleep.asleep); carry.update({ fibre: game.fibre.carried }, performance.now() / 1000); return info; };
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
@@ -67,8 +73,9 @@ async function boot() {
   document.body.classList.add('ready');
   window.__driftwood = { world, game, view, input, ready: true, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const real = (now - last) / 1000, dt = Math.min(0.05, real); last = now;
     if (paused) { requestAnimationFrame(frame); return; }
+    dev.frame(real);
     view.zoomBy(input.takeZoom());
     view.turn(input.takeTurn(dt));
     input.yaw = view.yaw;
