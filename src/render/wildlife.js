@@ -16,7 +16,7 @@
  *           tips and tail, an orange beak and legs: a body and two wings that flap
  *           or glide (wings spread, tips up a little) or are folded back on the
  *           ground; a standing bird pecks by pitching its head down
- *   fish    a dark elongated shadow (0.45 to 0.8 m, darker and bigger since 0.17.3) lying on the water (a soft flat shape with a
+ *   fish    a dark elongated shadow (0.35 to 0.6 m since 0.17.6, darker since 0.17.3) lying on the water (a soft flat shape with a
  *           tail, a little wiggle), drawn over the water so it reads under the
  *           surface; it fades by shrinking and by turning pale
  *   jump    a small silver fish on an arc, with a splash where it goes in and where
@@ -36,7 +36,7 @@ import { toon, outlineMat } from './materials.js';
 import { WILD } from './palette.js';
 import { SPLASH_TIME } from '../game/wildlife.js';
 
-export const MAX_CRABS = 96, MAX_BIRDS = 40, MAX_FISH = 128, MAX_HOLES = 160;
+export const MAX_CRABS = 96, MAX_BIRDS = 40, MAX_FISH = 192, MAX_HOLES = 160;
 export const BIRD_SCALE = 0.5;   // 0.17.3: gulls half as big (30 cm long, half a metre across the wings)
 const CRAB_RISE = 0.02;   // the crab's body centre above the sand
 

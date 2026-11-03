@@ -7,7 +7,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
-import { coloniesOfTile, fishOfTile, birdCell, CELL, SEA_FISH } from '../src/game/habitats.js';
+import { coloniesOfTile, fishOfTile, birdCell, CELL, SEA_FISH, FISH_LEN, SEA_LEN } from '../src/game/habitats.js';
 import { createWildlife, ALIVE, SCARE, SAFE, HIDE, DART, BACK_TIME, FLUSH, FLOCK_FIRST } from '../src/game/wildlife.js';
 import { RANGE } from '../src/game/tide.js';
 import { crabGeometry, birdGeometries, flapAngle } from '../src/render/wildlife.js';
@@ -51,7 +51,7 @@ describe('where the animals live', () => {
       expect(g.fish.length).toBeGreaterThanOrEqual(2); expect(g.fish.length).toBeLessThanOrEqual(6);
       for (const f of g.fish) {
         const x = g.x + (g.kind === 'river' ? Math.cos(g.dir) * f.ox - Math.sin(g.dir) * f.oz : f.ox), z = g.z + (g.kind === 'river' ? Math.sin(g.dir) * f.ox + Math.cos(g.dir) * f.oz : f.oz);
-        if (g.kind === 'river') expect(g.lw - w.H(x, z)).toBeGreaterThanOrEqual(0.1); else if (g.kind === 'lagoon') { expect(w.Lat(x, z)).toBeLessThan(0); expect(w.H(x, z)).toBeLessThan(-0.2); } else { expect(w.Lat(x, z)).toBeLessThan(0); expect(w.H(x, z)).toBeLessThan(SEA_FISH[1]); expect(w.H(x, z)).toBeGreaterThan(SEA_FISH[0] - 0.5); }
+        if (g.kind === 'river') expect(g.lw - w.H(x, z)).toBeGreaterThanOrEqual(0.1); else if (g.kind === 'lagoon') { expect(w.Lat(x, z)).toBeLessThan(0); expect(w.H(x, z)).toBeLessThan(-0.2); } else { if (!(g.id >= 1000000 && g.id < 2000000)) expect(w.Lat(x, z)).toBeLessThan(0); expect(w.H(x, z)).toBeLessThan(SEA_FISH[1]); expect(w.H(x, z)).toBeGreaterThan(SEA_FISH[0] - 0.5); }
       }
     }
   });
@@ -166,10 +166,26 @@ describe('fish you can see (0.17.3)', () => {
     const sea = groups.filter(g => g.kind === 'sea');
     expect(sea.length).toBeGreaterThan(100);
     expect(sea.some(g => dist(g, spawn) <= 20)).toBe(true);
-    for (const g of sea) for (const q of where(g)) { expect(w.Lat(q.x, q.z)).toBeLessThan(0); expect(w.H(q.x, q.z)).toBeLessThanOrEqual(SEA_FISH[1]); expect(w.H(q.x, q.z)).toBeGreaterThanOrEqual(SEA_FISH[0] - 0.4); }
+    for (const g of sea) for (const q of where(g)) { if (!(g.id >= 1000000 && g.id < 2000000)) expect(w.Lat(q.x, q.z)).toBeLessThan(0); expect(w.H(q.x, q.z)).toBeLessThanOrEqual(SEA_FISH[1]); expect(w.H(q.x, q.z)).toBeGreaterThanOrEqual(SEA_FISH[0] - 0.4); }
   });
-  it('are a little bigger than before (0.45 m and up)', () => {
-    for (const g of groups) for (const f of g.fish) { expect(f.len).toBeGreaterThanOrEqual(0.45); expect(f.len).toBeLessThanOrEqual(0.76); }
+  it('are smaller than the first 0.17.6 try and as big as a hand to a forearm (river and lagoon 0.35 to 0.5 m, sea 0.4 to 0.6 m)', () => {
+    for (const g of groups) for (const f of g.fish) {
+      const [lo, sp] = g.kind === 'sea' ? SEA_LEN : FISH_LEN;
+      expect(f.len).toBeGreaterThanOrEqual(lo); expect(f.len).toBeLessThanOrEqual(lo + sp);
+    }
+    expect(FISH_LEN[0] + FISH_LEN[1]).toBeCloseTo(0.5, 5); expect(SEA_LEN[0] + SEA_LEN[1]).toBeCloseTo(0.6, 5);
+  });
+  it('has fish in the wide, slow river stretch where he starts and in the river mouth (0.17.6)', () => {
+    const rv = w.rivers[0], wideK = [], mouthK = [];
+    for (let k = rv.kMouth - 14; k < rv.kMouth; k++) wideK.push(rv.pts[k]);
+    for (let k = rv.kMouth; k < rv.kMouth + 18; k++) mouthK.push(rv.pts[k]);
+    const near = (pts, g, r) => pts.some(p => Math.hypot(p.x - g.x, p.z - g.z) < r);
+    expect(groups.filter(g => g.kind === 'river' && near(wideK, g, 4)).length).toBeGreaterThanOrEqual(2);
+    const mouth = groups.filter(g => g.kind === 'sea' && g.id >= 1000000 && g.id < 2000000 && near(mouthK, g, 4));
+    expect(mouth.length).toBeGreaterThanOrEqual(2);
+    for (const g of mouth) for (const q of where(g)) expect(w.H(q.x, q.z)).toBeLessThanOrEqual(SEA_FISH[1]);
+    const tight = groups.filter(g => g.kind !== 'lagoon' && dist(g, spawn) <= 20);
+    expect(tight.some(g => g.kind === 'river' || (g.id >= 1000000 && g.id < 2000000))).toBe(true);
   });
   it('are listed near the start beach by day, and a sea group darts off when he wades within 2 m', () => {
     const wl = createWildlife(w); run(wl, 1, ctx(spawn.x, spawn.z)); expect(wl.fish().length).toBeGreaterThan(0);

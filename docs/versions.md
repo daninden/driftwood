@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.17.6 "More fish" — 2026-11-03
+
+- Why fish were skipped near the start of seed 1337: river groups sat at every 9th river point and 20 % of those were dropped by the seed, so along the last 40 m of the river before the mouth (the wide, slow stretch where he starts, 4 to 9 m wide, 0.6 to 1.1 m deep) only three groups were left, and the mouth was excluded outright (`k < kMouth - 3`); past the mouth the channel is a strip about 8 m wide, which the random sea rules (random points per 40 m tile, bed 0.55 to 3 m deep) practically never hit. The depth and width checks themselves were not the cause.
+- River groups: 92 % of the points kept (was 80 %), up to the mouth (still every 9th point), depth up to 1.5 m allowed (was 1.2), fish spread over up to 1.5 m across (was 0.8), 2 to 4 fish per group (was 2 to 5). New: river mouth groups of 2 to 4 sea fish along the channel from the mouth out to sea (kind `sea`, ids `1050000 + k`, every 8th river point, same bed range `SEA_FISH`, PRNG per river point). Seed 1337: 340 groups (16 river, was 15), 21 within 40 m of the start beach, about 10 fish in one view of the river; the island and its fixture are unchanged.
+- Sizes: river and lagoon fish 35 to 50 cm, sea fish 40 to 60 cm (`FISH_LEN`, `SEA_LEN` in `game/habitats`), same dark silhouette. A first try at 1.5 times bigger (68 to 112 cm) was too big, the fish read as sharks next to the castaway, so the fix is placement, not size; note these sizes are slightly smaller than 0.17.3's 45 to 65 and 50 to 75 cm. The pool holds 192 (was 128).
+- Tests: fish in the wide stretch and in the mouth, sizes, fixture unchanged; the Lat check skips mouth groups (the carved channel has Lat about 0). Smoke: the fish shot (`smoke-28.png`) also requires river or mouth fish within 30 m.
+
 ## 0.17.5 "Palm roof" — 2026-11-03
 
 - Look only. The lean-to roof is now seven thin, uneven branches (was twelve; spacing, slant, length and thickness vary, seeded by position) with, as a last building step from progress 0.84, five big overlapping palm fronds laid over the ridge and branches one by one (`leantoFronds` in `render/leanto`; the palms' own frond geometry, material and tints, no outline). Seen from the default camera it reads as a roof of fronds, no longer as a gate or fence. No new material, no new rules, nothing in `game/`; the save format is unchanged.

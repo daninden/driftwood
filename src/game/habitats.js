@@ -10,15 +10,16 @@
  * below high water and 1 m above it, dry of the rivers): a few holes in the sand
  * and 3 to 5 crabs that belong to them. Colonies on the wet strip are only
  * out of their holes when the sea has gone down (low water).
- * Fish (0.17.3: more of them, 0.45 to 0.65 m): groups of 2 to 5 in shallow river water
- * (not at falls, a group about every 9 river points) and in the shallow lagoons inside the
- * island (shallow sea water with land all round); and groups of 3 to 6 (0.5 to 0.75 m)
+ * Fish (0.17.3: more of them; 0.17.6: 0.35 to 0.5 m): groups of 2 to 4 in shallow river water
+ * (not at falls, a group about every 9 river points, also in the wide, slow stretch up to the mouth) and in the shallow lagoons inside the
+ * island (shallow sea water with land all round); and groups of 3 to 6 (0.4 to 0.6 m)
  * in the open sea along the coast, over a bed 0.55 to 3 m below high water (SEA_FISH),
  * beyond the surf. Sea groups use a PRNG of their own, so the others keep their places.
+ * 0.17.6: groups of 2 to 4 sea fish also lie in the channel of a river mouth, from the mouth out to sea (kind 'sea').
  * Bird cells: 64 m squares of the coast with 2 to 4 seabirds that circle high
  * over a stretch of shore, with the direction to the nearest rocky shore.
  *
- * COLONY_MAX, CELL (64), SEA_FISH, FLY_SPACING, EDGE_F, FLY_GROUP
+ * COLONY_MAX, CELL (64), SEA_FISH, FISH_LEN, SEA_LEN, FLY_SPACING, EDGE_F, FLY_GROUP
  * isBeach(w, x, z) -> true on gentle sand where crabs can have a hole (also the wet strip down to 0.4 m below high water)
  * coloniesOfTile(w, tile) -> [colony]
  *   colony: { id, x, z, holes: [{ x, y, z, wet }], crabs: [{ id, hole, x, z, u }] }
@@ -53,6 +54,7 @@ import { HALF, T, NT } from '../world/constants.js';
 export const COLONY_MAX = 6;
 export const CELL = 64;
 export const FLY_SPACING = 14, EDGE_F = [0.2, 0.78], FLY_GROUP = [10, 30];
+export const FISH_LEN = [0.35, 0.15], SEA_LEN = [0.4, 0.2];   // length of a river or lagoon fish and of a sea fish: [least, spread] in m (0.17.6: 0.35 to 0.5 and 0.4 to 0.6, were 0.45 to 0.65 and 0.5 to 0.75 in 0.17.3, which were too big)
 export const SEA_FISH = [-3.0, -0.55];   // sea groups lie over a bed between 3 m and 0.55 m below high water
 
 /** Gentle ground on the coast where a crab can dig a hole; the wet strip counts too (down to 0.4 m below high water). */
@@ -94,23 +96,41 @@ function riverGroups(w) {
   let idx = riverIndex.get(w); if (idx) return idx;
   idx = new Map(); riverIndex.set(w, idx);
   w.rivers.forEach((rv, ri) => {
-    for (let k = 6; k < rv.kMouth - 3; k += 9) {
+    for (let k = 6; k < rv.kMouth; k += 9) {
       const p = rv.pts[k], r = mulberry32(hashInt(Math.round(p.x * 8), Math.round(p.z * 8), 223));
-      if (r() >= 0.8) continue;
+      if (r() >= 0.92) continue;
       if (rv.falls.some(f => k > f.top - 6 && k < f.base + 8)) continue;
       const a = rv.pts[Math.max(0, k - 2)], b = rv.pts[Math.min(rv.n - 1, k + 2)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
       const px = -(b.z - a.z) / l, pz = (b.x - a.x) / l, t = k / (rv.n - 1), hw = rv.W(t) / 2, lw = rv.LW(t);
-      const off = (r() - 0.5) * hw * 0.8, cx = p.x + px * off, cz = p.z + pz * off, dir = Math.atan2(a.z - b.z, a.x - b.x);   // upstream: from the mouth side towards the source
-      const n = 2 + Math.floor(r() * 4), fish = [];
+      const wide = Math.min(1.5, hw * 0.8), off = (r() - 0.5) * hw * 0.8, cx = p.x + px * off, cz = p.z + pz * off, dir = Math.atan2(a.z - b.z, a.x - b.x);   // upstream: from the mouth side towards the source
+      const n = 2 + Math.floor(r() * 3), fish = [];
       for (let i = 0; i < n; i++) {
-        const ox = (r() - 0.5) * 0.9, oz = (r() - 0.5) * Math.min(0.8, hw * 0.9), fx = cx + Math.cos(dir) * ox - Math.sin(dir) * oz, fz = cz + Math.sin(dir) * ox + Math.cos(dir) * oz;
-        if (lw - w.H(fx, fz) < 0.1 || lw - w.H(fx, fz) > 1.2) continue;   // only where there is water over the bed
-        fish.push({ ox, oz, ph: r() * 6.28, len: 0.45 + r() * 0.2 });
+        const ox = (r() - 0.5) * 0.9, oz = (r() - 0.5) * wide, fx = cx + Math.cos(dir) * ox - Math.sin(dir) * oz, fz = cz + Math.sin(dir) * ox + Math.cos(dir) * oz;
+        if (lw - w.H(fx, fz) < 0.1 || lw - w.H(fx, fz) > 1.5) continue;   // only where there is water over the bed (the wide, slow part is up to 1.1 m deep)
+        fish.push({ ox, oz, ph: r() * 6.28, len: FISH_LEN[0] + r() * FISH_LEN[1] });
       }
       if (fish.length < 2) continue;
       const tile = Math.floor((cz + HALF) / T) * NT + Math.floor((cx + HALF) / T);
       if (!idx.has(tile)) idx.set(tile, []);
       idx.get(tile).push({ id: 1000000 + ri * 100000 + k, kind: 'river', x: cx, z: cz, dir, lw, fish });
+    }
+    // the mouth: where the river bed runs on into the sea (it fades out over MOUTH_FADE), sea groups lie in the channel, which
+    // is too narrow for the random sea rules to hit; they use the same bed range as the sea groups
+    for (let k = rv.kMouth; k < Math.min(rv.n - 1, rv.kMouth + 18); k += 8) {
+      const p = rv.pts[k], r = mulberry32(hashInt(Math.round(p.x * 8), Math.round(p.z * 8), 227));
+      if (r() >= 0.85) continue;
+      const a = rv.pts[Math.max(0, k - 2)], b = rv.pts[Math.min(rv.n - 1, k + 2)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+      const px = -(b.z - a.z) / l, pz = (b.x - a.x) / l, hw = rv.W(k / (rv.n - 1)) / 2, off = (r() - 0.5) * hw * 0.8, cx = p.x + px * off, cz = p.z + pz * off;
+      const nf = 2 + Math.floor(r() * 3), fish = [];
+      for (let i = 0; i < nf; i++) {
+        const ox = (r() - 0.5) * 3, oz = (r() - 0.5) * 3, fy = w.H(cx + ox, cz + oz);
+        if (fy > SEA_FISH[1] || fy < SEA_FISH[0] - 0.4) continue;
+        fish.push({ ox, oz, ph: r() * 6.28, len: SEA_LEN[0] + r() * SEA_LEN[1] });
+      }
+      if (fish.length < 2) continue;
+      const tile = Math.floor((cz + HALF) / T) * NT + Math.floor((cx + HALF) / T);
+      if (!idx.has(tile)) idx.set(tile, []);
+      idx.get(tile).push({ id: 1000000 + ri * 100000 + 50000 + k, kind: 'sea', x: cx, z: cz, dir: r() * Math.PI * 2, fish });
     }
   });
   return idx;
@@ -140,7 +160,7 @@ export function fishOfTile(w, tile) {
         const ox = (r() - 0.5) * 2.4, oz = (r() - 0.5) * 2.4;
         const fy = w.H(x + ox, z + oz);
         if (fy > -0.2 || fy < -1.0 || w.Lat(x + ox, z + oz) >= 0) continue;   // only over the sea
-        fish.push({ ox, oz, ph: r() * 6.28, len: 0.45 + r() * 0.2 });
+        fish.push({ ox, oz, ph: r() * 6.28, len: FISH_LEN[0] + r() * FISH_LEN[1] });
       }
       if (fish.length < 2) continue;
       list.push({ id: base + n++, kind: 'lagoon', x, z, dir: r() * Math.PI * 2, fish });
@@ -157,7 +177,7 @@ export function fishOfTile(w, tile) {
       for (let i = 0; i < nf; i++) {
         const ox = (rs() - 0.5) * 3, oz = (rs() - 0.5) * 3, fy = w.H(x + ox, z + oz);
         if (fy > SEA_FISH[1] || fy < SEA_FISH[0] - 0.4 || w.Lat(x + ox, z + oz) >= 0) continue;
-        fish.push({ ox, oz, ph: rs() * 6.28, len: 0.5 + rs() * 0.25 });
+        fish.push({ ox, oz, ph: rs() * 6.28, len: SEA_LEN[0] + rs() * SEA_LEN[1] });
       }
       if (fish.length < 3) continue;
       list.push({ id: bs + ns++, kind: 'sea', x, z, dir: rs() * Math.PI * 2, fish });

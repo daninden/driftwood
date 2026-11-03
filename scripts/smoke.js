@@ -399,14 +399,16 @@ const fishShot = await page.evaluate(start => {
   p.x = start.x; p.z = start.z; p.y = world.H(p.x, p.z); step(1);
   const pose = view.pose; view.setPose({ yaw: pose.yaw, tilt: pose.tilt, zoom: 7 });
   const sea = wl.fish().filter(f => f.kind === 'sea').sort((a, b) => Math.hypot(a.x - start.x, a.z - start.z) - Math.hypot(b.x - start.x, b.z - start.z));
-  const f = sea[0]; if (!f) return { sea: 0, listed: wl.fish().length };
+  const mouthRiver = wl.fish().filter(f => f.kind === 'river' || (f.id >= 8000000 && f.id < 16000000)).length;   // river fish and the sea groups of the river mouth (ids 1000000 to 1999999, times 8)
+  const f = sea[0]; if (!f) return { sea: 0, listed: wl.fish().length, mouthRiver };
   const dx = f.x - start.x, dz = f.z - start.z, l = Math.hypot(dx, dz) || 1;
   if (l > 12) { p.x = start.x + dx / l * (l - 8); p.z = start.z + dz / l * (l - 8); p.y = world.H(p.x, p.z); }
   step(3);
-  return { sea: sea.length, listed: wl.fish().length, nearest: Math.round(l), fish: [f.x, f.z].map(v => +v.toFixed(1)), player: [p.x, p.z].map(v => +v.toFixed(1)) };
+  return { sea: sea.length, listed: wl.fish().length, mouthRiver, nearest: Math.round(l), fish: [f.x, f.z].map(v => +v.toFixed(1)), player: [p.x, p.z].map(v => +v.toFixed(1)) };
 }, start);
 console.log('fish by day', JSON.stringify(fishShot));
 if (!fishShot.sea) errors.push('no sea fish within 30 m of the start beach: ' + JSON.stringify(fishShot));
+if (!fishShot.mouthRiver) errors.push('no fish in the river or its mouth near the start beach (0.17.6): ' + JSON.stringify(fishShot));
 await shot('smoke-28.png', { quick: true });
 // Fireflies (0.17.4): a night shot by a lowland river among a group (smoke-29, also in the quick run). Set up directly:
 // stand 3.5 m from the middle of the nearest river group of fireflies, midnight.
