@@ -52,11 +52,11 @@ export const DRIFT = Object.freeze({ dry: [0xa8987c, 0x9a8a70, 0xb4a68c, 0x8e806
 export const COCO = Object.freeze([0x7a5a36, 0x6a4c2e, 0x8a6a3e]);
 export const FIRE = Object.freeze({
   flame: [0xfff0b0, 0xffc45a, 0xf27a2e], ember: 0xff7a32, char: [0x3a2e26, 0x4a3a2e, 0x2e2620], ash: 0x6e665c,
-  smoke: 0xe2dcd2, light: 0xffa456, glow: [255, 138, 58],
+  smoke: 0xb2aa9e, light: 0xffa456, glow: [255, 138, 58],
 });
 
 export const SKY = Object.freeze({
   sunNoon: 0xffe6c4, sunLow: 0xffc690, moon: 0xb4c6ec,
   fillDay: 0xe2ebf0, fillDusk: 0xcab4dc, fillNight: 0x8494c4,
-  gradeGolden: 0xffe6cc, gradeDusk: 0xd9b8d6, gradeNight: 0x5f6e9e,
+  gradeGolden: 0xffe6cc, gradeDusk: 0xd9b8d6, gradeNight: 0x4c587e,
 });

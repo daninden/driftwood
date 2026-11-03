@@ -1,33 +1,30 @@
-// Small pure pieces of the renderer: the window round the castaway, the
+// Small pure pieces of the renderer: the silhouette of the castaway, the
 // fading footprints, the rest mark and the surf following the tide.
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { cutoutParams, cutKeep, CUT_RADIUS, CUT_CORE_KEEP } from '../src/render/cutout.js';
+import { flameWorld, FLAME_LOCAL } from '../src/render/fire.js';
+import { SIL_OPACITY } from '../src/render/hero.js';
 import { printAlpha, MAX, FADE } from '../src/render/footprints.js';
 import { moonPath, markOpacity, CLEAR_BELOW } from '../src/render/restMark.js';
 import { carryItems, carryChanged, carryOpacity, createCarryMark, REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 import { foamWeights, FOAM_LEVELS } from '../src/render/water.js';
 
-describe('cutout window', () => {
-  const cam = () => { const c = new THREE.OrthographicCamera(-16, 16, 10, -10, 1, 1000); c.position.set(100, 200, 100); c.lookAt(0, 0, 0); c.updateMatrixWorld(); return c; };
-  it('is centred on the castaway, sized in metres, with its depth', () => {
-    const c = cam(), p = cutoutParams(c, 1600, 1000, { x: 0, y: 0, z: 0 });
-    expect(p.cx).toBeCloseTo(800); expect(p.cy).toBeCloseTo(500);
-    expect(p.r).toBeCloseTo(CUT_RADIUS * 1000 / 20);   // 20 m of view height over 1000 px
-    expect(p.depth).toBeCloseTo(Math.hypot(100, 200, 100));
+describe('silhouette', () => {
+  it('is an even, quiet shape: semi-transparent, in the opaque pass', () => {
+    expect(SIL_OPACITY).toBeGreaterThanOrEqual(0.35); expect(SIL_OPACITY).toBeLessThanOrEqual(0.5);
   });
-  it('moves with the castaway on screen', () => {
-    const c = cam(), a = cutoutParams(c, 1600, 1000, { x: 0, y: 0, z: 0 }), b = cutoutParams(c, 1600, 1000, { x: 0, y: 2, z: 0 });
-    expect(b.cy).toBeGreaterThan(a.cy);   // higher up in the world is higher on screen
-    expect(b.depth).toBeLessThan(a.depth);
-  });
-  it('is a veil, not a hole: thinned in the middle, full at the edge', () => {
-    expect(CUT_CORE_KEEP).toBeGreaterThan(0.2);
-    expect(cutKeep(0)).toBeCloseTo(CUT_CORE_KEEP);
-    expect(cutKeep(1)).toBe(1); expect(cutKeep(2)).toBe(1);
-    for (let d = 0.05; d <= 1; d += 0.05) expect(cutKeep(d)).toBeGreaterThanOrEqual(cutKeep(d - 0.05));
-    // outlines (core 0) never keep a pixel the leaves in front of them drop
-    for (let d = 0; d <= 1.2; d += 0.05) expect(cutKeep(d, 0)).toBeLessThanOrEqual(cutKeep(d));
+});
+
+describe('torch flame', () => {
+  it('sits at the flame, following the tilt and the parents of the torch', () => {
+    const parent = new THREE.Group(); parent.position.set(10, 2, -3);
+    const t = new THREE.Group(); t.position.set(1, 0, 0); parent.add(t);
+    const out = new THREE.Vector3();
+    flameWorld(t, out);
+    expect(out.x).toBeCloseTo(11); expect(out.y).toBeCloseTo(2 + FLAME_LOCAL.y); expect(out.z).toBeCloseTo(-3);
+    t.rotation.z = Math.PI / 2;   // tipped over: the flame is beside the foot, not above it
+    flameWorld(t, out);
+    expect(out.y).toBeCloseTo(2); expect(Math.abs(out.x - 11)).toBeCloseTo(FLAME_LOCAL.y);
   });
 });
 

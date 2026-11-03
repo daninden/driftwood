@@ -32,7 +32,7 @@ Explored earlier and dropped: 2D pixel art, plain low-poly and voxels.
 
 - **Colour:** warm, earthy tones. Sand, olive green, weathered wood. All colours live in `src/render/palette.js`.
 - **Ground:** a painted texture with brush strokes.
-- **Lighting:** toon shading in three light steps, bright midday light, soft warm colour grading and a light paper grain. The sun follows its own path through the day (see *Day and night*); it stands still in the world when you turn the view, so shadows stay on the ground.
+- **Lighting:** toon shading in three light steps, bright midday light, soft warm colour grading. The sun follows its own path through the day (see *Day and night*); it stands still in the world when you turn the view, so shadows stay on the ground.
 - **Outlines:** dark brown edges around trees, rocks, palm trunks and the castaway.
 - **Detail:** leaf clusters, grass tufts, pebbles, shells and driftwood, at the level of the original style C.
 - **Rock walls:** painted in the shader with strata, cracks and ledges, greyer higher up, so the texture never stretches on steep faces.
@@ -93,7 +93,7 @@ Making fire is deliberately hard: it takes preparation and effort, so a fire tha
 - **Whether it catches:** at the end the tuft is used up, and the fire catches or it does not. At best (dry wood, rested) a little more than half the attempts catch. Wet wood makes it much harder (the chance falls with the square of the pile's dryness), fresh wood never catches, and a tired castaway does worse (half the chance at the limit). A failed attempt leaves only a puff of smoke; the pile stays. Whether an attempt catches is fixed by the seed and the number of attempts, so it cannot be retried for luck.
 - **Burning:** the pile becomes a little tepee of charred wood with flames and rising smoke. Each piece burns about **2½ hours** of game time (wet wood half as long), so four pieces last most of a night; a fire holds at most eight pieces' worth. When the wood is gone it sinks to **embers** that glow for about 1½ hours, then it goes out and you start again. No counter: the size of the flames tells how much is left.
 - **Keeping it going:** click or tap the fire while carrying wood; the castaway lays one piece on it. That also works on the embers.
-- **Light:** a fire throws a warm, flickering light round it; at night a soft glow lies round it over the darkness. By day a thin column of smoke rises.
+- **Light:** a fire throws a warm, flickering light round it; at night a soft glow lies round it over the darkness. The light reaches about 14 m for a fire and 9 m for a torch, and sits exactly at the flame (also on the torch in his hand). By day a thin column of grey smoke rises.
 - **The flood** puts out a fire laid on the wet sand of low water.
 - **Warmth:** a fire close by lets the castaway sleep the night through (see *Sleep*).
 - **A torch:** click or tap a burning fire with empty hands and the castaway takes a burning brand out of it (it costs the fire half a piece's worth; not from embers). He holds it up in his left hand; it lights a small warm circle round him at night and burns about **two hours** of game time. With a torch he has no hand free for wood. A click or tap on the castaway sticks it in the ground in front of him, where it burns on as a light; a click or tap on it takes it up again. Lying down to sleep, he sticks it in the ground first. Wading in deeper than about 30 cm puts it out, and the flood puts out a torch stuck in the wet sand.
@@ -119,7 +119,7 @@ Making fire is deliberately hard: it takes preparation and effort, so a fire tha
 - **One day lasts 20 minutes of play.** A game starts in the middle of the morning.
 - **The sun** rises in the east, climbs over the south to about 62° and sets in the west. It is up for about 13 minutes. Low sun gives warm golden light and long shadows; at noon the light is plain style C.
 - **Dusk and dawn** last about a minute each around the horizon: the light turns lilac and mauve, the warm coast grading fades and colours lose some saturation.
-- **Night lasts about 5 minutes and is moonlit:** dark blue and dim, with soft moon shadows; the island is just readable. A fire and a torch light their surroundings. Darker nights (where only your fire gives light) could come now that there is fire; not decided yet.
+- **Night lasts about 5 minutes and is moonlit:** dark blue and dim, with soft moon shadows, about a third darker than before. Only the moon, a fire and a torch give light, so their circles stand out; the island and the castaway stay readable. Dusk and dawn stay smooth, golden hour is unchanged.
 - The light never comes from lower than about 12°, so shadows stay readable.
 - No clock on screen, no stars, moon disc or weather yet. The day drives the tide (see *Ebb and flow*) and sleeping speeds it up (see *Sleep*); what else it should mean for playing is still to be discussed.
 
@@ -170,7 +170,8 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - **Touch screens:** tap to walk to a spot, drag to steer, double tap to run there (hold and drag after the double tap to steer while running). Hold the castaway to sleep (see *Sleep*). Two fingers: pinch to zoom (same limits), twist to turn the view; the island turns with the fingers, and the castaway stops while two fingers are down. No tilting on a touch screen. **Thumb stick (0.5):** on touch-only devices (a coarse primary pointer and no fine pointer anywhere, so never on a desktop nor on a laptop with a touch screen and a mouse) a thumb stick sits fixed bottom right, inside the safe area, to walk with one finger. It is drawn like the moon mark: a thin dark brown ink ring (about 110 px across) with a dot, no fills, arrows or labels; faint (0.3) most of the time, clearer (0.75) under a thumb; the dot follows the thumb inside the ring and springs back on release. Its touch area is a little larger than the ring. Dragging from the centre walks that way relative to the screen, like the walking keys (up is away from the camera, whatever the view angle); a small dead zone (12 %) near the centre does nothing, pushing past 85 % of the radius runs, letting go stops. It wakes a sleeping castaway like a walking key. A finger on the stick is never a tap, hold or steering for the world and does not count towards the two-finger turn and pinch; a second finger elsewhere can still turn or zoom the view, and the stick keeps walking meanwhile. The browser's own page zoom is switched off.
 - On a summit the camera zooms out a further 1.6× on top of the player's zoom (at most 14), as a reward for the climb.
 - **Almost no interface:** no HUD, map or menu. What you see is the island (the wood you carry, the torch in his hand, how big the flames are). The exceptions are the touch-only thumb stick (see *Touch screens*), the faint moon that shows how long you can still go without sleep (see *Sleep*), the inventory row next to it (see *Carrying and the inventory*), the developer panel (see below), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
-- **Dev panel:** a developer aid, not part of the game: one faint line top right in the same dark brown ink (`v0.4 · Dev panel · 60 fps`: version, name, frames per second). Visible for now; later it is hidden by default (`DEV_PANEL_VISIBLE`) and the backtick key (`` ` ``) shows and hides it, as it already does now. Not remembered between sessions. The versions are listed in `docs/versions.md`.
+- **Dev panel:** a developer aid, not part of the game: one faint line top right in the same dark brown ink (`v0.4 · Dev panel · 60 fps`: version, name, frames per second). Visible for now; later it is hidden by default (`DEV_PANEL_VISIBLE`) and the backtick key (`` ` ``) shows and hides it, as it already does now. Since 0.7 it also shows the work time per frame in ms and the word `idle` while the game rests (`v0.7 · Quiet frames · 30 fps · 9 ms · idle`). Not remembered between sessions. The versions are listed in `docs/versions.md`.
+- **Quiet frames (0.7):** the game is easy on the battery. On touch-only devices it draws at most 30 frames a second (a desktop is not capped), and on every device at most 15 a second when nothing has happened for about 3 seconds (the castaway standing still, the view settled, no touch, key or wheel). Any input brings the full rate back at once. Fire flicker and the slow sun and tide do not count as something happening.
 
 ## Decisions
 
@@ -181,6 +182,18 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - **Saving (0.6, built):** automatic and silent, no menu and no message. One save **per island** (per seed), kept in the browser's local storage, so it belongs to this browser on this device; another browser or device starts fresh. The game is laid over the generated island at start-up: where he stands, the time, how long he has been awake or asleep, the wood carried, in piles and washed up, the coconuts taken, the fibre, fires, torches. Not saved: the view (turn, tilt, zoom), footprints, kneeling work in progress. **Start over** with Shift + backtick (`` Shift+` ``), or by opening the island with `#new` in the address (it starts fresh and `new` is removed from the address again). A save that cannot be read is ignored. A local save is all there is for now; a backend could come later behind the same interface (see `architecture.md`).
 - **Working method:** see `CLAUDE.md`.
 
+## Basic needs (decided, not built yet)
+
+- **General:** the castaway never dies. Needs make him slower and wear him out; at worst he collapses and sleeps, like exhaustion. Each need has a small ink mark in the row next to the moon, always shown (faint like the moon, clearer when it matters), no bars or numbers.
+- **Water (0.10 "Water"):** thirsty after about one day (20 minutes of play), very thirsty after a day and a half. Drinking: tap river water or its bank within reach with empty hands (wood or a torch is laid down or stuck in the ground first, as before sleep); he kneels and drinks a few seconds and is no longer thirsty. Sea and lagoon water don't help (he doesn't kneel). No carrying water yet.
+- **Water effects:** thirsty: a little slower, like tiredness; very thirsty: rest runs out twice as fast; after two days he collapses and sleeps, and wakes still thirsty. Mark: a drop that empties; his head hangs a little.
+- **Food (0.11 "Coconut"):** hungry after about two days, starving after four. Husking a coconut gives a tuft of fibre and he eats and drinks the nut on the spot (always, also when not hungry; no storing for now, may change later): one nut takes away about a third of the hunger and a little thirst. Coconuts grow back after some days, so you move along the palms.
+- **Food effects:** hungry: drilling fire costs more rest, a little slower; starving: rest runs out faster. Mark: half a coconut that empties. Later, not decided in detail: crabs at low water, fishing.
+- **Shelter (0.12 "Lean-to"):** new material: branches, lying under broadleaf trees and in the rain forest like driftwood on the beach. Picked up and carried under the arm (wood and branches together at most three). Dry; they burn too, shorter than driftwood; they grow back slowly.
+- **Building a lean-to:** a pile with at least 6 driftwood and 6 branches; hold it (or `F`) as when lighting a fire: with enough branches on it he builds instead. About an hour of game time (about a minute of play), costs rest. The lean-to rises in steps (posts, then a sloping roof of branches), open side towards the camera.
+- **Lean-to effect:** sleeping under a lean-to without fire: the cold sleep lasts 6 hours instead of 4 and he wakes about three quarters rested; with a fire within 3 m: the whole night, and he recovers faster than by a fire alone. The flood takes a lean-to built on the wet sand of low water. More than one may be built. Shown only in the world, not in the row.
+- **Fire place (with 0.10):** after a fire goes out, the burnt place (ash and charred ends) stays visible for about two days, fading slowly, then is gone; the flood washes it away sooner. It gives no light or warmth.
+
 ## Game ideas (not built, not decided)
 
 An early atmosphere prototype tried most of these. They are ideas until we decide otherwise.
@@ -189,12 +202,12 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 |---|---|
 | Gathering, later | Branches under trees, a barrel of nails at the wreck |
 | Digging | The ground really sinks; salt water on the beach, nails at the wreck |
-| Building | Lean-to (6 driftwood, 6 branches); fire is built (of driftwood only, see *Fire*) |
+| Building | Lean-to (see *Basic needs*); fire is built (of driftwood only, see *Fire*) |
 | Building, later | Rope from lianas or palm fibre, lashing, palisade, storage pit, raft |
 | Day and night | At night only the light of your fire; a fire can be seen from far away (also by the strangers) |
 | Strangers | A canoe lands on a distant beach and lights a fire; within 10 m they see you and flee; they leave footprints |
 | Journal | Messages as journal lines in an 18th-century hand |
-| Basic needs | Fresh water (rain, well, river), food (coconut, fish, crab); sleeping in a lean-to |
+| Food, later | Crabs at low water, fishing; storing coconuts |
 | Weather | A storm wrecks your lean-to but washes up new driftwood |
 | Map | Filled in by yourself, journal style; only what you have seen |
 | Ending | Build a raft and sail away, or stay |
@@ -204,7 +217,7 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 - Who are the strangers (mutineers, slave traders, other castaways)?
 - Saving: local only for now (0.6); a backend later?
 - Mood per terrace: weather over time (mist in the rain forest, wind on the summit).
-- What else should the day/night cycle mean for playing (food, strangers, darker nights now that there is fire)?
+- What else should the day/night cycle mean for playing (food, strangers)?
 - Should a fire mean anything for the strangers?
 - Loneliness: the castaway growing lonelier without a fire, shown without a meter (an idea, to be thought through).
 

@@ -13,7 +13,9 @@
  * turnView(angles, turn) -> new { yaw, pitch } after a turn { yaw, pitch }
  *   (radians), with the pitch clamped to PITCH_MIN..PITCH_MAX. Pure.
  * createCamera() -> { camera, follow(target, dt, onSummit), zoomBy(steps),
- *   turn({ yaw, pitch }), zoom, yaw, pitch, target, pick(ndcX, ndcY, H) }
+ *   turn({ yaw, pitch }), zoom, yaw, pitch, target, settling, pick(ndcX, ndcY, H) }
+ *   settling is true while position, zoom and angles are still easing towards
+ *   their goals (main uses it to tell a quiet scene from a moving one).
  *   yaw and pitch are the current (eased) angles, for everything else that
  *   depends on the view.
  *   pick returns the ground point under a screen position (normalised
@@ -35,7 +37,7 @@ export const turnView = (a, t) => ({ yaw: a.yaw + t.yaw, pitch: Math.min(PITCH_M
 export function createCamera() {
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 4000);
   const at = new THREE.Vector3(), goal = new THREE.Vector3();
-  const state = { zoom: GAME_ZOOM, level: GAME_ZOOM, yaw: YAW, pitch: PITCH, ready: false };
+  const state = { zoom: GAME_ZOOM, level: GAME_ZOOM, yaw: YAW, pitch: PITCH, ready: false, zoomGoal: GAME_ZOOM };
   let aim = { yaw: YAW, pitch: PITCH };
 
   function place() {
@@ -49,7 +51,8 @@ export function createCamera() {
   function follow(target, dt, onSummit) {
     goal.set(target.x, target.y + 0.5, target.z);
     if (!state.ready) { at.copy(goal); state.ready = true; } else at.lerp(goal, Math.min(1, dt * 6));
-    state.zoom += ((onSummit ? summitZoom(state.level) : state.level) - state.zoom) * Math.min(1, dt * 4);
+    state.zoomGoal = onSummit ? summitZoom(state.level) : state.level;
+    state.zoom += (state.zoomGoal - state.zoom) * Math.min(1, dt * 4);
     const k = Math.min(1, dt * 6); state.yaw += (aim.yaw - state.yaw) * k; state.pitch += (aim.pitch - state.pitch) * k;
     place();
   }
@@ -67,5 +70,7 @@ export function createCamera() {
   }
   function zoomBy(steps) { if (steps) state.level = stepZoom(state.level, steps); }
   function turn(t) { if (t && (t.yaw || t.pitch)) aim = turnView(aim, t); }
-  return { camera, follow, zoomBy, turn, pick, get yaw() { return state.yaw; }, get pitch() { return state.pitch; }, get zoom() { return state.zoom; }, get target() { return at; } };
+  /** True while the position, zoom or angles are still easing towards where they are going (or a new goal is set). */
+  const settling = () => at.distanceToSquared(goal) > 1e-5 || Math.abs(state.zoomGoal - state.zoom) > 1e-3 || Math.abs(aim.yaw - state.yaw) > 1e-4 || Math.abs(aim.pitch - state.pitch) > 1e-4;
+  return { camera, follow, zoomBy, turn, pick, get settling() { return settling(); }, get yaw() { return state.yaw; }, get pitch() { return state.pitch; }, get zoom() { return state.zoom; }, get target() { return at; } };
 }

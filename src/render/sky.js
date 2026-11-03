@@ -51,11 +51,11 @@ export function skyAt(time) {
   const day = ss(-0.1, 0.1, sun.y);
   const golden = ss(-0.04, 0.06, sun.y) * (1 - ss(0.12, 0.42, sun.y));
   const dusk = ss(-0.3, -0.02, sun.y) * (1 - ss(-0.02, 0.14, sun.y));
-  const sunI = ss(-0.04, 0.16, sun.y), moonI = 0.4 * ss(-0.02, 0.15, moon.y) * (1 - day);
+  const sunI = ss(-0.04, 0.16, sun.y), moonI = 0.32 * ss(-0.02, 0.15, moon.y) * (1 - day);
   const light = sunI >= moonI
     ? { dir: lift(sun), color: mix(C.sunNoon, C.sunLow, golden), intensity: sunI }
     : { dir: lift(moon), color: C.moon, intensity: moonI };
-  const fill = { color: mix(mix(C.fillNight, C.fillDay, day), C.fillDusk, dusk * 0.7), intensity: lerp(0.4, 0.6, day) + dusk * 0.15 + golden * 0.12 };
+  const fill = { color: mix(mix(C.fillNight, C.fillDay, day), C.fillDusk, dusk * 0.7), intensity: lerp(0.32, 0.6, day) + dusk * 0.15 + golden * 0.12 };
   let grade = mix(C.gradeNight, WHITE, day);
   grade = mix(grade, C.gradeGolden, golden * 0.5);
   grade = mix(grade, C.gradeDusk, dusk * 0.7);

@@ -20,12 +20,16 @@
  *     small fire: a second point light follows the torch in his hand.
  *
  * makeTorch() -> Group   a torch, foot at its origin; userData.flicker(time)
+ * FLAME_LOCAL, flameWorld(torch, out)   where the flame is, in the torch's
+ *   space and in the world (with the tilt of a held or askew torch); the
+ *   torch lights and their glow sit exactly there
  * createFireView(scene, container, fire) -> fireView
- *   fireView.update(dt, { total, day, camera, player, H })
+ *   fireView.update(dt, { total, day, camera, player, H, heroFlame })
  *     total: days on the clock; day: 1 by day .. 0 at night (render/sky);
  *     camera: for the glow on screen; player: for the lights, the wisp and
  *     the torch he carries (player.torch);
- *     H: the world's ground height
+ *     H: the world's ground height; heroFlame(out) -> out | null: the flame
+ *     of the torch in his hand in world space (render/hero `flame`)
  *
  * Depends on: three, render/materials, render/palette, game/clock, game/fire
  */
@@ -35,8 +39,10 @@ import { FIRE } from './palette.js';
 import { DAY_SECONDS } from '../game/clock.js';
 import { EMBERS } from '../game/fire.js';
 
-const PUFF_SECONDS = 7, WISPS = 7, LIGHT_RANGE = 9, NEAR = 60, GLOWS = 3;
-const TORCH_POW = 0.55, TORCH_RANGE = 6;
+const PUFF_SECONDS = 7, WISPS = 7, LIGHT_RANGE = 14, NEAR = 60, GLOWS = 3;
+const TORCH_POW = 0.55, TORCH_RANGE = 9;
+// Gentler than the inverse square (decay 2): the light is the same one metre from the flame, but reaches further, so the wider range shows.
+const LIGHT_DECAY = 1.5;
 
 export const smokeAmount = (f, s) => f.fuel > 0 ? 0.35 + 0.25 * (1 - s) : 0.5 * Math.min(1, f.embers / EMBERS + 0.2);
 
@@ -70,11 +76,19 @@ function createSmoke(scene, seed) {
         const u = ((t / 4.5 + i / WISPS) % 1 + 1) % 1, k = Math.sin(seed * 3 + i * 2.1);
         m.position.set(x + u * u * 1.4 + Math.sin(t * 0.7 + i) * 0.08 * u, y + 0.25 + u * 2.6, z + u * u * 0.6 + k * 0.1 * u);
         m.scale.setScalar(0.1 + u * 0.38);
-        m.material.opacity = amount * 0.55 * Math.sin(Math.PI * Math.min(1, u * 1.15)) * (1 - u * 0.4);
+        m.material.opacity = amount * 0.66 * Math.sin(Math.PI * Math.min(1, u * 1.15)) * (1 - u * 0.4);
       });
     },
     dispose() { scene.remove(g); puffs.forEach(m => m.material.dispose()); },
   };
+}
+
+/** Where the flame of a torch sits, in the torch's own space (the middle of the flame above the head). */
+export const FLAME_LOCAL = new THREE.Vector3(0, 0.68, 0);
+/** The flame of a torch object in world space, with its current tilt and parents (written to out). */
+export function flameWorld(torch, out) {
+  torch.updateWorldMatrix(true, false);
+  return out.copy(FLAME_LOCAL).applyMatrix4(torch.matrixWorld);
 }
 
 /** A torch: a short stick with a small flame at its head (also used by render/hero). */
@@ -92,6 +106,7 @@ export function makeTorch() {
 function createTorches(scene) {
   const views = new Map();
   return {
+    flame(tc, out) { return views.has(tc) ? flameWorld(views.get(tc), out) : null; },
     update(list, t, H) {
       for (const tc of list) if (!views.has(tc)) { const m = makeTorch(); m.rotation.z = 0.12; m.rotation.y = tc.id; scene.add(m); views.set(tc, m); }
       views.forEach((m, tc) => {
@@ -106,7 +121,7 @@ export function createFireView(scene, container, fire) {
   const views = new Map();   // fire -> its meshes
   const puffs = new Map();   // failed attempt -> smoke
   // always there, so no shader is rebuilt when a fire is lit or a torch taken
-  const light = new THREE.PointLight(FIRE.light, 0, LIGHT_RANGE, 2), handLight = new THREE.PointLight(FIRE.light, 0, TORCH_RANGE, 2); scene.add(light); scene.add(handLight);
+  const light = new THREE.PointLight(FIRE.light, 0, LIGHT_RANGE, LIGHT_DECAY), handLight = new THREE.PointLight(FIRE.light, 0, TORCH_RANGE, LIGHT_DECAY); scene.add(light); scene.add(handLight);
   const place = (pl, l, night) => {
     if (!l) { pl.intensity = 0; return; }
     pl.position.set(l.x, l.y, l.z); pl.intensity = l.pow * 1.1 * night * night * (1 + 0.08 * l.fl);   // by day the sun drowns it
@@ -116,7 +131,7 @@ export function createFireView(scene, container, fire) {
   const wisp = createSmoke(scene, 0.3);
   const glow = document.createElement('div'); glow.style.cssText = 'position:fixed;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0;';
   container.appendChild(glow);
-  const v = new THREE.Vector3();
+  const v = new THREE.Vector3(), flame = new THREE.Vector3();
   let clock = 0;
 
   function build(f) {
@@ -142,7 +157,7 @@ export function createFireView(scene, container, fire) {
   }
   function dropView(vw) { scene.remove(vw.g); vw.wood.children.forEach(c => c.material.dispose()); vw.smoke.dispose(); }
 
-  function update(dt, { total, day, camera, player, H }) {
+  function update(dt, { total, day, camera, player, H, heroFlame }) {
     clock += dt;
     const night = 1 - day;
     // fires come and go
@@ -180,11 +195,8 @@ export function createFireView(scene, container, fire) {
     else wisp.update(dt, 0, 0, 0, 0);
     // torches: stuck in the ground, and the one he carries (drawn by render/hero)
     torchView.update(fire.torches, clock, H);
-    for (const t of fire.torches) lights.push({ x: t.x, y: H(t.x, t.z) + 0.75, z: t.z, pow: TORCH_POW, range: TORCH_RANGE, fl: Math.sin(clock * 11 + t.id) });
-    if (player.torch) {
-      const hx = player.x + Math.sin(player.heading) * 0.15 - Math.cos(player.heading) * 0.2, hz = player.z + Math.cos(player.heading) * 0.15 + Math.sin(player.heading) * 0.2;
-      lights.push({ x: hx, y: (player.y || H(player.x, player.z)) + 0.8, z: hz, pow: TORCH_POW, range: TORCH_RANGE, fl: Math.sin(clock * 12), carried: true });
-    }
+    for (const t of fire.torches) { const p = torchView.flame(t, flame); if (p) lights.push({ x: p.x, y: p.y, z: p.z, pow: TORCH_POW, range: TORCH_RANGE, fl: Math.sin(clock * 11 + t.id), exact: true }); }
+    if (player.torch && heroFlame && heroFlame(flame)) lights.push({ x: flame.x, y: flame.y, z: flame.z, pow: TORCH_POW, range: TORCH_RANGE, fl: Math.sin(clock * 12), carried: true, exact: true });
     // the point lights: the carried torch, and the strongest other light near the castaway
     const near = lights.filter(l => Math.hypot(l.x - player.x, l.z - player.z) < NEAR);
     const weight = l => l.pow / (1 + Math.hypot(l.x - player.x, l.z - player.z) * 0.05);
@@ -193,7 +205,7 @@ export function createFireView(scene, container, fire) {
     // at night a warm glow round the nearest lights, over the night grading
     const rc = container.getBoundingClientRect(), [r, g, b] = FIRE.glow, grads = [];
     for (const l of near.sort((a, b) => weight(b) - weight(a)).slice(0, GLOWS)) {
-      v.set(l.x, l.y - 0.3, l.z).project(camera);
+      v.set(l.x, l.exact ? l.y : l.y - 0.3, l.z).project(camera);
       const sx = ((v.x + 1) / 2 * rc.width).toFixed(0), sy = (1 - v.y) / 2 * rc.height, px = l.range * (0.6 + 0.4 * l.pow) / (camera.top - camera.bottom) * rc.height * 0.5;
       const k = l.pow * (0.8 + 0.2 * l.fl), a = x => (x * k).toFixed(3);
       grads.push(`radial-gradient(circle ${(px * 0.12).toFixed(0)}px at ${sx}px ${(sy - px * 0.05).toFixed(0)}px, rgba(255,214,140,${a(0.95)}), rgba(255,170,90,${a(0.5)}) 55%, rgba(255,170,90,0) 100%)`);

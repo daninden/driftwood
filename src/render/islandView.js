@@ -7,12 +7,12 @@
  *   view.render(player, frameInfo, dt)
  *     frameInfo: { distance, terrain, time, sea } from game.update
  *     follows the player with camera and sun, sets the light for the time
- *     of day, streams detailed tiles, cuts the window in the vegetation round
- *     the castaway (render/cutout),
+ *     of day, streams detailed tiles,
  *     footprints, mood, sets the sea level of the tide, and draws the frame.
  *   view.zoomBy(steps)   zoom the camera (positive = further away), see render/camera
  *   view.turn({ yaw, pitch })   turn and tilt the view (radians), see render/camera
  *   view.yaw              the current view angle (for walking relative to the screen)
+ *   view.settling         true while the camera is still easing (position, zoom, angles)
  *   view.setGame(game)   from then on draws what can be gathered and made:
  *     the driftwood of game/wood (beach logs with the detailed tiles, piles,
  *     the castaway's load, drying: render/driftwood), the coconuts
@@ -45,7 +45,6 @@ import { SUMMIT_MAX } from './camera.js';
 import { T, HALF, NT } from '../world/constants.js';
 import { buildNearTile, disposeGroup } from './nearTile.js';
 import { createStreamer, tileInView } from './streaming.js';
-import { updateCutout } from './cutout.js';
 import { createHero } from './hero.js';
 import { createFootprints } from './footprints.js';
 import { createCamera } from './camera.js';
@@ -97,9 +96,8 @@ export async function createIslandView(world, container, progress, start) {
     streamer.pump(BUILD_MS);
     pumpFarTiles(far, tile => tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch), FAR_MS);
     updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
-    updateCutout(cam.camera, renderer, { x: player.x, y: hero.group.position.y + 0.4, z: player.z });
     const sky = skyAt(info.time);
-    if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H });
+    if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H, heroFlame: hero.flame });
     stage.followSun(cam.target, Math.max(24, Math.min(90, cam.zoom * 3.2)), sky.light.dir);
     mood.update(world.tierAt(t.L), dt, sky);
     renderer.render(scene, cam.camera);
@@ -158,5 +156,5 @@ export async function createIslandView(world, container, progress, start) {
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, setGame, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, pickGround, canvas: renderer.domElement, scene, stats, settle, prepare };
+  return { render, setGame, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, get settling() { return cam.settling; }, pickGround, canvas: renderer.domElement, scene, stats, settle, prepare };
 }

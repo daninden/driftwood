@@ -31,8 +31,8 @@ describe('render/sky', () => {
     expect(skyAt(0.5).grade).toEqual([1, 1, 1]);
   });
   it('always keeps some light, so the island stays visible at night', () => {
-    for (const t of times) { const s = skyAt(t); expect(s.light.intensity + s.fill.intensity).toBeGreaterThan(0.38); }
-    expect(Math.min(...skyAt(0).grade)).toBeGreaterThan(0.33);
+    for (const t of times) { const s = skyAt(t); expect(s.light.intensity + s.fill.intensity).toBeGreaterThan(0.3); }
+    expect(Math.min(...skyAt(0).grade)).toBeGreaterThan(0.27);
   });
   it('never lets the light come from below the minimum height', () => {
     for (const t of times) { const d = skyAt(t).light.dir; expect(d.y).toBeGreaterThan(0.19); expect(Math.hypot(d.x, d.y, d.z)).toBeCloseTo(1); }

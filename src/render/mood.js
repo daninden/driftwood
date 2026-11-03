@@ -7,7 +7,7 @@
  *   - a multiply layer that warms and deepens the beach
  *   - a mist gradient in the rain forest (lighter on the summit)
  *   - desaturation on the summit
- *   - paper grain and a soft vignette, always
+ *   - a soft vignette, always
  * Plus fog in the rain forest and cooler light from tier 3 up. Everything
  * blends over about 1.5 s when you change terrace.
  *
@@ -30,20 +30,12 @@ import { lerp } from '../core/math.js';
 const TINT = ['rgba(255,170,95,0.34)', 'rgba(255,190,120,0.24)', 'rgba(255,190,120,0.24)', 'rgba(160,190,225,0.18)', 'rgba(160,190,225,0.22)'];
 const MIST = [0, 0, 1, 0, 0.4];
 
-function grainURL() {
-  const c = document.createElement('canvas'); c.width = c.height = 220; const g = c.getContext('2d'); let a = 7;
-  const rr = () => (a = (a * 16807) % 2147483647) / 2147483647;
-  for (let k = 0; k < 280; k++) { g.fillStyle = rr() < 0.5 ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'; g.fillRect(rr() * 220 | 0, rr() * 220 | 0, 2, 2); }
-  return c.toDataURL();
-}
-
 export function createMood({ stage, canvas, container }) {
   const layer = (css) => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;pointer-events:none;' + css; container.appendChild(d); return d; };
   const tint = layer('mix-blend-mode:soft-light;transition:background-color 1.4s ease;');
   const mult = layer('mix-blend-mode:multiply;background:rgba(232,212,186,0.55);');
   const mist = layer('background:linear-gradient(rgba(236,240,232,0.16),rgba(236,240,232,0.05) 50%,rgba(236,240,232,0) 80%);opacity:0;transition:opacity 1.6s ease;');
   const daylight = layer('mix-blend-mode:multiply;background-color:rgb(255,255,255);');
-  layer('background-image:url(' + grainURL() + ');');
   layer('background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(20,15,10,0.3) 100%);');
 
   const fog = new THREE.Fog(0xe4ebe2, 4000, 5000); stage.scene.fog = fog;

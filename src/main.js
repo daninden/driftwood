@@ -22,8 +22,16 @@
  * On touch-only devices the thumb stick #stick (render/thumbStick) bottom right
  * walks and runs through the same input object.
  *
- * The dev panel #dev (render/devPanel, src/version) shows version, name and
- * fps top right; the backtick key toggles it. It is fed the real frame time.
+ * The dev panel #dev (render/devPanel, src/version) shows version, name, fps,
+ * the work time per frame and `idle` top right; the backtick key toggles it.
+ * It is fed the real time between drawn frames and the ms update + render took.
+ *
+ * Frame pacing (render/framePacer): the loop runs at the screen's rate but
+ * only updates and draws a frame when it is due: at most 30 a second on
+ * touch-only devices (same test as the thumb stick), and at most 15 a second
+ * when nothing has happened for 3 s (the castaway still, the camera settled,
+ * no input, awake). Input of any kind ends that at once. The game's dt is the
+ * time since the last drawn frame.
  *
  * The height grids, the slowest part of generating the world, are built in
  * Web Workers (heightWorker, parallelHeights), one per spare core.
@@ -32,7 +40,7 @@
  * (core/loading); it fades out with the class `ready` on <body>.
  *
  * window.__driftwood exposes { world, game, view, input, ready } for the smoke
- * test, plus three hooks so it does not have to play in real time (a
+ * test (and `frames`, a read-only count of drawn frames, for checking the pacing), plus three hooks so it does not have to play in real time (a
  * headless browser without a GPU draws only a few frames per second):
  *   pause(on)              stop or restart drawing in the frame loop
  *   step(seconds, until?)  run the game in fixed steps of 1/60 s without
@@ -48,8 +56,9 @@ import { createGame } from './game/game.js';
 import { createInput } from './game/input.js';
 import { createRestMark } from './render/restMark.js';
 import { createCarryMark } from './render/carryMark.js';
-import { createThumbStick } from './render/thumbStick.js';
+import { createThumbStick, touchOnly } from './render/thumbStick.js';
 import { createDevPanel } from './render/devPanel.js';
+import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
 import { VERSION, NAME } from './version.js';
 import { createSaveStore, parseHash, withoutNew, isResetKey, momentKey, SAVE_EVERY } from './save.js';
 import { createLoading } from './core/loading.js';
@@ -93,24 +102,35 @@ async function boot() {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
   window.addEventListener('pagehide', save);
   window.addEventListener('keydown', e => { if (isResetKey(e)) { stopSaving = true; store.clear(); location.reload(); } });
-  let last = performance.now(), paused = false;
+  let last = performance.now(), paused = false, frames = 0;
+  const cap = touchOnly(window.matchMedia ? q => window.matchMedia(q) : null) ? FRAME_CAP_TOUCH : 0;   // 0: no cap
+  const quiet = createIdleTracker(undefined, last);
+  let anchor = -Infinity;   // where the frame schedule stands (render/framePacer)
+  const woken = () => { const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
+  for (const type of ['pointerdown', 'pointermove', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove']) window.addEventListener(type, woken, { capture: true, passive: true });
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };
   const draw = () => { view.settle(game.player); for (let i = 0; i < 4; i++) view.render(game.player, show(game.update(input, 0)), 0.5); };
   view.render(game.player, show(game.update(input, 0)), 0);
   loading.done();
   document.body.classList.add('ready');
-  window.__driftwood = { world, game, view, input, ready: true, pause: on => { paused = on; }, step, draw };
+  window.__driftwood = { world, game, view, input, ready: true, get frames() { return frames; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
-    const real = (now - last) / 1000, dt = Math.min(0.05, real); last = now;
-    if (paused) { requestAnimationFrame(frame); return; }
-    dev.frame(real);
+    requestAnimationFrame(frame);
+    if (paused) { last = now; return; }
+    const idle = quiet.idle(now), due = nextFrame(now, anchor, targetFps(cap, idle));
+    if (!due.render) return;
+    anchor = due.anchor;
+    const real = (now - last) / 1000, dt = Math.min(maxDt(idle), real); last = now;
+    const t0 = performance.now();
     view.zoomBy(input.takeZoom());
     view.turn(input.takeTurn(dt));
     input.yaw = view.yaw;
     view.render(game.player, show(game.update(input, dt)), dt);
     autosave(dt);
-    requestAnimationFrame(frame);
+    frames++;
+    if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input })) quiet.poke(now);
+    dev.frame(real, performance.now() - t0, idle);
   });
 }
 

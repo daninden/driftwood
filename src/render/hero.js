@@ -9,9 +9,9 @@
  * The figure is read from far away, so the detail lives in the silhouette
  * and in flat colour areas (skin against cloth), not in small parts.
  *
- * Where something solid (a rock wall, a boulder, a trunk) hides the figure,
- * a light stippled silhouette shows through, so you never lose it.
- * Vegetation is cut away round it instead (render/cutout).
+ * Where anything hides the figure (a rock wall, a boulder, a trunk, a
+ * crown, a palm, a bush, a fern), an even, semi-transparent light silhouette
+ * (SIL_OPACITY, one flat shape, no pattern) shows through, so you never lose it.
  *
  * Carried driftwood is held under the left arm, at its real length (low
  * enough that the head and hat stay readable). When the castaway picks up or lays down wood, the upper
@@ -27,25 +27,36 @@
  * forth. A burning torch (player.torch) he holds up in front of him in his
  * left hand.
  *
- * createHero(scene) -> { group, update(player, wadeDepth, load?) }
+ * SIL_OPACITY   opacity of the silhouette (0..1)
+ * createHero(scene) -> { group, update(player, wadeDepth, load?), flame(out) }
  *   update copies position and heading from the player state
  *   (game/movement) and animates the walk cycle from player.phase. In water
  *   he sinks by wadeDepth * 0.6, but never deeper than 0.35 (his waist).
  *   load: the carried pieces as [{ len, rad, col }] (bottom first); the
  *   bundle is rebuilt when it changes.
+ *   flame(out) -> out | null: the flame of the torch in his hand in world
+ *   space (null without a torch), for the light of render/fire.
  *   The figure faces +z in its own space.
  *
- * Depends on: three, render/materials, render/palette
+ * Depends on: three, render/materials, render/palette, render/fire
  */
 import * as THREE from 'three';
 import { toon, outlineMat } from './materials.js';
 import { HERO } from './palette.js';
-import { makeTorch } from './fire.js';
+import { makeTorch, flameWorld } from './fire.js';
 
-const silMat = new THREE.MeshBasicMaterial({ color: HERO.silhouette, depthFunc: THREE.GreaterDepth, depthWrite: false });
-silMat.onBeforeCompile = sh => {
-  sh.fragmentShader = sh.fragmentShader.replace('void main() {', 'void main() {\n  vec2 sp = floor(gl_FragCoord.xy);\n  if (mod(sp.x + sp.y, 2.0) > 0.5) discard;');
-};
+// Drawn where something is in front of the figure (inverted depth test). The
+// stencil lets each pixel be painted once, so overlapping parts of the body
+// do not add up to a patchy shape. It blends like a transparent material but
+// stays in the opaque pass (custom blending), so renderOrder puts it before
+// the figure, which then covers it.
+export const SIL_OPACITY = 0.42;
+const silMat = new THREE.MeshBasicMaterial({
+  color: HERO.silhouette, opacity: SIL_OPACITY, depthFunc: THREE.GreaterDepth, depthWrite: false,
+  blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+  blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+  stencilWrite: true, stencilFunc: THREE.NotEqualStencilFunc, stencilRef: 1, stencilZPass: THREE.ReplaceStencilOp,
+});
 
 export function createHero(scene) {
   const group = new THREE.Group(), body = new THREE.Group(); group.add(body); body.scale.setScalar(0.62);
@@ -103,7 +114,7 @@ export function createHero(scene) {
   // A burning torch, held up in the left hand (render/fire draws its light).
   const torch = makeTorch(); torch.scale.setScalar(1 / 0.62); torch.position.set(0, -0.44, 0.02); torch.rotation.x = 1.0; torch.visible = false; shL.add(torch);
 
-  // Silhouette: where something solid hides the figure, a light stippled
+  // Silhouette: where something solid hides the figure, an even light
   // shape shows through. It is drawn after the world and before the figure
   // itself (renderOrder), with an inverted depth test.
   const silhouette = root => {
@@ -164,5 +175,6 @@ export function createHero(scene) {
     drill.rotation.y = clock * 22;   // spinning
     body.position.y = (p.moving ? Math.abs(Math.cos(p.phase)) * 0.03 : 0) - bend * 0.12 + ly * 0.07 - kn * 0.13;
   }
-  return { group, update };
+  const flame = out => (torch.visible ? flameWorld(torch, out) : null);
+  return { group, update, flame };
 }

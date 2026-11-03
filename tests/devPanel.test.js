@@ -33,13 +33,30 @@ describe('fps meter', () => {
   });
 });
 
+describe('work time', () => {
+  it('averages the work of the drawn frames, not the interval, and rounds', () => {
+    const m = createFpsMeter(); let f = null;
+    for (let i = 0; i < 30 && f === null; i++) f = m.add(1 / 30, i % 2 ? 8 : 11);
+    expect(f).toBe(30); expect(m.ms()).toBe(10);   // (8 + 11) / 2 = 9.5 -> 10, whatever the 33 ms apart
+  });
+  it('has no value without work times', () => {
+    const m = createFpsMeter(); for (let i = 0; i < 40; i++) m.add(1 / 60);
+    expect(m.ms()).toBeNull();
+  });
+});
+
 describe('label and version', () => {
   it('writes version, name and fps on one line', () => {
     expect(devLabel('0.4', 'Dev panel', 60)).toBe('v0.4 · Dev panel · 60 fps');
     expect(devLabel('0.4', 'Dev panel', null)).toBe('v0.4 · Dev panel · – fps');
   });
+  it('adds the work time in ms and, only when idling, idle', () => {
+    expect(devLabel('0.7', 'Quiet frames', 30, 9)).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
+    expect(devLabel('0.7', 'Quiet frames', 30, 9, true)).toBe('v0.7 · Quiet frames · 30 fps · 9 ms · idle');
+    expect(devLabel('0.7', 'Quiet frames', 15, 0, false)).toBe('v0.7 · Quiet frames · 15 fps · 0 ms');
+  });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.6'); expect(NAME).toBe('Saved');
+    expect(VERSION).toBe('0.8'); expect(NAME).toBe('Wider light');
   });
   it('starts visible for now', () => { expect(DEV_PANEL_VISIBLE).toBe(true); });
 });
@@ -69,6 +86,13 @@ describe('panel element', () => {
     expect(el.textContent).toBe('v0.4 · Dev panel · 60 fps');
     const w = el.writes(); for (let i = 0; i < 31; i++) p.frame(1 / 60);
     expect(el.writes()).toBe(w);   // same number again: no DOM write
+  });
+  it('shows the work time and idle, and writes at once when idle changes', () => {
+    const el = fakeEl(), p = createDevPanel(el, '0.7', 'Quiet frames', true);
+    for (let i = 0; i < 16; i++) p.frame(1 / 30, 9, false);
+    expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
+    p.frame(1 / 15, 4, true); expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms · idle');
+    p.frame(1 / 30, 9, false); expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
   });
   it('can start hidden', () => {
     const el = fakeEl(); createDevPanel(el, '0.4', 'Dev panel', false);

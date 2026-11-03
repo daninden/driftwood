@@ -17,11 +17,17 @@ All tests (195) and the smoke test pass.
 
 ## Next, agreed with the user
 
-Nothing agreed is waiting.
+In this order:
+
+1. **0.8 "Wider light"** (in progress): wider fire and torch light, no stippled veil, darker nights. See `docs/design.md`, *Fire* and *Day and night*.
+2. **0.9 "Name"**: name asked at first start, saved per island, shown in the top left and on waking; ink marks turn pale at night. See `docs/design.md`, *Decisions*.
+3. **0.10 "Water"**, with the lasting fire place. See `docs/design.md`, *Basic needs*.
+4. **0.11 "Coconut"**: food from coconuts. See `docs/design.md`, *Basic needs*.
+5. **0.12 "Lean-to"**: branches and the lean-to shelter. See `docs/design.md`, *Basic needs*.
 
 ## Open, not decided
 
-See *Open questions* in `docs/design.md`: loneliness without a fire (to be thought through with the user, without a meter), darker nights (now that fire and torch give light), what a fire means for the strangers.
+See *Open questions* in `docs/design.md`: loneliness without a fire (to be thought through with the user, without a meter), what a fire means for the strangers.
 
 ## Notes
 

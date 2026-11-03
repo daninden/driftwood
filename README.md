@@ -73,7 +73,7 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 - **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom
 - **Shift + `**: start over (forget this island's save and begin again)
-- **`** (backtick): show or hide the developer panel (version, name, frame rate)
+- **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame)
 
 ## More
 
