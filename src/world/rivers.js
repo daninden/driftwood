@@ -9,13 +9,22 @@
  *      little wiggle, sampled every 0.5 units.
  *   3. The water level along the river is a running minimum of the ground,
  *      minus 0.45. Where it drops fast (> 1.6 over 6 samples) a fall is marked.
- *   4. A distance field (RD distance, RT position along, RI river index) is
- *      built around the river, and the bed and banks are carved into HG.
- *      Beside each waterfall a rough scramble route is carved as well.
+ *   4. Along the middle reach 2 to 4 fords are placed (fixed by the noise of
+ *      the seed): short stretches, away from the falls and the deep
+ *      stretch towards the sea, where the bed rises to FORD_DEPTH below the
+ *      water.
+ *   5. A distance field (RD distance, RT position along, RI river index) is
+ *      built around the river, and the bed and banks are carved into HG
+ *      (shallow where the river is narrow, near its source, and on the
+ *      fords). Beside each waterfall a rough scramble route is carved as well.
  *
  * computeRivers({ HG, LG, noise, HL }) -> { rivers, RD, RT, RI }
  *   Mutates HG (carving). Each river: { pts, n, main, RL, kMouth, tMouth,
- *   falls: [{ top, base, drop }], W(t), L(t), LW(t) }
+ *   falls: [{ top, base, drop }], fords: [{ k0, k1 }], W(t), L(t), LW(t),
+ *   fordAt(k) }
+ *     fords  stretches of samples k0..k1 where the bed is shallow
+ *     fordAt(k) 0..1 how much sample position k (may be fractional) lies on a
+ *            ford (1 on it, easing to 0 over FORD_RAMP samples beside it)
  *     W(t)  river width at t (0 = source, 1 = end)
  *     L(t)  water level (can be below 0 past the mouth); LW(t) = max(L, 0)
  *
@@ -29,6 +38,11 @@ import { S, HALF, GR, NG } from './constants.js';
 import { sampleGrid } from './heightfield.js';
 
 const CG = 4, NC = Math.round(S / CG) + 1;
+export const FORD_DEPTH = 0.22;   // water depth over a ford's bed
+export const FORD_HALF = 4;       // a ford is 2 * FORD_HALF + 1 samples (4 m) long
+export const FORD_RAMP = 3;       // samples over which the bed eases down on either side
+/** Bed depth below the water at the river's centre, from its width: shallow where it is narrow. */
+export const bedDepth = w => 0.3 + 0.1 * w - 0.14 * ss(1.45, 0.95, w);
 const hsm = L => L < 1 ? L * 7 : 7 + (L - 1) * 6;
 
 /** Rocky coast mask: where the shore is rock instead of beach (0..1). */
@@ -114,12 +128,13 @@ export function computeRivers({ HG, LG, noise, HL }) {
         rv.falls.push({ top: k, base: e + 2, drop: rv.RL[k - 3] - rv.RL[e + 3] }); k = e;
       }
     }
+    placeFords(rv, ri, vnoise);
   });
 
   // carve the beds, banks and the scramble routes beside the falls
   for (let id = 0; id < NG * NG; id++) {
     const d = RD[id]; if (d > 13) continue;
-    const rv = rivers[RI[id]], t = RT[id], w = rv.W(t), hw = w / 2, L = rv.L(t), dep = 0.3 + 0.1 * w;
+    const rv = rivers[RI[id]], t = RT[id], w = rv.W(t), hw = w / 2, L = rv.L(t), dep = lerp(bedDepth(w), FORD_DEPTH, rv.fordAt(t * (rv.n - 1)));
     const cy = d < hw ? L - dep * (1 - (d / hw) ** 2) + 0.08 * (d / hw) ** 2 : L + 0.08 + (d - hw) * 0.75;
     if (cy < HG[id]) HG[id] = cy;
     for (const fl of rv.falls) {
@@ -130,4 +145,31 @@ export function computeRivers({ HG, LG, noise, HL }) {
     }
   }
   return { rivers, RD, RT, RI };
+}
+
+/**
+ * The middle reach: samples where the river is too deep to wade (where
+ * bedDepth is more than FORD_DEPTH + 0.13), at least 8 samples from a fall,
+ * and above the deep stretch towards the sea. 2 to 4 fords are spread over
+ * it, at least FORD_GAP samples apart (fewer if it is too short).
+ */
+const FORD_GAP = 6;
+function placeFords(rv, ri, vnoise) {
+  const n = rv.n, kEnd = rv.main ? Math.floor((rv.tMouth - 0.07) * (n - 1)) : rv.kMouth - 4;
+  const ok = new Uint8Array(n);
+  for (let k = 0; k < n; k++) {
+    const t = k / (n - 1);
+    ok[k] = k <= kEnd && bedDepth(rv.W(t)) > FORD_DEPTH + 0.13 && rv.RL[k] > 0.15 && !rv.falls.some(f => k > f.top - 8 && k < f.base + 8) ? 1 : 0;
+  }
+  const centres = [], span = FORD_HALF + FORD_RAMP;
+  for (let k = span; k < n - span; k++) { let all = true; for (let j = k - span; j <= k + span && all; j++) all = !!ok[j]; if (all) centres.push(k); }
+  rv.fords = [];
+  const want = 2 + Math.min(2, Math.floor(vnoise(ri * 7.3 + 3.1, 11.7) * 3)), chunk = centres.length / want;
+  for (let f = 0; f < want; f++) {
+    const prev = rv.fords.length ? rv.fords[rv.fords.length - 1].k1 + FORD_GAP + FORD_HALF : -1;
+    const target = Math.max(prev, centres[Math.floor(chunk * (f + 0.2 + 0.6 * vnoise(ri * 5.1 + f * 1.7, 23.3)))]);
+    const k = centres.find(c => c >= target); if (k === undefined) break;
+    rv.fords.push({ k0: k - FORD_HALF, k1: k + FORD_HALF });
+  }
+  rv.fordAt = k => { let f = 0; for (const fd of rv.fords) f = Math.max(f, ss(fd.k0 - FORD_RAMP, fd.k0, k) * ss(fd.k1 + FORD_RAMP, fd.k1, k)); return f; };
 }

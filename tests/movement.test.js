@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { passageSpots, startSpot } from '../src/world/spots.js';
-import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt, obstaclesNear, pushOut, bushFactor, WALK_SPEED, RUN_SPEED, STONE_MIN, BUSH_SLOW } from '../src/game/movement.js';
+import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt, obstaclesNear, pushOut, bushFactor, WALK_SPEED, RUN_SPEED, STONE_MIN, BUSH_SLOW, WADE_MAX } from '../src/game/movement.js';
 import { CAMDIR, basis } from '../src/core/view.js';
 import { bushSize } from '../src/world/vegetation.js';
 
@@ -152,5 +152,48 @@ describe('bushes', () => {
   });
   it('gives every bush a size from its place, the same every time', () => {
     for (const b of bushes()) { const s = bushSize(b); expect(s).toBe(bushSize({ ...b })); expect(s).toBeGreaterThan(0.2); expect(s).toBeLessThan(0.75); }
+  });
+});
+
+describe('wading rivers', () => {
+  const perp = (rv, k) => { const a = rv.pts[Math.max(0, k - 2)], b = rv.pts[Math.min(rv.n - 1, k + 2)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1; return { x: -(b.z - a.z) / l, z: (b.x - a.x) / l }; };
+  const side = (rv, k, p) => { const c = rv.pts[k], q = perp(rv, k); return (p.x - c.x) * q.x + (p.z - c.z) * q.z; };
+  /** Walk straight across river rv at sample k from the -perp bank, trying a few offsets along the river; true if any attempt ends on the far bank, out of the water. */
+  function crosses(rv, k, offs = [0, 2, -2, 4, -4]) {
+    const q = perp(rv, k), hw = rv.W(k / (rv.n - 1)) / 2, c = rv.pts[k];
+    for (const off of offs) {
+      const kk = Math.max(0, Math.min(rv.n - 1, k + off)), r = rv.pts[kk], qq = perp(rv, kk), h = rv.W(kk / (rv.n - 1)) / 2;
+      const p = createPlayer({ x: r.x - qq.x * (h + 1.5), z: r.z - qq.z * (h + 1.5), y: 0 }); p.y = w.H(p.x, p.z);
+      if (terrainAt(w, p.x, p.z).inRiver) continue;
+      for (let i = 0; i < 12 * 60 && side(rv, kk, p) < h + 0.8; i++) stepPlayer(w, p, qq, 1 / 60);
+      if (side(rv, kk, p) >= h + 0.8 && !terrainAt(w, p.x, p.z).inRiver) return true;
+    }
+    return false;
+  }
+  it('stops at waist depth', () => {
+    const rv = w.rivers[0], k = Math.floor((rv.fords[0].k0 + rv.fords[0].k1) / 2) - 20, c = rv.pts[k], t = terrainAt(w, c.x, c.z);
+    expect(t.inRiver && t.depth).toBeGreaterThan(WADE_MAX);
+    const q = perp(rv, k), a = { x: c.x + q.x * 3, z: c.z + q.z * 3 }; a.y = w.H(a.x, a.z);
+    expect(stepFactor(w, a, c.x, c.z)).toBe(0);
+    expect(stepFactor(w, { x: c.x, z: c.z, y: t.y }, c.x + q.x * 0.1, c.z + q.z * 0.1)).toBeGreaterThan(0);   // already deep: you can wade back out
+  });
+  it('can be crossed at every ford', () => {
+    for (const rv of w.rivers) for (const fd of rv.fords) expect(crosses(rv, Math.round((fd.k0 + fd.k1) / 2))).toBe(true);
+  });
+  it('cannot be crossed in the middle reach beside the fords or in the deep stretch', () => {
+    for (const rv of w.rivers) {
+      let kd = -1, best = 0;   // the deepest centre-line sample of the middle reach, clear of fords and falls
+      for (let k = 0; k < rv.kMouth - 8; k++) {
+        const c = rv.pts[k], d = rv.LW(k / (rv.n - 1)) - w.H(c.x, c.z);
+        if (d > best && [-4, 4].every(o => rv.fordAt(k + o) === 0) && rv.fordAt(k) === 0 && !rv.falls.some(f => k > f.top - 6 && k < f.base + 6)) { best = d; kd = k; }
+      }
+      expect(best).toBeGreaterThan(WADE_MAX + 0.05);
+      expect(crosses(rv, kd, [0, 1, -1, 2, -2])).toBe(false);
+      expect(crosses(rv, rv.kMouth - 2, [0, 1, -1, 2, -2])).toBe(false);   // at the mouth
+    }
+  });
+  it('can be waded anywhere upstream', () => {
+    expect(crosses(w.rivers[0], 10)).toBe(true);
+    if (w.rivers[1]) expect(crosses(w.rivers[1], Math.max(8, Math.floor(w.rivers[1].falls[0] ? w.rivers[1].falls[0].top - 10 : 10)))).toBe(true);
   });
 });

@@ -5,6 +5,10 @@
  *   river ribbons: vertex colour (white where it runs fast or falls) and a
  *     per-vertex alpha that fades at the banks; at the mouth the water runs
  *     down with the tide to wherever the sea stands, and fades into it
+ *   fords (world/rivers) are recognisable by nature only: whiter, rippling
+ *     water, a dozen small stones sticking out of it, gravel on the bed and a
+ *     few foam flecks below the stones. Render-only (own PRNG) and not in
+ *     tile.rocks, so they never block movement
  *   surf foam along the shore, for each of the FOAM_LEVELS of the tide (the
  *     levels next to the current sea level fade in), foam and spray at the
  *     foot of waterfalls
@@ -14,7 +18,7 @@
  *   tide (game/tide)
  * FOAM_LEVELS, foamWeights(level) -> weight 0..1 per foam level, pure
  *
- * Depends on: three, core/*, render/palette, render/materials, render/batch
+ * Depends on: three, core/*, render/palette, render/materials, render/batch, render/props (rockColor)
  */
 import * as THREE from 'three';
 import { mulberry32 } from '../core/noise.js';
@@ -23,6 +27,7 @@ import { P, PC } from './palette.js';
 import { toon, outlineMat } from './materials.js';
 import { Batch } from './batch.js';
 import { mat4 } from './geometry.js';
+import { rockColor } from './props.js';
 
 export const FOAM_LEVELS = [0, -0.1, -0.2, -0.3, -0.4];
 const FOAM_STEP = 0.1;
@@ -41,6 +46,7 @@ function riverRibbon(w, rv, sea) {
     const p = rv.pts[k], pp = perpOf(rv, k), t = k / (rv.n - 1), hw = rv.W(t) / 2 + 0.35, lw = rv.LW(t) + 0.015;
     const sl = rv.LW(Math.max(0, k - 2) / (rv.n - 1)) - rv.LW(Math.min(rv.n - 1, k + 2) / (rv.n - 1));
     let foam = ss(0.25, 1.1, sl); rv.falls.forEach(f => { foam = Math.max(foam, Math.exp(-(((k - f.base - 3) / 5) ** 2)) * 0.75); });
+    foam = Math.max(foam, rv.fordAt(k) * 0.55);   // fords run whiter: shallow, rippling water
     const fade = rv.main ? 1 : 1 - ss(rv.n - 12, rv.n - 1, k), lv = rv.L(t);
     for (let c = 0; c < X; c++) {
       const u = c / (X - 1) * 2 - 1; pos.push(p.x + pp.x * u * hw, lw, p.z + pp.z * u * hw); lvs.push(lv);
@@ -99,6 +105,21 @@ export function buildWater(w, kit, scene) {
     for (let n = 0; n < 60; n++) { const a = r() * Math.PI * 2, rr = Math.sqrt(r()) * wd * 0.55; B.add('fr', foamGeo, foamMat, mat4(pb.x + Math.cos(a) * rr, lw, pb.z + Math.sin(a) * rr, 0.15 + r() * 0.3, 1, 0.08 + r() * 0.14, r() * 6), 0xffffff, { cast: false, order: 6 }); }
     const fp = rv.pts[f.base];
     for (let n = 0; n < 10; n++) { const s = 0.35 + r() * 0.6, m = new THREE.Mesh(sprayGeo, sprayMat); m.position.set(fp.x + (r() - 0.5) * 1.6, lw + 0.2 + r() * 0.9, fp.z + (r() - 0.5) * 1.6); m.scale.set(s, s * 0.7, s); m.renderOrder = 7; scene.add(m); }
+  }));
+  // fords: stones just out of the water, gravel on the bed, foam flecks downstream
+  const rf = mulberry32(w.seed + 91);
+  w.rivers.forEach(rv => rv.fords.forEach(fd => {
+    const spot = (k, u) => { const kk = Math.max(0, Math.min(rv.n - 1, k)), p = rv.pts[Math.round(kk)], pp = perpOf(rv, Math.round(kk)), t = Math.round(kk) / (rv.n - 1), hw = rv.W(t) / 2; return { x: p.x + pp.x * u * hw, z: p.z + pp.z * u * hw, lw: rv.LW(t) }; };
+    const span = fd.k1 - fd.k0 + 2;
+    for (let n = 0; n < 12; n++) {
+      const s = 0.08 + rf() * 0.12, q = spot(fd.k0 - 1 + rf() * span, (rf() * 2 - 1) * 0.9);
+      B.add('fordRock', kit.rock, kit.rockMat, mat4(q.x, q.lw - s * 0.35, q.z, s, s * 0.7, s, rf() * 6, rf() * 0.4), rockColor(rf), { outline: 1.08 });
+      if (n % 3 === 0) { const f = spot(fd.k0 - 1 + rf() * span + 1.5, (rf() * 2 - 1) * 0.8); B.add('fordFoam', foamGeo, foamMat, mat4(f.x, f.lw + 0.03, f.z, 0.1 + rf() * 0.14, 1, 0.06 + rf() * 0.08, rf() * 6), 0xffffff, { cast: false, order: 6 }); }
+    }
+    for (let n = 0; n < 60; n++) {
+      const s = 0.03 + rf() * 0.04, q = spot(fd.k0 - 1 + rf() * span, (rf() * 2 - 1) * 0.95);
+      B.add('fordPebble', kit.rock, kit.rockMat, mat4(q.x, H(q.x, q.z) - s * 0.05, q.z, s, s * 0.4, s, rf() * 6), rockColor(rf, 0.12), {});
+    }
   }));
   B.build(scene);
 

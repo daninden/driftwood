@@ -24,6 +24,17 @@ describe('world generation (seed 1337)', () => {
       expect(r.pts[r.n - 1].z).toBeCloseTo(g.pEnd.z, 6);
     });
   });
+  it('has 2 to 4 fords per river, clear of the falls and above the mouth', () => {
+    w.rivers.forEach(r => {
+      expect(r.fords.length).toBeGreaterThanOrEqual(2);
+      expect(r.fords.length).toBeLessThanOrEqual(4);
+      r.fords.forEach(f => {
+        expect(f.k1).toBeLessThan(r.kMouth);
+        r.falls.forEach(fl => expect(f.k1 < fl.top - 8 || f.k0 > fl.base + 8).toBe(true));
+        expect(r.fordAt((f.k0 + f.k1) / 2)).toBe(1);
+      });
+    });
+  });
   it('matches heights, levels, slopes, rivers and passages at 400 points', () => {
     for (const p of golden.pts) {
       expect(w.H(p.x, p.z)).toBeCloseTo(p.h, 4);

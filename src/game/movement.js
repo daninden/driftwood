@@ -3,8 +3,10 @@
  *
  * Rules
  *   - Open sea (ground more than 0.6 below the sea level, which goes up and
- *     down with the tide, game/tide) and deep river water (> 0.85) block.
- *     When the flood comes in round you, you can always wade back to shore:
+ *     down with the tide, game/tide) blocks, and so does river water deeper
+ *     than WADE_MAX (waist deep, 0.35): narrow upstream brooks and the fords
+ *     can be waded, the wide deep reaches cannot. When the flood comes in
+ *     round you, or you stand in deep water, you can always wade back out:
  *     only going deeper is blocked.
  *   - Gentle ground (steepness < 0.85) is walked at full speed, up to 1.25
  *     at 70 %.
@@ -52,6 +54,7 @@ export const WALK_SPEED = 2.9;
 export const RUN_SPEED = 3.9;
 export const BODY = 0.2;        // the castaway's radius
 export const STONE_MIN = 0.35;  // smaller stones are stepped over
+export const WADE_MAX = 0.35;   // rivers deeper than this (waist deep) cannot be waded
 export const BUSH_SLOW = 0.45;  // in the middle of a bush you go at 55 %
 
 const cache = new WeakMap();
@@ -131,7 +134,7 @@ export function terrainAt(w, x, z, sea = 0) {
 export function stepFactor(w, a, x, z, sea = 0) {
   const b = terrainAt(w, x, z, sea), dist = Math.hypot(x - a.x, z - a.z) || 1e-6, grade = (b.y - a.y) / dist;
   const deep = sea - 0.6;   // a rising tide may have overtaken you down to RANGE deeper: from there you can wade back
-  if ((b.y < deep && (b.y <= a.y || a.y < deep - 0.5)) || (b.inRiver && b.depth > 0.85)) return 0;
+  if ((b.y < deep && (b.y <= a.y || a.y < deep - 0.5)) || (b.inRiver && b.depth > WADE_MAX && (b.y <= a.y || terrainAt(w, a.x, a.z, sea).depth <= WADE_MAX))) return 0;
   const steep = Math.max(b.s, Math.abs(grade));
   let f;
   if (steep < 0.85) f = 1;
@@ -141,7 +144,7 @@ export function stepFactor(w, a, x, z, sea = 0) {
     const limit = 3.2 + 1.6 * Math.max(b.pa.bench, b.pa.roots);
     if (steep < 3.2) f = 0.42; else if (steep < limit) f = 0.3; else return 0;
   } else return 0;
-  if (b.depth > 0.05) f *= b.depth > 0.4 ? 0.45 : 0.7;
+  if (b.depth > 0.05) f *= b.depth > 0.25 ? 0.45 : 0.7;
   if (w.tiles && b.climb <= 0.25) f *= bushFactor(w, x, z);
   return f;
 }

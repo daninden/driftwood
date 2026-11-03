@@ -30,7 +30,8 @@
  *
  * createHero(scene) -> { group, update(player, wadeDepth, load?, fibre?) }
  *   update copies position and heading from the player state
- *   (game/movement) and animates the walk cycle from player.phase.
+ *   (game/movement) and animates the walk cycle from player.phase. In water
+ *   he sinks by wadeDepth * 0.6, but never deeper than 0.35 (his waist).
  *   load: the carried pieces as [{ len, rad, col }] (bottom first); the
  *   bundle is rebuilt when it changes. fibre: the tufts carried (0..3).
  *   The figure faces +z in its own space.
