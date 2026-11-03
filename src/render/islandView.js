@@ -104,7 +104,7 @@ export async function createIslandView(world, container, progress, start) {
     const sky = skyAt(info.time);
     if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H, heroFlame: hero.flame });
     if (tallyView) tallyView.update(dt, { game, camera: cam.camera, H: world.H, player });
-    stage.followSun(cam.target, Math.max(24, Math.min(90, cam.zoom * 3.2)), sky.light.dir);
+    stage.followSun({ target: cam.target, yaw, pitch, zoom: cam.zoom, aspect }, sky.light.dir);
     mood.update(world.tierAt(t.L), dt, sky);
     renderer.render(scene, cam.camera);
   }

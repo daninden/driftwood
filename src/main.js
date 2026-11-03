@@ -18,8 +18,9 @@
  * For tests and development only: `?spawn=x,z` starts somewhere else, and
  * `?time=t` starts at another time of day (0 midnight, 0.5 noon), and
  * `?awake=d` as if the castaway had been awake d days. Temporary:
- * `?shadows=step,min,soft` (degrees, degrees, 0/1) tries other shadow light
- * settings (render/sky), e.g. `?shadows=0.25,11.54,0` is the 0.11.1 look.
+ * `?shadows=step,min,soft,fit` (degrees, degrees, 0..2, 0..2) tries other shadow
+ * settings (render/sky), e.g. `?shadows=0.25,11.54,0,0` is the 0.11.1 look and
+ * `?shadows=0.03125,15,0,0` the 0.12.1 one (hard edges, loose shadow camera).
  *
  * The name (0.9): at the first start of an island (no test parameters, no save
  * with a name) the loading screen asks "What is your name?" (render/namePrompt,
@@ -104,7 +105,7 @@ async function boot() {
   const store = createSaveStore(seed);
   if (fresh) { store.clear(); try { history.replaceState(null, '', location.pathname + location.search + withoutNew(location.hash)); } catch (e) { /* keep the address */ } }
   const qs = new URLSearchParams(location.search), q = qs.get('spawn'), qt = qs.get('time'), qa = qs.get('awake');
-  const shadows = parseShadowParam(qs.get('shadows')); if (shadows) setShadowLight(shadows);   // temporary: compare shadow variants, `?shadows=step,min,soft`
+  const shadows = parseShadowParam(qs.get('shadows')); if (shadows) setShadowLight(shadows);   // temporary: compare shadow variants, `?shadows=step,min,soft,fit`
   const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no question, no loading, no saving
   const saved = testing ? null : store.load();
   const asking = shouldAsk({ testing, saved }) ? createNamePrompt(document.getElementById('ask')) : null;   // asked while the island loads

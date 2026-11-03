@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.13.1 "Soft shadows" — 2026-11-03
+
+- Fixed: the shadow edges are no longer jagged and restless. The shadow map (still 2048 px) now covers only what is seen, measured across the light, so its texels are about 3 times finer on the sand with a low sun (the old square covered far more than the view). Its size changes in steps of 5 %, so zooming or turning does not make the edges shift, and it still snaps to whole texels so walking does not shimmer.
+- Soft edges: three.js's hard shadow filter is replaced by an own one (16 taps on a small disc, turned per pixel), which turns the stair steps into a narrow soft band while the drawn look stays crisp.
+- The shadow light now turns in steps of 1/16 degree (was 1/32): with the finer map it is the calmest step in the headless flicker check.
+- Temporary `?shadows=step,min,soft,fit` grows two meanings: `soft` is 0 (old hard filter), 1 (new soft, default) or 2 (softer); a fourth value `fit` is 0 (old loose shadow camera), 1 (tight, default) or 2 (tight with more room).
+
 ## 0.13 "Action" — 2026-11-03
 
 - Clicking and tapping only walk now. On wood, a pile, a coconut, a fire or a torch in the ground he walks to beside it and stands there, doing nothing; river water and its bank are just ground, so wading through a river works and a stray click no longer takes a torch from a fire or makes him drink. Tapping or holding the castaway does nothing any more.

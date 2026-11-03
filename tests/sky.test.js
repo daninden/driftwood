@@ -85,19 +85,20 @@ describe('light direction steps', () => {
 });
 
 describe('shadow light settings', () => {
-  it('defaults to steps of 1/32 degree and a minimum height of 15 degrees', () => {
-    expect(DIR_STEP * 180 / Math.PI).toBeCloseTo(1 / 32);
+  it('defaults to steps of 1/16 degree and a minimum height of 15 degrees', () => {
+    expect(DIR_STEP * 180 / Math.PI).toBeCloseTo(1 / 16);
     expect(Math.asin(LIGHT_MIN) * 180 / Math.PI).toBeCloseTo(15);
-    expect(shadowLight.soft).toBe(false);
+    expect(shadowLight.soft).toBe(1); expect(shadowLight.fit).toBe(1);   // the own soft filter and the tight fit
   });
   it('lifts only the shadow light, not the sun itself', () => {
     const s = skyAt(SUNRISE + 0.001);
     expect(s.sun.y).toBeLessThan(0.05); expect(s.light.dir.y).toBeGreaterThan(LIGHT_MIN - 0.01);
   });
-  it('parses ?shadows=step,min,soft and applies it', () => {
+  it('parses ?shadows=step,min,soft,fit and applies it', () => {
     expect(parseShadowParam('')).toBe(null); expect(parseShadowParam('x,1,0')).toBe(null);
     const o = parseShadowParam('0.25,5,1');
-    expect(o.step).toBeCloseTo(0.25 * Math.PI / 180); expect(o.min).toBeCloseTo(Math.sin(5 * Math.PI / 180)); expect(o.soft).toBe(true);
+    expect(o.step).toBeCloseTo(0.25 * Math.PI / 180); expect(o.min).toBeCloseTo(Math.sin(5 * Math.PI / 180)); expect(o.soft).toBe(1); expect(o.fit).toBe(1);
+    expect(parseShadowParam('0.25,5,0,2')).toMatchObject({ soft: 0, fit: 2 }); expect(parseShadowParam('0.25,5,2')).toMatchObject({ soft: 2, fit: 1 }); expect(parseShadowParam('0.25,5,7,9')).toMatchObject({ soft: 1, fit: 1 });
     const keep = { ...shadowLight };
     try { setShadowLight(o); expect(skyAt(SUNRISE + 0.001).light.dir.y).toBeGreaterThan(o.min - 0.01); expect(skyAt(SUNRISE + 0.001).light.dir.y).toBeLessThan(LIGHT_MIN - 0.02); }
     finally { setShadowLight(keep); }
