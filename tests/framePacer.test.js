@@ -78,7 +78,7 @@ describe('busy', () => {
       const s = calm(); f(s); expect(isBusy(s)).toBe(true);
     }
   });
-  it('is busy with a key held, the stick, a walking target or a press waiting', () => {
+  it('is busy with a key held, the stick, a walking target or the action button held', () => {
     for (const f of [s => { s.input.up = true; }, s => { s.input.right = true; }, s => { s.input.stick = { x: 1, z: 0 }; }, s => { s.input.target = { x: 1, z: 2 }; }, s => { s.input.pressing = () => true; }]) {
       const s = calm(); f(s); expect(isBusy(s)).toBe(true);
     }

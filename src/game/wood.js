@@ -40,8 +40,10 @@
  *   wood.onBeach(log)       true while the log still lies where it washed up
  *   wood.beachLogs(tile)    the logs lying on the beach of a tile, the first
  *                           ones and those washed up since
- *   wood.find(x, z, reach)  -> { kind: 'log', log, x, z } | { kind: 'pile', pile, x, z } | null
- *     the nearest thing within reach of (x, z); x, z is its nearest point
+ *   wood.find(x, z, reach, only?)  -> { kind: 'log', log, x, z, d } | { kind: 'pile', pile, x, z, d } | null
+ *     the nearest thing within reach of (x, z); x, z is its nearest point, d its
+ *     distance from (x, z) (to a pile's edge); only: 'log' or 'pile' to look for
+ *     that kind alone
  *   wood.take(thing) -> number of pieces picked up (0 when the hands are full)
  *   wood.drop(x, z, heading, inWater?, wetAt?) -> true when something was laid down
  *     (wetAt(x, z) -> true for water, to keep a new pile out of it)
@@ -130,15 +132,15 @@ export function createWood(w, saved) {
     return out;
   }
 
-  function find(x, z, reach) {
+  function find(x, z, reach, only) {
     let best = null, bd = reach;
-    for (const l of near(x, z, reach)) {
+    if (only !== 'pile') for (const l of near(x, z, reach)) {
       if (taken.has(l.id)) continue;
-      const q = distToLog(l, x, z); if (q.d < bd) { bd = q.d; best = { kind: 'log', log: l, x: q.x, z: q.z }; }
+      const q = distToLog(l, x, z); if (q.d < bd) { bd = q.d; best = { kind: 'log', log: l, x: q.x, z: q.z, d: q.d }; }
     }
-    for (const p of wood.piles) {
+    if (only !== 'log') for (const p of wood.piles) {
       const d = Math.max(0, Math.hypot(x - p.x, z - p.z) - PILE_R);
-      if (d < bd || (d === 0 && best && best.kind === 'log')) { bd = d; best = { kind: 'pile', pile: p, x: p.x, z: p.z }; }
+      if (d < bd || (d === 0 && best && best.kind === 'log')) { bd = d; best = { kind: 'pile', pile: p, x: p.x, z: p.z, d }; }
     }
     return best;
   }

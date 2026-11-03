@@ -19,11 +19,12 @@ beforeAll(async () => {
 }, 120000);
 
 const makeInput = (o = {}) => {
-  const i = { up: false, down: false, left: false, right: false, run: false, target: null, hold: null, held: false, sleep: false, ...o };
+  const i = { up: false, down: false, left: false, right: false, run: false, target: null, hold: null, action: null, sleep: false, ...o };
   i.clearTarget = () => { i.target = null; };
   i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
   i.takeSleep = () => { const s = i.sleep; i.sleep = false; return s; };
-  i.pressing = () => i.held;
+  i.takeAction = () => { const a = i.action; i.action = null; return a; };
+  i.pressing = () => false;
   return i;
 };
 const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
@@ -41,7 +42,7 @@ function busyGame() {
   g.wood.drop(g.player.x, g.player.z, g.player.heading);
   // husk a coconut
   const c = cocos[0]; g.player.x = c.x + 1; g.player.z = c.z; g.player.y = w.H(g.player.x, g.player.z);
-  input.target = { x: c.x, z: c.z, tap: true }; run(g, input, 5);
+  input.target = { x: c.x, z: c.z, tap: true }; run(g, input, 1); input.action = 'tap'; run(g, input, 5);
   // let a high water wash wood up, and carry one wet piece
   g.clock.advance(PERIOD * DAY_SECONDS * 1.2); g.update(input, 0);
   expect(g.wood.washes).toBeGreaterThan(0);
@@ -52,7 +53,7 @@ function busyGame() {
   input.hold = { key: true }; run(g, input, 16);
   expect(g.fire.fires.length).toBeGreaterThan(0);
   expect(g.fire.takeTorch(g.fire.fires[0])).toBe(true); g.player.torch = true;
-  input.target = { tap: true, hero: true, x: g.player.x, z: g.player.z }; run(g, input, 1);
+  input.action = 'tap'; run(g, input, 1);
   expect(g.fire.torches.length).toBe(1);
   g.fire.takeTorch(g.fire.fires[0]);
   run(g, input, 3);

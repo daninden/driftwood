@@ -127,10 +127,10 @@ describe('touch input', () => {
     expect(input.target).toEqual({ x: 130, z: 100 });
     input.dispose();
   });
-  it('marks a tap on the castaway', () => {
-    const el = new EventTarget(), input = createInput(el, (x, y, t) => ({ x, z: y, hero: t }), () => 0);
+  it('walks to a tap on the castaway like to any other spot (he is no thing to tap)', () => {
+    const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => 0);
     fire(el, 'pointerdown', touch(1, 10, 20));
-    expect(input.target).toEqual({ x: 10, z: 20, tap: true, touch: true, hero: true });
+    expect(input.target).toEqual({ x: 10, z: 20, tap: true, touch: true });
     fire(window, 'pointerup', touch(1, 10, 20));
     input.dispose();
   });

@@ -32,6 +32,7 @@
  *     BURNT_DAYS (two days) and fades slowly (render/fire). The flood washes it
  *     away sooner, as it puts fires out (and a fire put out by the flood leaves
  *     none); a new fire lit on it replaces it.
+ *   - A full fire (FUEL_MAX) takes no more wood: `full(f)`.
  *   - A fire, or its embers, within WARM_R warms a sleeper (game/sleep).
  *   - Whether a fire catches is fixed by the seed and how many attempts
  *     there have been, so a game plays the same way twice.
@@ -40,6 +41,7 @@
  *
  * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, TIRED_CATCH, BURN, FUEL_MAX, EMBERS,
  * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS
+ * full(f) -> true when fire f holds as much as it can (FUEL_MAX)
  * catchChance(dry, tired) -> 0..CATCH   dry: mean dryness 0..1, tired 0..1 (game/sleep)
  * createFire(world, saved?) -> fire
  *   fire.fires             [{ id, x, z, fuel, embers, lit, fed }]  fuel and embers in
@@ -51,8 +53,9 @@
  *   fire.version           goes up with every change that shows (not with burning)
  *   fire.torch             null, or { left } the torch carried (days left)
  *   fire.torches           [{ id, x, z, left }]  torches stuck in the ground
- *   fire.find(x, z, reach) -> { kind: 'fire', fire, x, z } | { kind: 'torch', torch, x, z } | null
- *     the nearest fire or torch stuck in the ground
+ *   fire.find(x, z, reach, only?) -> { kind: 'fire', fire, x, z, d } | { kind: 'torch', torch, x, z, d } | null
+ *     the nearest fire or torch stuck in the ground (d: distance to its edge);
+ *     only: 'fire' or 'torch' to look for that kind alone
  *   fire.takeTorch(f) -> true when a torch was taken out of fire f
  *   fire.plant(x, z) -> true when the torch carried was stuck in the ground there
  *   fire.pickTorch(t) -> true when torch t was taken up again (hands free of a torch)
@@ -62,7 +65,7 @@
  *     not catch (logs: the pile's pieces, dry: their mean dryness)
  *   fire.kindle(x, z, logs, dry, total) -> the new fire lit with the torch carried,
  *     or null (no torch, or the wood too wet: a puff of smoke)
- *   fire.feed(f, dry) -> true when a piece of dryness dry went on fire f
+ *   fire.feed(f, dry) -> true when a piece of dryness dry went on fire f (false: not a fire of ours, or it is full)
  *   fire.update(days)      burns down by days of game time; embers and torches go out
  *   fire.flood(sea) -> number of fires (and torches in the sand) the sea put out
  *   fire.strength(f) -> 0..1 how big the flames are (0 for embers)
@@ -92,6 +95,7 @@ const PUFFS = 4;
 const BURNT_MAX = 32;                         // at most this many burnt places are kept
 const BURNT_R = 0.7;                          // a new fire this close to a burnt place replaces it
 
+export const full = f => f.fuel >= FUEL_MAX - 1e-9;
 export const catchChance = (dry, tired = 0) => CATCH * Math.max(0, Math.min(1, dry)) ** 2 * (1 - (1 - TIRED_CATCH) * Math.max(0, Math.min(1, tired)));
 
 export function createFire(w, saved) {
@@ -106,15 +110,15 @@ export function createFire(w, saved) {
     nextId = saved.nextId || [...fire.fires, ...fire.torches, ...fire.burnt].reduce((m, f) => Math.max(m, f.id + 1), 0);
   }
 
-  function find(x, z, reach) {
+  function find(x, z, reach, only) {
     let best = null, bd = reach;
-    for (const f of fire.fires) {
+    if (only !== 'torch') for (const f of fire.fires) {
       const d = Math.max(0, Math.hypot(x - f.x, z - f.z) - FIRE_R);
-      if (d < bd) { bd = d; best = { kind: 'fire', fire: f, x: f.x, z: f.z }; }
+      if (d < bd) { bd = d; best = { kind: 'fire', fire: f, x: f.x, z: f.z, d }; }
     }
-    for (const t of fire.torches) {
+    if (only !== 'fire') for (const t of fire.torches) {
       const d = Math.max(0, Math.hypot(x - t.x, z - t.z) - TORCH_R);
-      if (d < bd) { bd = d; best = { kind: 'torch', torch: t, x: t.x, z: t.z }; }
+      if (d < bd) { bd = d; best = { kind: 'torch', torch: t, x: t.x, z: t.z, d }; }
     }
     return best;
   }
@@ -150,7 +154,7 @@ export function createFire(w, saved) {
   }
   function clearBurnt(x, z) { fire.burnt = fire.burnt.filter(b => Math.hypot(b.x - x, b.z - z) >= BURNT_R); }
   function feed(f, dry = 1) {
-    if (!fire.fires.includes(f)) return false;
+    if (!fire.fires.includes(f) || full(f)) return false;
     f.fuel = Math.min(FUEL_MAX, f.fuel + BURN * (0.5 + 0.5 * dry)); f.embers = EMBERS; f.fed++;
     fire.version++; return true;
   }

@@ -11,6 +11,7 @@
  * something is added or used up, then fades back.
  *
  * ITEMS                       the item keys in the order they are drawn
+ * DRAWINGS                    the inner SVG of each item, in a 0 0 20 26 box (the action button reuses the fibre)
  * REST_OPACITY, PEAK_OPACITY, HOLD, EASE   the opacity curve (seconds)
  * carryItems(state) -> [key]  one key per thing carried, e.g. { fibre: 2 } -> ['fibre', 'fibre']. Pure.
  * carryChanged(a, b) -> bool  true when the counts differ. Pure.
@@ -46,7 +47,7 @@ export function carryOpacity(since) {
 
 // each drawing is the inner SVG of a 0 0 20 26 box: a few loose curved
 // strokes tied together at one end (round caps, no fill)
-const DRAWINGS = {
+export const DRAWINGS = {
   fibre: '<path d="M10 20C8 14 4.5 10 3 5.5"/><path d="M10 20C9.5 14 8 9 7.5 3.5"/><path d="M10 20C10.5 13 11.5 9 12.5 3"/><path d="M10 20C12 14 15 10 17 6"/><path d="M10 20C11 16 14 14 16 12.5"/><path d="M8.2 19.6L11.8 21.4M8.4 21.6L11.6 23.4"/>',
 };
 const svg = key => `<svg viewBox="0 0 20 26" aria-hidden="true">${DRAWINGS[key]}</svg>`;

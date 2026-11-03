@@ -129,28 +129,14 @@ describe('sleeping in the game', () => {
 describe('sleep input', () => {
   beforeAll(() => { if (!globalThis.window) globalThis.window = new EventTarget(); });
   const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
-  const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y, hero: x < 50 }), () => t); return { el, input, later: ms => { t += ms; } }; };
+  const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t); return { el, input, later: ms => { t += ms; } }; };
 
-  for (const pointerType of ['touch', 'mouse']) it(`lies down after holding the castaway (${pointerType})`, () => {
+  for (const pointerType of ['touch', 'mouse']) it(`does not lie down after holding the castaway or anywhere else (${pointerType}); sleeping is Z or the held action button`, () => {
     const { el, input, later } = setup();
     fire(el, 'pointerdown', { button: 0, pointerType, pointerId: 1, clientX: 10, clientY: 10 });
-    expect(input.target.hero).toBe(true);
-    later(HOLD_MS / 2); expect(input.takeSleep()).toBe(false);
-    later(HOLD_MS); expect(input.takeSleep()).toBe(true); expect(input.takeSleep()).toBe(false);
+    expect(input.target).toEqual(pointerType === 'touch' ? { x: 10, z: 10, tap: true, touch: true } : { x: 10, z: 10, tap: true });
+    later(HOLD_MS * 2); expect(input.takeSleep()).toBe(false); expect(input.takeHold()).toBeNull(); expect(input.takeAction()).toBeNull();
     fire(window, 'pointerup', { button: 0, pointerType, pointerId: 1 });
-    input.dispose();
-  });
-  it('does not lie down after a short tap, a hold elsewhere or a drag off the castaway', () => {
-    const { el, input, later } = setup();
-    fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 1, clientX: 10, clientY: 10 });
-    fire(window, 'pointerup', { pointerType: 'touch', pointerId: 1 }); later(HOLD_MS * 2);
-    expect(input.takeSleep()).toBe(false);
-    fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 2, clientX: 200, clientY: 10 }); later(HOLD_MS * 2);
-    expect(input.takeSleep()).toBe(false);
-    fire(window, 'pointerup', { pointerType: 'touch', pointerId: 2 }); later(1000);
-    fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 3, clientX: 10, clientY: 10 });
-    fire(el, 'pointermove', { pointerType: 'touch', pointerId: 3, clientX: 40, clientY: 10 }); later(HOLD_MS * 2);
-    expect(input.takeSleep()).toBe(false);
     input.dispose();
   });
   it('lies down with Z, and wakes on any key or tap but not on a key held down', () => {

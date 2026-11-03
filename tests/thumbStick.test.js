@@ -35,7 +35,7 @@ describe('stickIntent', () => {
 describe('thumb stick input', () => {
   beforeAll(() => { if (!globalThis.window) globalThis.window = new EventTarget(); });
   const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
-  const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y, hero: x < 50 }), () => t); return { el, input, later: ms => { t += ms; } }; };
+  const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t); return { el, input, later: ms => { t += ms; } }; };
   const p = { x: 0, z: 0 };
 
   it('walks from the stick and stops on release', () => {
@@ -68,15 +68,15 @@ describe('thumb stick input', () => {
     input.stickMove(1, 5, -R / 2, R); expect(input.takeWake()).toBe(false);
     input.dispose();
   });
-  it('is no tap, hold or steering, and its end leaves the world finger alone', () => {
+  it('is no tap, press or steering, and its end leaves the world finger alone', () => {
     const { el, input, later } = setup();
     input.stickStart(9); input.stickMove(9, 0, -R / 2, R);
     expect(input.target).toBeNull(); expect(input.pressing()).toBe(false);
-    later(HOLD_MS * 2); expect(input.takeHold()).toBeNull(); expect(input.takeSleep()).toBe(false);
+    later(HOLD_MS * 2); expect(input.takeHold()).toBeNull(); expect(input.takeSleep()).toBe(false); expect(input.takeAction()).toBeNull();
     fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 1, clientX: 200, clientY: 10 });   // a finger on the world
-    expect(input.pressing()).toBe(true);
+    expect(input.target).not.toBeNull();
     fire(window, 'pointerup', { pointerType: 'touch', pointerId: 9 });   // the stick finger lifts
-    expect(input.pressing()).toBe(true); expect(input.stick).not.toBeNull();
+    expect(input.target).not.toBeNull(); expect(input.stick).not.toBeNull();
     input.stickEnd(9);
     fire(window, 'pointerup', { pointerType: 'touch', pointerId: 1 });
     input.dispose();

@@ -143,7 +143,9 @@ describe('the flood', () => {
   it('does not let you lay wood down where the sea is', () => {
     const p = wetSpot(), g = createGame(w, { ...p, y: w.H(p.x, p.z) }, { time: FIRST_HIGH });
     g.wood.take({ kind: 'log', log: w.tiles.flatMap(t => t.drift)[0] });
-    g.update(makeInput({ target: { x: p.x, z: p.z, tap: true, hero: true } }), 1 / 60);
+    const i = makeInput(); i.action = 'tap'; i.takeAction = () => { const a = i.action; i.action = null; return a; };
+    g.update(i, 1 / 60);
+    expect(g.action().tap).toBeNull();
     expect(g.wood.carried.length).toBe(1);
   });
 });

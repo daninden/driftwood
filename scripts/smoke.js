@@ -12,7 +12,9 @@
 // smoke-8 husking a coconut, smoke-9 drilling fire, smoke-10 the fire by day,
 // smoke-11 the fire at night, smoke-12 walking away from it with a torch,
 // smoke-13 tally marks beside the fire at night, smoke-14 the same by day,
-// smoke-15 beside a pile of twelve.
+// smoke-15 beside a pile of twelve, smoke-16 the action button beside a pile with fibre (by day),
+// smoke-17 beside the fire with dry wood (at night), smoke-18 its ring filling while held,
+// smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night).
 //
 // A headless browser here has no GPU and draws only a few frames per second,
 // so after loading the test does not play in real time: it pauses drawing,
@@ -53,9 +55,12 @@ const err = await page.evaluate(() => document.body.dataset.error);
 if (err) { console.error('boot failed:', err); process.exit(1); }
 console.log('ready after', secs());
 
-await page.evaluate(() => window.__driftwood.pause(true));
+await page.evaluate(() => {
+  window.__driftwood.pause(true);
+  window.__press = () => { const { input } = window.__driftwood; input.actionStart('smoke'); input.actionEnd('smoke'); };   // a short press of the action button
+});
 await page.waitForTimeout(1200);   // let the loader finish fading out
-const shot = async name => { await page.evaluate(() => window.__driftwood.draw()); await page.screenshot({ path: name }); };
+const shot = async (name, settle = 0) => { await page.evaluate(() => window.__driftwood.draw()); if (settle) await page.waitForTimeout(settle); await page.screenshot({ path: name }); };   // settle: ms for the marks' CSS fades
 await shot('smoke-1.png');
 console.log('tiles', JSON.stringify(await page.evaluate(() => window.__driftwood.view.stats())));
 
@@ -71,13 +76,15 @@ await shot('smoke-2.png');
 console.log('tiles', JSON.stringify(await page.evaluate(() => window.__driftwood.view.stats())));
 
 // Gathering: stand next to the piece of driftwood nearest the start, click
-// it and the two next nearest up one by one (smoke-3: carrying), then lay
-// them down with a click on the castaway (smoke-4: a pile).
+// it (he walks there and stands) and press the action button (input.action
+// 'tap', what Space does), the two next nearest likewise (smoke-3: carrying,
+// with the button showing the lay-down icon), then lay them down with a press
+// (smoke-4: a pile).
 const gathered = await page.evaluate(start => {
   const { world, game, input, step } = window.__driftwood, p = game.player;
   const near = world.tiles.flatMap(t => t.drift).sort((a, b) => Math.hypot(a.x - start.x, a.z - start.z) - Math.hypot(b.x - start.x, b.z - start.z)).slice(0, 3);
   p.x = near[0].x + 1.2; p.z = near[0].z + 1.2; p.y = world.H(p.x, p.z);
-  for (const l of near) { input.target = { x: l.x, z: l.z, tap: true }; step(60, () => !input.target && !p.stoop); }
+  for (const l of near) { input.target = { x: l.x, z: l.z, tap: true }; step(60, () => !input.target && !p.stoop); window.__press(); step(0.05); step(2, () => !p.stoop); }
   input.target = { x: p.x - 1.5, z: p.z + 1.5 }; step(10, () => !input.target);
   return game.wood.carried.length;
 }, start);
@@ -86,7 +93,7 @@ if (gathered !== 3) errors.push('picked up ' + gathered + ' pieces instead of 3'
 await shot('smoke-3.png');
 const pile = await page.evaluate(() => {
   const { game, input, step } = window.__driftwood, p = game.player;
-  input.target = { x: p.x, z: p.z, tap: true, hero: true }; step(5, () => !input.target && !p.stoop);
+  window.__press(); step(0.05); step(2, () => !p.stoop);
   input.target = { x: p.x - 1.4, z: p.z + 1.4 }; step(10, () => !input.target);
   return game.wood.piles.length ? game.wood.piles[0].logs.length : 0;
 });
@@ -123,12 +130,12 @@ if (woke.washes < 1 || woke.fresh < 1) errors.push('no wood washed up at the nex
 await page.evaluate(() => { const { game } = window.__driftwood, l = game.wood.fresh[0]; console.log('fresh wood at', l.x.toFixed(1), l.z.toFixed(1)); });
 await shot('smoke-7.png');
 
-// Fibre: click the coconut nearest the castaway; he kneels to husk it.
+// Fibre: click the coconut nearest the castaway, then press the button; he kneels to husk it.
 const husk = await page.evaluate(() => {
   const { world, game, input, step } = window.__driftwood, p = game.player;
   const c = world.tiles.flatMap(t => t.cocos).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
   p.x = c.x + 1; p.z = c.z + 0.3; p.y = world.H(p.x, p.z);
-  input.target = { x: c.x, z: c.z, tap: true }; step(10, () => p.work && p.work.f > 0.5);
+  input.target = { x: c.x, z: c.z, tap: true }; step(10, () => !input.target); window.__press(); step(10, () => p.work && p.work.f > 0.5);
   return { work: p.work && p.work.kind, x: p.x, z: p.z };
 });
 console.log('husking', JSON.stringify(husk));
@@ -165,10 +172,10 @@ await page.evaluate(() => { const { game, input, step } = window.__driftwood, p 
 await shot('smoke-10.png');
 await page.evaluate(() => { const { game, step } = window.__driftwood; game.clock.time = 0.95; step(0.1); });
 await shot('smoke-11.png');
-// A torch: tap the fire empty-handed, then walk off into the night with it.
+// A torch: click the fire empty-handed, press the button, then walk off into the night with it.
 const torch = await page.evaluate(() => {
   const { game, input, step } = window.__driftwood, p = game.player, f = game.fire.fires[0];
-  input.target = { x: f.x, z: f.z, tap: true }; step(5, () => game.fire.torch);
+  input.target = { x: f.x, z: f.z, tap: true }; step(5, () => !input.target); window.__press(); step(5, () => game.fire.torch);
   const lit = !!game.fire.torch;
   input.target = { x: p.x - 7, z: p.z + 4 }; step(6, () => !input.target);
   return lit && !!game.fire.torch;
@@ -192,6 +199,68 @@ await page.evaluate(() => {
   const pile = w.piles.reduce((a, b) => b.logs.length > a.logs.length ? b : a); p.x = pile.x + 0.9; p.z = pile.z + 0.3; step(0.1);
 });
 await shot('smoke-15.png');
+// The action button (0.13): what it shows beside a pile with fibre by day (the pick-up
+// icon large, the flame of a hold small), beside a fire with dry wood at night (feed,
+// and the moon), and its ring filling while the button is held.
+const iconOf = () => page.evaluate(() => { const a = document.getElementById('action'); return { opacity: a.style.opacity, main: a.querySelector('.main').innerHTML.length, side: a.querySelector('.side').innerHTML.length, on: a.classList.contains('on') }; });
+await page.evaluate(() => { const { game, step } = window.__driftwood; game.clock.time = 0.5; game.fibre.carried = 1; step(0.1); });
+const dayIcon = await iconOf();
+console.log('action button by the pile', JSON.stringify(dayIcon));
+if (!dayIcon.on || !dayIcon.main || !dayIcon.side) errors.push('the action button shows no pick-up and hold icons beside a pile with fibre');
+await shot('smoke-16.png', 800);
+await page.evaluate(() => {
+  const { world, game, step } = window.__driftwood, p = game.player, f = game.fire.fires[0], w = game.wood;
+  game.clock.time = 0.95; p.x = f.x + 1.0; p.z = f.z + 0.4; p.y = world.H(p.x, p.z);
+  const l = world.tiles.flatMap(t => t.drift).find(q => w.onBeach(q)); w.take({ kind: 'log', log: l }); step(0.1);
+});
+const feedIcon = await iconOf();
+console.log('action button by the fire', JSON.stringify(feedIcon));
+if (!feedIcon.on) errors.push('the action button is empty beside a fire with dry wood in his arm');
+await shot('smoke-17.png', 800);
+// Held for 250 ms of a frozen clock (drawing is slow here, so real time would run past the hold): the ring is part full.
+const ring = await page.evaluate(() => {
+  const { input } = window.__driftwood, real = performance.now.bind(performance), t0 = real();
+  input.actionStart('smoke'); performance.now = () => t0 + 250;
+  window.__driftwood.draw();
+  const off = +document.querySelector('#action .fill').getAttribute('stroke-dashoffset');
+  window.__ringClock = real; return off;
+});
+await page.screenshot({ path: 'smoke-18.png' });
+await page.evaluate(() => { const { input } = window.__driftwood; performance.now = window.__ringClock; input.cancelAction(); input.actionEnd('smoke'); });
+console.log('ring while held', ring);
+if (!(ring > 0 && ring < 226)) errors.push('the ring does not fill while the button is held: ' + ring);
+
+// The same on a phone: a touch-only screen with the thumb stick, the button just above it (day and night).
+const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+phone.on('pageerror', e => errors.push('phone: ' + e.message));
+await phone.goto('file://' + file + '?spawn=' + start.x.toFixed(1) + ',' + start.z.toFixed(1), { waitUntil: 'commit', timeout: 0 });
+await phone.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
+await phone.evaluate(() => {
+  window.__driftwood.pause(true);
+  const m = document.createElement('meta'); m.name = 'viewport'; m.content = 'width=device-width, initial-scale=1, viewport-fit=cover';   // the single-file build has no <head> of its own
+  document.head.appendChild(m);
+});
+await phone.waitForTimeout(2000);
+const sticks = await phone.evaluate(() => ({ stick: getComputedStyle(document.getElementById('stick')).display, action: document.getElementById('action').getBoundingClientRect().toJSON(), stickBox: document.getElementById('stick').getBoundingClientRect().toJSON() }));
+console.log('phone', JSON.stringify(sticks));
+if (sticks.stick !== 'block') errors.push('the thumb stick is not shown on the phone');
+if (!(sticks.action.bottom - 12 <= sticks.stickBox.top + 20 &&   // the ring above the stick's ring
+     sticks.action.right <= 390 && sticks.action.left >= 0 && sticks.action.top >= 0)) errors.push('the action button is not just above the thumb stick on the phone');
+const phoneShot = async (name, time) => {
+  await phone.evaluate(t => {
+    const { world, game, step } = window.__driftwood, p = game.player, w = game.wood;
+    game.clock.time = t; game.fibre.carried = 1;
+    const dry = world.tiles.flatMap(q => q.drift).filter(l => w.onBeach(l)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
+    if (!w.piles.length) { p.x = dry[0].x + 0.6; p.z = dry[0].z + 0.6; p.y = world.H(p.x, p.z); for (const k of [0, 2]) { for (const l of dry.slice(k, k + 2)) w.take({ kind: 'log', log: l }); w.drop(p.x, p.z, p.heading); } }
+    const pile = w.piles.at(-1); p.x = pile.x + 0.7; p.z = pile.z + 0.3; p.y = world.H(p.x, p.z); step(0.1);
+  }, time);
+  await phone.evaluate(() => window.__driftwood.draw());
+  await phone.waitForTimeout(800);
+  await phone.screenshot({ path: name });
+};
+await phoneShot('smoke-19.png', 0.5);
+await phoneShot('smoke-20.png', 0.95);
+await phone.close();
 await browser.close();
 console.log('done after', secs());
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }

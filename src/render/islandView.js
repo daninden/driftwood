@@ -23,9 +23,8 @@
  *     (game/fibre, render/coconuts), and the fires
  *     (game/fire, render/fire), with the tally marks of piles and fires while
  *     he stands beside them (render/tallyMarks)
- *   view.pickGround(clientX, clientY, touch?) -> { x, z, hero? } | null
- *     hero when the screen point is on the castaway (with a finger: near it);
- *     on a piece of beach driftwood as drawn (its trunk, a branch or the
+ *   view.pickGround(clientX, clientY, touch?) -> { x, z } | null
+ *     the ground under the screen point; on a piece of beach driftwood as drawn (its trunk, a branch or the
  *     roots standing up, with a finger a little wider) a point on that piece,
  *     rather than the ground behind it
  *   view.canvas
@@ -118,7 +117,7 @@ export async function createIslandView(world, container, progress, start) {
     tallyView = createTallyView(container);
   }
 
-  const feet = new THREE.Vector3(), head = new THREE.Vector3(), ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), onLog = new THREE.Vector3();
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), onLog = new THREE.Vector3();
   /** The beach log whose drawn shape (trunk, branch, roots) the view ray passes through, near ground point g: a point on its trunk. */
   function pickLog(g, touch) {
     if (!game || !g) return null;
@@ -139,14 +138,8 @@ export async function createIslandView(world, container, progress, start) {
   function pickGround(cx, cy, touch) {
     const rc = renderer.domElement.getBoundingClientRect(), nx = (cx - rc.left) / rc.width * 2 - 1, ny = -(cy - rc.top) / rc.height * 2 + 1;
     ndc.set(nx, ny); ray.setFromCamera(ndc, cam.camera);
-    const ground = cam.pick(nx, ny, world.H), g = pickLog(ground, touch) || ground;
-    // on the castaway: near the line from the feet to the head on screen
-    const px = v => ({ x: rc.left + (v.x + 1) / 2 * rc.width, y: rc.top + (1 - v.y) / 2 * rc.height });
-    const hp = hero.group.position, a = px(feet.copy(hp).project(cam.camera)), b = px(head.set(hp.x, hp.y + 0.8, hp.z).project(cam.camera));
-    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1, u = Math.max(0, Math.min(1, ((cx - a.x) * dx + (cy - a.y) * dy) / l2));
-    const d = Math.hypot(cx - a.x - dx * u, cy - a.y - dy * u), r = Math.sqrt(l2) * 0.25 + (touch ? 22 : 3);
-    if (d < r) return { ...(g || { x: hp.x, z: hp.z }), hero: true };
-    return g;
+    const ground = cam.pick(nx, ny, world.H);
+    return pickLog(ground, touch) || ground;
   }
   /** Builds the detailed tiles in view around the player before the game starts, reporting progress('details', f). */
   async function prepare(player, progress) {

@@ -1,7 +1,7 @@
 // Fire: coconuts husked for fibre, washed-up wood that has to dry, lighting
 // a pile with the fire drill (hard work, uses up the fibre, may fail),
-// burning down to embers, feeding, the flood, saving, and the input (a long
-// press on a pile, or F); sleeping warm by a fire or cold without one; and
+// burning down to embers, feeding, the flood, saving, and the input (the
+// held action button, or F); sleeping warm by a fire or cold without one; and
 // the torch, which also lights a pile without fibre.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
@@ -11,7 +11,7 @@ import { createWood, dryness, DRY_DAYS } from '../src/game/wood.js';
 import { createFibre, FIBRE_MAX, REGROW, REGROW_SPREAD } from '../src/game/fibre.js';
 import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, BURN, EMBERS, FUEL_MAX, TORCH_DAYS, TORCH_COST, WARM_R } from '../src/game/fire.js';
 import { COLD_SLEEP, SLEEP_DAYS } from '../src/game/sleep.js';
-import { createInput, HOLD_MS } from '../src/game/input.js';
+import { createInput } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { FIRST_HIGH, PERIOD } from '../src/game/tide.js';
 
@@ -23,10 +23,11 @@ beforeAll(async () => {
 }, 120000);
 
 const makeInput = (o = {}) => {
-  const i = { up: false, down: false, left: false, right: false, run: false, target: null, hold: null, held: false, ...o };
+  const i = { up: false, down: false, left: false, right: false, run: false, target: null, hold: null, action: null, ...o };
   i.clearTarget = () => { i.target = null; };
   i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
-  i.pressing = () => i.held;
+  i.takeAction = () => { const a = i.action; i.action = null; return a; };
+  i.pressing = () => false;
   return i;
 };
 const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
@@ -47,18 +48,20 @@ describe('coconuts and fibre', () => {
     const again = await generateWorld(1337);
     expect(again.tiles.flatMap(t => t.cocos)).toEqual(w.tiles.flatMap(t => t.cocos).sort((a, b) => a.id - b.id));
   }, 120000);
-  it('are husked for fibre: walk there, kneel a while, and carry a tuft', () => {
+  it('are husked for fibre: walk there, press the button, kneel a while, and carry a tuft', () => {
     const c = cocos[0], g = createGame(w, at(c.x + 1, c.z)), input = makeInput({ target: { x: c.x, z: c.z, tap: true } });
     run(g, input, 1.5);
+    expect(g.player.work).toBeNull();   // clicking only walks
+    input.action = 'tap'; run(g, input, 0.5);
     expect(g.player.work).toEqual({ kind: 'husk', f: expect.any(Number) });
     expect(g.fibre.carried).toBe(0);
     run(g, input, HUSK_TIME);
     expect(g.player.work).toBeNull();
-    expect(g.fibre.carried).toBe(1); expect(g.fibre.onGround(c)).toBe(false);
+    expect(g.fibre.carried).toBe(1); expect(cocos.filter(q => !g.fibre.onGround(q)).length).toBe(1);   // the nearest nut to where he stands
   });
   it('gives nothing when husking is broken off by walking away', () => {
     const c = cocos[0], g = createGame(w, at(c.x + 1, c.z)), input = makeInput({ target: { x: c.x, z: c.z, tap: true } });
-    run(g, input, 1.5); expect(g.player.work).not.toBeNull();
+    run(g, input, 1.5); input.action = 'tap'; run(g, input, 0.5); expect(g.player.work).not.toBeNull();
     input.up = true; run(g, input, HUSK_TIME);
     expect(g.fibre.carried).toBe(0); expect(g.fibre.onGround(c)).toBe(true);
   });
@@ -106,7 +109,7 @@ describe('the chance that it catches', () => {
 
 describe('lighting a fire', () => {
   it('kneels by the pile, drills, uses up the fibre and costs rest; the pile becomes a fire', () => {
-    const g = withPile(FIRE_MIN, { fire: { attempts: attemptsFor(true) } }), input = makeInput({ hold: { key: true } });
+    const g = withPile(FIRE_MIN, { fire: { attempts: attemptsFor(true) } }), input = makeInput({ action: 'hold' });
     const awake = g.sleep.awake;
     run(g, input, 1);
     expect(g.player.work.kind).toBe('drill');
@@ -144,21 +147,22 @@ describe('lighting a fire', () => {
     const t = 5, wet = logs.slice(0, FIRE_MIN).map(l => ({ ...l, t }));   // as if just washed up
     for (let k = 0; k < 20; k++) expect(createFire(w, { attempts: k }).attempt(0, 0, wet, wet.reduce((s, l) => s + dryness(l, t), 0) / wet.length, 0, t)).toBeNull();
   });
-  it('lights after a long press on the pile, and waits by the pile while the press is held', () => {
-    const g = withPile(FIRE_MIN, { fire: { attempts: attemptsFor(true) } }), p = g.wood.piles[0];
-    const input = makeInput({ target: { x: p.x, z: p.z, tap: true }, held: true });
-    run(g, input, 0.4);
-    expect(g.wood.carried.length).toBe(0);   // not picked up while the press is held
-    input.hold = { x: p.x, z: p.z }; input.held = false;
+  it('lights after F beside the pile too', () => {
+    const g = withPile(FIRE_MIN, { fire: { attempts: attemptsFor(true) } }), input = makeInput({ hold: { key: true } });
     run(g, input, DRILL_TIME + 1.5);
     expect(g.fire.fires.length).toBe(1);
   });
-  it('picks a pile up after a short tap, and leaves it be after a long press without fibre', () => {
-    const a = withPile(), pa = a.wood.piles[0], ia = makeInput({ target: { x: pa.x, z: pa.z, tap: true } });
+  it('picks a pile up with a short press, and with a hold but without fibre does not light it (he lies down instead)', () => {
+    const a = withPile(), ia = makeInput({ action: 'tap' });
     run(a, ia, 1); expect(a.wood.carried.length).toBe(3);
-    const b = withPile(FIRE_MIN, { fibre: { carried: 0 } }), pb = b.wood.piles[0], ib = makeInput({ target: { x: pb.x, z: pb.z, tap: true }, held: true });
-    run(b, ib, 0.3); ib.hold = { x: pb.x, z: pb.z }; ib.held = false; run(b, ib, 1);
-    expect(b.wood.carried.length).toBe(0); expect(b.player.work).toBeNull();
+    const b = withPile(FIRE_MIN, { fibre: { carried: 0 } }), ib = makeInput({ action: 'hold' });
+    run(b, ib, 1);
+    expect(b.wood.carried.length).toBe(0); expect(b.player.work).toBeNull(); expect(b.sleep.asleep).toBe(true);
+  });
+  it('is not lit by clicking, tapping or holding the pile itself', () => {
+    const g = withPile(), p = g.wood.piles[0], input = makeInput({ target: { x: p.x, z: p.z, tap: true } });
+    run(g, input, DRILL_TIME + 1);
+    expect(g.player.work).toBeNull(); expect(g.fire.attempts).toBe(0); expect(g.wood.carried.length).toBe(0);
   });
 });
 
@@ -175,7 +179,7 @@ describe('a burning fire', () => {
     const g = lit(), fire = g.fire.fires[0];
     g.fire.update(fire.fuel + EMBERS / 2); expect(fire.fuel).toBe(0);
     g.wood.take({ kind: 'log', log: logs[10] }); g.wood.take({ kind: 'log', log: logs[11] });
-    const input = makeInput({ target: { x: fire.x, z: fire.z, tap: true } });
+    const input = makeInput({ action: 'tap' });
     run(g, input, 1.5);
     expect(g.wood.carried.length).toBe(1);
     expect(fire.fuel).toBeCloseTo(BURN, 2);
@@ -209,31 +213,7 @@ describe('a burning fire', () => {
 describe('fire input', () => {
   beforeAll(() => { if (!globalThis.window) globalThis.window = new EventTarget(); });
   const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
-  const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y, hero: x < 50 }), () => t); return { el, input, later: ms => { t += ms; } }; };
-  for (const pointerType of ['touch', 'mouse']) it(`reports a long press away from the castaway, and that it is still held (${pointerType})`, () => {
-    const { el, input, later } = setup();
-    fire(el, 'pointerdown', { button: 0, pointerType, pointerId: 1, clientX: 200, clientY: 30 });
-    expect(input.pressing()).toBe(true);
-    later(HOLD_MS / 2); expect(input.takeHold()).toBeNull();
-    later(HOLD_MS); expect(input.takeHold()).toMatchObject({ x: 200, z: 30 }); expect(input.takeHold()).toBeNull();
-    expect(input.takeSleep()).toBe(false);
-    fire(window, 'pointerup', { button: 0, pointerType, pointerId: 1 });
-    expect(input.pressing()).toBe(false);
-    input.dispose();
-  });
-  it('does not report a short tap, a hold on the castaway or a drag', () => {
-    const { el, input, later } = setup();
-    fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 1, clientX: 200, clientY: 10 });
-    fire(window, 'pointerup', { pointerType: 'touch', pointerId: 1 }); later(HOLD_MS * 2);
-    expect(input.takeHold()).toBeNull(); expect(input.pressing()).toBe(false);
-    fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 2, clientX: 10, clientY: 10 }); later(HOLD_MS * 2);
-    expect(input.takeHold()).toBeNull(); expect(input.takeSleep()).toBe(true);
-    fire(window, 'pointerup', { pointerType: 'touch', pointerId: 2 });
-    fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 3, clientX: 200, clientY: 10 });
-    fire(el, 'pointermove', { pointerType: 'touch', pointerId: 3, clientX: 240, clientY: 10 }); later(HOLD_MS * 2);
-    expect(input.takeHold()).toBeNull();
-    input.dispose();
-  });
+  const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t); return { el, input, later: ms => { t += ms; } }; };
   it('lights with F', () => {
     const { input } = setup();
     fire(window, 'keydown', { code: 'KeyF' });
@@ -270,7 +250,8 @@ describe('sleeping by the fire', () => {
 
 describe('a torch', () => {
   const burning = (fuel = FUEL_MAX) => ({ fires: [{ id: 0, x: spawn.x + 2, z: spawn.z, fuel, embers: EMBERS, lit: 0, fed: 8 }], attempts: 0, nextId: 1 });
-  const tapFire = (g, s = 2) => { const f = g.fire.fires[0], input = makeInput({ target: { x: f.x, z: f.z, tap: true } }); run(g, input, s); return input; };
+  // click the fire (he walks to beside it and stands there), then press the button
+  const tapFire = (g, s = 2) => { const f = g.fire.fires[0], input = makeInput({ target: { x: f.x, z: f.z, tap: true } }); run(g, input, s); input.action = 'tap'; run(g, input, 1); return input; };
   it('is taken out of a burning fire with empty hands, at a cost to the fire', () => {
     const g = createGame(w, spawn, { fire: burning() }), f0 = g.fire.fires[0].fuel;
     tapFire(g);
@@ -285,16 +266,20 @@ describe('a torch', () => {
   it('leaves no hand free for wood', () => {
     const g = createGame(w, spawn, { fire: { ...burning(), torch: { left: TORCH_DAYS } } }), log = logs[0];
     g.player.x = log.x + 1; g.player.z = log.z; g.player.y = w.H(g.player.x, g.player.z);
-    run(g, makeInput({ target: { x: log.x, z: log.z, tap: true } }), 2);
+    const input = makeInput({ target: { x: log.x, z: log.z, tap: true } });
+    run(g, input, 2); input.action = 'tap'; run(g, input, 1);
     expect(g.wood.carried.length).toBe(0);
   });
-  it('is stuck in the ground with a tap on the castaway, taken up again with a tap on it', () => {
+  it('is stuck in the ground with the button, and taken up again with the button beside it', () => {
     const g = createGame(w, spawn, { fire: { torch: { left: TORCH_DAYS } } });
-    run(g, makeInput({ target: { x: spawn.x, z: spawn.z, tap: true, hero: true } }), 0.1);
+    run(g, makeInput({ action: 'tap' }), 0.1);
     expect(g.fire.torch).toBeNull(); expect(g.fire.torches.length).toBe(1);
     const t = g.fire.torches[0];
     run(g, makeInput({ right: true }), 1);
-    run(g, makeInput({ target: { x: t.x, z: t.z, tap: true } }), 2);
+    const input = makeInput({ target: { x: t.x, z: t.z, tap: true } });
+    run(g, input, 2);
+    expect(g.fire.torch).toBeNull();   // standing beside it, doing nothing
+    input.action = 'tap'; run(g, input, 1);
     expect(g.fire.torch).not.toBeNull(); expect(g.fire.torches.length).toBe(0);
   });
   it('burns out after two hours, also stuck in the ground', () => {
@@ -324,9 +309,9 @@ describe('lighting a pile with a torch', () => {
     if (!dry) for (const l of g.wood.piles[0].logs) l.t = g.clock.total;   // as if just washed up
     return g;
   };
-  it('catches with a tap on a dry pile, without fibre; the torch goes into the fire', () => {
-    const g = torchAndPile(), p = g.wood.piles[0];
-    run(g, makeInput({ target: { x: p.x, z: p.z, tap: true } }), 2);
+  it('catches with a hold beside a dry pile, without fibre; the torch goes into the fire', () => {
+    const g = torchAndPile();
+    run(g, makeInput({ action: 'hold' }), 2);
     expect(g.fire.fires.length).toBe(1); expect(g.wood.piles.length).toBe(0); expect(g.fire.torch).toBeNull();
     expect(g.wood.carried.length).toBe(0);
   });
@@ -336,15 +321,15 @@ describe('lighting a pile with a torch', () => {
     expect(g.fire.fires.length).toBe(1);
   });
   it('only smokes on wet wood, and the torch is kept', () => {
-    const g = torchAndPile(false), p = g.wood.piles[0];
-    run(g, makeInput({ target: { x: p.x, z: p.z, tap: true } }), 2);
+    const g = torchAndPile(false);
+    run(g, makeInput({ action: 'hold' }), 2);
     expect(g.fire.fires.length).toBe(0); expect(g.fire.puffs.length).toBe(1); expect(g.fire.torch).not.toBeNull();
     expect(g.wood.piles[0].logs.length).toBe(FIRE_MIN);
     for (const l of logs.slice(0, FIRE_MIN)) delete l.t;   // the world's logs are shared between tests
   });
   it('does not light too small a pile', () => {
-    const g = withPile(FIRE_MIN - 1, { fire: { torch: { left: TORCH_DAYS } } }), p = g.wood.piles[0];
-    run(g, makeInput({ target: { x: p.x, z: p.z, tap: true } }), 2);
+    const g = withPile(FIRE_MIN - 1, { fire: { torch: { left: TORCH_DAYS } } });
+    run(g, makeInput({ hold: { key: true } }), 2);
     expect(g.fire.fires.length).toBe(0); expect(g.fire.torch).not.toBeNull();
   });
 });

@@ -21,7 +21,7 @@
  *   fibre.version            goes up with every change, for the renderer
  *   fibre.onGround(coco)     true while the coconut lies there
  *   fibre.groundCocos(tile)  the coconuts lying under the palms of a tile
- *   fibre.find(x, z, reach) -> { kind: 'coco', coco, x, z } | null   the nearest
+ *   fibre.find(x, z, reach) -> { kind: 'coco', coco, x, z, d } | null   the nearest (d: distance)
  *   fibre.take(coco, total) -> true when it gave a tuft (false: hands full or gone)
  *     total: the days on the clock (game/clock), for when it grows back
  *   fibre.use() -> true when a tuft was used up
@@ -60,7 +60,7 @@ export function createFibre(w, saved) {
       for (const c of w.tiles[k].cocos || []) {
         if (taken.has(c.id)) continue;
         const d = Math.max(0, Math.hypot(c.x - x, c.z - z) - 0.1);
-        if (d < bd) { bd = d; best = { kind: 'coco', coco: c, x: c.x, z: c.z }; }
+        if (d < bd) { bd = d; best = { kind: 'coco', coco: c, x: c.x, z: c.z, d }; }
       }
     }
     return best;

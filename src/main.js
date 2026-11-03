@@ -37,7 +37,10 @@
  * turns pale at night (from sky.day).
  *
  * On touch-only devices the thumb stick #stick (render/thumbStick) bottom right
- * walks and runs through the same input object.
+ * walks and runs through the same input object. The action button #action
+ * (render/actionButton; Space does the same) sits above the stick there and in
+ * the bottom right corner on a desktop: each frame it is given what
+ * game.action() says a press would do, and input.actionFill() for its ring.
  *
  * The dev panel #dev (render/devPanel, src/version) shows version, name, fps,
  * the work time per frame and `idle` top right; the backtick key toggles it.
@@ -77,6 +80,7 @@ import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
 import { createCarryMark } from './render/carryMark.js';
 import { createThumbStick, touchOnly } from './render/thumbStick.js';
+import { createActionButton } from './render/actionButton.js';
 import { createDevPanel, DEV_PANEL_VISIBLE } from './render/devPanel.js';
 import { createNamePrompt } from './render/namePrompt.js';
 import { createDayLine, createWakeLine } from './render/nameLines.js';
@@ -125,10 +129,11 @@ async function boot() {
   const ink = createInk(document.documentElement);
   let name = saved && typeof saved.name === 'string' ? saved.name : '';   // set from the prompt below when asked
   const startDay = saved && Number.isInteger(saved.startDay) ? saved.startDay : (saved ? 0 : game.clock.day);   // day 1 is the day the game started
-  let wasAsleep = game.sleep.asleep;
+  let wasAsleep = game.sleep.asleep, button = null;
   const show = info => {
     const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
     mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); carry.update({ fibre: game.fibre.carried }, now);
+    if (button) button.update(game.action(), input.actionFill());
     ink.update(skyAt(info.time).day);
     who.update(dayLine(name, day), now);
     if (wasAsleep && !game.sleep.asleep) wakes.show(wakeLine(name, day), now);   // any end of a sleep
@@ -141,6 +146,7 @@ async function boot() {
   input.yaw = view.yaw;
 
   createThumbStick(document.getElementById('stick'), input);
+  button = createActionButton(document.getElementById('action'), input);
   let stopSaving = testing || !!asking, sinceSave = 0, moment = momentKey(game);
   const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, view: view.pose }); sinceSave = 0; } };
   const viewSaver = createViewSaver();

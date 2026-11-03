@@ -1,5 +1,5 @@
-// Gathering driftwood: what lies on the beach, picking it up with a click
-// or a tap, carrying at most three pieces (slower), laying them down in
+// Gathering driftwood: what lies on the beach, picking it up with the action
+// button (a click or tap only walks to it), carrying at most three pieces (slower), laying them down in
 // piles and picking those up again.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
@@ -14,7 +14,7 @@ beforeAll(async () => {
   logs = w.tiles.flatMap(t => t.drift).sort((a, b) => Math.hypot(a.x - spawn.x, a.z - spawn.z) - Math.hypot(b.x - spawn.x, b.z - spawn.z));
 }, 120000);
 
-const makeInput = (o = {}) => { const i = { up: false, down: false, left: false, right: false, run: false, target: null, ...o }; i.clearTarget = () => { i.target = null; }; return i; };
+const makeInput = (o = {}) => { const i = { up: false, down: false, left: false, right: false, run: false, target: null, action: null, ...o }; i.clearTarget = () => { i.target = null; }; i.takeAction = () => { const a = i.action; i.action = null; return a; }; return i; };
 const besides = (log, d = 1.2) => { const x = log.x - Math.sin(log.a) * d, z = log.z + Math.cos(log.a) * d; return { x, z, y: w.H(x, z) }; };
 const run = (g, input, s) => { for (let i = 0; i < s * 60; i++) g.update(input, 1 / 60); };
 
@@ -36,9 +36,12 @@ describe('driftwood on the island', () => {
 });
 
 describe('picking up and carrying', () => {
-  it('walks to a clicked piece, bends down and picks it up', () => {
+  it('walks to a clicked piece and stands there; the button bends him down to pick it up', () => {
     const log = logs[0], g = createGame(w, besides(log)), input = makeInput({ target: { x: log.x, z: log.z, tap: true } });
     for (let i = 0; i < 300 && input.target; i++) g.update(input, 1 / 60);
+    expect(g.wood.carried.length).toBe(0); expect(g.player.stoop).toBe(0);   // clicking only walks
+    expect(g.action().tap).toMatchObject({ kind: 'pickup' });
+    input.action = 'tap'; g.update(input, 1 / 60);
     expect(g.wood.carried).toEqual([log]);
     expect(g.wood.onBeach(log)).toBe(false);
     expect(g.player.stoop).toBeGreaterThan(0);
@@ -48,15 +51,17 @@ describe('picking up and carrying', () => {
     run(g, input, 0.5);
     expect(Math.hypot(g.player.x - at.x, g.player.z - at.z)).toBeGreaterThan(0.3);
   });
-  it('needs a click close to the piece, a tap a little less close', () => {
+  it('needs a click close to the piece to walk up to it, a tap a little less close', () => {
     const log = logs[0], off = (AIM.mouse + AIM.touch) / 2, x = log.x - Math.sin(log.a) * off, z = log.z + Math.cos(log.a) * off;
     const mouse = createGame(w, besides(log, 2)), finger = createGame(w, besides(log, 2));
     const a = makeInput({ target: { x, z, tap: true } }), b = makeInput({ target: { x, z, tap: true, touch: true } });
     for (let i = 0; i < 400; i++) { mouse.update(a, 1 / 60); finger.update(b, 1 / 60); }
-    expect(mouse.wood.carried.length).toBe(0);
-    expect(finger.wood.carried.length).toBe(1);
+    const far = g => Math.hypot(g.player.x - log.x, g.player.z - log.z);
+    expect(far(mouse)).toBeLessThan(0.1 + off);   // walked to the spot itself ...
+    expect(far(finger)).toBeLessThan(0.6);        // ... and the finger to beside the piece
+    expect(mouse.wood.carried.length).toBe(0); expect(finger.wood.carried.length).toBe(0);
   });
-  it('does not pick up what was only steered over', () => {
+  it('does not pick up anything in passing, only with the button', () => {
     const log = logs[0], g = createGame(w, besides(log)), input = makeInput({ target: { x: log.x, z: log.z } });
     run(g, input, 3);
     expect(g.wood.carried.length).toBe(0);
@@ -88,9 +93,11 @@ describe('picking up and carrying', () => {
 
 describe('laying down', () => {
   const full = () => { const wood = createWood(w); for (const l of logs.slice(0, 3)) wood.take({ kind: 'log', log: l }); return wood.state(); };
-  it('lays everything down in a pile with a tap on the castaway', () => {
-    const g = createGame(w, spawn, { wood: full() }), input = makeInput({ target: { x: spawn.x, z: spawn.z, tap: true, hero: true } });
+  it('lays everything down in a pile with the button; a tap on the castaway does nothing', () => {
+    const g = createGame(w, spawn, { wood: full() }), input = makeInput({ target: { x: spawn.x, z: spawn.z, tap: true } });
     g.update(input, 1 / 60);
+    expect(g.wood.carried.length).toBe(3); expect(g.wood.piles.length).toBe(0);
+    input.action = 'tap'; g.update(input, 1 / 60);
     expect(input.target).toBeNull();
     expect(g.wood.carried.length).toBe(0);
     expect(g.wood.piles.length).toBe(1); expect(g.wood.piles[0].logs.length).toBe(3);
@@ -110,12 +117,14 @@ describe('laying down', () => {
     wood.drop(spawn.x + 20, spawn.z, 0);
     expect(wood.piles.length).toBe(2);
   });
-  it('walks to a pile and picks it up', () => {
+  it('walks to a pile and picks it up with the button', () => {
     const g = createGame(w, spawn, { wood: full() });
-    g.update(makeInput({ target: { x: 0, z: 0, tap: true, hero: true } }), 1 / 60);
+    g.update(makeInput({ action: 'tap' }), 1 / 60);
     run(g, makeInput({ right: true }), 1.5);
     const p = g.wood.piles[0], input = makeInput({ target: { x: p.x, z: p.z, tap: true } });
     for (let i = 0; i < 600 && input.target; i++) g.update(input, 1 / 60);
+    expect(g.wood.carried.length).toBe(0); expect(g.wood.piles.length).toBe(1);
+    input.action = 'tap'; g.update(input, 1 / 60);
     expect(g.wood.carried.length).toBe(3); expect(g.wood.piles.length).toBe(0);
   });
   it('does not lay wood down in the water', () => {
@@ -125,7 +134,7 @@ describe('laying down', () => {
   });
   it('saves and restores what is carried and where the piles are', () => {
     const g = createGame(w, spawn, { wood: full() });
-    g.update(makeInput({ target: { x: 0, z: 0, tap: true, hero: true } }), 1 / 60);
+    g.update(makeInput({ action: 'tap' }), 1 / 60);
     const s = g.state();
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
     const back = createGame(w, spawn, { wood: s.wood });

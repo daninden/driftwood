@@ -24,7 +24,7 @@
  *   It counts from `start` (ms, default 0) as if something had happened then.
  * isBusy({ player, asleep, settling, input }) -> bool   whether the scene is
  *   moving: player.moving, work, stoop, lie; asleep; the camera settling; held
- *   keys, stick, a walking target or a press waiting to become a hold.
+ *   keys, stick, a walking target or the action button held (its ring is filling).
  * maxDt(idle) -> MAX_DT or MAX_DT_IDLE
  *
  * Depends on: nothing

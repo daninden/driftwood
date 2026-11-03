@@ -17,7 +17,7 @@ beforeAll(async () => {
   logs = w.tiles.flatMap(t => t.drift).sort((a, b) => Math.hypot(a.x - spawn.x, a.z - spawn.z) - Math.hypot(b.x - spawn.x, b.z - spawn.z));
 }, 120000);
 
-const makeInput = (o = {}) => { const i = { up: false, down: false, left: false, right: false, run: false, target: null, ...o }; i.clearTarget = () => { i.target = null; }; return i; };
+const makeInput = (o = {}) => { const i = { up: false, down: false, left: false, right: false, run: false, target: null, action: null, ...o }; i.clearTarget = () => { i.target = null; }; i.takeAction = () => { const a = i.action; i.action = null; return a; }; return i; };
 const run = (g, input, s) => { for (let i = 0; i < s * 60; i++) g.update(input, 1 / 60); };
 // a wood state with n pieces in one pile at the spawn, the rest ready to be taken
 const pileOf = (n, from = 0) => ({ carried: [], piles: [{ x: spawn.x, z: spawn.z, logs: logs.slice(from, from + n).map(l => l.id) }], washed: [], lost: [], tide: null, nextId: 0 });
@@ -78,7 +78,7 @@ describe('the pile limit', () => {
   it('lays wood down through the game with the same rule', () => {
     const g = createGame(w, spawn, { wood: pileOf(PILE_MAX) });
     carry(g.wood, logs.slice(20, 23));
-    g.update(makeInput({ target: { x: g.player.x, z: g.player.z, tap: true, hero: true } }), 1 / 60);
+    g.update(makeInput({ action: 'tap' }), 1 / 60);
     expect(g.wood.piles.length).toBe(2);
   });
 });
@@ -91,7 +91,7 @@ describe('wet wood on a fire', () => {
   };
   const wetLog = g => ({ ...logs[40], id: 9001, t: g.clock.total });             // just washed up
   const dryLog = g => ({ ...logs[41], id: 9002, t: g.clock.total - 2 });          // two days on the beach
-  const tap = (g, f) => { const i = makeInput({ target: { x: f.x, z: f.z, tap: true } }); run(g, i, 3); };
+  const tap = (g, f) => { const i = makeInput({ target: { x: f.x, z: f.z, tap: true } }); run(g, i, 3); i.action = 'tap'; run(g, i, 1); };   // walk to the fire, press the button
   it('lays a dry piece and keeps the wet one from a mixed load', () => {
     const { g, f } = fireGame(), wet = wetLog(g), dry = dryLog(g);
     g.wood.carried.push(dry, wet);   // the wet one is on top
@@ -99,11 +99,14 @@ describe('wet wood on a fire', () => {
     expect(g.wood.carried).toEqual([wet]);
     expect(f.fuel).toBeGreaterThan(2 * BURN);
   });
-  it('does nothing with only wet wood', () => {
+  it('puts nothing on the fire with only wet wood (the button lays the wood down instead)', () => {
     const { g, f } = fireGame(), wet = wetLog(g);
     g.wood.carried.push(wet);
-    tap(g, f);
-    expect(g.wood.carried).toEqual([wet]); expect(f.fuel).toBeCloseTo(2 * BURN);
+    const i = makeInput({ target: { x: f.x, z: f.z, tap: true } }); run(g, i, 3);
+    expect(g.action().tap.kind).toBe('lay');
+    expect(f.fuel).toBeCloseTo(2 * BURN);
+    i.action = 'tap'; run(g, i, 1);
+    expect(f.fuel).toBeCloseTo(2 * BURN); expect(g.wood.carried.length).toBe(0); expect(g.wood.piles.at(-1).logs).toEqual([wet]);
   });
   it('takes a piece dry just over the threshold', () => {
     const { g, f } = fireGame(), l = { ...logs[42], id: 9003, t: g.clock.total - TORCH_DRY - 0.01 };

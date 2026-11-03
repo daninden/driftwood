@@ -11,6 +11,7 @@
  * sits in #needs (index.html) between the moon and the row of what he
  * carries; the half coconut of hunger will come right after it.
  *
+ * DROP_PATH                  the outline of the drop in its 16 × 24 box
  * dropClip(fill) -> { y, h }   the part of the drop's 16 × 24 box that is filled,
  *   from the bottom, fill 0..1 in steps of 1/FILL_STEPS. Pure.
  * thirstOpacity(days, since) -> 0..1   opacity from the days of thirst and the
@@ -30,6 +31,7 @@ import { COLLAPSE_AT } from '../game/thirst.js';
 export const FILL_STEPS = 48;
 export const CLEAR_FROM = 0.5, CLEAR_TO = COLLAPSE_AT;   // days of thirst: starts getting clearer, fully clear
 const H = 24;
+export const DROP_PATH = 'M8 1C10 5 14 10 14 15.5A6 6 0 0 1 2 15.5C2 10 6 5 8 1Z';   // the drop in a 0 0 16 24 box (the action button reuses it)
 
 export function dropClip(fill) {
   const f = Math.round(Math.min(1, Math.max(0, fill)) * FILL_STEPS) / FILL_STEPS;

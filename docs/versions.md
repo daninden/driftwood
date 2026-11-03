@@ -2,6 +2,16 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.13 "Action" — 2026-11-03
+
+- Clicking and tapping only walk now. On wood, a pile, a coconut, a fire or a torch in the ground he walks to beside it and stands there, doing nothing; river water and its bank are just ground, so wading through a river works and a stray click no longer takes a torch from a fire or makes him drink. Tapping or holding the castaway does nothing any more.
+- One action button: **Space**, and a thin ink ring in the bottom right corner (above the thumb stick on touch screens, clickable with the mouse on a desktop), in the same ink as the other marks and pale at night. Faint and empty when nothing can be done; clearer, with a small ink icon, when something can. Its touches never count as a walk tap and do not disturb the stick or the two-finger view gestures.
+- A short press does the obvious thing for what he stands beside: pick up wood or from a pile, husk a coconut, lay a piece of dry wood on a fire, take a torch from a fire or take up a planted torch, drink at river water or its bank, and otherwise lay down what he carries or stick the torch in the ground. What is in his hands decides first (dry wood beside a fire feeds it, even with a pile next to it), then what is nearest; laying down comes last.
+- Holding the button (about half a second) does the heavy things: light a pile of four or more (fire drill with fibre, or a torch) and, anywhere else on dry ground, sleep. A small ring round the icon fills while it is held. `F` and `Z` stay as shortcuts. A press of the button wakes a sleeping castaway.
+- Icons in thin ink: wood with an arrow up or down, the fibre tuft, a flame over a piece of wood, a torch, a torch with a stroke of ground, the drop, a flame and the crescent moon. When a short press and a hold both do something, the short-press icon is large and the hold icon small beside it.
+- Fixed: a full fire (eight pieces) takes no more wood; the button offers nothing to lay on it and the piece is no longer wasted.
+- The pure `game.action()` says what a press and a hold would do; the button draws its icon from it. New `tests/action.test.js`.
+
 ## 0.12.1 "Smooth shadows" — 2026-11-03
 
 - Fixed: the shadows no longer move in visible jerks. The shadow light now turns in steps of 1/32 degree (before: a quarter degree, about a metre of shadow per step with a low sun), and it never comes from lower than 15 degrees (before: about 11.5), so shadows at sunrise and sunset are less extreme. The sun and the sky colours are unchanged.

@@ -1,5 +1,5 @@
-// Water (0.11): thirst over time and its effects, drinking at river water (not
-// at the sea), the drop mark, the burnt fire place and the save.
+// Water (0.11): thirst over time and its effects, drinking at river water with
+// the action button (not at the sea), the drop mark, the burnt fire place and the save.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
@@ -19,7 +19,7 @@ const WATER = { x: -77, z: 180 }, BANK = { x: -75.8, z: 180 };   // seed 1337: a
 const at = (x, z) => ({ x, z, y: w.H(x, z) });
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
 
-const makeInput = (o = {}) => { const i = { up: false, down: false, left: false, right: false, run: false, target: null, ...o }; i.clearTarget = () => { i.target = null; }; return i; };
+const makeInput = (o = {}) => { const i = { up: false, down: false, left: false, right: false, run: false, target: null, action: null, ...o }; i.clearTarget = () => { i.target = null; }; i.takeAction = () => { const a = i.action; i.action = null; return a; }; return i; };
 const tap = (g, input, x, z) => { input.target = { x, z, tap: true }; };
 const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
 const runUntil = (g, input, cond, s = 30, dt = 1 / 30) => { for (let t = 0; t < s && !cond(); t += dt) g.update(input, dt); };
@@ -119,10 +119,19 @@ describe('fresh water', () => {
 
 describe('drinking', () => {
   const start = (o = {}) => createGame(w, at(BANK.x + 3, BANK.z), { thirst: { days: 1.4 }, ...o });
-  it('walks to the water, kneels for a few seconds, and is no longer thirsty', () => {
+  const near = { x: BANK.x - 0.5, z: BANK.z };   // dry bank, 0.7 m from the water
+  const press = (g, i, kind = 'tap') => { i.action = kind; g.update(i, 1 / 30); };
+  const arrive = (g, i, x, z) => { tap(g, i, x, z); runUntil(g, i, () => !i.target, 20); };   // click: he walks there and stands
+  it('is only done with the button: walking to the water, even into it, drinks nothing', () => {
     const g = start(), i = makeInput();
-    tap(g, i, WATER.x, WATER.z);
-    runUntil(g, i, () => g.player.work, 20);
+    arrive(g, i, WATER.x, WATER.z);
+    expect(freshWater(w, g.player.x, g.player.z)).toBe(true);   // wading in the brook
+    run(g, i, 3); expect(g.player.work).toBeNull(); expect(g.thirst.days).toBeGreaterThan(1.4);
+    expect(g.action().tap).toMatchObject({ kind: 'drink' });
+  });
+  it('kneels for a few seconds and is no longer thirsty', () => {
+    const g = start(), i = makeInput();
+    arrive(g, i, WATER.x, WATER.z); press(g, i);
     expect(g.player.work && g.player.work.kind).toBe('drink');
     expect(g.thirst.days).toBeGreaterThan(1.3);
     run(g, i, DRINK_TIME * 0.5); expect(g.player.work.f).toBeGreaterThan(0.3); expect(g.player.work.f).toBeLessThan(0.8);
@@ -131,38 +140,46 @@ describe('drinking', () => {
   });
   it('also works from the bank, a little away from the water, and when not thirsty', () => {
     const g = start({ thirst: { days: 0.2 } }), i = makeInput();
-    const near = { x: BANK.x - 0.5, z: BANK.z }; expect(freshWater(w, near.x, near.z)).toBe(false); expect(findWater(w, near.x, near.z, 0.7)).not.toBeNull();
-    tap(g, i, near.x, near.z);
-    runUntil(g, i, () => g.player.work, 20);
+    expect(freshWater(w, near.x, near.z)).toBe(false); expect(findWater(w, near.x, near.z, 0.8)).not.toBeNull();
+    arrive(g, i, near.x, near.z); press(g, i);
     expect(g.player.work && g.player.work.kind).toBe('drink');
     run(g, i, DRINK_TIME + 1); expect(g.thirst.days).toBeLessThan(0.01);
   });
   it('is stopped early by walking off: no drink', () => {
     const g = start(), i = makeInput();
-    tap(g, i, WATER.x, WATER.z); runUntil(g, i, () => g.player.work, 20);
-    run(g, i, 1); i.target = { x: g.player.x + 3, z: g.player.z };
+    arrive(g, i, WATER.x, WATER.z); press(g, i); run(g, i, 1); i.target = { x: g.player.x + 3, z: g.player.z };
     run(g, i, 0.5); expect(g.player.work).toBeNull(); run(g, i, DRINK_TIME); expect(g.thirst.days).toBeGreaterThan(1.3);
   });
   it('does not kneel to the sea, to dry land or to a wet beach', () => {
     let sea = null; for (let x = -340; x < -300 && !sea; x += 5) if (w.H(x, 0) < -1) sea = { x, z: 0 };
-    const g = createGame(w, at(spawn.x, spawn.z), { thirst: { days: 1.4 } }), i = makeInput();
-    tap(g, i, sea.x, sea.z); let kneeled = false; for (let t = 0; t < 40; t += 1 / 30) { g.update(i, 1 / 30); if (g.player.work) kneeled = true; }
+    let shore = null; for (let x = sea.x; x < sea.x + 250 && !shore; x += 0.5) if (w.H(x, 0) > 0.1) shore = { x, z: 0 };   // dry sand beside the sea
+    const g = createGame(w, at(shore.x, shore.z), { thirst: { days: 1.4 } }), i = makeInput();
+    expect(g.action().tap === null || g.action().tap.kind !== 'drink').toBe(true);
+    tap(g, i, sea.x, sea.z); let kneeled = false; for (let t = 0; t < 10; t += 1 / 30) { g.update(i, 1 / 30); i.action = 'tap'; if (g.player.work && g.player.work.kind === 'drink') kneeled = true; }
     expect(kneeled).toBe(false); expect(g.thirst.days).toBeGreaterThan(1.4);
     const h = createGame(w, at(spawn.x, spawn.z)), j = makeInput(); tap(h, j, spawn.x + 2, spawn.z);
-    run(h, j, 6); expect(h.player.work).toBeNull();
+    run(h, j, 6); j.action = 'tap'; run(h, j, 6); expect(h.player.work && h.player.work.kind).not.toBe('drink');
   });
   it('lays carried wood down first, then drinks', () => {
     const logs = w.tiles.flatMap(t => t.drift), g = start({ wood: { carried: [], piles: [] } }), i = makeInput();
     g.wood.take({ kind: 'log', log: logs[0] }); g.wood.take({ kind: 'log', log: logs[1] });
-    tap(g, i, WATER.x, WATER.z);
+    arrive(g, i, near.x, near.z);
+    expect(g.action().tap).toMatchObject({ kind: 'drink' });
+    i.action = 'tap';
     let layDown = -1, kneel = -1; for (let t = 0; t < 30; t += 1 / 30) { g.update(i, 1 / 30); if (layDown < 0 && !g.wood.carried.length) layDown = t; if (kneel < 0 && g.player.work) kneel = t; if (kneel >= 0) break; }
     expect(layDown).toBeGreaterThanOrEqual(0); expect(kneel).toBeGreaterThan(layDown); expect(g.wood.piles.length).toBe(1); expect(g.wood.piles[0].logs.length).toBe(2);
     expect(freshWater(w, g.wood.piles[0].x, g.wood.piles[0].z)).toBe(false);   // not in the water
     run(g, i, DRINK_TIME + 1); expect(g.thirst.days).toBeLessThan(0.01);
   });
+  it('does not drink with wood in his arm while he stands in the water (the wood cannot go down)', () => {
+    const logs = w.tiles.flatMap(t => t.drift), g = start({ wood: { carried: [], piles: [] } }), i = makeInput();
+    g.wood.take({ kind: 'log', log: logs[0] });
+    arrive(g, i, WATER.x, WATER.z);
+    expect(g.action().tap).toBeNull();
+  });
   it('sticks a torch in the dry ground first, then drinks', () => {
     const g = start(), i = makeInput(); g.fire.torch = { left: 0.05 }; g.player.torch = true;
-    tap(g, i, WATER.x, WATER.z);
+    arrive(g, i, near.x, near.z); press(g, i);
     runUntil(g, i, () => g.player.work, 20);
     expect(g.fire.torch).toBeNull(); expect(g.fire.torches.length).toBe(1);
     const t = g.fire.torches[0]; expect(freshWater(w, t.x, t.z)).toBe(false);
