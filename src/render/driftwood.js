@@ -20,7 +20,11 @@
  * shrinks and fades as the wood dries and is gone when it is dry enough to
  * burn. Only beach logs get one, not piles (the sea left the sand wet where
  * it left the wood, a pile has been carried and laid down). The patches are
- * built with the tile's logs, so they stream with the tiles.
+ * built with the tile's logs, so they stream with the tiles. Wood in the strip
+ * between low and high water (0.18, ground below 0) gets none: the sea covers it
+ * and draws over it (the sea is drawn after the opaque wood), so it shows faintly
+ * through shallow water. The look is rebuilt on a step of drying while
+ * `wood.drying(total)` says some piece can still be wet.
  *
  * woodLook(dry) -> { wet, sheen }   pure; wet 0..1 is how much of the wet colour
  *   is mixed in (1 until BURN_DRY, 0 from BURN_DRY + BLEACH), sheen 1 while it
@@ -57,7 +61,6 @@ import { disposeGroup } from './nearTile.js';
 import { DRIFT, BRANCH } from './palette.js';
 import { dryness, DRY_DAYS } from '../game/wood.js';
 import { TORCH_DRY } from '../game/fire.js';
-import { FIRST_HIGH, PERIOD } from '../game/tide.js';
 import { ss } from '../core/math.js';
 import { wetToon } from './materials.js';
 
@@ -178,7 +181,7 @@ export function createWoodView(scene, w, rawKit, wood) {
   // the damp patches of some beach logs, into a group; k scales their opacity (1: full; fading wood: 0 and rising)
   const addPatches = (grp, logs, k) => {
     for (const l of logs) {
-      const p = dampPatch(l, dryness(l, now)); if (!p) continue;
+      const p = l.y < 0 ? null : dampPatch(l, dryness(l, now)); if (!p) continue;   // none in the strip the sea covers: no patch on top of the water
       const m = new THREE.Mesh(dampGeometry(w.H, l, p.scale), toon(DRIFT.damp, { transparent: true, opacity: p.opacity * k, alphaMap: damp, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
       m.userData.base = p.opacity; m.castShadow = false; m.receiveShadow = true; m.renderOrder = 1; grp.add(m);
     }
@@ -203,7 +206,7 @@ export function createWoodView(scene, w, rawKit, wood) {
     const dk = Math.floor(total * DRY_STEPS / DRY_DAYS);
     if (dk !== dryKey) {   // a step of drying: only worth a rebuild while some wood can still be wet (the latest wash-up is under a day old)
       dryKey = dk;
-      if (!Number.isFinite(wood.tide) || total < FIRST_HIGH + wood.tide * PERIOD + DRY_DAYS + 1 / DRY_STEPS) seen = -1;
+      if (wood.drying(total)) seen = -1;
     }
     if (wood.washes !== washes) { washes = wood.washes; fresh = new Set(wood.fresh); fadeT = 0; seen = -1; }
     if (wood.version !== seen) {

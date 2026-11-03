@@ -59,12 +59,12 @@ describe('label and version', () => {
     expect(devLabel('0.10', 'Wet wood', 30, 9, false, 10)).toBe('v0.10 · Wet wood · 30 fps · 9 ms');   // zoom only beyond 10
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.17.6'); expect(NAME).toBe('More fish');
+    expect(VERSION).toBe('0.18'); expect(NAME).toBe('Low water finds');
   });
   it('shows the quality level after the zoom and before idle, only when known', () => {
-    expect(devLabel('0.17.6', 'More fish', 30, 9, false, 0, 1)).toBe('v0.17.6 · More fish · 30 fps · 9 ms · q1');
-    expect(devLabel('0.17.6', 'More fish', 30, 9, true, 18, 0)).toBe('v0.17.6 · More fish · 30 fps · 9 ms · zoom 18 · q0 · idle');
-    expect(devLabel('0.17.6', 'More fish', 30, 9, false, 0, null)).toBe('v0.17.6 · More fish · 30 fps · 9 ms');
+    expect(devLabel('0.18', 'Low water finds', 30, 9, false, 0, 1)).toBe('v0.18 · Low water finds · 30 fps · 9 ms · q1');
+    expect(devLabel('0.18', 'Low water finds', 30, 9, true, 18, 0)).toBe('v0.18 · Low water finds · 30 fps · 9 ms · zoom 18 · q0 · idle');
+    expect(devLabel('0.18', 'Low water finds', 30, 9, false, 0, null)).toBe('v0.18 · Low water finds · 30 fps · 9 ms');
   });
   it('starts visible for now', () => { expect(DEV_PANEL_VISIBLE).toBe(true); });
 });

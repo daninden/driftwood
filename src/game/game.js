@@ -146,6 +146,7 @@ export function createGame(world, spawn, opts = {}) {
   const wildlife = createWildlife(world), fireflies = createFireflies(world), game = { player, clock, wood, sleep, fibre, branches, leantos, fire, thirst, hunger, wildlife, fireflies, sea: seaLevel(clock.total), update, state, action };
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
+  wood.tideUpdate(game.sea, clock.total);
   const here = () => terrainAt(world, player.x, player.z, game.sea);
   const wet = t => t.inRiver || t.y < game.sea + 0.05;
   const beside = (x, z) => {   // where to kneel by a pile or a fire: SIDE from its middle, on the castaway's side
@@ -363,6 +364,7 @@ export function createGame(world, spawn, opts = {}) {
     const n = highWaters(clock.total);
     if (n > wood.tide) { for (let k = Math.max(wood.tide + 1, n - 2); k <= n; k++) wood.washUp(k, player); wood.tide = n; }
     wood.flood(game.sea);
+    wood.tideUpdate(game.sea, clock.total);   // wood under the sea cannot be picked up and starts drying again
     thirst.update(gameDt / DAY_SECONDS);
     hunger.update(gameDt / DAY_SECONDS);
     fire.update(gameDt / DAY_SECONDS);

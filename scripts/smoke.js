@@ -19,6 +19,7 @@
 // smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night),
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
 // smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
+// smoke-30 wood out at low water on the wet strip, smoke-31 the same spot at high water (0.18).
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
 // smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
 // smoke-28 fish by day on the start beach at the default zoom (0.17.3, also in the quick run).
@@ -391,6 +392,41 @@ console.log('crabs at low water', JSON.stringify(crabsShot));
 if (crabsShot.sea > -0.3) errors.push('not at low water for the crabs: ' + crabsShot.sea);
 if (crabsShot.crabs < 2) errors.push('too few crabs out at low water: ' + crabsShot.crabs);
 await shot('smoke-25.png');
+// Low water finds (0.18): wood that washed up in the strip between low and high water. At low water it lies out on the
+// wet sand (smoke-30) and can be picked up; at high water its spot is under the sea, it shows faintly through the
+// water (smoke-31) and cannot be picked up. The nearest washed-up piece to the start is used, the clock set to low and
+// then high water by day, the player two steps from it, towards higher ground.
+const lowFinds = await page.evaluate(start => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, c = game.clock, wood = game.wood;
+  const PERIOD = 12.42 / 24, LOW = 0.2 + PERIOD / 2, HIGH = 0.2;
+  let best = null;
+  for (const tile of world.tiles) for (const l of wood.beachLogs(tile)) if (l.t !== undefined && l.y < 0 && (!best || Math.hypot(l.x - start.x, l.z - start.z) < Math.hypot(best.x - start.x, best.z - start.z))) best = l;
+  if (!best) return { error: 'no washed-up wood in the strip' };
+  let up = null; for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8, x = best.x + Math.cos(a) * 1.8, z = best.z + Math.sin(a) * 1.8; if (!up || world.H(x, z) > up.h) up = { x, z, h: world.H(x, z) }; }
+  const at = n => { const target = n, d = Math.floor(target); c.day = d; c.time = target - d; };
+  const near = (target) => { at(target); game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0; game.fire.torch = null; wood.carried.length = 0; p.x = up.x; p.z = up.z; p.y = world.H(p.x, p.z); step(1); view.zoomBy(-5); };
+  const day = Math.floor(c.total) + 2; const clock0 = { day: c.day, time: c.time };
+  let lowT = LOW + Math.ceil((day + 0.4 - LOW) / PERIOD) * PERIOD; while (lowT - Math.floor(lowT) < 0.33 || lowT - Math.floor(lowT) > 0.6) lowT += PERIOD;
+  near(lowT); const lo = { sea: game.sea, found: !!wood.find(best.x, best.z, 0.3), x: best.x, z: best.z, y: best.y };
+  window.__lowFind = best; window.__upSpot = up; window.__clockBefore = clock0;
+  return lo;
+}, start);
+console.log('low water finds', JSON.stringify(lowFinds));
+if (lowFinds.error) errors.push(lowFinds.error);
+else {
+  if (lowFinds.sea > -0.3 || !lowFinds.found) errors.push('wood in the strip not out at low water: ' + JSON.stringify(lowFinds));
+  await shot('smoke-30.png', { quick: true });
+  const highFinds = await page.evaluate(() => {
+    const { game, step, view, world } = window.__driftwood, p = game.player, c = game.clock, wood = game.wood, best = window.__lowFind, up = window.__upSpot;
+    const PERIOD = 12.42 / 24; let t = 0.2 + Math.ceil((c.total - 0.2) / PERIOD) * PERIOD; while (t - Math.floor(t) < 0.33 || t - Math.floor(t) > 0.6) t += PERIOD;
+    c.day = Math.floor(t); c.time = t - c.day; p.x = up.x; p.z = up.z; step(1);
+    return { sea: game.sea, found: !!wood.find(best.x, best.z, 0.3), dry: game.wood.beachLogs ? true : false };
+  });
+  console.log('high water finds', JSON.stringify(highFinds));
+  if (highFinds.sea < -0.05 || highFinds.found) errors.push('wood in the strip is not covered at high water: ' + JSON.stringify(highFinds));
+  await shot('smoke-31.png', { quick: true });
+  await page.evaluate(() => { const { game, step } = window.__driftwood, b = window.__clockBefore; game.clock.day = b.day; game.clock.time = b.time; step(0.1); });   // the later shots start from the clock as it was
+}
 // Fish (0.17.3): by day at the default zoom on the start beach, the nearest sea fish listed (smoke-28, also in the
 // quick run). The player stands at the start, or a few metres on land towards the fish if they are further than 12 m.
 const fishShot = await page.evaluate(start => {

@@ -21,11 +21,18 @@
  *     carried with driftwood (CARRY_MAX together, the same slowing), are always dry, and
  *     go on piles of their own. A pile of branches or driftwood is never mixed.
  *   - Piles stay where they are. Nothing is solid: you walk over wood.
- *   - Every high water (game/tide) washes up new wood on the dry beach above
- *     the tide line: at most WASH_MAX pieces per beach tile, and never more
- *     loose wood on a tile than it had at the start (its cap), so the beach
- *     never fills up. Piles do not count. Each washed-up piece is new, with
- *     its own id and its own look, fixed by its place.
+ *   - Every high water (game/tide) washes up new wood in the strip between low
+ *     and high water (ground between the low-water and the high-water sea
+ *     level, not in a river), placed while the spot is under water, so it is
+ *     never seen to appear: at most WASH_MAX pieces per beach tile, and never
+ *     more loose wood on a tile than it had at the start (its cap), so the
+ *     beach never fills up. Piles do not count. Each washed-up piece is new,
+ *     with its own id and its own look, fixed by its place. Wood that lies
+ *     there stays (the next high water only adds up to the cap).
+ *   - A piece whose spot is under the sea (log.y below the current sea level)
+ *     cannot be found or picked up; at low water it can, also on wet sand or
+ *     in shallow water (tideUpdate sets the level).
+ *   - The sea covering a piece starts its drying over (log.t = now, tideUpdate).
  *   - A pile laid on sand that the flood covers (at low water, below the
  *     high-water line) is taken back by the sea.
  *   - Freshly washed-up wood is wet and salty. It dries over DRY_DAYS (a day)
@@ -58,6 +65,9 @@
  *   wood.washUp(n, avoid?) -> the logs high water number n brought (none
  *     within 2 m of avoid { x, z }, the castaway); deterministic in (seed, n).
  *     Each carries t, the day of that high water (game/tide), for drying.
+ *   wood.tideUpdate(sea, total)  tells the wood the sea level (pieces under it cannot be picked
+ *     up) and restarts the drying (log.t = total) of every washed-up piece the sea covers
+ *   wood.drying(total)  true while some washed-up or carried piece can still be wet
  *   wood.takePile(pile) -> its logs, taken off the island (to burn, game/fire)
  *   wood.giveOne(ok?) -> the top piece carried that ok(log) accepts (any, without
  *     ok), taken off the island (to feed a fire), or null
@@ -77,7 +87,7 @@
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
-import { FIRST_HIGH, PERIOD } from './tide.js';
+import { FIRST_HIGH, PERIOD, RANGE } from './tide.js';
 import { BRANCH_ID0 } from './branches.js';
 
 export const CARRY_MAX = 3;
@@ -88,6 +98,7 @@ export const PILE_MAX = 12;       // a pile holds at most this many pieces
 export const PILE_NEXT = 0.95;    // a new pile beside a full one stands this far from it
 const FRONT = 0.45;               // a first pile is laid this far in front of him
 const PILE_R = 0.45;              // how far a pile reaches round its centre
+const LOW = -RANGE;                // the sea level at low water
 export const WASH_MAX = 2;        // at most this many new pieces per beach tile and high water
 const WASH_GAP = 1.3;             // a new piece keeps this far from other wood
 export const DRY_DAYS = 1;        // washed-up wood is dry after a day
@@ -118,7 +129,8 @@ export function createWood(w, saved, branches = null) {
   for (const t of w.tiles) if (t.drift) for (const l of t.drift) { byId.set(l.id, l); nextId = Math.max(nextId, l.id + 1); }
   const taken = new Set(), lost = new Set();   // lost: first logs the sea took back
   const washed = new Map();                      // tile index -> [log] washed up since the start
-  const wood = { carried: [], piles: [], version: 0, fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, take, drop, washUp, flood, takePile, giveOne, consume, state };
+  let sea = -Infinity;   // the current sea level (tideUpdate)
+  const wood = { carried: [], tideUpdate, drying, piles: [], version: 0, fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, take, drop, washUp, flood, takePile, giveOne, consume, state };
   const addWashed = l => { const k = tileOf(l.x, l.z); if (!washed.has(k)) washed.set(k, []); washed.get(k).push(l); byId.set(l.id, l); };
   if (saved) {
     for (const l of saved.washed || []) addWashed({ ...l });
@@ -146,7 +158,7 @@ export function createWood(w, saved, branches = null) {
   function find(x, z, reach, only) {
     let best = null, bd = reach;
     if (only !== 'pile') for (const l of near(x, z, reach)) {
-      if (taken.has(l.id)) continue;
+      if (taken.has(l.id) || (!l.branch && l.y < sea)) continue;   // under the sea: out of reach until it falls dry
       const q = distToLog(l, x, z); if (q.d < bd) { bd = q.d; best = { kind: 'log', log: l, x: q.x, z: q.z, d: q.d }; }
     }
     if (only !== 'log') for (const p of wood.piles) {
@@ -213,16 +225,43 @@ export function createWood(w, saved, branches = null) {
     return null;
   }
 
+  function tideUpdate(level, total) {
+    sea = level;
+    for (const list of washed.values()) for (const l of list) if (l.y < level && l.t !== undefined && !taken.has(l.id)) l.t = total;   // carried up, it dries
+  }
+  function drying(total) {
+    const wet = l => l.t !== undefined && total - l.t < DRY_DAYS + 0.05;
+    for (const list of washed.values()) for (const l of list) if (wet(l)) return true;
+    return wood.carried.some(wet);
+  }
+
+  // the metre cells of a tile that lie in the strip between low and high water on gentle ground, not in a river (worked out once per tile)
+  const strips = new Map();
+  function stripCells(tile) {
+    let cells = strips.get(tile);
+    if (!cells) {
+      cells = [];
+      for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) {
+        const x = tile.x0 + i + 0.5, z = tile.z0 + j + 0.5, y = w.H(x, z);
+        if (y > LOW + 0.05 && y < -0.06 && w.slope(x, z) < 0.3 && !w.riverAt(x, z)) cells.push([x, z]);
+      }
+      strips.set(tile, cells);
+    }
+    return cells;
+  }
+  const inStrip = (x, y, z) => y > LOW + 0.02 && y < -0.03 && w.slope(x, z) < 0.35 && !w.riverAt(x, z);
+
   function washUp(n, avoid) {
     const brought = [];
     for (const tile of w.tiles) {
       const cap = tile.drift ? tile.drift.length : 0; if (!cap) continue;
       const here = beachLogs(tile), free = cap - here.length; if (free <= 0) continue;
       const r = mulberry32(hashInt(w.seed * 31 + n * 7919 + 17, tile.tx, tile.tz)), want = Math.min(free, 1 + (r() < 0.5 ? 1 : 0), WASH_MAX);
+      const cells = stripCells(tile); if (!cells.length) continue;
       let got = 0;
-      for (let k = 0; k < 26 && got < want; k++) {
-        const x = tile.x0 + r() * T, z = tile.z0 + r() * T, len = 0.9 + r() * 1.3, a = r() * Math.PI, rad = 0.07 + r() * 0.06, y = w.H(x, z);
-        if (!(y > 0.25 && y < 1.1 && w.slope(x, z) < 0.35 && w.Lat(x, z) < 0.35)) continue;
+      for (let k = 0; k < 40 && got < want; k++) {
+        const c = cells[Math.floor(r() * cells.length)], x = c[0] + r() - 0.5, z = c[1] + r() - 0.5, len = 0.9 + r() * 1.3, a = r() * Math.PI, rad = 0.07 + r() * 0.06, y = w.H(x, z);
+        if (!inStrip(x, y, z)) continue;   // the strip between low and high water, not in a river
         if (avoid && Math.hypot(x - avoid.x, z - avoid.z) < 2) continue;
         if (near(x, z, WASH_GAP).some(l => onBeach(l) && Math.hypot(l.x - x, l.z - z) < WASH_GAP) || wood.piles.some(p => Math.hypot(p.x - x, p.z - z) < WASH_GAP)) continue;
         const l = { id: nextId++, x, y, z, len, a, rad, t: FIRST_HIGH + n * PERIOD }; addWashed(l); here.push(l); brought.push(l); got++;

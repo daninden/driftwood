@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.18 "Low water finds" — 2026-11-03
+
+- New driftwood no longer lands on the dry beach: each high water places it (same numbers as before: one or two pieces per beach tile, never more than the tile had at the start) in the strip between the low-water and the high-water line, on gentle ground and not in a river, while the spot is under water, so you never see it appear. On seed 1337 35 of the 49 tiles with start wood have such a strip, 149 pieces of the 214 can be refilled; the other 14 tiles get no new wood.
+- At low water the wood lies out on the wet sand or in the shallows and is picked up as usual (also standing in shallow water). While the sea covers its spot it cannot be picked up (`find`, `take`, so also click targets and the action button's pickup skip it) and it shows faintly through the water.
+- Wood in the strip stays wet: `wood.tideUpdate(sea, total)` sets `log.t = total` of every washed-up piece under the sea (not those carried), so its drying starts over each time the sea covers it. Carried up above high water it dries as before. No damp patch under wood in the strip. Left wood stays across high waters; start wood on the dry beach is unchanged; piles in the strip are still taken by the flood. Nothing new in the save (`t` was saved already); old saves load.
+- Tests: strip spots only, not pickable when covered and pickable at low water (also through the action button), stays wet while covered and dries once carried, left wood stays, cap respected, start wood unchanged, save round trip.
+
 ## 0.17.6 "More fish" — 2026-11-03
 
 - Why fish were skipped near the start of seed 1337: river groups sat at every 9th river point and 20 % of those were dropped by the seed, so along the last 40 m of the river before the mouth (the wide, slow stretch where he starts, 4 to 9 m wide, 0.6 to 1.1 m deep) only three groups were left, and the mouth was excluded outright (`k < kMouth - 3`); past the mouth the channel is a strip about 8 m wide, which the random sea rules (random points per 40 m tile, bed 0.55 to 3 m deep) practically never hit. The depth and width checks themselves were not the cause.

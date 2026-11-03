@@ -6,7 +6,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createClock, DAY_SECONDS } from '../src/game/clock.js';
 import { seaLevel, highWaters, PERIOD, RANGE, FIRST_HIGH } from '../src/game/tide.js';
-import { createWood, WASH_MAX } from '../src/game/wood.js';
+import { createWood, WASH_MAX, dryness } from '../src/game/wood.js';
 import { createGame } from '../src/game/game.js';
 import { stepFactor } from '../src/game/movement.js';
 
@@ -75,12 +75,12 @@ describe('wood washing up', () => {
     expect(wood.washUp(1)).toEqual([]);
     expect(wood.washes).toBe(0);
   });
-  it('brings one or two new pieces per high water where wood was taken, on the dry beach', () => {
+  it('brings one or two new pieces per high water where wood was taken, in the strip between low and high water', () => {
     const { ts, wood } = emptied(12), got = wood.washUp(1);
     expect(got.length).toBeGreaterThan(0);
     for (const t of ts) expect(wood.beachLogs(t).length).toBeLessThanOrEqual(WASH_MAX);
     for (const l of got) {
-      expect(l.y).toBeGreaterThan(0.25); expect(l.y).toBeLessThan(1.1); expect(w.slope(l.x, l.z)).toBeLessThan(0.35);
+      expect(l.y).toBeGreaterThan(-RANGE); expect(l.y).toBeLessThan(0); expect(w.slope(l.x, l.z)).toBeLessThan(0.35); expect(w.riverAt(l.x, l.z)).toBeFalsy();
       expect(wood.onBeach(l)).toBe(true);
     }
     expect(wood.fresh).toEqual(got); expect(wood.washes).toBe(1);
@@ -90,7 +90,8 @@ describe('wood washing up', () => {
   it('never fills a beach beyond what it had at the start', () => {
     const { ts, wood } = emptied(6);
     for (let n = 1; n < 80; n++) wood.washUp(n);
-    for (const t of ts) { expect(wood.beachLogs(t).length).toBeLessThanOrEqual(t.drift.length); expect(wood.beachLogs(t).length).toBeGreaterThan(0); }
+    for (const t of ts) { expect(wood.beachLogs(t).length).toBeLessThanOrEqual(t.drift.length); }
+    expect(ts.some(t => wood.beachLogs(t).length > 0)).toBe(true);   // not every tile has a strip of its own
     for (const t of beaches().slice(6, 30)) expect(wood.beachLogs(t).length).toBe(t.drift.length);
   });
   it('is the same for the same high water, and keeps away from the castaway', () => {
@@ -117,6 +118,59 @@ describe('wood washing up', () => {
     for (let i = 0; i < 30; i++) g.update(input, 1 / 60);
     expect(g.wood.washes).toBe(1); expect(g.wood.tide).toBe(1);
     expect(g.wood.fresh.length).toBeGreaterThan(0);
+  });
+});
+
+describe('low water finds', () => {
+  const emptied = n => { const ts = beaches().slice(0, n); return { ts, wood: createWood(w, { lost: ts.flatMap(t => t.drift.map(l => l.id)) }) }; };
+  it('cannot be picked up while its spot is under the sea, and can at low water', () => {
+    const { wood } = emptied(12), l = wood.washUp(1)[0];
+    wood.tideUpdate(0, 1);
+    expect(wood.find(l.x, l.z, 0.3)).toBeNull();
+    wood.tideUpdate(-RANGE, 1.2);
+    const f = wood.find(l.x, l.z, 0.3); expect(f.log).toBe(l);
+    expect(wood.take(f)).toBe(1); expect(wood.carried).toEqual([l]);
+  });
+  it('stays wet while the sea covers it and dries once it is out and carried up', () => {
+    const { wood } = emptied(12), l = wood.washUp(1)[0];
+    wood.tideUpdate(0, 3); expect(dryness(l, 3)).toBe(0);
+    wood.tideUpdate(-RANGE, 3.3); expect(dryness(l, 3.3)).toBeCloseTo(0.3);   // out of the water: drying
+    wood.tideUpdate(0, 3.5); expect(dryness(l, 3.5)).toBe(0);                 // covered again: starts over
+    wood.tideUpdate(-RANGE, 3.6);
+    wood.take(wood.find(l.x, l.z, 0.3));
+    wood.tideUpdate(0, 4); expect(dryness(l, 4)).toBeCloseTo(0.5);            // carried: the sea does not reset it
+    expect(dryness(l, 4.6)).toBe(1);
+  });
+  it('lies there for the next high water, which only adds wood up to the cap', () => {
+    const { ts, wood } = emptied(12), first = wood.washUp(1);
+    for (let n = 2; n < 30; n++) wood.washUp(n);
+    for (const l of first) expect(wood.onBeach(l)).toBe(true);
+    for (const t of ts) expect(wood.beachLogs(t).length).toBeLessThanOrEqual(t.drift.length);
+  });
+  it('leaves the start wood on the dry beach alone', () => {
+    const wood = createWood(w), t = beaches()[0], before = t.drift.map(l => [l.x, l.y, l.z, l.t]);
+    wood.tideUpdate(0, 7); wood.tideUpdate(-RANGE, 7.1);
+    expect(t.drift.map(l => [l.x, l.y, l.z, l.t])).toEqual(before);
+    for (const l of t.drift) { expect(l.y).toBeGreaterThan(0); expect(dryness(l, 7)).toBe(1); }
+    const l = t.drift[0]; expect(wood.find(l.x, l.z, 0.3).log).toBe(l);
+  });
+  it('is not offered by the action button while covered, and is at low water', () => {
+    const { wood } = emptied(12), l = wood.washUp(1)[0], spot = { x: l.x, z: l.z };
+    const hi = createGame(w, spot, { time: FIRST_HIGH + 0.001, wood: wood.state() }), lo = createGame(w, spot, { time: FIRST_HIGH + PERIOD / 2, wood: wood.state() });
+    for (const g of [hi, lo]) { g.player.x = l.x; g.player.z = l.z; }
+    expect(hi.action().tap && hi.action().tap.kind).not.toBe('pickup');
+    expect(lo.action().tap && lo.action().tap.kind).toBe('pickup');
+  });
+  it('saves and loads its wetness', () => {
+    const { wood } = emptied(12), got = wood.washUp(1); wood.tideUpdate(0, 2.25);
+    const s = JSON.parse(JSON.stringify(wood.state())), back = createWood(w, s);
+    expect(back.state()).toEqual(s);
+    expect(s.washed.find(x => x.id === got[0].id).t).toBe(2.25);
+    expect(dryness(back.find(got[0].x, got[0].z, 5).log || got[0], 2.5)).toBeCloseTo(0.25);
+  });
+  it('knows whether anything can still be wet', () => {
+    const { wood } = emptied(12); expect(wood.drying(5)).toBe(false);
+    wood.washUp(1); wood.tideUpdate(0, 5); expect(wood.drying(5.5)).toBe(true); expect(wood.drying(7)).toBe(false);
   });
 });
 
