@@ -193,7 +193,7 @@ await shot('smoke-7.png', { look: false });
 const husk = await page.evaluate(() => {
   const { world, game, input, step } = window.__driftwood, p = game.player;
   const c = world.tiles.flatMap(t => t.cocos).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
-  p.x = c.x + 1; p.z = c.z + 0.3; p.y = world.H(p.x, p.z);
+  p.x = c.x + 1; p.z = c.z + 0.3; p.y = world.H(p.x, p.z); game.hunger.days = 3;   // hungry, to see the nut eaten
   input.target = { x: c.x, z: c.z, tap: true }; step(10, () => !input.target); window.__press(); step(10, () => p.work && p.work.f > 0.5);
   return { work: p.work && p.work.kind, x: p.x, z: p.z };
 });
@@ -202,6 +202,8 @@ if (husk.work !== 'husk') errors.push('did not kneel to husk a coconut');
 await shot('smoke-8.png');
 const fibre = await page.evaluate(() => { const { game, step } = window.__driftwood; step(5, () => !game.player.work); return game.fibre.carried; });
 console.log('fibre', fibre);
+const hunger = await page.evaluate(() => window.__driftwood.game.hunger.days);
+if (hunger > 1.9) errors.push('hunger ' + hunger.toFixed(2) + ' after eating the nut, expected about 1.67');
 if (fibre !== 1) errors.push('carries ' + fibre + ' tufts of fibre instead of 1');
 
 // Fire: lay a pile of four dry pieces (the first beach wood) on the dry sand

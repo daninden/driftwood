@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.15 "Coconut" — 2026-11-03
+
+- Hunger (new `src/game/hunger.js`, modelled on thirst): counted in game days since he last ate, running on while he sleeps, stopping at four days (no collapse; he never dies). Hungry from two days: walking speed down to 90 % at four days (multiplied with load, thirst and tiredness) and drilling a fire costs 1.5 times as much rest. Starving from four days: rest runs out 1.5 times as fast, multiplied with thirst's double (both together: 3 times).
+- Eating: husking a coconut takes 4 seconds (was 2.5; the same kneeling work, no new animation). When it is done he has one tuft of fibre, eats the nut (hunger down by 4/3 day, not below 0) and drinks its milk (thirst down by a quarter day, `thirst.sip`), always, also when not hungry. Stopped early: nothing, the nut stays.
+- The half coconut mark (`src/render/hungerMark.js`, `#hunger` in `index.html`) next to the drop: a half coconut seen from the side whose flesh empties from the top down as hunger grows; same ink, glow and opacity curve as the drop.
+- Saving: an optional `hunger: { days }`; older saves load as not hungry (the format stays `v: 1`).
+
 ## 0.14.2 "Still edges" — 2026-11-03
 
 - Fixed: the shadows flickered. Each tiny step of the shadow light (1/32°, about ten a second) re-drew the shadow map and its jagged texel edges fell slightly differently every time. Now there are no jaggies: the shadow map is 4096 px on desktop (2048 px on touch-only devices, as before), the soft filter's radius is 3 texels (was 1.5), and each of its 16 taps is a bilinear comparison (four texels mixed by the fraction). The light's stepping is unchanged. `shadowMapSize(touch)` in `src/render/stage.js` chooses the size; `main` passes the touch test down through `createIslandView` to `createStage`.

@@ -9,7 +9,7 @@
  * as thirst grows from the half of the way to a day on, and clear for a few
  * seconds after drinking (the curve of render/carryMark). No numbers. Rim 2 px with the glow `--halo` (index.html, 0.13.3). It
  * sits in #needs (index.html) between the moon and the row of what he
- * carries; the half coconut of hunger will come right after it.
+ * carries; the half coconut of hunger (render/hungerMark) comes right after it.
  *
  * DROP_PATH                  the outline of the drop in its 16 × 24 box
  * dropClip(fill) -> { y, h }   the part of the drop's 16 × 24 box that is filled,

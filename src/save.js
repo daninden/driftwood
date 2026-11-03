@@ -25,6 +25,8 @@
  * clamped to 0..2 by game/thirst; missing in older saves: not thirsty) and
  * `fire.burnt: [{ id, x, z, left, n }]` (the burnt places of game/fire; missing:
  * none). A wrong type makes the save unusable like any other broken field.
+ * Since 0.15 a save may also carry `hunger: { days }` (days since he ate; clamped
+ * to 0..4 by game/hunger; missing in older saves: not hungry).
  * saveKey(seed) -> 'driftwood-save-<seed>'
  * serialise(state) -> string          state: game.state() (plus name, startDay); adds the format number `v`
  * parseSave(text, seed) -> state | null
@@ -79,6 +81,7 @@ function valid(s, seed) {
   if (!fi.fires.every(q => obj(q) && [q.id, q.x, q.z, q.fuel, q.embers, q.lit, q.fed].every(num))) return false;
   if (fi.torch !== null && fi.torch !== undefined && !(obj(fi.torch) && num(fi.torch.left))) return false;
   if (s.thirst !== undefined && !(obj(s.thirst) && num(s.thirst.days))) return false;
+  if (s.hunger !== undefined && !(obj(s.hunger) && num(s.hunger.days))) return false;
   if (fi.burnt !== undefined && !(arr(fi.burnt) && fi.burnt.length <= 64 && fi.burnt.every(b => obj(b) && [b.id, b.x, b.z, b.left, b.n].every(num)))) return false;
   return !fi.torches || fi.torches.every(t => obj(t) && [t.id, t.x, t.z, t.left].every(num));
 }

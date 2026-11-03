@@ -56,13 +56,19 @@ Every high water washes up some new wood, and the sea takes back piles laid on t
 
 ### Coconut fibre
 
-Coconuts lie under the palms. Stand beside one and press the button: he kneels and husks it, and you get a tuft of fibre (the nut is not kept). You can carry at most three tufts. They show as small drawings next to the moon: faint most of the time, clearer for a moment when the number changes.
+Coconuts lie under the palms. Stand beside one and press the button: he kneels and husks it, and you get a tuft of fibre (and you eat the nut, see Hunger). You can carry at most three tufts. They show as small drawings next to the moon: faint most of the time, clearer for a moment when the number changes.
 
 ### Thirst
 
 After about a day (twenty minutes of play) you are thirsty and a little slower; after a day and a half you are very thirsty and your rest runs out twice as fast. After two days you collapse and sleep where you stand, and wake still thirsty. You never die.
 
 Drink at a river: stand in the water or on its bank and press the button; you kneel and drink for a few seconds. Wood you carry is laid down first, a torch is stuck in the ground first. The sea and the lagoons are salt and do nothing, and wading in a river does not drink by itself. A small drop next to the moon shows your thirst: full after a drink, emptying as you get thirsty. Your head hangs a little when you are thirsty.
+
+### Hunger
+
+After about two days without eating you are hungry: a little slower, and drilling a fire costs more of your rest. After four days you are starving and your rest runs out faster, so you fall asleep exhausted sooner (and if you are thirsty as well, faster still). You never die of it, and it never gets worse than that.
+
+The food is the coconut. Husking one now takes a little longer, about four seconds: first the husk comes off (you get your tuft of fibre), then you eat the nut. One nut takes away a third of the way to starving and a bit of thirst too, also when you are not hungry. Walk off before you are done and nothing happens; the nut stays. A small half coconut next to the drop shows your hunger: full after a meal, emptying as you get hungry. Coconuts grow back after a few days, so you move along the palms.
 
 ### Fire
 
@@ -86,7 +92,7 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 
 - **W A S D** or arrow keys: walk; **Shift**: run
 - **Click or tap** the ground to walk there; double tap to run. Clicking or tapping a thing (driftwood, a pile, a coconut, a fire, a torch in the ground) walks to beside it and does nothing else
-- **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks, feeds a fire, takes or sticks a torch, or drinks, whatever the drawing in the ring shows
+- **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks (and eats) a coconut, feeds a fire, takes or sticks a torch, or drinks, whatever the drawing in the ring shows
 - **Hold** the action button (about half a second) to light a pile beside you (or press **F** there), or to sleep (or press **Z**)
 - A left click, a tap, the action button or a walking key wakes him; the view controls do not
 - **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, drinking, drilling a fire), like walking off

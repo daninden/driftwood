@@ -8,7 +8,7 @@
  * the rivers (game/thirst, game/water), and sleeping now and then (game/sleep). The state is kept small and plain so it can be saved later
  * (see docs/architecture.md, "Saving").
  *
- * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire, thirst }?) -> game
+ * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire, thirst, hunger }?) -> game
  *   The options are what state() returns, so restoring a save is
  *   createGame(world, spawn, saved) (see save.js): each part starts from its
  *   saved state. A saved player { x, z, heading } who cannot stand there any
@@ -17,12 +17,13 @@
  *   a pending tap are not saved.
  *   wantsToMove(input) -> true while keys, the thumb stick or a target ask to walk;
  *   it stops kneeling work and drops a queued action (a resting stick is null)
- *   REACH (0.55), BESIDE (1.2), AIM, HUSK_TIME, DRINK_TIME, STOOP: reaches and times
+ *   REACH (0.55), BESIDE (1.2), AIM, HUSK_TIME, NUT_DRINK, DRINK_TIME, STOOP: reaches, times and what a nut gives
  *   game.player                 { x, y, z, heading, moving, speed, phase, stoop, lie, tired, work }
  *     stoop: 1..0 while bending down to pick up or lay down wood (counts
  *     down over STOOP seconds); the castaway stands still meanwhile
  *     lie: 0..1 lying down to sleep (game/sleep); tired: 0..1;
      thirsty: 0..1 how thirsty (game/thirst level)
+ *     hungry: 0..1 how hungry (game/hunger level)
  *     work: null, or { kind: 'husk' | 'drill', f: 0..1 } while kneeling to
  *     husk a coconut (HUSK_TIME) or to drill fire (game/fire DRILL_TIME)
  *     torch: true while he carries a burning torch (game/fire)
@@ -32,6 +33,7 @@
  *   game.fibre                  coconuts and the fibre carried (game/fibre)
  *   game.fire                   fires, burnt places and failed attempts (game/fire)
  *   game.thirst                 days since he drank (game/thirst)
+ *   game.hunger                 days since he ate (game/hunger)
  *   game.sea                    the current sea level (game/tide)
  *   game.update(input, dt) -> { distance, terrain, time, sea, rest }
  *     dt is real time. Moves the player from the input (game/input; Shift
@@ -54,7 +56,7 @@
  *     lays one piece on it, also on embers; wet wood stays with him), then the
  *     nearest of 'pickup' (a piece within REACH, or a pile within BESIDE when
  *     his arm is empty; no hand free with a torch; room for CARRY_MAX), 'husk'
- *     (a coconut within REACH: kneels HUSK_TIME, one tuft of fibre), 'torch'
+ *     (a coconut within REACH: kneels HUSK_TIME, one tuft of fibre, and he eats the nut: hunger.eat(), thirst.sip(NUT_DRINK), always), 'torch'
  *     (empty-handed: a burning brand out of a fire within BESIDE, not from
  *     embers, or a torch in the ground within REACH) and 'drink' (fresh river
  *     water within 0.8 m, game/water; wood is laid down and a torch stuck in
@@ -71,7 +73,9 @@
  *     lies down or kneels.
  *     Thirst makes him a
  *     little slower, very thirsty makes rest run out twice as fast, and after
- *     two days he collapses and sleeps like exhaustion (game/thirst).
+ *     two days he collapses and sleeps like exhaustion (game/thirst). Hunger
+ *     (game/hunger) slows him a little, makes drilling cost more rest and,
+ *     starving, makes rest run out faster (multiplied with thirst's drain).
  *     Walking off or a click elsewhere stops kneeling work early (the fibre
  *     is kept). Wading deep puts the torch out. Lying down to sleep, he lays
  *     down what he carries and sticks a torch in the ground first; the sleep
@@ -85,7 +89,7 @@
  *   game.state() -> plain object with what would need saving
  *
  * Depends on: game/movement, game/clock, game/wood, game/tide, game/sleep,
- *   game/fibre, game/fire, game/thirst, game/water
+ *   game/fibre, game/fire, game/thirst, game/hunger, game/water
  */
 import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
@@ -94,6 +98,7 @@ import { seaLevel, highWaters } from './tide.js';
 import { createSleep } from './sleep.js';
 import { createFibre, FIBRE_MAX } from './fibre.js';
 import { createThirst } from './thirst.js';
+import { createHunger } from './hunger.js';
 import { findWater } from './water.js';
 import { createFire, full, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH, TORCH_DRY, TORCH_COST } from './fire.js';
 
@@ -101,7 +106,8 @@ export const STOOP = 0.55;         // seconds to bend down and up again
 export const REACH = 0.55;         // a piece of wood, a coconut or a torch in the ground within this distance of the feet can be reached
 export const BESIDE = 1.2;         // a pile or a fire within this distance (from its edge) is beside him: F and the hold of the action button reach it
 export const AIM = { mouse: 0.4, touch: 0.8 };   // how close to a piece a click or tap has to be to walk to it
-export const HUSK_TIME = 2.5;      // seconds of kneeling to tear the husk off a coconut
+export const HUSK_TIME = 4;        // seconds of kneeling to tear the husk off a coconut and eat it
+export const NUT_DRINK = 0.25;     // days of thirst the milk of a coconut takes away
 export const DRINK_TIME = 4;       // seconds of kneeling to drink
 const DRINK_REACH = 0.8;           // fresh water this close to the feet can be drunk (the bank of a brook counts)
 const SIDE = 0.75;                 // kneeling this far from the middle of a pile or a fire
@@ -113,11 +119,11 @@ export function createGame(world, spawn, opts = {}) {
   const clock = createClock(opts.time, opts.day);
   const saved = opts.player && nearestStandable(world, opts.player.x, opts.player.z, seaLevel(clock.total));
   const player = createPlayer(saved ? { x: saved.x, z: saved.z, y: world.H(saved.x, saved.z) } : spawn), wood = createWood(world, opts.wood), sleep = createSleep(opts.sleep);
-  const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst);
+  const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger);
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
-  player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level();
-  const game = { player, clock, wood, sleep, fibre, fire, thirst, sea: seaLevel(clock.total), update, state, action };
+  player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
+  const game = { player, clock, wood, sleep, fibre, fire, thirst, hunger, sea: seaLevel(clock.total), update, state, action };
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
   const here = () => terrainAt(world, player.x, player.z, game.sea);
@@ -229,7 +235,7 @@ export function createGame(world, spawn, opts = {}) {
   }
 
   function finish(wk) {
-    if (wk.kind === 'husk') { fibre.take(wk.thing, clock.total); return; }
+    if (wk.kind === 'husk') { fibre.take(wk.thing, clock.total); hunger.eat(); thirst.sip(NUT_DRINK); return; }
     if (wk.kind === 'drink') { thirst.drink(); return; }
     const pile = wk.thing; if (!wood.piles.includes(pile) || !fibre.use()) return;
     const lit = fire.attempt(pile.x, pile.z, pile.logs, meanDry(pile.logs), sleep.tired(), clock.total);
@@ -252,9 +258,9 @@ export function createGame(world, spawn, opts = {}) {
     else if (wantSleep && canSleep()) { work = null; queued = null; sleep.start(); }
     if (sleep.asleep && fire.torch && !plantTorch()) fire.douse();   // he sticks the torch in the ground before he lies down
     settle();
-    const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z), { drain: thirst.drain(), faint: thirst.faint() });
+    const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z), { drain: thirst.drain() * hunger.drain(), faint: thirst.faint() });
     settle();
-    player.lie = sleep.lie; player.tired = sleep.tired(); player.thirsty = thirst.level();
+    player.lie = sleep.lie; player.tired = sleep.tired(); player.thirsty = thirst.level(); player.hungry = hunger.level();
     if (work && (sleep.asleep || wantsToMove(input))) work = null;   // stopped early
     if (queued && (sleep.asleep || wantsToMove(input))) queued = null;
 
@@ -267,7 +273,7 @@ export function createGame(world, spawn, opts = {}) {
       res = stepPlayer(world, player, null, dt);
     } else if (work) {
       work.t += dt;
-      if (work.kind === 'drill') sleep.tire(DRILL_COST * dt / DRILL_TIME);
+      if (work.kind === 'drill') sleep.tire(DRILL_COST * hunger.drillCost() * dt / DRILL_TIME);
       if (work.t >= work.dur) { const wk = work; work = null; finish(wk); }
       res = stepPlayer(world, player, null, dt);
     } else {
@@ -291,7 +297,7 @@ export function createGame(world, spawn, opts = {}) {
       } else {
         const dir = moveIntent(input, player);
         if (!dir && input.target) input.clearTarget();
-        const load = (1 - CARRY_SLOW * wood.carried.length) * sleep.speed() * thirst.speed();
+        const load = (1 - CARRY_SLOW * wood.carried.length) * sleep.speed() * thirst.speed() * hunger.speed();
         res = stepPlayer(world, player, dir, dt, input.run || !!(input.target && input.target.run), load, game.sea, 1 - CARRY_STRIDE * wood.carried.length);
         if (res.blocked && input.target) { blockedFor += dt; if (blockedFor > 0.5) input.clearTarget(); } else blockedFor = 0;
       }
@@ -306,6 +312,7 @@ export function createGame(world, spawn, opts = {}) {
     if (n > wood.tide) { for (let k = Math.max(wood.tide + 1, n - 2); k <= n; k++) wood.washUp(k, player); wood.tide = n; }
     wood.flood(game.sea);
     thirst.update(gameDt / DAY_SECONDS);
+    hunger.update(gameDt / DAY_SECONDS);
     fire.update(gameDt / DAY_SECONDS);
     fire.flood(game.sea);
     fibre.update(clock.total);
@@ -314,7 +321,7 @@ export function createGame(world, spawn, opts = {}) {
     return { distance: res.distance, terrain: here(), time: clock.time, sea: game.sea, rest: sleep.rest() };
   }
   function state() {
-    return { seed: world.seed, time: clock.time, day: clock.day, player: { x: player.x, z: player.z, heading: player.heading }, sleep: sleep.state(), wood: wood.state(), fibre: fibre.state(), fire: fire.state(), thirst: thirst.state() };
+    return { seed: world.seed, time: clock.time, day: clock.day, player: { x: player.x, z: player.z, heading: player.heading }, sleep: sleep.state(), wood: wood.state(), fibre: fibre.state(), fire: fire.state(), thirst: thirst.state(), hunger: hunger.state() };
   }
   return game;
 }

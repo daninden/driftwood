@@ -30,7 +30,7 @@
  *
  * The moon mark #rest (render/restMark) shows how rested the castaway is;
  * next to it the drop #thirst (render/thirstMark, in #needs) shows how thirsty
- * he is, and the row #carry (render/carryMark) what he carries loose.
+ * he is and the half coconut #hunger (render/hungerMark) how hungry, and the row #carry (render/carryMark) what he carries loose.
  * All ink marks take their colour from `--ink` on <html>, which render/ink
  * turns pale at night (from sky.day).
  *
@@ -76,6 +76,7 @@ import { createGame } from './game/game.js';
 import { createInput } from './game/input.js';
 import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
+import { createHungerMark } from './render/hungerMark.js';
 import { createCarryMark } from './render/carryMark.js';
 import { createThumbStick, touchOnly } from './render/thumbStick.js';
 import { createActionButton } from './render/actionButton.js';
@@ -120,6 +121,7 @@ async function boot() {
   try { game = createGame(world, spawn, saved || opts); } catch (err) { console.warn('save not usable, starting fresh', err); game = createGame(world, spawn, opts); }
   const mark = createRestMark(document.getElementById('rest'));
   const drop = createThirstMark(document.getElementById('thirst'));
+  const half = createHungerMark(document.getElementById('hunger'));
   const carry = createCarryMark(document.getElementById('carry'));
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
   const who = createDayLine(document.getElementById('who')), wakes = createWakeLine(document.getElementById('wake'));
@@ -129,7 +131,7 @@ async function boot() {
   let wasAsleep = game.sleep.asleep, button = null;
   const show = info => {
     const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
-    mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); carry.update({ fibre: game.fibre.carried }, now);
+    mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); half.update(game.hunger.days, now); carry.update({ fibre: game.fibre.carried }, now);
     if (button) button.update(game.action(), input.actionFill());
     ink.update(skyAt(info.time).day);
     who.update(dayLine(name, day), now);

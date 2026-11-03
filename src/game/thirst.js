@@ -30,6 +30,7 @@
  *   thirst.drain()       1, or DRAIN when very thirsty: how fast rest runs out
  *   thirst.update(days)  time passes (days of game time)
  *   thirst.drink()       thirst is gone
+ *   thirst.sip(days)     a little less thirst (the milk of a coconut), not below 0
  *   thirst.revive()      after a collapse sleep: back to REVIVE_AT if still at COLLAPSE_AT
  *   thirst.state() -> { days }   plain, for saving
  *   saved: such a state, to start from (missing or bad: not thirsty)
@@ -54,6 +55,7 @@ export function createThirst(saved) {
     drain: () => (thirst.very() ? DRAIN : 1),
     update(days) { if (days > 0) thirst.days = Math.min(COLLAPSE_AT, thirst.days + days); },
     drink() { thirst.days = 0; },
+    sip(days) { if (days > 0) thirst.days = Math.max(0, thirst.days - days); },
     revive() { if (thirst.faint()) thirst.days = REVIVE_AT; },
     state: () => ({ days: thirst.days }),
   };
