@@ -90,6 +90,10 @@ The moon in the bottom left corner shows how rested you are: full when rested, a
 
 Lie down on dry land whenever you like: hold the button where there is no pile to light (or press **Z**). Sleeping next to a fire lasts the whole night and you wake fully rested. Without a fire the cold wakes you after four hours, only half rested. Lie down within about a metre of a finished lean-to and the cold sleep lasts six hours and you wake three quarters rested; with a fire close by you sleep the whole night as before, and you recover a quarter faster than by a fire alone. A click, a tap, the button or a walking key wakes you early. The rising flood wakes you too. However a sleep ends, a short line fades in and out in the middle of the screen, such as *Dave wakes. Day 3.*
 
+### Animals
+
+You are not quite alone. Small **crabs** live on the beach, in groups round a few holes in the sand, and more of them are out on the wet sand at low water. They run sideways; come within a few steps and they scuttle into a hole and vanish, and come out again after a while once you have gone. In the shallow river water and in the lagoons you may see the dark shapes of **fish**; wade in near them and they dart away, and they come back slowly. Now and then a fish jumps out beyond the surf. By day **seabirds** circle high over the coast and leave in the evening; every few minutes a small flock lands on the beach to peck about, and when you come close they fly up and leave. They are only there to look at: you cannot catch or do anything with them. They are only alive near you, and nothing about them is saved.
+
 ### Day and night
 
 A day lasts twenty minutes. The sun rises in the east and sets in the west, with golden light low in the sky and lilac light at dusk and dawn. The night is dim and moonlit; a fire or torch lights its surroundings. The small marks on screen (the moon, the drop, the row of what you carry, the thumb stick, the action button, the name line) are dark brown by day and turn pale at night.

@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.17 "Wildlife" — 2026-11-03
+
+- Crabs, fish and birds, atmosphere only (nothing to do with them, no sound, nothing saved), all alive only within 30 m of the castaway.
+- Where they live: new `src/game/habitats.js` (pure) works out crab colonies, fish groups and bird cells from existing world data with a PRNG seeded by the seed and the tile or cell, like `game/branches`; the generated island and the seed 1337 fixture are untouched.
+- Behaviour: new `src/game/wildlife.js` (pure, run from the end of `game.update`; `game.wildlife`). Crabs: sideways runs near their hole, scuttle to the nearest hole within 3 m, back 10 to 20 s after he is more than 5 m away, 45 % of a colony out at high water and all at low water, holes the sea covers are shut. Fish: shadows in shallow rivers (facing upstream) and lagoons, darting and fading when he wades within 2 m, back after 8 to 16 s over 4 s; a fish jumps beyond the surf every 30 to 90 s with a splash. Birds: 2 to 4 circle high over each stretch of coast by day, arriving at dawn and leaving towards the rocky shore in the evening, none at night; a flock of 5 to 8 lands 10 to 20 m away every few minutes (the first after 90 to 180 s), pecks about and flies up, circles and leaves when one is within 4 m.
+- Drawing: new `src/render/wildlife.js`: instanced pools in the toon style with outlines (a crab about 14 cm across, a seabird 60 cm long with a metre of wings that flap, glide or fold, fish as dark flat shadows drawn over the water, the jumping fish and a splash of flat white flecks and drops in the surf's style). No shadows are cast; the moving animals do not keep the idle rate of 15 fps from kicking in (`framePacer` is unchanged).
+- Tests: `tests/wildlife.test.js`. Smoke test: crabs at low water (`smoke-25.png`) and a landed flock (`smoke-26.png`, also in the quick run). README: an *Animals* section.
+
 ## 0.16.2 "Light load" — 2026-11-03
 
 - The game lowers its own quality on a slow device (a laptop with an integrated chip drew 10 to 12 fps with the 4096 px shadow map, the 16 x 4 tap filter and 1.5 times pixel ratio). New `src/render/quality.js` (pure): five levels, one step at a time: 0 as before, 1 shadow map 2048, 2 the lighter filter (16 plain taps, radius 1.5), 3 pixel ratio 1, 4 the ground casts no shadows. After the island has faded in, the mean time between non-idle frames is measured over 3 s; slower than 1/27 s steps down one level, 2 s of settling, measure again; the first 4 s, idle frames, the frame after idling and gaps are ignored; never steps up. Steps that change nothing on the device are skipped (touch devices already start at 2048).

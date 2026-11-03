@@ -17,6 +17,9 @@
  *        burn), and the damp sand under it (a dark, low-opacity patch)
  * BRANCH branches under the trees: dark bark colours and dry leaf colours
  * COCO   coconuts under the palms
+ * WILD   the animals: crab (orange-red body, claws, darker legs, black eyes), seabird
+ *        (white, grey wing tips and tail, orange beak and legs), fish (the dark
+ *        shadow in the water and its pale end when it fades, the silver jumper)
  * FIRE   flames (core to tip), embers, charred wood, ash, smoke, and the
  *        warm light and glow a fire gives at night
  *
@@ -53,6 +56,11 @@ export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8
 export const DRIFT = Object.freeze({ dry: [0xa8987c, 0x9a8a70, 0xb4a68c, 0x8e8068], wet: 0x40393a, damp: 0x8c6a30 });
 export const BRANCH = Object.freeze({ bark: [0x5a4631, 0x4f3d2b, 0x654f38], leaf: [0xb08a45, 0x9c7a3a, 0xc19a52] });
 export const COCO = Object.freeze([0x7a5a36, 0x6a4c2e, 0x8a6a3e]);
+export const WILD = Object.freeze({
+  crab: { hole: 0x6b5336, body: 0xd4522a, claw: 0xe0683a, leg: 0xa8401f, eye: 0x1b1410 },
+  bird: { body: 0xf4f1ea, tip: 0x7b7f86, tail: 0xd9d7d0, beak: 0xe6a238, leg: 0xd98a3a, eye: 0x1b1410 },
+  fish: { shadow: 0x1d424c, pale: 0x86c4bc, jump: 0xaebfc6, belly: 0xe2e8e6 },
+});
 export const FIRE = Object.freeze({
   flame: [0xfff0b0, 0xffc45a, 0xf27a2e], ember: 0xff7a32, char: [0x3a2e26, 0x4a3a2e, 0x2e2620], ash: 0x6e665c,
   smoke: 0xb2aa9e, light: 0xffa456, glow: [255, 138, 58],

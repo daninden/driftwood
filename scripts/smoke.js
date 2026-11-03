@@ -18,14 +18,15 @@
 // smoke-17 beside the fire with dry wood (at night), smoke-18 its ring filling while held,
 // smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night),
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
-// smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots).
+// smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
+// smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
 //
 // The browser is the full Chromium (channel 'chromium', new headless mode), which uses the real graphics
 // card (ANGLE on Direct3D 11 on Windows) where there is one. Without a usable card (a CI machine, or the
 // full Chromium not installed) it falls back to the headless shell with software drawing (SwiftShader),
 // which costs time in proportion to pixels. The renderer in use is logged once at the start.
 // Two sizes are used to keep that fallback bearable. The quick run
-// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to) and 19 (on a phone) at 640x400 (the phone at scale 1).
+// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to), 26 (the flock) and 19 (on a phone) at 640x400 (the phone at scale 1).
 // The full run (--full) takes every shot; those a person looks at are 1280x800 (the phone at
 // scale 2), the ones that only check something (smoke-0, 2, 3, 4, 7, 18) stay at 640x400.
 // All the checks on the game state run in both. Pixels are checked without a PNG: right
@@ -364,6 +365,40 @@ console.log('sleeping under the lean-to', JSON.stringify({ ...under, ...slept })
 if (!under.sheltered) errors.push('not sheltered at the centre of the lean-to');
 if (slept.slept < 0.24 || slept.slept > 0.27) errors.push('a cold sleep under the lean-to lasted ' + (slept.slept * 24).toFixed(1) + ' h instead of 6');
 if (slept.rest < 0.7) errors.push('not three quarters rested under the lean-to: ' + slept.rest);
+
+// Wildlife (0.17): crabs out on the wet sand at low water, near their holes (smoke-25), and a
+// flock of seabirds landed on the beach (smoke-26, also in the quick run). The state is set up
+// directly: the clock to a low water by day, the player a few steps from the colony, the flock
+// called at once. A crab or a bird is only counted when game/wildlife lists it within 30 m.
+const crabsShot = await page.evaluate(start => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, wl = game.wildlife, c = game.clock;
+  const PERIOD = 12.42 / 24, LOW = 0.2 + PERIOD / 2;   // game/tide: a low water at LOW + n x PERIOD
+  let target = 0; for (let n = Math.ceil((c.total - LOW) / PERIOD); n < Math.ceil((c.total - LOW) / PERIOD) + 6; n++) { target = LOW + n * PERIOD; const f = target - Math.floor(target); if (f > 0.33 && f < 0.6) break; }
+  c.day = Math.floor(target); c.time = target - c.day; game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0; game.fire.torch = null;
+  const cols = wl.coloniesNear(start.x, start.z, 90).filter(k => k.holes.some(h => h.wet)).sort((a, b) => Math.hypot(a.x - start.x, a.z - start.z) - Math.hypot(b.x - start.x, b.z - start.z));
+  const col = cols[0], dx = start.x - col.x, dz = start.z - col.z, l = Math.hypot(dx, dz) || 1;
+  p.x = col.x + dx / l * 7.5; p.z = col.z + dz / l * 7.5; p.y = world.H(p.x, p.z);   // crabs that were hidden come out once he is more than 5 m away
+  step(1); view.zoomBy(-5);
+  step(22);   // crabs scared on the way here need 10 to 20 s to come out
+  return { sea: game.sea, colony: [col.x, col.z], crabs: wl.crabs().filter(k => Math.hypot(k.x - col.x, k.z - col.z) < 8).length, holes: wl.holes().length };
+}, start);
+console.log('crabs at low water', JSON.stringify(crabsShot));
+if (crabsShot.sea > -0.3) errors.push('not at low water for the crabs: ' + crabsShot.sea);
+if (crabsShot.crabs < 2) errors.push('too few crabs out at low water: ' + crabsShot.crabs);
+await shot('smoke-25.png');
+const flockShot = await page.evaluate(start => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, wl = game.wildlife, c = game.clock;
+  c.day += 1; c.time = 0.45; p.x = start.x + 2; p.z = start.z + 1.5; p.y = world.H(p.x, p.z); game.wood.carried.length = 0;
+  step(0.1); const called = wl.callFlock(); step(15, () => wl.flock && wl.flock.phase === 'ground');
+  const f = wl.flock; if (!f) return { called, phase: null };
+  const dx = p.x - f.site.x, dz = p.z - f.site.z, l = Math.hypot(dx, dz) || 1;
+  p.x = f.site.x + dx / l * 7; p.z = f.site.z + dz / l * 7; p.y = world.H(p.x, p.z);   // 7 m from the flock: close, but not yet within 4 m
+  step(0.5); view.zoomBy(2);
+  return { called, phase: f.phase, birds: wl.birds().filter(b => b.mode === 'ground').length, dist: Math.round(l) };
+}, start);
+console.log('flock landed', JSON.stringify(flockShot));
+if (!flockShot.called || flockShot.phase !== 'ground' || flockShot.birds < 5) errors.push('the flock did not land: ' + JSON.stringify(flockShot));
+await shot('smoke-26.png', { quick: true });
 
 // The same on a phone: a touch-only screen with the thumb stick, the button just above it (day and night).
 const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: full ? 2 : 1, hasTouch: true, isMobile: true });

@@ -24,7 +24,7 @@
  *     (game/fibre, render/coconuts), and the fires
  *     (game/fire, render/fire), the branches under the trees (game/branches,
  *     render/branches), the lean-tos (game/leanto, render/leanto), with the tally marks of piles and fires while
- *     he stands beside them (render/tallyMarks)
+ *     he stands beside them (render/tallyMarks), and the crabs, fish and birds near him (game/wildlife, render/wildlife)
  *   view.pickGround(clientX, clientY, touch?) -> { x, z } | null
  *     the ground under the screen point; on a piece of beach driftwood as drawn (its trunk, a branch or the
  *     roots standing up, with a finger a little wider) a point on that piece,
@@ -63,6 +63,7 @@ import { createBranchView } from './branches.js';
 import { createLeantoView } from './leanto.js';
 import { createFireView } from './fire.js';
 import { createTallyView } from './tallyMarks.js';
+import { createWildlifeView } from './wildlife.js';
 import { dryness } from '../game/wood.js';
 
 const BUILD_MS = 9, FAR_MS = 3;
@@ -80,7 +81,7 @@ export async function createIslandView(world, container, progress, start, opts =
   if (start) far.rest.sort((a, b) => Math.hypot(a.x0 - start.x, a.z0 - start.z) - Math.hypot(b.x0 - start.x, b.z0 - start.z));
   const slicer = createSlicer();
   const near = new Map();   // tile -> { group }
-  let woodView = null, cocoView = null, branchView = null, leantoView = null, fireView = null, tallyView = null, game = null;
+  let woodView = null, cocoView = null, branchView = null, leantoView = null, fireView = null, tallyView = null, wildView = null, game = null;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso),
@@ -110,6 +111,7 @@ export async function createIslandView(world, container, progress, start, opts =
     water.tick(dt, sky.day);
     if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H, heroFlame: hero.flame });
     if (tallyView) tallyView.update(dt, { game, camera: cam.camera, H: world.H, player });
+    if (wildView) wildView.update(dt);
     stage.followSun({ target: cam.target, yaw, pitch, zoom: cam.zoom, aspect }, sky.light.dir);
     mood.update(world.tierAt(t.L), dt, sky);
     renderer.render(scene, cam.camera);
@@ -122,6 +124,7 @@ export async function createIslandView(world, container, progress, start, opts =
     near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); });
     fireView = createFireView(scene, container, g.fire);
     tallyView = createTallyView(container);
+    wildView = createWildlifeView(scene, g.wildlife);
   }
 
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), onLog = new THREE.Vector3();
