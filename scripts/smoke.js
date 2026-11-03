@@ -1,5 +1,6 @@
 // Smoke test of the built game in a real (headless) browser.
-// Run `npm run build` first. Usage: npm run smoke [-- x,z]
+// Run `npm run build` first. Usage: npm run smoke [-- x,z]   (quick, about a minute)
+//                                    npm run smoke:full [-- x,z]   (every shot, for visual versions)
 // Loads dist/driftwood.html, waits for the world, builds the detailed tiles
 // around the start (or around x,z), walks for a moment, gathers driftwood and
 // lays it down, waits for low water, sleeps (with Z) a short, cold sleep
@@ -16,6 +17,13 @@
 // smoke-17 beside the fire with dry wood (at night), smoke-18 its ring filling while held,
 // smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night).
 //
+// Software drawing costs time in proportion to pixels, so two sizes are used. The quick run
+// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button) and 19 (on a phone) at 640x400 (the phone at scale 1).
+// The full run (--full) takes every shot; those a person looks at are 1280x800 (the phone at
+// scale 2), the ones that only check something (smoke-0, 2, 3, 4, 7, 18) stay at 640x400.
+// All the checks on the game state run in both. Pixels are checked without a PNG: right
+// after a draw the canvas is drawImage'd into a tiny 2D canvas in the page (see `shot`).
+//
 // A headless browser here has no GPU and draws only a few frames per second,
 // so after loading the test does not play in real time: it pauses drawing,
 // runs the game in fixed steps (__driftwood.step) and draws one settled frame
@@ -26,10 +34,13 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const file = fileURLToPath(new URL('../dist/driftwood.html', import.meta.url));
-const spawn = process.argv[2] ? '?spawn=' + process.argv[2] : '';
+const args = process.argv.slice(2), full = args.includes('--full');
+const spawnArg = args.find(a => !a.startsWith('--'));
+const spawn = spawnArg ? '?spawn=' + spawnArg : '';
+const SMALL = { width: 640, height: 400 }, BIG = { width: 1280, height: 800 };
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const page = await browser.newPage({ viewport: SMALL });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
@@ -37,7 +48,7 @@ const t0 = Date.now(), secs = () => ((Date.now() - t0) / 1000).toFixed(1) + ' s'
 await page.goto('file://' + file + spawn, { waitUntil: 'commit', timeout: 0 });
 const barAt = () => page.evaluate(() => { const f = document.querySelector('#loader .fill'); return f ? new DOMMatrix(getComputedStyle(f).transform).a : -1; });
 await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || document.body.dataset.error || new DOMMatrix(getComputedStyle(f).transform).a > 0.25; }, null, { timeout: 300000, polling: 100 });
-await page.screenshot({ path: 'smoke-0.png' });
+await page.screenshot({ path: 'smoke-0.png' });   // the loader: only checked, small
 // A real start of an island asks for a name (src/render/namePrompt): leave it empty (the castaway).
 if (!spawn) {   // with ?spawn (a test parameter) the question is skipped
   await page.waitForSelector('#ask:not([hidden]) input', { timeout: 10000 });
@@ -60,8 +71,32 @@ await page.evaluate(() => {
   window.__press = () => { const { input } = window.__driftwood; input.actionStart('smoke'); input.actionEnd('smoke'); };   // a short press of the action button
 });
 await page.waitForTimeout(1200);   // let the loader finish fading out
-const shot = async (name, settle = 0) => { await page.evaluate(() => window.__driftwood.draw()); if (settle) await page.waitForTimeout(settle); await page.screenshot({ path: name }); };   // settle: ms for the marks' CSS fades
-await shot('smoke-1.png');
+// shot(name, opts): draws one settled frame, reads a tiny thumbnail of the canvas (16x10, drawImage into a
+// 2D canvas in the page: no PNG, no readPixels of the whole frame) and saves a screenshot.
+//   quick: also taken in the quick run; look: a person looks at it, so full size in the full run;
+//   settle: ms for the marks' CSS fades. Other shots only draw in the quick run.
+let size = SMALL;
+const setSize = async to => { if (to !== size) { size = to; await page.setViewportSize(to); await page.waitForTimeout(300); } };
+const lums = {};
+const shot = async (name, { quick = false, look = true, settle = 0 } = {}) => {
+  if (!full && !quick) { await page.evaluate(() => { const d = window.__driftwood; d.view.settle(d.game.player); d.game.update(d.input, 0); }); console.log('  draw', name, 'at', secs()); return; }   // the game needs its frames (tiles, tides), but no picture
+  await setSize(full && look ? BIG : SMALL);
+  const t = await page.evaluate(() => {
+    const d = window.__driftwood; d.draw();
+    const c = document.createElement('canvas'); c.width = 16; c.height = 10;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(d.view.canvas, 0, 0, 16, 10);
+    const px = g.getImageData(0, 0, 16, 10).data; let sum = 0, lo = 255, hi = 0;
+    for (let i = 0; i < px.length; i += 4) { const l = (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11); sum += l; lo = Math.min(lo, l); hi = Math.max(hi, l); }
+    return { mean: sum / 160, spread: hi - lo };
+  });
+  lums[name] = t.mean;
+  if (t.spread < 4) errors.push(name + ': the canvas is blank (spread ' + t.spread.toFixed(1) + ')');
+  if (settle) await page.waitForTimeout(settle);
+  await page.screenshot({ path: name });
+  console.log('  shot', name, size.width + 'x' + size.height, 'at', secs());
+};
+await shot('smoke-1.png', { quick: true, look: false });
 console.log('tiles', JSON.stringify(await page.evaluate(() => window.__driftwood.view.stats())));
 
 const start = await page.evaluate(() => ({ x: window.__driftwood.game.player.x, z: window.__driftwood.game.player.z }));
@@ -72,7 +107,7 @@ const walked = await page.evaluate(() => {
 });
 console.log('walked', walked.toFixed(2), 'units');
 if (walked < 3) errors.push('walked only ' + walked.toFixed(2) + ' units in 3 s');
-await shot('smoke-2.png');
+await shot('smoke-2.png', { look: false });
 console.log('tiles', JSON.stringify(await page.evaluate(() => window.__driftwood.view.stats())));
 
 // Gathering: stand next to the piece of driftwood nearest the start, click
@@ -90,7 +125,7 @@ const gathered = await page.evaluate(start => {
 }, start);
 console.log('carrying', gathered);
 if (gathered !== 3) errors.push('picked up ' + gathered + ' pieces instead of 3');
-await shot('smoke-3.png');
+await shot('smoke-3.png', { look: false });
 const pile = await page.evaluate(() => {
   const { game, input, step } = window.__driftwood, p = game.player;
   window.__press(); step(0.05); step(2, () => !p.stoop);
@@ -99,7 +134,7 @@ const pile = await page.evaluate(() => {
 });
 console.log('pile of', pile);
 if (pile !== 3) errors.push('laid down ' + pile + ' pieces instead of 3');
-await shot('smoke-4.png');
+await shot('smoke-4.png', { look: false });
 
 // Low water: the sea falls back and a strip of wet sand lies dry.
 const sea = await page.evaluate(() => {
@@ -128,7 +163,7 @@ if (woke.slept < 0.15 || woke.slept > 0.2) errors.push('a cold sleep without a f
 if (woke.rest < 0.8) errors.push('not rested after sleeping: ' + woke.rest);
 if (woke.washes < 1 || woke.fresh < 1) errors.push('no wood washed up at the next high water');
 await page.evaluate(() => { const { game } = window.__driftwood, l = game.wood.fresh[0]; console.log('fresh wood at', l.x.toFixed(1), l.z.toFixed(1)); });
-await shot('smoke-7.png');
+await shot('smoke-7.png', { look: false });
 
 // Fibre: click the coconut nearest the castaway, then press the button; he kneels to husk it.
 const husk = await page.evaluate(() => {
@@ -171,7 +206,9 @@ if (!fires) errors.push('no fire after ' + attempts + ' attempts');
 await page.evaluate(() => { const { game, input, step } = window.__driftwood, p = game.player; input.target = { x: p.x - 2.2, z: p.z + 1.2 }; step(5, () => !input.target); });
 await shot('smoke-10.png');
 await page.evaluate(() => { const { game, step } = window.__driftwood; game.clock.time = 0.95; step(0.1); });
-await shot('smoke-11.png');
+await shot('smoke-11.png', { quick: true });
+console.log('mean brightness start by day / fire at night', lums['smoke-1.png'] && lums['smoke-1.png'].toFixed(1), lums['smoke-11.png'] && lums['smoke-11.png'].toFixed(1));   // a pixel check
+if (lums['smoke-11.png'] > lums['smoke-1.png'] - 8) errors.push('the view at night is not darker than the start view by day');
 // A torch: click the fire empty-handed, press the button, then walk off into the night with it.
 const torch = await page.evaluate(() => {
   const { game, input, step } = window.__driftwood, p = game.player, f = game.fire.fires[0];
@@ -185,7 +222,7 @@ if (!torch) errors.push('did not take a torch out of the fire');
 await shot('smoke-12.png');
 // Tally marks (0.12): beside the fire at night and by day, and beside a full pile.
 await page.evaluate(() => { const { game, input, step } = window.__driftwood, p = game.player, f = game.fire.fires[0]; game.fire.torch = null; p.x = f.x + 1.0; p.z = f.z + 0.4; p.y = window.__driftwood.world.H(p.x, p.z); input.target = null; step(0.1); });
-await shot('smoke-13.png');
+await shot('smoke-13.png', { quick: true });
 const marks = await page.evaluate(() => document.querySelectorAll('#island svg path[stroke]').length);
 console.log('tally marks shown', marks);
 if (marks < 1) errors.push('no tally marks beside the fire');
@@ -204,20 +241,21 @@ await shot('smoke-15.png');
 // and the moon), and its ring filling while the button is held.
 const iconOf = () => page.evaluate(() => { const a = document.getElementById('action'); return { opacity: a.style.opacity, main: a.querySelector('.main').innerHTML.length, side: a.querySelector('.side').innerHTML.length, on: a.classList.contains('on') }; });
 await page.evaluate(() => { const { game, step } = window.__driftwood; game.clock.time = 0.5; game.fibre.carried = 1; step(0.1); });
-const dayIcon = await iconOf();
+await shot('smoke-16.png', { quick: true, settle: 800 });
+const dayIcon = await iconOf();   // read after the frame is drawn: the button is updated while drawing
 console.log('action button by the pile', JSON.stringify(dayIcon));
 if (!dayIcon.on || !dayIcon.main || !dayIcon.side) errors.push('the action button shows no pick-up and hold icons beside a pile with fibre');
-await shot('smoke-16.png', 800);
 await page.evaluate(() => {
   const { world, game, step } = window.__driftwood, p = game.player, f = game.fire.fires[0], w = game.wood;
   game.clock.time = 0.95; p.x = f.x + 1.0; p.z = f.z + 0.4; p.y = world.H(p.x, p.z);
   const l = world.tiles.flatMap(t => t.drift).find(q => w.onBeach(q)); w.take({ kind: 'log', log: l }); step(0.1);
 });
+await shot('smoke-17.png', { quick: true, settle: 800 });
 const feedIcon = await iconOf();
 console.log('action button by the fire', JSON.stringify(feedIcon));
 if (!feedIcon.on) errors.push('the action button is empty beside a fire with dry wood in his arm');
-await shot('smoke-17.png', 800);
 // Held for 250 ms of a frozen clock (drawing is slow here, so real time would run past the hold): the ring is part full.
+await setSize(SMALL);   // only checked: small
 const ring = await page.evaluate(() => {
   const { input } = window.__driftwood, real = performance.now.bind(performance), t0 = real();
   input.actionStart('smoke'); performance.now = () => t0 + 250;
@@ -225,13 +263,13 @@ const ring = await page.evaluate(() => {
   const off = +document.querySelector('#action .fill').getAttribute('stroke-dashoffset');
   window.__ringClock = real; return off;
 });
-await page.screenshot({ path: 'smoke-18.png' });
+if (full) await page.screenshot({ path: 'smoke-18.png' });
 await page.evaluate(() => { const { input } = window.__driftwood; performance.now = window.__ringClock; input.cancelAction(); input.actionEnd('smoke'); });
 console.log('ring while held', ring);
 if (!(ring > 0 && ring < 226)) errors.push('the ring does not fill while the button is held: ' + ring);
 
 // The same on a phone: a touch-only screen with the thumb stick, the button just above it (day and night).
-const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: full ? 2 : 1, hasTouch: true, isMobile: true });
 phone.on('pageerror', e => errors.push('phone: ' + e.message));
 await phone.goto('file://' + file + '?spawn=' + start.x.toFixed(1) + ',' + start.z.toFixed(1), { waitUntil: 'commit', timeout: 0 });
 await phone.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
@@ -247,6 +285,7 @@ if (sticks.stick !== 'block') errors.push('the thumb stick is not shown on the p
 if (!(sticks.action.bottom - 12 <= sticks.stickBox.top + 20 &&   // the ring above the stick's ring
      sticks.action.right <= 390 && sticks.action.left >= 0 && sticks.action.top >= 0)) errors.push('the action button is not just above the thumb stick on the phone');
 const phoneShot = async (name, time) => {
+  if (!full && name !== 'smoke-19.png') return;
   await phone.evaluate(t => {
     const { world, game, step } = window.__driftwood, p = game.player, w = game.wood;
     game.clock.time = t; game.fibre.carried = 1;
@@ -254,7 +293,15 @@ const phoneShot = async (name, time) => {
     if (!w.piles.length) { p.x = dry[0].x + 0.6; p.z = dry[0].z + 0.6; p.y = world.H(p.x, p.z); for (const k of [0, 2]) { for (const l of dry.slice(k, k + 2)) w.take({ kind: 'log', log: l }); w.drop(p.x, p.z, p.heading); } }
     const pile = w.piles.at(-1); p.x = pile.x + 0.7; p.z = pile.z + 0.3; p.y = world.H(p.x, p.z); step(0.1);
   }, time);
-  await phone.evaluate(() => window.__driftwood.draw());
+  const spread = await phone.evaluate(() => {   // a pixel check as in shot(): the canvas shows something
+    const d = window.__driftwood; d.draw();
+    const c = document.createElement('canvas'); c.width = 16; c.height = 10;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(d.view.canvas, 0, 0, 16, 10);
+    const px = g.getImageData(0, 0, 16, 10).data; let lo = 255, hi = 0;
+    for (let i = 0; i < px.length; i += 4) { const l = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11; lo = Math.min(lo, l); hi = Math.max(hi, l); }
+    return hi - lo;
+  });
+  if (spread < 4) errors.push('phone ' + name + ': the canvas is blank');
   await phone.waitForTimeout(800);
   await phone.screenshot({ path: name });
 };

@@ -127,7 +127,8 @@ Nothing stutters while playing, because detailed tiles are built in slices of ab
 ```
 npm test          unit tests (Vitest, Node), about 30 s
 npm run build     builds dist/ and dist/driftwood.html (a single file)
-npm run smoke     opens the build in headless Chromium, answers the name question with an empty Enter, walks, gathers wood (clicking walks, the button picks up), waits for low water, sleeps a cold sleep, waits for a high water, husks a coconut, lights a fire, takes a torch, takes screenshots including the action button by day and night, held, and on a phone-sized touch screen with the thumb stick (several minutes)
+npm run smoke     quick check (about 1.5 minutes): opens the build in headless Chromium at 640x400, answers the name question with an empty Enter, runs the whole story on game state (walks, gathers wood, low water, a cold sleep, a high water, husks a coconut, lights a fire, takes a torch, the action button by a pile and by the fire, held, and on a phone-sized touch screen with the thumb stick) and takes only a few screenshots: the loader, the start by day, the fire at night, tally marks, the action button by day and by the fire, and the phone
+npm run smoke:full  the same with every screenshot (about 4 minutes); the shots a person looks at are 1280x800 (the phone at scale 2), the ones that only check something stay 640x400. Use it for visual versions
 ```
 
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
@@ -154,7 +155,7 @@ npm run smoke     opens the build in headless Chromium, answers the name questio
 - `tests/sky.test.js` tests the clock and the light of the day: sun up and down, east to west, golden hour, enough light at night, a minimum light height, smooth changes, and a light direction that moves in small steps (holds still between them).
 - `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser, and on touch: tap, double tap, pinch and twist). Movement and streaming tests also run from turned and tilted views.
 
-Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for. A headless browser without a GPU draws only a few frames per second, so after loading the smoke test does not play in real time: it pauses drawing, runs the game in fixed 1/60 s steps and draws one settled frame per screenshot (`__driftwood.pause`, `step`, `draw` in `main.js`, for the smoke test only). Stepped walks leave no footprints, because those are laid while drawing.
+Rendering itself is not checked by unit tests. That is what the smoke test with screenshots is for (`scripts/smoke.js`: quick by default, every shot with `--full`; the page is loaded once and the phone is a second page). Software drawing is slow and `toDataURL`/`readPixels` take seconds, so pixels are checked by `drawImage` of the canvas into a tiny 2D canvas in the page right after a draw (the start view by day must be brighter than the fire at night; no canvas may be blank). Shots the run skips still draw a frame, because tiles and tides depend on the frames drawn. A headless browser without a GPU draws only a few frames per second, so after loading the smoke test does not play in real time: it pauses drawing, runs the game in fixed 1/60 s steps and draws one settled frame per screenshot (`__driftwood.pause`, `step`, `draw` in `main.js`, for the smoke test only). Stepped walks leave no footprints, because those are laid while drawing.
 
 ## Publishing
 

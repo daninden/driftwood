@@ -11,7 +11,8 @@ npm install
 npm run dev        development server at http://localhost:5173
 npm test           unit tests
 npm run build      dist/ plus dist/driftwood.html (everything in one file)
-npm run smoke      open the build in headless Chromium and take screenshots
+npm run smoke      quick check in headless Chromium with a few screenshots
+npm run smoke:full the same with every screenshot
 ```
 
 Another island: add `#seed-2024` to the address. Start an island over: add `new` (`#new`, or `#seed-2024&new`); it starts fresh and `new` disappears from the address again.

@@ -12,12 +12,12 @@ Read `docs/design.md` (what the game is) and `docs/architecture.md` (how the cod
 - **Everything in English:** game text, code, comments, documentation and commit messages.
 - **No personal data** in the repository: no names, e-mail addresses, private links or account details.
 - **Delegate the hands-on work to cheaper subagents.** The main session plans, reviews and pushes; the actual tool calls and implementation go to subagents on Sonnet, or Haiku for very simple tasks.
-- **Work directly on `main`.** No feature branches or pull requests. Every push to `main` goes live (see `docs/architecture.md`), so run `npm test` (and for visual changes the smoke test) before pushing.
+- **Work directly on `main`.** No feature branches or pull requests. Every push to `main` goes live (see `docs/architecture.md`), so run `npm test` (and for changes that touch render the quick smoke test, `npm run smoke`; for visual versions `npm run smoke:full`) before pushing.
 
 ## Code
 
 - Respect the layers: `core` ← `world` ← `game`, and `render` reads `world` and game state. `world` and `game` stay pure (no DOM, no WebGL).
 - Every module starts with a header: what it does, what it exports, what it depends on. Update it when the module changes.
-- Add or update tests with every change: `npm test`. For visual changes also run `npm run build && npm run smoke` and look at the screenshots.
+- Add or update tests with every change: `npm test`. For changes that touch render also run `npm run build && npm run smoke` (quick), and for visual versions `npm run build && npm run smoke:full`; look at the screenshots.
 - `tests/world.test.js` guards seed 1337 against the style prototype. If it fails, the island changed: only accept that on purpose, and regenerate the fixture with `prototypes/make-golden.js` after changing the prototype the same way.
 - Three.js stays at r128 (the shaders depend on its shader chunks).
