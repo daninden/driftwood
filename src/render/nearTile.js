@@ -5,6 +5,8 @@
  * rocks, roots and lianas, the tide line, and ground cover
  * (grass, ferns, reeds, pebbles, shells).
  *
+ * Plants sway in the wind (0.19, render/wind): the near tile uses the swaying materials of the kit, the far tiles do not.
+ *
  * The ground mesh is tagged userData.terrain, so render/stage can stop or start its shadows (render/quality).
  *
  * (The driftwood and coconuts that can be picked up are drawn by
@@ -69,7 +71,7 @@ export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
 
 export function disposeGroup(group) {
   group.traverse(o => {
-    if (o.isInstancedMesh) o.dispose();
+    if (o.isInstancedMesh) { o.dispose(); if (o.userData.ownGeometry) o.geometry.dispose(); }
     else if (o.isMesh) { o.geometry.dispose(); if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
   });
   if (group.parent) group.parent.remove(group);

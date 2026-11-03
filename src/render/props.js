@@ -79,7 +79,7 @@ export function addPine(B, kit, t, r) {
   B.add('trunk', kit.trunk, kit.trunkMat, stickMatrix(new THREE.Vector3(t.x, t.y - 0.1, t.z), at(0.4), 0.08 * Math.sqrt(g)), P.trunk, { outline: 1.25 });
   for (let k = 0; k < n; k++) {
     const u = k / (n - 1), p = at(0.35 + u * 0.44), s = w * (1 - u * 0.5);
-    B.add('pine', kit.pine, kit.canopyMat, mat4(p.x, p.y, p.z, s, h * (1.26 / n) * (slim ? 1.15 : 1), s, lean ? 0 : r() * 6, lean ? lz : 0, lean ? -lx : 0), c, { outline: 1.08 });
+    B.add('pine', kit.pine, kit.pineMat, mat4(p.x, p.y, p.z, s, h * (1.26 / n) * (slim ? 1.15 : 1), s, lean ? 0 : r() * 6, lean ? lz : 0, lean ? -lx : 0), c, { outline: 1.08 });
   }
 }
 
@@ -105,12 +105,12 @@ export function addPalm(B, kit, p, r, others = []) {
   else if (shape === 'low') { hgt *= 0.6; lean = (1.6 + r() * 0.8) * fs; }
   const sd = { x: Math.cos(th), z: Math.sin(th) }, bark = pick(r, P.palmTrunk);
   let prev = o.clone();
-  for (let i = 0; i < 8; i++) { const t = (i + 1) / 8, f = lean * bend(t), q = o.clone().add(new THREE.Vector3(sd.x * f, hgt * t, sd.z * f)); B.add('palmseg', kit.seg, kit.palmTrunkMat, stickMatrix(prev, q, (0.1 - 0.035 * t) * fs), bark, { outline: 1.35 }); prev = q; }
+  for (let i = 0; i < 8; i++) { const t = (i + 1) / 8, f = lean * bend(t), q = o.clone().add(new THREE.Vector3(sd.x * f, hgt * t, sd.z * f)); B.add('palmseg', kit.seg, kit.palmTrunkMat, stickMatrix(prev, q, (0.1 - 0.035 * t) * fs), bark, { outline: 1.35 }, [i / 8, hgt]); prev = q; }
   const nf = 8 + (r() * 3 | 0), tint = pick(r, P.frondTint);
-  for (let k = 0; k < nf; k++) { O3.position.copy(prev); O3.rotation.order = 'YZX'; O3.rotation.set(0, k / nf * Math.PI * 2 + r() * 0.3, (r() - 0.35) * 0.5); O3.scale.setScalar((0.75 + r() * 0.3) * fs); O3.updateMatrix(); B.add('frond', kit.frond, kit.frondMat, O3.matrix.clone(), shade(tint, r, 0.02, 0.06), { depthMat: kit.frondDepth, receive: false }); }
+  for (let k = 0; k < nf; k++) { O3.position.copy(prev); O3.rotation.order = 'YZX'; O3.rotation.set(0, k / nf * Math.PI * 2 + r() * 0.3, (r() - 0.35) * 0.5); O3.scale.setScalar((0.75 + r() * 0.3) * fs); O3.updateMatrix(); B.add('frond', kit.frond, kit.frondMat, O3.matrix.clone(), shade(tint, r, 0.02, 0.06), { depthMat: kit.frondDepth, receive: false }, [1, hgt]); }
   if (r() < DRY_CHANCE) for (let k = 0, n = r() < 0.3 ? 2 : 1; k < n; k++) {
     O3.position.set(prev.x, prev.y - 0.06, prev.z); O3.rotation.set(0, r() * Math.PI * 2, -(0.55 + r() * 0.35)); O3.scale.setScalar((0.8 + r() * 0.2) * fs); O3.updateMatrix();
-    B.add('frondDry', kit.frond, kit.dryFrondMat, O3.matrix.clone(), pick(r, P.dryTint), { depthMat: kit.dryFrondDepth, receive: false });
+    B.add('frondDry', kit.frond, kit.dryFrondMat, O3.matrix.clone(), pick(r, P.dryTint), { depthMat: kit.dryFrondDepth, receive: false }, [1, hgt]);
   }
 }
 
@@ -133,7 +133,7 @@ export function addBush(B, kit, t, r) {
     const a = a0 + i / n * Math.PI * 2 + (r() - 0.5) * 0.8, d = (i === 0 ? 0 : 0.35 + r() * 0.4) * R * K.spread * 1.3;
     const s = R * (i === 0 ? 0.78 : 0.48 + r() * 0.26), y = t.y + s * K.sy * 0.45 + (i === 0 ? s * 0.15 : r() * s * 0.25);
     const c = new THREE.Color(r() < 0.6 ? base : pick(r, pal)).offsetHSL((r() - 0.5) * 0.03, 0, (r() - 0.5) * 0.1 + (i === 0 ? -0.04 : 0.02)).getHex();
-    B.add('bush', kit.bush, kit.canopyMat, mat4(t.x + Math.cos(a) * d, y, t.z + Math.sin(a) * d, s, s * K.sy, s, r() * 6), c, { outline: 1.1 });
+    B.add('bush', kit.bush, kit.bushMat, mat4(t.x + Math.cos(a) * d, y, t.z + Math.sin(a) * d, s, s * K.sy, s, r() * 6), c, { outline: 1.1 });
   }
   const top = t.y + R * K.sy * 0.75;
   for (let i = 0; i < (K.fans || 0); i++) {

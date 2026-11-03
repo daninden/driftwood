@@ -42,6 +42,10 @@ A short press does the obvious thing for what you stand beside: what is in your 
 
 You are alone. The island rises in terraces, divided by rock walls. A wall stops you, but nature leaves passages: a scree slope, a ravine, rock benches, roots and lianas in the rain forest, or a mossy route beside a waterfall. Nothing marks them; look for loose stones, bare ground and moss. Tree trunks, big boulders and the open sea stop you too. Bushes only slow you down.
 
+### Wind
+
+A light wind moves the palms, trees, bushes and grass near you, and now and then a gust rolls over the island: you see it coming through the trees further off, and the shadows move with the leaves. It is calmer at night and in the rain forest, and strongest on the high terraces. It is only for the eye; it changes nothing in what you do.
+
 ### Rivers and the sea
 
 You can wade up to your waist. Upstream, where a river is a narrow brook, you can cross anywhere. Along the middle reach you can cross only at fords, which you can tell by stones sticking out of the water and white rippling water. The deep stretch towards the sea cannot be crossed.

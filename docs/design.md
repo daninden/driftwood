@@ -67,6 +67,18 @@ The look is the same on every device, but the game lowers its own quality when i
 
 After the island has faded in, the game measures the time between frames over 3 seconds of normal play (not while idling); below 27 frames a second (30 with a tolerance) it steps down one level, waits 2 seconds for things to settle, and measures again, until it is fine or at level 4. The first 4 seconds are ignored (tiles are still being built). It never steps back up within a session. The level is remembered per device and the next start begins there (and may step further down). A step that changes nothing on this device is skipped (touch devices start at 2048 anyway). The numbers are in `render/quality`.
 
+### Wind (0.19, built)
+
+The plants move, a little, atmosphere only: nothing in the rules depends on it, and nothing in the picture is added. It is done in the existing tree and plant shaders (a small shift per vertex, no extra objects), only on the detailed tiles near him; the far tiles stand still.
+
+- **What moves:** palm fronds most (tips up and down and a little sideways, the top of a tall palm bends slightly with them, the trunk below it stands still); broadleaf and rain forest crowns rock slowly as a whole, with the leaf clumps a little apart; pines sway slightly from the cones' tips; bushes, ferns and leaf fans move a little; grass and reeds bend at their tips. Trunks, branches, rocks, driftwood and the lean-to stand still (the lean-to's palm fronds too: it is something he built). Outlines move with the plant they belong to.
+- **Wind:** a calm base that is never quite still, plus gusts that roll over the island as a wave, one about every 30 s, some weak or nothing, crossing at 12 m/s about 40 m wide, so you see a gust coming: first the trees further off, then the ones near him. The direction is fixed per island by the seed and turns slowly (26 degrees to each side, once round a day). Neighbouring plants are out of step (the phase follows the place), but the clumps of one crown move together.
+- **Strength by height:** moderate on the coast, a little less in the lowland, hardly any in the rain forest (sheltered, an eighth of the coast), strongest on the plateau and the summit (one and a half and one and eight tenths times the coast); calmer at night (0.4 of the day strength). The largest movements are a few decimetres: a frond tip 20 cm in a gust on the coast, a crown 11 cm, a blade of grass 9 cm.
+- **Shadows move with it:** the shadow map gets the same displacement (the shadows of fronds, crowns and bushes sway), and so does the place a plant looks up its own shadow, so there is no acne. The shadow filter is unchanged; the shadow light itself still turns in the same small steps.
+- **Quality:** on at every level (it costs a fraction of a millisecond; measured at the start view, before and after the same within the noise), so no level turns it off.
+- **Idle:** wind does not count as something happening, as moving water does not (see *Quiet frames*): an idle game draws 15 frames a second and the wind then moves at that rate. The wind keeps its own clock, advancing with the drawn frames, so a fast-forwarded sleep does not make gusts race.
+- **Sound (0.20 "Sound"):** the wind layer there will follow these gusts and the strength per height.
+
 ## The castaway
 
 A small blocky figure with outlines, dressed for a tropical island after a long time alone: a straw hat, shaggy dark hair and a long, unkempt beard, a yellowed shirt with ripped short sleeves, holes and a ragged hem, frayed short trousers, bare sun-tanned legs and bare feet, and a staff. Because the figure is small on screen, the detail lives in the silhouette and in flat colour areas (skin against cloth), not in small parts.

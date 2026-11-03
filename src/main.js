@@ -171,7 +171,8 @@ async function boot() {
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove']) window.addEventListener(type, woken, { capture: true, passive: true });
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };
-  const draw = () => { view.settle(game.player); for (let i = 0; i < 4; i++) view.render(game.player, show(game.update(input, 0)), 0.5); };
+  const draw = () => { view.settle(game.player); view.setWindTime(20);   // the wind at the same moment in every shot
+    for (let i = 0; i < 4; i++) view.render(game.player, show(game.update(input, 0)), 0.5); };
   view.render(game.player, show(game.update(input, 0)), 0);
   loading.done();
   if (asking) {   // the island waits quietly for the answer; until then nothing is saved (a save without a name would count as an answer)

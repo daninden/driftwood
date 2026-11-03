@@ -10,6 +10,10 @@
  *   fernMat, smallMat
  *   Some shapes are made lumpy with the island's noise, so they belong to a seed.
  * stickMatrix(a, b, r)   matrix that stretches the unit cylinder from a to b
+ * Wind (0.19): canopyMat, pineMat, bushMat, palmTrunkMat, frondMat, dryFrondMat, grassMat and fernMat sway
+ *   (render/windShader), with the shadow depth material (frondDepth, dryFrondDepth, or userData.depthMat) and the
+ *   outline hull (userData.outline) that sway the same way. They are for the detailed tiles only: farCanopyMat is
+ *   the still crown material of the far tiles, frondStillMat and frondStillDepth the still fronds of the lean-to.
  * mat4(x, y, z, sx, sy, sz, ry, rx, rz)   compose position, scale, rotation
  * opaqueCutout(material)   alpha-tested leaves write full alpha, so the page
  *   behind the canvas never shows through their edges
@@ -19,6 +23,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/noise.js';
 import { toon } from './materials.js';
+import { withWind, windDepth, windOutline } from './windShader.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 export function stickMatrix(a, b, r) {
@@ -38,6 +43,14 @@ export function opaqueCutout(mat) {
   return mat;
 }
 export const mat4 = (x, y, z, sx, sy, sz, ry, rx, rz) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx, sy, sz));
+
+/** A material that sways, with its shadow depth material and (if outlined) its outline hull. */
+function swaying(mat, kind, { depth = true, outline = true, depthParams } = {}) {
+  withWind(mat, kind);
+  if (depth) mat.userData.depthMat = windDepth(kind, depthParams);
+  if (outline) mat.userData.outline = windOutline(kind);
+  return mat;
+}
 
 export function createKit(noise) {
   const { vnoise, hash2 } = noise;
@@ -63,7 +76,7 @@ export function createKit(noise) {
   const dryTex = paintFrond(['#c9ad6a', '#b89a58', '#a8844a', '#bfa060'], '#8a6a3a', 43);
   const frond = (() => { const g = new THREE.PlaneGeometry(2.0, 0.6, 10, 1), p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i) + 1.0, y = p.getY(i), t = x / 2.0; p.setXYZ(i, x, -0.15 * x * x + 0.25 * x * (1 - t), y * (1 - 0.6 * t)); } g.computeVertexNormals(); return g; })();
 
-  return {
+  const kit = {
     canopy: gradient(lumpy(new THREE.IcosahedronGeometry(1, 2), 0.35, 2), 0.7, 1.05),
     canopyLod: gradient(lumpy(new THREE.IcosahedronGeometry(1, 1), 0.3, 2), 0.7, 1.05),
     trunk: new THREE.CylinderGeometry(0.7, 1, 1, 8, 1),
@@ -77,11 +90,15 @@ export function createKit(noise) {
     frond, grass: tuft(7, 0.22, 0.2, 0.022, 5), reed: tuft(9, 0.55, 0.45, 0.016, 8), fern,
     pebble: new THREE.IcosahedronGeometry(1, 0), shell: new THREE.SphereGeometry(1, 6, 4),
     driftwood: lumpy(new THREE.CylinderGeometry(0.09, 0.07, 1, 8, 4), 0.5, 7),
-    canopyMat: toon(0xffffff, { vertexColors: true }), trunkMat: toon(), rockMat: toon(), palmTrunkMat: toon(),
-    frondMat: opaqueCutout(toon(0xffffff, { map: frondTex, alphaTest: 0.4, side: THREE.DoubleSide })),
-    frondDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: frondTex, alphaTest: 0.4 }),
-    dryFrondMat: opaqueCutout(toon(0xffffff, { map: dryTex, alphaTest: 0.4, side: THREE.DoubleSide })),
-    dryFrondDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: dryTex, alphaTest: 0.4 }),
-    grassMat: toon(0xffffff, { side: THREE.DoubleSide }), fernMat: toon(0xffffff, { side: THREE.DoubleSide }), smallMat: toon(),
+    canopyMat: swaying(toon(0xffffff, { vertexColors: true }), 'crown'), pineMat: swaying(toon(0xffffff, { vertexColors: true }), 'pine'), bushMat: swaying(toon(0xffffff, { vertexColors: true }), 'bush'),
+    farCanopyMat: toon(0xffffff, { vertexColors: true }),   // the far tiles stand still
+    trunkMat: toon(), rockMat: toon(), palmTrunkMat: swaying(toon(), 'palmtrunk'),
+    frondMat: swaying(opaqueCutout(toon(0xffffff, { map: frondTex, alphaTest: 0.4, side: THREE.DoubleSide })), 'frond', { outline: false, depthParams: { map: frondTex, alphaTest: 0.4 } }),
+    dryFrondMat: swaying(opaqueCutout(toon(0xffffff, { map: dryTex, alphaTest: 0.4, side: THREE.DoubleSide })), 'frond', { outline: false, depthParams: { map: dryTex, alphaTest: 0.4 } }),
+    frondStillMat: opaqueCutout(toon(0xffffff, { map: frondTex, alphaTest: 0.4, side: THREE.DoubleSide })),
+    frondStillDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: frondTex, alphaTest: 0.4 }),
+    grassMat: swaying(toon(0xffffff, { side: THREE.DoubleSide }), 'grass', { depth: false, outline: false }), fernMat: swaying(toon(0xffffff, { side: THREE.DoubleSide }), 'leaf', { outline: false }), smallMat: toon(),
   };
+  kit.frondDepth = kit.frondMat.userData.depthMat; kit.dryFrondDepth = kit.dryFrondMat.userData.depthMat;   // the fronds' shadow, swaying with them
+  return kit;
 }

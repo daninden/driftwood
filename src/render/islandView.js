@@ -9,7 +9,7 @@
  *     frameInfo: { distance, terrain, time, sea } from game.update
  *     follows the player with camera and sun, sets the light for the time
  *     of day, streams detailed tiles,
- *     footprints, mood, sets the sea level of the tide, and draws the frame.
+ *     footprints, mood, sets the sea level of the tide, the wind (render/wind, render/windShader: plants on the detailed tiles sway), and draws the frame.
  *   view.zoomBy(steps)   zoom the camera (positive = further away), see render/camera
  *   view.setZoomMax(max)   the furthest zoom (dev panel: 25, else 10), see render/camera
  *   view.turn({ yaw, pitch })   turn and tilt the view (radians), see render/camera
@@ -30,6 +30,7 @@
  *     roots standing up, with a finger a little wider) a point on that piece,
  *     rather than the ground behind it
  *   view.setQuality(settings)   changes the quality live (render/stage applyQuality; render/fire gives out fewer lights)
+ *   view.setWindTime(t) / view.windTime   the wind's clock in seconds (it runs with the drawn frames' dt; the smoke test sets it so shots repeat)
  *   view.canvas
  *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
  *   view.prepare(player, progress?)  builds the detailed tiles in view before
@@ -66,6 +67,8 @@ import { createTallyView } from './tallyMarks.js';
 import { createWildlifeView } from './wildlife.js';
 import { createFireflyView } from './fireflies.js';
 import { dryness } from '../game/wood.js';
+import { windState } from './wind.js';
+import { setWind } from './windShader.js';
 
 const BUILD_MS = 9, FAR_MS = 3;
 
@@ -90,6 +93,7 @@ export async function createIslandView(world, container, progress, start, opts =
     onReady: (tile, v) => { stage.tagTerrain(v.group); scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); } },
     onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); } },
   });
+  let windSeconds = 0;   // the wind's own clock: the drawn time, so gusts do not race while he sleeps
   const hero = createHero(scene), steps = createFootprints(scene, world.H), cam = createCamera();
   const mood = createMood({ stage, canvas: renderer.domElement, container });
   window.addEventListener('resize', stage.resize);
@@ -111,6 +115,7 @@ export async function createIslandView(world, container, progress, start, opts =
     updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
     const sky = skyAt(info.time);
     water.tick(dt, sky.day);
+    windSeconds += dt; setWind(windState(world.seed, windSeconds, total, sky.day), windSeconds);
     if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H, heroFlame: hero.flame });
     if (tallyView) tallyView.update(dt, { game, camera: cam.camera, H: world.H, player });
     if (wildView) wildView.update(dt);
@@ -171,5 +176,5 @@ export async function createIslandView(world, container, progress, start, opts =
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: next => { stage.applyQuality(next); if (next && next.fireLights !== undefined) { fireLights = next.fireLights; if (fireView) fireView.setActive(fireLights); } }, canvas: renderer.domElement, scene, stats, settle, prepare };
+  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: next => { stage.applyQuality(next); if (next && next.fireLights !== undefined) { fireLights = next.fireLights; if (fireView) fireView.setActive(fireLights); } }, canvas: renderer.domElement, scene, stats, setWindTime: t => { windSeconds = t; }, get windTime() { return windSeconds; }, settle, prepare };
 }

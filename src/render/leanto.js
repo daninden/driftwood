@@ -88,7 +88,7 @@ export function createLeantoView(scene, w, kit, leantos) {
     const O = new THREE.Object3D();
     leantoFronds(w.H, l).forEach(f => {
       O.position.copy(f.pos); O.rotation.order = 'YZX'; O.rotation.set(0, f.yaw, f.pitch); O.scale.set(f.sx, 1, f.sz); O.updateMatrix();
-      B.add('frond', kit.frond, kit.frondMat, O.matrix.clone(), P.frondTint[(l.id + f.k * 2) % 3 + (f.k % 2)], { depthMat: kit.frondDepth, receive: false });   // as the palms' fronds, no outline
+      B.add('frond', kit.frond, kit.frondStillMat, O.matrix.clone(), P.frondTint[(l.id + f.k * 2) % 3 + (f.k % 2)], { depthMat: kit.frondStillDepth, receive: false });   // as the palms' fronds, no outline
     });
     B.build(g); scene.add(g); return g;
   };
