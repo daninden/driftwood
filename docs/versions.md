@@ -2,6 +2,11 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.14 "Moving water" — 2026-11-03
+
+- The water moves, stylised and subtle, in the existing water shaders only. Rivers: light streaks and flecks drift downstream, faster on steep stretches, fords and falls, and the white water at fords and falls breaks up and moves. Sea: a slow long swell with glints on the crests (the sun, the moon and fires and torches do the glinting: faint and silvery at night, warm by a fire) and faint pale lines by day. Lagoons and sheltered bays are calmer. The surf breathes up and down the beach over a few seconds on top of the tide.
+- Moving water does not count as something happening: the idle 15 fps rate is unchanged, the water just moves as fast as frames are drawn.
+
 ## 0.13.3 "Clear marks" — 2026-11-03
 
 - Every interface element is now readable on light and dark ground, by day and at night. The action button has a soft glow in the opposite colour of the ink behind ring and icon, a faint paper disc inside the ring (pale by day, dark at night), thicker strokes (2.2 px) and larger icons, and is clearer (0.45 empty, 0.95 with an action). The thumb stick, the moon, the drop, the fibre tufts and the tally marks get the same glow and thicker strokes; the moon, drop and fibre row rest at 0.5 instead of 0.3. No frames or boxes.
