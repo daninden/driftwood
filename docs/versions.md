@@ -2,6 +2,11 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.12.1 "Smooth shadows" — 2026-11-03
+
+- Fixed: the shadows no longer move in visible jerks. The shadow light now turns in steps of 1/32 degree (before: a quarter degree, about a metre of shadow per step with a low sun), and it never comes from lower than 15 degrees (before: about 11.5), so shadows at sunrise and sunset are less extreme. The sun and the sky colours are unchanged.
+- Temporary developer parameter `?shadows=step,min,soft` (degrees, degrees, 0 or 1) to compare variants; to be removed once one is chosen.
+
 ## 0.12 "Piles" — 2026-11-03
 
 - A pile holds at most twelve pieces, and (for later) only one kind of wood. Wood laid on a full pile starts a new pile right next to it, and what does not fit on a pile goes into the new one. Older saves with bigger piles still load.

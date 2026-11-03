@@ -8,13 +8,21 @@
  * arc: dark blue, dim light in which the island is just readable. Low sun
  * gives golden light; around the horizon the sky fill turns rose and lilac.
  *
- * The light never comes from lower than LIGHT_MIN, so shadows of a low sun
+ * The shadow light never comes from lower than LIGHT_MIN (15 degrees; the sun
+ * disc and the sky colours still use the true sun), so shadows of a low sun
  * stay long but never smear across the whole island. The direction of that
- * light moves in small steps (DIR_STEP, a quarter degree), not continuously:
+ * light moves in tiny steps (DIR_STEP, 1/32 degree), not continuously:
  * the shadow map is snapped to texels in light space, which only holds while
- * the light direction holds still. Colour and intensity stay smooth.
+ * the light direction holds still. Steps this small move a shadow by a few
+ * centimetres, so shadows glide. Colour and intensity stay smooth.
+ *
+ * TEMPORARY developer parameter `?shadows=step,min,soft` (degrees, degrees,
+ * 0/1): setShadowLight(parseShadowParam(...)) overrides the defaults so
+ * variants can be compared by eye; to be removed once one is chosen.
  *
  * quantiseDir(d, step = DIR_STEP) -> unit vector with azimuth and elevation rounded to step
+ * shadowLight -> { step (rad), min (sine of the minimum height), soft (bool) } the live settings
+ * setShadowLight({ step, min, soft }) / parseShadowParam('0.25,5,0') -> settings in degrees (null if unusable)
  * skyAt(time) -> {
  *   sun, moon        unit vectors towards sun and moon
  *   day              1 by day .. 0 at night
@@ -32,8 +40,20 @@ import { ss, lerp, hex, mix } from '../core/math.js';
 import { SKY } from './palette.js';
 
 export const SUNRISE = 0.175, SUNSET = 0.825;
-export const DIR_STEP = 0.25 * Math.PI / 180;   // radians: the shadow light turns in steps of this size
-const SUN_TOP = 62 * Math.PI / 180, MOON_TOP = 50 * Math.PI / 180, LIGHT_MIN = 0.2;
+const RAD = Math.PI / 180;
+export const DIR_STEP = RAD / 32;   // radians: the shadow light turns in steps of this size
+export const LIGHT_MIN = Math.sin(15 * RAD);   // sine of the lowest height of the shadow light
+const SUN_TOP = 62 * RAD, MOON_TOP = 50 * RAD;
+export const shadowLight = { step: DIR_STEP, min: LIGHT_MIN, soft: false };
+/** Override the shadow light settings (any of step in radians, min as a sine, soft). */
+export function setShadowLight(o) { Object.assign(shadowLight, o); }
+/** Parse `step,min,soft` (degrees, degrees, 0/1) into settings for setShadowLight; null when unusable. */
+export function parseShadowParam(str) {
+  if (!str) return null;
+  const [st, mn, sf] = String(str).split(',').map(Number);
+  if (!(st > 0 && st <= 5) || !(mn >= 0 && mn < 60)) return null;
+  return { step: st * RAD, min: Math.sin(mn * RAD), soft: sf === 1 };
+}
 const C = Object.fromEntries(Object.entries(SKY).map(([k, v]) => [k, hex(v)]));
 const WHITE = [1, 1, 1];
 
@@ -44,15 +64,16 @@ function arc(t) {
 }
 const along = (a, top) => ({ x: Math.cos(a), y: Math.sin(a) * Math.sin(top), z: Math.sin(a) * Math.cos(top) });
 
-/** Lift a direction to at least LIGHT_MIN above the horizon. */
+/** Lift a direction to at least the minimum height of the shadow light. */
 function lift(d) {
-  if (d.y >= LIGHT_MIN) return d;
-  const h = Math.hypot(d.x, d.z) || 1, k = Math.sqrt(1 - LIGHT_MIN * LIGHT_MIN) / h;
-  return { x: d.x * k, y: LIGHT_MIN, z: d.z * k };
+  const m = shadowLight.min;
+  if (d.y >= m) return d;
+  const h = Math.hypot(d.x, d.z) || 1, k = Math.sqrt(1 - m * m) / h;
+  return { x: d.x * k, y: m, z: d.z * k };
 }
 
 /** Round a unit direction's azimuth and elevation to multiples of `step` (radians); returns a unit vector. */
-export function quantiseDir(d, step = DIR_STEP) {
+export function quantiseDir(d, step = shadowLight.step) {
   const az = Math.round(Math.atan2(d.z, d.x) / step) * step;
   const el = Math.round(Math.asin(Math.max(-1, Math.min(1, d.y))) / step) * step;
   const c = Math.cos(el);

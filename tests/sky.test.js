@@ -1,7 +1,7 @@
 // the day: the clock (game/clock) and the light it gives (render/sky).
 import { describe, it, expect } from 'vitest';
 import { createClock, DAY_SECONDS, START_TIME } from '../src/game/clock.js';
-import { skyAt, quantiseDir, DIR_STEP, SUNRISE, SUNSET } from '../src/render/sky.js';
+import { skyAt, quantiseDir, DIR_STEP, LIGHT_MIN, SUNRISE, SUNSET, shadowLight, setShadowLight, parseShadowParam } from '../src/render/sky.js';
 
 describe('game/clock', () => {
   it('starts in the middle of the morning and runs a 20-minute day', () => {
@@ -35,7 +35,7 @@ describe('render/sky', () => {
     expect(Math.min(...skyAt(0).grade)).toBeGreaterThan(0.27);
   });
   it('never lets the light come from below the minimum height', () => {
-    for (const t of times) { const d = skyAt(t).light.dir; expect(d.y).toBeGreaterThan(0.19); expect(Math.hypot(d.x, d.y, d.z)).toBeCloseTo(1); }
+    for (const t of times) { const d = skyAt(t).light.dir; expect(d.y).toBeGreaterThan(LIGHT_MIN - 0.01); expect(Math.hypot(d.x, d.y, d.z)).toBeCloseTo(1); }
   });
   it('has golden light at sunrise and sunset, not at noon', () => {
     expect(skyAt(SUNRISE + 0.02).golden).toBeGreaterThan(0.5); expect(skyAt(SUNSET - 0.02).golden).toBeGreaterThan(0.5);
@@ -75,11 +75,31 @@ describe('light direction steps', () => {
       prev = d;
     }
     expect(changes).toBeGreaterThan(50);
-    expect(changes).toBeLessThan(700);   // many consecutive seconds with an identical direction
+    expect(changes).toBeLessThan(1200);
     expect(biggest).toBeLessThan(DIR_STEP * 2.5);
   });
   it('keeps the light colour and intensity smooth (not stepped)', () => {
     const a = skyAt(0.2), b = skyAt(0.2 + 1 / 12000);
     expect(a.light.intensity).not.toBe(b.light.intensity);
+  });
+});
+
+describe('shadow light settings', () => {
+  it('defaults to steps of 1/32 degree and a minimum height of 15 degrees', () => {
+    expect(DIR_STEP * 180 / Math.PI).toBeCloseTo(1 / 32);
+    expect(Math.asin(LIGHT_MIN) * 180 / Math.PI).toBeCloseTo(15);
+    expect(shadowLight.soft).toBe(false);
+  });
+  it('lifts only the shadow light, not the sun itself', () => {
+    const s = skyAt(SUNRISE + 0.001);
+    expect(s.sun.y).toBeLessThan(0.05); expect(s.light.dir.y).toBeGreaterThan(LIGHT_MIN - 0.01);
+  });
+  it('parses ?shadows=step,min,soft and applies it', () => {
+    expect(parseShadowParam('')).toBe(null); expect(parseShadowParam('x,1,0')).toBe(null);
+    const o = parseShadowParam('0.25,5,1');
+    expect(o.step).toBeCloseTo(0.25 * Math.PI / 180); expect(o.min).toBeCloseTo(Math.sin(5 * Math.PI / 180)); expect(o.soft).toBe(true);
+    const keep = { ...shadowLight };
+    try { setShadowLight(o); expect(skyAt(SUNRISE + 0.001).light.dir.y).toBeGreaterThan(o.min - 0.01); expect(skyAt(SUNRISE + 0.001).light.dir.y).toBeLessThan(LIGHT_MIN - 0.02); }
+    finally { setShadowLight(keep); }
   });
 });

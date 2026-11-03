@@ -17,9 +17,12 @@
  * shadowBias(far) -> depth bias worth BIAS metres for a shadow camera reaching to far
  *   dir: unit vector { x, y, z } towards the light
  *
- * Depends on: three
+ * Plain PCF shadow edges by default; PCF soft only with the temporary `?shadows=` variant (render/sky).
+ *
+ * Depends on: three, render/sky
  */
 import * as THREE from 'three';
+import { shadowLight } from './sky.js';
 
 export const BIAS = 0.04;   // metres along the light
 /** Depth bias for a shadow camera from near 1 to `far`: always BIAS metres. */
@@ -37,7 +40,7 @@ export function snapToTexels(p, dir, texel) {
 export function createStage(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0);
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = shadowLight.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;   // soft: temporary ?shadows= variant
   container.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   const hemi = new THREE.HemisphereLight(0xe2ebf0, 0x8a7458, 0.6); scene.add(hemi);
