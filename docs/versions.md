@@ -2,6 +2,10 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.11.1 "Still shadows" — 2026-11-03
+
+- Fixed: around sunrise and sunset the shadows trembled, even standing still; they now hold still and move on in tiny steps as the sun moves.
+
 ## 0.11 "Water" — 2026-11-03
 
 - The castaway gets thirsty: after about a day (20 minutes of play) he is thirsty and a little slower, after a day and a half very thirsty and his rest runs out twice as fast. After two days he collapses and sleeps like exhaustion, and wakes still thirsty. He never dies.

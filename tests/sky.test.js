@@ -1,7 +1,7 @@
 // the day: the clock (game/clock) and the light it gives (render/sky).
 import { describe, it, expect } from 'vitest';
 import { createClock, DAY_SECONDS, START_TIME } from '../src/game/clock.js';
-import { skyAt, SUNRISE, SUNSET } from '../src/render/sky.js';
+import { skyAt, quantiseDir, DIR_STEP, SUNRISE, SUNSET } from '../src/render/sky.js';
 
 describe('game/clock', () => {
   it('starts in the middle of the morning and runs a 20-minute day', () => {
@@ -54,5 +54,32 @@ describe('render/sky', () => {
       expect(Math.abs(a.day - b.day)).toBeLessThan(0.05);
       expect(Math.max(...a.grade.map((v, k) => Math.abs(v - b.grade[k])))).toBeLessThan(0.05);
     }
+  });
+});
+
+describe('light direction steps', () => {
+  const ang = (a, b) => Math.acos(Math.min(1, a.x * b.x + a.y * b.y + a.z * b.z));
+  it('quantiseDir gives unit vectors close to the input, on the step grid', () => {
+    for (const d of [{ x: 0.6, y: 0.3, z: 0.7416 }, { x: -0.9, y: 0.2, z: 0.3873 }, { x: 0, y: 1, z: 0 }]) {
+      const l = Math.hypot(d.x, d.y, d.z), u = { x: d.x / l, y: d.y / l, z: d.z / l }, q = quantiseDir(u);
+      expect(Math.hypot(q.x, q.y, q.z)).toBeCloseTo(1);
+      expect(ang(u, q)).toBeLessThan(DIR_STEP);
+      const el = Math.asin(q.y) / DIR_STEP; expect(el).toBeCloseTo(Math.round(el), 6);
+    }
+  });
+  it('holds the light direction still between steps (golden hour) and moves it in small steps', () => {
+    let changes = 0, biggest = 0, prev = skyAt(0.2).light.dir;
+    for (let i = 1; i <= 1200; i++) {   // 0.2 .. 0.3, one game second apart
+      const d = skyAt(0.2 + i / 12000).light.dir;
+      if (d.x !== prev.x || d.y !== prev.y || d.z !== prev.z) { changes++; biggest = Math.max(biggest, ang(d, prev)); }
+      prev = d;
+    }
+    expect(changes).toBeGreaterThan(50);
+    expect(changes).toBeLessThan(700);   // many consecutive seconds with an identical direction
+    expect(biggest).toBeLessThan(DIR_STEP * 2.5);
+  });
+  it('keeps the light colour and intensity smooth (not stepped)', () => {
+    const a = skyAt(0.2), b = skyAt(0.2 + 1 / 12000);
+    expect(a.light.intensity).not.toBe(b.light.intensity);
   });
 });
