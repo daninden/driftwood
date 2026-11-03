@@ -2,6 +2,11 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.17.5 "Palm roof" — 2026-11-03
+
+- Look only. The lean-to roof is now seven thin, uneven branches (was twelve; spacing, slant, length and thickness vary, seeded by position) with, as a last building step from progress 0.84, five big overlapping palm fronds laid over the ridge and branches one by one (`leantoFronds` in `render/leanto`; the palms' own frond geometry, material and tints, no outline). Seen from the default camera it reads as a roof of fronds, no longer as a gate or fence. No new material, no new rules, nothing in `game/`; the save format is unchanged.
+- Tests: `tests/leanto.test.js` (roof branch count, no fronds before the roof is done, fronds appear one by one up to five). Smoke: `smoke-22.png` and `smoke-23.png` show it.
+
 ## 0.17.4 "Fireflies" — 2026-11-03
 
 - New: fireflies, atmosphere only. Groups of 10 to 30 at forest edges (forest density in the transition range with at least two trees within 7 m) and along river banks, in the lowland and rain forest only (tiers 1 and 2, ground at least 1 m above high water: never the open beach, plateau or summit), fixed per island by the seed (`firefliesOfTile` in `game/habitats`, own PRNG streams, derived from existing world data: the island and its fixture are unchanged). Seed 1337: 81 groups (70 edge, 11 river), 1580 fireflies.

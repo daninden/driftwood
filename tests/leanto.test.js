@@ -17,7 +17,7 @@ import { DAY_SECONDS } from '../src/game/clock.js';
 import { FIRST_HIGH, PERIOD } from '../src/game/tide.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
 import { carryItems } from '../src/render/carryMark.js';
-import { leantoParts } from '../src/render/leanto.js';
+import { leantoParts, leantoFronds, ROOF_N, FROND_N } from '../src/render/leanto.js';
 import { YAW } from '../src/core/view.js';
 
 let w, spawn, logs, all;
@@ -201,8 +201,12 @@ describe('building', () => {
     expect(keys(0).size).toBe(0); expect([...keys(0.1)]).toEqual(['post']);
     expect(keys(0.3).has('fork')).toBe(true); expect(keys(0.3).has('ridge')).toBe(false);
     expect(keys(0.5).has('ridge')).toBe(true); expect(keys(0.5).has('roof')).toBe(false);
-    expect(leantoParts(w.H, l, 1).filter(s => s.key === 'roof').length).toBe(12);
-    expect(leantoParts(w.H, l, 0.8).filter(s => s.key === 'roof').length).toBeLessThan(7);
+    expect(leantoParts(w.H, l, 1).filter(s => s.key === 'roof').length).toBe(ROOF_N);
+    expect(leantoParts(w.H, l, 0.8).filter(s => s.key === 'roof').length).toBeLessThan(ROOF_N);
+    expect(leantoFronds(w.H, l, 0.8).length).toBe(0);   // the palm fronds come last
+    const n = [0.86, 0.9, 0.95, 1].map(p => leantoFronds(w.H, l, p).length);
+    expect(n[0]).toBeGreaterThan(0); expect(n[3]).toBe(FROND_N);
+    expect(n).toEqual([...n].sort((a, b) => a - b));   // one by one, never fewer
   });
   it('is not solid: he walks through it', () => {
     const g = createGame(w, at(spawn.x - 1.5, spawn.z), { leantos: { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } });

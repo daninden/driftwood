@@ -5,14 +5,18 @@
  * the open side, a ridge pole rests in their forks, and branches lean on the ridge
  * and slope down to the ground at the back as a roof. It rises in steps with its
  * progress: the first third the two posts grow, the second third the ridge pole is
- * laid, the last third the roof branches are leaned on one by one. The open side
+ * laid, then a few thin, uneven roof branches are leaned on one by one, and last
+ * (0.17.5) FROND_N big palm fronds, the palms' own frond geometry and material, are laid
+ * over them, one by one. The open side
  * faces `heading` (the way the camera looked when building started). Toon
  * shading with outlines, like the driftwood; not solid.
  *
  * STEPS               progress is drawn in this many steps (1/STEPS)
- * POST_H, WIDTH, DEPTH, ROOF_N   the measures in metres, and the number of roof branches
+ * POST_H, WIDTH, DEPTH, ROOF_N, FROND_N   the measures in metres, the number of roof branches and of fronds
  * leantoParts(H, l, progress?) -> [{ a, b, r, key }]   pure: the sticks of a lean-to at a
  *   progress (default its own); key is 'post', 'fork', 'ridge' or 'roof'
+ * leantoFronds(H, l, progress?) -> [{ pos, yaw, pitch, sx, sz, k }]   pure: the fronds laid so far
+ *   (pos on the ridge, yaw to the back, pitch down along the roof, scale along and across)
  * createLeantoView(scene, world, kit, leantos) -> { update() }
  *   update() builds, rebuilds (when the progress moved a step) and removes the groups
  *   to match leantos.list
@@ -26,11 +30,12 @@ import { Batch } from './batch.js';
 import { stickMatrix } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
-import { DRIFT, BRANCH } from './palette.js';
+import { DRIFT, BRANCH, P } from './palette.js';
 
 export const STEPS = 60;
-export const POST_H = 1.35, WIDTH = 2.0, DEPTH = 1.5, ROOF_N = 12;
-const POST_R = 0.08, RIDGE_R = 0.065, ROOF_R = 0.075;
+export const POST_H = 1.35, WIDTH = 2.0, DEPTH = 1.5, ROOF_N = 7, FROND_N = 5;
+const POST_R = 0.08, RIDGE_R = 0.065, ROOF_R = 0.05;
+const BRANCHES_END = 0.86, FROND_FROM = 0.84;   // the roof branches are all on at this progress; the fronds start here
 
 const clamp01 = v => Math.max(0, Math.min(1, v));
 
@@ -49,11 +54,25 @@ export function leantoParts(H, l, progress = l.progress) {
   const ridgeT = clamp01((p - 1 / 3) * 3);
   const R0 = at(front, -half - 0.12, POST_H + 0.03), R1 = at(front, half + 0.12, POST_H + 0.03);
   if (ridgeT > 0.02) out.push({ a: R0, b: new THREE.Vector3().lerpVectors(R0, R1, ridgeT), r: RIDGE_R, key: 'ridge' });
-  const roofN = Math.ceil(ROOF_N * clamp01((p - 2 / 3) * 3) - 1e-9);
-  for (let k = 0; k < roofN; k++) {
-    const u = k / (ROOF_N - 1), r0 = -half - 0.05 + u * (WIDTH - 0.1 + 0.1), j = (hashInt(Math.round(l.x * 64) + k, Math.round(l.z * 64), 101) / 4294967296 - 0.5) * 0.12;
-    const a = at(front + 0.04, r0, POST_H + 0.05), b = at(-DEPTH / 2 - 0.05, r0 + j * 2, 0.04);
-    out.push({ a, b, r: ROOF_R * (0.85 + (k % 3) * 0.1), key: 'roof' });
+  const roofN = Math.ceil(ROOF_N * clamp01((p - 2 / 3) / (BRANCHES_END - 2 / 3)) - 1e-9), rnd = rndOf(l, 101);
+  for (let k = 0; k < roofN; k++) {   // fewer, thin and uneven: spacing, slant, length and thickness all vary
+    const u = (k + (k === 0 || k === ROOF_N - 1 ? 0 : (rnd(k, 0) - 0.5) * 0.7)) / (ROOF_N - 1), r0 = -half - 0.05 + u * WIDTH, lean = (rnd(k, 1) - 0.5) * 0.7, len = 0.78 + rnd(k, 2) * 0.22;
+    const a = at(front + 0.04 + (rnd(k, 3) - 0.5) * 0.08, r0, POST_H + 0.05), end = at(-DEPTH / 2 - 0.05, r0 + lean, 0.04);
+    out.push({ a, b: new THREE.Vector3().lerpVectors(a, end, len), r: ROOF_R * (0.7 + rnd(k, 4) * 0.6), key: 'roof' });
+  }
+  return out;
+}
+
+// A seeded number 0..1 per lean-to, index and slot, fixed by where it stands.
+const rndOf = (l, salt) => (k, slot) => hashInt(Math.round(l.x * 64) + k * 7 + slot * 131, Math.round(l.z * 64) + slot, salt + slot) / 4294967296;
+
+export function leantoFronds(H, l, progress = l.progress) {
+  const p = clamp01(progress), n = Math.ceil(FROND_N * clamp01((p - FROND_FROM) / (1 - FROND_FROM)) - 1e-9);
+  const s = Math.sin(l.heading), c = Math.cos(l.heading), rnd = rndOf(l, 211), yaw0 = Math.atan2(c, -s), half = WIDTH / 2 - 0.1, out = [];
+  for (let k = 0; k < n; k++) {
+    const r = -half + 0.1 + (k + (rnd(k, 0) - 0.5) * 0.5) / (FROND_N - 1) * (2 * half - 0.2), f = DEPTH / 2 + 0.2 + (rnd(k, 1) - 0.5) * 0.12;   // starting just in front of the ridge, so the fronds hang over it
+    const x = l.x + s * f + c * r, z = l.z + c * f - s * r;
+    out.push({ pos: new THREE.Vector3(x, H(x, z) + POST_H + 0.12 + k % 2 * 0.06, z), yaw: yaw0 + (rnd(k, 2) - 0.5) * 0.5, pitch: -(0.1 + rnd(k, 3) * 0.15), sx: 1.0 + rnd(k, 4) * 0.15, sz: 2.3 + rnd(k, 5) * 0.6, k });
   }
   return out;
 }
@@ -65,6 +84,11 @@ export function createLeantoView(scene, w, kit, leantos) {
     leantoParts(w.H, l).forEach((s, i) => {
       const c = s.key === 'roof' ? BRANCH.bark[(i + l.id) % BRANCH.bark.length] : pc;
       B.add(s.key, kit.driftwood, kit.smallMat, stickMatrix(s.a, s.b, s.r / 0.09), c, { outline: 1.18 });
+    });
+    const O = new THREE.Object3D();
+    leantoFronds(w.H, l).forEach(f => {
+      O.position.copy(f.pos); O.rotation.order = 'YZX'; O.rotation.set(0, f.yaw, f.pitch); O.scale.set(f.sx, 1, f.sz); O.updateMatrix();
+      B.add('frond', kit.frond, kit.frondMat, O.matrix.clone(), P.frondTint[(l.id + f.k * 2) % 3 + (f.k % 2)], { depthMat: kit.frondDepth, receive: false });   // as the palms' fronds, no outline
     });
     B.build(g); scene.add(g); return g;
   };
