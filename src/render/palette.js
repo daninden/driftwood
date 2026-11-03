@@ -11,7 +11,13 @@
  *        of golden hour, dusk and night
  * HERO   the castaway: sun-tanned skin, yellowed torn shirt, faded shorts,
  *        dark hair and beard, straw hat, staff, and the light silhouette
- *        that shows when something hides the figure
+ *        that shows when something hides the figure, and the tufts of
+ *        coconut fibre at his waist
+ * DRIFT  driftwood: the bleached colours of dry wood, and the dark colour
+ *        of wet wood just washed up (mixed in as it dries)
+ * COCO   coconuts under the palms
+ * FIRE   flames (core to tip), embers, charred wood, ash, smoke, and the
+ *        warm light and glow a fire gives at night
  *
  * Changing a value here changes the look everywhere; nothing else hard-codes
  * these colours. Plain data, no Three.js.
@@ -41,7 +47,14 @@ export const TG = Object.freeze([
 
 export const BUSHC = Object.freeze([[0x8a9a52, 0x9aa45a], P.bush, [0x4f7038, 0x5a7a3c, 0x46683a], [0x7d7f52, 0x8a8752, 0x6f7448, 0x857a5c], [0x7d8452, 0x8a8a5a]]);
 
-export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8a7558, hair: 0x4a3222, hat: 0xc9b07a, staff: 0x7a5a3a, silhouette: 0xf4ead2 });
+export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8a7558, hair: 0x4a3222, hat: 0xc9b07a, staff: 0x7a5a3a, silhouette: 0xf4ead2, fibre: 0xb08a52 });
+
+export const DRIFT = Object.freeze({ dry: [0xa8987c, 0x9a8a70, 0xb4a68c, 0x8e8068], wet: 0x5e4c3a });
+export const COCO = Object.freeze([0x7a5a36, 0x6a4c2e, 0x8a6a3e]);
+export const FIRE = Object.freeze({
+  flame: [0xfff0b0, 0xffc45a, 0xf27a2e], ember: 0xff7a32, char: [0x3a2e26, 0x4a3a2e, 0x2e2620], ash: 0x6e665c,
+  smoke: 0xe2dcd2, light: 0xffa456, glow: [255, 138, 58],
+});
 
 export const SKY = Object.freeze({
   sunNoon: 0xffe6c4, sunLow: 0xffc690, moon: 0xb4c6ec,

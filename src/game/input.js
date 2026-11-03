@@ -10,6 +10,8 @@
  *                          game decides, see game/game)
  *   hold on the castaway   (about HOLD_MS, finger or mouse) lie down to sleep
  *   Z                      lie down to sleep
+ *   hold anywhere else     (about HOLD_MS) on a pile: light it (the game decides)
+ *   F                      light the pile at the castaway's feet
  *   any key or tap         while asleep: wake up (the game decides)
  *   double tap             run to that spot (touch: hold and drag to steer
  *                          while running)
@@ -38,6 +40,11 @@
  *     (without moving off him) or Z was pressed
  *   input.takeWake() -> true once when a key went down (not a held key
  *     repeating) or a pointer was pressed since the last call
+ *   input.takeHold() -> once, when a press somewhere else than on the
+ *     castaway was held long enough without moving: { x, z, touch? } (the
+ *     pressed spot), or { key: true } when F was pressed; otherwise null
+ *   input.pressing() -> true while a press is still being held still (it
+ *     may yet become a hold), so the game can wait before picking up
  *   input.clearTarget()   called by the game when the target is reached
  *   input.dispose()
  *
@@ -54,7 +61,7 @@ const KEYS = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA:
 export function createInput(element, pickGround, now = () => performance.now()) {
   const touches = new Map();   // pointerId -> { x, y } for fingers on the screen
   let pinch = null, lastTap = null, running = false, downAt = null, steering = false;
-  let hold = null, sleepKey = false, woke = false;   // hold: { t, x, y } while pressing on the castaway
+  let hold = null, sleepKey = false, lightKey = false, woke = false;   // hold: { t, x, y, hero, at } while a press is held still
   let pointerDown = false, dragging = false, zoom = 0, dragYaw = 0, dragPitch = 0, turnL = false, turnR = false;
   const takeZoom = () => { const z = zoom; zoom = 0; return z; };
   const takeTurn = dt => {
@@ -62,16 +69,23 @@ export function createInput(element, pickGround, now = () => performance.now()) 
     dragYaw = dragPitch = 0; return t;
   };
   const takeSleep = () => {
-    if (hold && now() - hold.t >= HOLD_MS) { hold = null; return true; }
+    if (hold && hold.hero && now() - hold.t >= HOLD_MS) { hold = null; return true; }
     const k = sleepKey; sleepKey = false; return k;
   };
+  const takeHold = () => {
+    if (hold && !hold.hero && now() - hold.t >= HOLD_MS) { const h = hold.at; hold = null; return h; }
+    if (lightKey) { lightKey = false; return { key: true }; }
+    return null;
+  };
+  const pressing = () => !!hold;
   const takeWake = () => { const k = woke; woke = false; return k; };
-  const input = { up: false, down: false, left: false, right: false, run: false, target: null, clearTarget() { input.target = null; }, takeZoom, takeTurn, takeSleep, takeWake, dispose };
+  const input = { up: false, down: false, left: false, right: false, run: false, target: null, clearTarget() { input.target = null; }, takeZoom, takeTurn, takeSleep, takeWake, takeHold, pressing, dispose };
 
   const onKey = down => e => {
     const k = KEYS[e.code];
     if (down && !e.repeat) woke = true;
     if (down && !e.repeat && e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey) sleepKey = true;
+    if (down && !e.repeat && e.code === 'KeyF' && !e.ctrlKey && !e.metaKey) lightKey = true;
     if (k) { input[k] = down; if (down) input.target = null; e.preventDefault(); }
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.run = down;
     if (e.code === 'KeyQ') turnL = down;
@@ -87,7 +101,10 @@ export function createInput(element, pickGround, now = () => performance.now()) 
   const setTarget = (e, tap) => {
     const touch = e.pointerType === 'touch', g = pickGround(e.clientX, e.clientY, touch); if (!g) return;
     const t = { x: g.x, z: g.z }; if (running) t.run = true;
-    if (tap) { t.tap = true; if (touch) t.touch = true; if (g.hero) { t.hero = true; hold = { t: now(), x: e.clientX, y: e.clientY }; } }
+    if (tap) {
+      t.tap = true; if (touch) t.touch = true; if (g.hero) t.hero = true;
+      hold = { t: now(), x: e.clientX, y: e.clientY, hero: !!g.hero, at: touch ? { x: g.x, z: g.z, touch: true } : { x: g.x, z: g.z } };
+    }
     input.target = t;
   };
   const twoFingers = () => {

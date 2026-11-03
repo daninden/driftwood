@@ -52,7 +52,7 @@ async function boot() {
   const game = createGame(world, spawn, { ...(qt === null ? {} : { time: Number(qt) }), ...(qa === null ? {} : { sleep: { awake: Number(qa) } }) });
   const mark = createRestMark(document.getElementById('rest'));
   const show = info => { mark.update(info.rest, game.sleep.asleep); return info; };
-  view.setWood(game.wood);
+  view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
 
   let last = performance.now(), paused = false;

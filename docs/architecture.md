@@ -34,31 +34,35 @@ Rules:
 | `world/terrain` | From L to height: terraces, rock walls and the natural passages. |
 | `world/heightfield` | The height and level grids, and bilinear sampling. |
 | `world/rivers` | Rivers (Dijkstra, smooth curve), waterfalls, carving beds and banks. |
-| `world/vegetation` | Per tile: trees, palms, rocks, bushes, root spots, and the driftwood that can be gathered (with its own PRNG and an id per piece) (data only). |
+| `world/vegetation` | Per tile: trees, palms, rocks, bushes, root spots, and what can be gathered: driftwood and the coconuts under the palms (each with its own PRNG and an id per piece) (data only). |
 | `world/occlusion` | Darker ground under crowns and in hollows. |
 | `world/spots` | Finding places: the start spot, examples of each passage (for tests). |
 | `world/world` | Builds everything from a seed and returns one read-only object with queries. |
 | `game/movement` | Walking rules: walls block, passages let you climb, the sea blocks below the current sea level (you can always wade back), sliding along walls; trunks, boulders and crags (from the tile data, cached per tile) block and you slide round them. |
-| `game/input` | Keys and clicks/taps to a movement intent (a double tap runs; the tapped spot itself is marked, steering after it is not; a finger may wobble a little); holding the castaway or `Z` to sleep, any key or tap to wake; mouse wheel, `+`/`-` and a two-finger pinch to zoom steps; `Q`/`E`, right-mouse drag and a two-finger twist to turn (the mouse also tilts). |
-| `game/wood` | Gathering: driftwood still on the beach, what is carried (at most 3, each piece slows you), piles; finding the nearest piece or pile, taking, laying down; washing up new wood at high water (deterministic per high water, never more per tile than at the start), piles the flood takes; a plain saveable state. |
+| `game/input` | Keys and clicks/taps to a movement intent (a double tap runs; the tapped spot itself is marked, steering after it is not; a finger may wobble a little); holding the castaway or `Z` to sleep, any key or tap to wake; holding anywhere else or `F` for the game to light a pile (and whether a press is still being held); mouse wheel, `+`/`-` and a two-finger pinch to zoom steps; `Q`/`E`, right-mouse drag and a two-finger twist to turn (the mouse also tilts). |
+| `game/wood` | Gathering: driftwood still on the beach, what is carried (at most 3, each piece slows you), piles; finding the nearest piece or pile, taking, laying down; washing up new wood at high water (deterministic per high water, never more per tile than at the start), piles the flood takes; washed-up wood is wet and dries over a day (`dryness`); piles and pieces taken off to burn; a plain saveable state. |
+| `game/fibre` | Coconuts under the palms, husked for a tuft of fibre (at most 3 carried, one used up per attempt to light a fire); palms drop new nuts after some days; a plain saveable state. |
+| `game/fire` | Fires: an attempt to light a pile (catches or not, from the dryness and tiredness, fixed by the seed and the number of attempts), burning down to embers and going out, feeding one piece at a time, the flood putting them out; a plain saveable state. |
 | `game/clock` | The time of day and the number of days: a 20-minute day, part of the game state. |
 | `game/tide` | Ebb and flow (pure): the sea level from the time, two high waters a day, and which high water it is. |
-| `game/sleep` | Being awake, tiredness, and sleeping: how fast game time runs (20× while asleep, eased), lying down and getting up, falling asleep after two days (only on dry ground). |
-| `game/game` | Game state (the player, the clock, the wood and sleep) and the per-frame update: a tapped target is looked at once (on the castaway: lay down; on wood: walk there and pick it up, bending down briefly); sleeping and waking (the flood wakes the castaway when it reaches him); the clock runs (faster while asleep), the tide washes up wood at high water and takes covered piles. |
+| `game/sleep` | Being awake, tiredness, and sleeping: how fast game time runs (20× while asleep, eased), lying down and getting up, falling asleep after two days (only on dry ground); hard work tires (`tire`). |
+| `game/game` | Game state (the player, the clock, the wood, sleep, the fibre and the fires) and the per-frame update: a tapped target is looked at once (on the castaway: lay down; on wood: walk there and pick it up, bending down briefly; on a coconut: kneel to husk it; on a fire: lay a piece on it); a hold on a pile (or `F`) kneels to drill fire; kneeling work stops when you walk or tap; sleeping and waking (the flood wakes the castaway when it reaches him); the clock runs (faster while asleep), the tide washes up wood at high water and takes covered piles, fires burn down. |
 | `render/palette` | All colours of style C in one place, the castaway's included. |
 | `render/terrainColor` | Painted ground colour per point (pure, tested against the prototype). |
 | `render/materials` | Toon shading, outlines (also a cut version for vegetation), the rock shader for steep walls. |
 | `render/geometry` | Shared shapes (crowns, rocks, grass, ferns, driftwood) and matrix helpers. |
 | `render/batch` | Many small objects into a few InstancedMeshes with outlines. |
-| `render/props` | Detailed trees, palms, roots and lianas, beach finds, the tide line. Trees, pines and palms each pick a shape and colours from the tile generator. |
+| `render/props` | Detailed trees, palms, roots and lianas, the tide line. Trees, pines and palms each pick a shape and colours from the tile generator. |
 | `render/terrainTile` | Ground mesh and painted texture of one tile. |
 | `render/farTiles` | A cheap version of every tile. Those in view at the start are built before the game starts; the rest follow in the background, about 3 ms per frame, tiles in view first. |
 | `render/nearTile` | The full-detail version of one tile. |
 | `render/streaming` | Which detailed tiles exist for the current view; building one at a time, dropping old ones. |
 | `render/cutout` | The thinned veil in the vegetation round the castaway: a shader patch on the vegetation materials that discards, with an ordered dither, part of what lies in front of the figure inside a screen circle (40% kept in the middle, filling in to all at the edge). |
 | `render/water` | Sea, river ribbons, surf, foam and spray at waterfalls. The sea planes move with the tide; the surf is built for five levels of the tide and the two next to the sea level fade in. |
-| `render/driftwood` | The driftwood of `game/wood`: logs on the beach per detailed tile (rebuilt when wood is taken or washes up), piles stacked crosswise, and each piece's look, fixed by its place. Freshly washed-up wood fades in over 3 s. |
-| `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle, carried wood under the arm, bending down, a tired stoop, lying down to sleep with the hat over his face, and a light stippled silhouette (drawn with an inverted depth test before the figure) where something solid hides it. |
+| `render/driftwood` | The driftwood of `game/wood`: logs on the beach per detailed tile (rebuilt when wood is taken or washes up), piles stacked crosswise, and each piece's look, fixed by its place; wet wood is dark and bleaches in steps as it dries. Freshly washed-up wood fades in over 3 s. |
+| `render/coconuts` | The coconuts of `game/fibre` under the palms, per detailed tile (rebuilt when one is taken or falls again). |
+| `render/fire` | The fires of `game/fire`: a tepee of charred wood that sinks as it burns, flickering unlit flame cones, embers, rising smoke (also a puff after a failed attempt and a wisp while drilling), one warm point light over the strongest fire near the castaway (always in the scene, so no shader is rebuilt), and at night a warm glow over the picture round it (a DOM layer above the night grading). |
+| `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle, carried wood under the arm, tufts of fibre at the waist, bending down, kneeling to husk a coconut or to twirl the staff as a fire drill, a tired stoop, lying down to sleep with the hat over his face, and a light stippled silhouette (drawn with an inverted depth test before the figure) where something solid hides it. |
 | `render/footprints` | Footprints in the sand: at most 80, the oldest fading out; those the tide covers are wiped out. |
 | `render/restMark` | The moon mark (`#rest` in `index.html`) that wanes as the castaway needs sleep; drawn by `main` from `game.update`'s `rest`. |
 | `render/camera` | Orthographic camera that follows; player zoom within fixed limits; free turning and limited tilting, eased; zooms out on the summits; ground picking. (`islandView.pickGround` also tells whether a point is on the castaway.) |
@@ -76,14 +80,16 @@ input ──> view.zoomBy(input.takeZoom()), view.turn(input.takeTurn(dt))
   │          zoom and view angles are view settings, not game state
   │      input.yaw = view.yaw   so the keys walk relative to the screen
   │
-  └─> game.update(input, dt) ──> sleep or wake (game/sleep: how fast game time runs), a tap is looked at (game/wood),
-                │                the player moves (game/movement), the clock runs, the tide (game/tide) washes up wood
+  └─> game.update(input, dt) ──> sleep or wake (game/sleep: how fast game time runs), a tap or hold is looked at
+                │                (game/wood, game/fibre, game/fire), kneeling work goes on, the player moves (game/movement),
+                │                the clock runs, the tide (game/tide) washes up wood, fires burn down
                 │
                 ├─> { rest } ──> the moon mark (render/restMark)
                 └─> { distance, terrain, time, sea } ──> view.render(player, info, dt)
                                                 ├ camera follows; sun or moon from the time (render/sky)
                                                 ├ sea level and surf of the tide
-                                                ├ driftwood when game.wood changed (fresh wood fades in); castaway with its load, footprints
+                                                ├ driftwood when game.wood changed or dried a step (fresh wood fades in), coconuts; castaway with its load and fibre, footprints
+                                                ├ fires: flames, smoke, the fire light and the night glow
                                                 ├ streaming: at most ~9 ms building tiles
                                                 ├ far tiles on/off
                                                 ├ window in the vegetation round the castaway
@@ -102,7 +108,7 @@ Nothing stutters while playing, because detailed tiles are built in slices of ab
 ```
 npm test          unit tests (Vitest, Node), about 30 s
 npm run build     builds dist/ and dist/driftwood.html (a single file)
-npm run smoke     opens the build in headless Chromium, walks, gathers wood, waits for low water, sleeps through a high water, takes screenshots (about 50 s)
+npm run smoke     opens the build in headless Chromium, walks, gathers wood, waits for low water, sleeps through a high water, husks a coconut, lights a fire, takes screenshots (about 60 s)
 ```
 
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
@@ -115,6 +121,7 @@ npm run smoke     opens the build in headless Chromium, walks, gathers wood, wai
 - `tests/wood.test.js` tests gathering: driftwood on the beach, picking up with a click or (less precise) tap, not when steering, at most three pieces and the slowdown, laying down on the castaway, piles, and the saved state.
 - `tests/game.test.js` tests click-to-walk, the running clock and the saveable state.
 - `tests/tide.test.js` tests the days on the clock, the sea level (twice a day, a little later each day), walking further out at low water and wading back, wood washing up (where there is room, never more than at the start, deterministic, away from the castaway, saved) and piles the flood takes.
+- `tests/fire.test.js` tests the coconuts and the fibre (husking, at most three tufts, new nuts), wood drying, the chance that a fire catches, lighting (kneeling, the cost in rest, fibre used up, failing, stopping early, too small a pile, wet wood, a long press and waiting while it is held), burning down to embers, feeding, the flood, saving, and the input (a long press away from the castaway, `F`).
 - `tests/sleep.test.js` tests tiredness, falling asleep after two days, the length and speed of a sleep, waking early, sleeping in the game (laying wood down first, not in the water, woken by the flood on the wet sand of low water, not falling asleep while wading) and the input (holding the castaway with a finger or mouse, `Z`, waking).
 - `tests/sky.test.js` tests the clock and the light of the day: sun up and down, east to west, golden hour, enough light at night, a minimum light height, smooth changes.
 - `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser, and on touch: tap, double tap, pinch and twist). Movement and streaming tests also run from turned and tilted views.
@@ -130,7 +137,7 @@ The game is published on Vercel as a static site. The Vercel project is linked t
 The design allows for saving without building it yet:
 
 - **The world never needs saving.** It follows entirely from the seed.
-- **What needs saving is small:** the seed, the day and the time of day (the tide follows from them), the player's position, how long the castaway has been awake, and what changed on top of the generated world: for now the driftwood carried and the piles (as ids of the pieces), the wood washed up since the start, the first pieces the sea took back and the last high water that brought wood; later what was dug and built. `game.state()` already returns that as a plain object.
+- **What needs saving is small:** the seed, the day and the time of day (the tide follows from them), the player's position, how long the castaway has been awake, and what changed on top of the generated world: for now the driftwood carried and the piles (as ids of the pieces), the wood washed up since the start (with when it washed up, for drying), the pieces the sea took back or that were burnt and the last high water that brought wood; the fibre carried and the coconuts taken (and when); the fires and the number of attempts; later what was dug and built. `game.state()` already returns that as a plain object.
 - **Saving goes behind one interface**, for example `save/store.js` with `load()` and `save(state)`. First a local version in the browser; a backend can come later behind the same interface, without `game` or `render` noticing.
 
 ## Agreements

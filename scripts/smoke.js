@@ -3,9 +3,12 @@
 // Loads dist/driftwood.html, waits for the world, builds the detailed tiles
 // around the start (or around x,z), walks for a moment, gathers driftwood and
 // lays it down, waits for low water, sleeps (with Z) through the next high
-// water, and saves screenshots.
+// water, husks a coconut, lights a fire with the drill (F), and saves
+// screenshots.
 // smoke-0.png shows the loader while it is filling; smoke-5 low water,
-// smoke-6 the castaway asleep, smoke-7 awake again with new wood on the beach.
+// smoke-6 the castaway asleep, smoke-7 awake again with new wood on the beach,
+// smoke-8 husking a coconut, smoke-9 drilling fire, smoke-10 the fire by day,
+// smoke-11 the fire at night.
 //
 // A headless browser here has no GPU and draws only a few frames per second,
 // so after loading the test does not play in real time: it pauses drawing,
@@ -105,6 +108,49 @@ if (woke.rest < 0.95) errors.push('not rested after sleeping: ' + woke.rest);
 if (woke.washes < 1 || woke.fresh < 1) errors.push('no wood washed up while sleeping');
 await page.evaluate(() => { const { game } = window.__driftwood, l = game.wood.fresh[0]; console.log('fresh wood at', l.x.toFixed(1), l.z.toFixed(1)); });
 await shot('smoke-7.png');
+
+// Fibre: click the coconut nearest the castaway; he kneels to husk it.
+const husk = await page.evaluate(() => {
+  const { world, game, input, step } = window.__driftwood, p = game.player;
+  const c = world.tiles.flatMap(t => t.cocos).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+  p.x = c.x + 1; p.z = c.z + 0.3; p.y = world.H(p.x, p.z);
+  input.target = { x: c.x, z: c.z, tap: true }; step(10, () => p.work && p.work.f > 0.5);
+  return { work: p.work && p.work.kind, x: p.x, z: p.z };
+});
+console.log('husking', JSON.stringify(husk));
+if (husk.work !== 'husk') errors.push('did not kneel to husk a coconut');
+await shot('smoke-8.png');
+const fibre = await page.evaluate(() => { const { game, step } = window.__driftwood; step(5, () => !game.player.work); return game.fibre.carried; });
+console.log('fibre', fibre);
+if (fibre !== 1) errors.push('carries ' + fibre + ' tufts of fibre instead of 1');
+
+// Fire: lay a pile of four dry pieces (the first beach wood) on the dry sand
+// above the tide line, press F beside it and drill (smoke-9); when it does
+// not catch, try again with new fibre until it does (smoke-10).
+const pressF = () => page.evaluate(() => { for (const type of ['keydown', 'keyup']) window.dispatchEvent(new KeyboardEvent(type, { code: 'KeyF' })); });
+const drilling = await page.evaluate(() => {
+  const { world, game, step } = window.__driftwood, p = game.player, w = game.wood;
+  const dry = world.tiles.flatMap(t => t.drift).filter(l => w.onBeach(l)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
+  p.x = dry[0].x + 0.6; p.z = dry[0].z + 0.6; p.y = world.H(p.x, p.z);
+  for (const k of [0, 2]) { for (const l of dry.slice(k, k + 2)) w.take({ kind: 'log', log: l }); w.drop(p.x, p.z, p.heading); }
+  return w.piles.at(-1).logs.length;
+});
+if (drilling !== 4) errors.push('laid a pile of ' + drilling + ' instead of 4');
+await pressF();
+const work = await page.evaluate(() => { const { game, step } = window.__driftwood; step(10, () => game.player.work && game.player.work.f > 0.85); return game.player.work && game.player.work.kind; });
+if (work !== 'drill') errors.push('did not kneel to drill fire');
+await shot('smoke-9.png');
+let fires = 0, attempts = 0;
+for (let k = 0; k < 12 && !fires; k++) {
+  ({ fires, attempts } = await page.evaluate(() => { const { game, step } = window.__driftwood; step(30, () => !game.player.work); if (!game.fibre.carried) game.fibre.carried = 1; return { fires: game.fire.fires.length, attempts: game.fire.attempts }; }));
+  if (!fires) await pressF();
+}
+console.log('fire after', attempts, 'attempts');
+if (!fires) errors.push('no fire after ' + attempts + ' attempts');
+await page.evaluate(() => { const { game, input, step } = window.__driftwood, p = game.player; input.target = { x: p.x - 2.2, z: p.z + 1.2 }; step(5, () => !input.target); });
+await shot('smoke-10.png');
+await page.evaluate(() => { const { game, step } = window.__driftwood; game.clock.time = 0.95; step(0.1); });
+await shot('smoke-11.png');
 await browser.close();
 console.log('done after', secs());
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }

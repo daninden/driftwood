@@ -13,8 +13,11 @@
  *   view.zoomBy(steps)   zoom the camera (positive = further away), see render/camera
  *   view.turn({ yaw, pitch })   turn and tilt the view (radians), see render/camera
  *   view.yaw              the current view angle (for walking relative to the screen)
- *   view.setWood(wood)   from then on draws the driftwood of game/wood: beach
- *     logs with the detailed tiles, piles, and the castaway's load (render/driftwood)
+ *   view.setGame(game)   from then on draws what can be gathered and made:
+ *     the driftwood of game/wood (beach logs with the detailed tiles, piles,
+ *     the castaway's load, drying: render/driftwood), the coconuts and the
+ *     fibre carried (game/fibre, render/coconuts), and the fires
+ *     (game/fire, render/fire)
  *   view.pickGround(clientX, clientY, touch?) -> { x, z, hero? } | null
  *     hero when the screen point is on the castaway (with a finger: near it)
  *   view.canvas
@@ -45,7 +48,10 @@ import { createFootprints } from './footprints.js';
 import { createCamera } from './camera.js';
 import { createMood } from './mood.js';
 import { skyAt } from './sky.js';
-import { createWoodView, driftLook } from './driftwood.js';
+import { createWoodView, driftColor } from './driftwood.js';
+import { createCocoView } from './coconuts.js';
+import { createFireView } from './fire.js';
+import { dryness } from '../game/wood.js';
 
 const BUILD_MS = 9, FAR_MS = 3;
 
@@ -62,12 +68,12 @@ export async function createIslandView(world, container, progress, start) {
   if (start) far.rest.sort((a, b) => Math.hypot(a.x0 - start.x, a.z0 - start.z) - Math.hypot(b.x0 - start.x, b.z0 - start.z));
   const slicer = createSlicer();
   const near = new Map();   // tile -> { group }
-  let woodView = null, wood = null;
+  let woodView = null, cocoView = null, fireView = null, game = null;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso),
-    onReady: (tile, v) => { scene.add(v.group); near.set(tile, v); if (woodView) woodView.addTile(tile); },
-    onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) woodView.dropTile(tile); },
+    onReady: (tile, v) => { scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); } },
+    onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); } },
   });
   const hero = createHero(scene), steps = createFootprints(scene, world.H), cam = createCamera();
   const mood = createMood({ stage, canvas: renderer.domElement, container });
@@ -78,8 +84,9 @@ export async function createIslandView(world, container, progress, start) {
     const t = info.terrain, aspect = window.innerWidth / window.innerHeight, sea = info.sea || 0;
     cam.follow(player, dt, t.L > 4.25);
     water.setSea(sea);
-    if (woodView) woodView.update(dt);
-    hero.update(player, t.depth, wood ? wood.carried.map(l => ({ len: l.len, rad: l.rad, col: driftLook(l).col })) : []);
+    const total = game ? game.clock.total : 0;
+    if (woodView) { woodView.update(dt, total); cocoView.update(); }
+    hero.update(player, t.depth, game ? game.wood.carried.map(l => ({ len: l.len, rad: l.rad, col: driftColor(l, dryness(l, total)) })) : [], game ? game.fibre.carried : 0);
     steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver);
     steps.wash(sea);
     const { yaw, pitch } = cam;
@@ -89,12 +96,18 @@ export async function createIslandView(world, container, progress, start) {
     updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
     updateCutout(cam.camera, renderer, { x: player.x, y: hero.group.position.y + 0.4, z: player.z });
     const sky = skyAt(info.time);
+    if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H });
     stage.followSun(cam.target, Math.max(24, Math.min(90, cam.zoom * 3.2)), sky.light.dir);
     mood.update(world.tierAt(t.L), dt, sky);
     renderer.render(scene, cam.camera);
   }
 
-  function setWood(w) { wood = w; woodView = createWoodView(scene, world, kit, w); near.forEach((v, tile) => woodView.addTile(tile)); }
+  function setGame(g) {
+    game = g;
+    woodView = createWoodView(scene, world, kit, g.wood); cocoView = createCocoView(scene, world, kit, g.fibre);
+    near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); });
+    fireView = createFireView(scene, container, g.fire);
+  }
 
   const feet = new THREE.Vector3(), head = new THREE.Vector3();
   function pickGround(cx, cy, touch) {
@@ -124,5 +137,5 @@ export async function createIslandView(world, container, progress, start) {
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, setWood, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, pickGround, canvas: renderer.domElement, stats, settle, prepare };
+  return { render, setGame, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, pickGround, canvas: renderer.domElement, stats, settle, prepare };
 }

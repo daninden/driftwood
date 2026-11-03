@@ -10,16 +10,23 @@
  * Wood that a high water brings (game/wood `fresh`) fades in over FADE_IN
  * seconds, in a group of its own, before it joins its tile.
  *
+ * Wood just washed up is wet: dark, bleaching to its own colour over the
+ * day it takes to dry (game/wood `dryness`), in DRY_STEPS steps.
+ *
  * driftLook(log) -> { col, branch, roots }   pure; branch and roots are
  *   null or parameters
- * addBeachLog(B, kit, H, log)       a log as it washed up
- * addPile(B, kit, H, pile)          logs stacked crosswise, two per layer
+ * driftColor(log, dry?) -> its colour at dryness dry (0 wet .. 1 dry), pure
+ * addBeachLog(B, kit, H, log, dry?)  a log as it washed up
+ * addPile(B, kit, H, pile, total?)   logs stacked crosswise, two per layer
+ *   (total: the days on the clock, for how dry each piece is)
  * createWoodView(scene, world, kit, wood) -> woodView
  *   woodView.addTile(tile), woodView.dropTile(tile)   with the detailed tiles
- *   woodView.update(dt)   rebuilds what changed since the last call
- *     (wood.version) and fades in freshly washed-up wood (dt in real seconds)
+ *   woodView.update(dt, total?)   rebuilds what changed since the last call
+ *     (wood.version, or a step of drying) and fades in freshly washed-up
+ *     wood (dt in real seconds, total the days on the clock)
  *
- * Depends on: three, core/noise, render/geometry, render/nearTile (disposeGroup)
+ * Depends on: three, core/noise, render/geometry, render/nearTile (disposeGroup),
+ *   render/palette, game/wood (dryness, read only)
  */
 import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
@@ -27,9 +34,18 @@ import { stickMatrix } from './geometry.js';
 import { Batch } from './batch.js';
 import { outlineMat, toon } from './materials.js';
 import { disposeGroup } from './nearTile.js';
+import { DRIFT } from './palette.js';
+import { dryness, DRY_DAYS } from '../game/wood.js';
 
 export const FADE_IN = 3;
-const COLS = [0xa8987c, 0x9a8a70, 0xb4a68c, 0x8e8068];
+const COLS = DRIFT.dry, WET = new THREE.Color(DRIFT.wet), DRY_STEPS = 12;   // the look of drying wood changes in steps
+
+/** The colour of a log at a dryness 0..1: dark and wet, bleaching as it dries. */
+export function driftColor(log, dry = 1) {
+  const col = driftLook(log).col; if (dry >= 1) return col;
+  const k = Math.round(dry * DRY_STEPS) / DRY_STEPS;
+  return new THREE.Color(col).lerp(WET, (1 - k) * 0.9).getHex();
+}
 
 export function driftLook(log) {
   const r = mulberry32(hashInt(Math.round(log.x * 64), Math.round(log.z * 64), 53));
@@ -39,8 +55,8 @@ export function driftLook(log) {
   return { col, branch, roots };
 }
 
-export function addBeachLog(B, kit, H, log) {
-  const { x, z, y, len, rad } = log, ca = Math.cos(log.a), sa = Math.sin(log.a), { col, branch, roots } = driftLook(log);
+export function addBeachLog(B, kit, H, log, dry = 1) {
+  const { x, z, y, len, rad } = log, ca = Math.cos(log.a), sa = Math.sin(log.a), { branch, roots } = driftLook(log), col = driftColor(log, dry);
   const A = new THREE.Vector3(x - ca * len / 2, 0, z - sa * len / 2), Bv = new THREE.Vector3(x + ca * len / 2, 0, z + sa * len / 2);
   A.y = Math.max(H(A.x, A.z), y - 0.2) + rad * 0.7; Bv.y = Math.max(H(Bv.x, Bv.z), y - 0.2) + rad * 0.6;
   B.add('log', kit.driftwood, kit.smallMat, stickMatrix(A, Bv, rad / 0.09), col, { outline: 1.12 });
@@ -56,40 +72,43 @@ export function addBeachLog(B, kit, H, log) {
   });
 }
 
-export function addPile(B, kit, H, pile) {
+export function addPile(B, kit, H, pile, total = 0) {
   const a0 = (hashInt(Math.round(pile.x * 64), Math.round(pile.z * 64), 59) / 4294967296) * Math.PI;
   const g = H(pile.x, pile.z);
   pile.logs.forEach((log, i) => {
     const layer = i >> 1, a = a0 + (layer % 2) * Math.PI / 2 + ((i * 0.37) % 0.2 - 0.1), ca = Math.cos(a), sa = Math.sin(a);
     const off = (i % 2 ? 1 : -1) * 0.15, cx = pile.x - sa * off, cz = pile.z + ca * off, cy = g + 0.08 + layer * 0.19, h = log.len / 2;
     const A = new THREE.Vector3(cx - ca * h, cy, cz - sa * h), Bv = new THREE.Vector3(cx + ca * h, cy + 0.02, cz + sa * h);
-    B.add('pile', kit.driftwood, kit.smallMat, stickMatrix(A, Bv, log.rad / 0.09), driftLook(log).col, { outline: 1.12 });
+    B.add('pile', kit.driftwood, kit.smallMat, stickMatrix(A, Bv, log.rad / 0.09), driftColor(log, dryness(log, total)), { outline: 1.12 });
   });
 }
 
 export function createWoodView(scene, w, kit, wood) {
   const tiles = new Map();   // tile -> group of its beach logs
-  let piles = null, seen = -1, washes = wood.washes, fading = null, fadeT = 0, fresh = new Set();
+  let piles = null, seen = -1, washes = wood.washes, fading = null, fadeT = 0, fresh = new Set(), now = 0, dryKey = -1;
   const fadeMat = toon(0xffffff, { transparent: true, opacity: 0 }), fadeOutline = outlineMat.clone(); fadeOutline.transparent = true; fadeOutline.opacity = 0;
   const build = (add, mat = kit.smallMat, ol = outlineMat) => { const grp = new THREE.Group(), B = new Batch(ol); add(B, mat); B.build(grp); scene.add(grp); return grp; };
-  const tileGroup = tile => build(B => { for (const l of wood.beachLogs(tile)) if (!fresh.has(l)) addBeachLog(B, kit, w.H, l); });
+  const tileGroup = tile => build(B => { for (const l of wood.beachLogs(tile)) if (!fresh.has(l)) addBeachLog(B, kit, w.H, l, dryness(l, now)); });
   const rebuildTiles = () => tiles.forEach((g, tile) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
   const buildFading = () => {
     if (fading) disposeGroup(fading);
-    fading = build((B, mat) => { for (const l of fresh) if (wood.onBeach(l)) addBeachLog(B, { ...kit, smallMat: mat }, w.H, l); }, fadeMat, fadeOutline);
+    fading = build((B, mat) => { for (const l of fresh) if (wood.onBeach(l)) addBeachLog(B, { ...kit, smallMat: mat }, w.H, l, dryness(l, now)); }, fadeMat, fadeOutline);
     fading.traverse(o => { o.castShadow = false; });   // no shadow before the wood is there
   };
 
   function addTile(tile) { if (tile.drift && tile.drift.length && !tiles.has(tile)) tiles.set(tile, tileGroup(tile)); }
   function dropTile(tile) { const g = tiles.get(tile); if (g) { disposeGroup(g); tiles.delete(tile); } }
-  function update(dt = 0) {
+  function update(dt = 0, total = 0) {
+    now = total;
+    const dk = Math.floor(total * DRY_STEPS / DRY_DAYS);
+    if (dk !== dryKey) { dryKey = dk; seen = -1; }
     if (wood.washes !== washes) { washes = wood.washes; fresh = new Set(wood.fresh); fadeT = 0; seen = -1; }
     if (wood.version !== seen) {
       seen = wood.version;
       rebuildTiles();
       if (fresh.size) buildFading();
       if (piles) disposeGroup(piles);
-      piles = build(B => { for (const p of wood.piles) addPile(B, kit, w.H, p); });
+      piles = build(B => { for (const p of wood.piles) addPile(B, kit, w.H, p, now); });
     }
     if (fresh.size) {
       fadeT += dt;

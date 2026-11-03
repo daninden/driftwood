@@ -2,8 +2,11 @@
  * render/nearTile — the full-detail version of one tile.
  *
  * 160-cell ground with a 1024 px painted texture, detailed trees, palms,
- * rocks, roots and lianas, beach drift, the tide line, and ground cover
+ * rocks, roots and lianas, the tide line, and ground cover
  * (grass, ferns, reeds, pebbles, shells).
+ *
+ * (The driftwood and coconuts that can be picked up are drawn by
+ * render/driftwood and render/coconuts.)
  *
  * buildNearTile(world, colorAt, kit, tile, slicer) — generator; returns { group }
  *
@@ -16,7 +19,7 @@ import { terrainMat, outlineMat } from './materials.js';
 import { Batch } from './batch.js';
 import { mat4 } from './geometry.js';
 import { tileGeometry, tileTexture } from './terrainTile.js';
-import { addTree, addPine, addPalm, addBush, addRoots, addBeach, addTideLine, rockColor } from './props.js';
+import { addTree, addPine, addPalm, addBush, addRoots, addTideLine, rockColor } from './props.js';
 
 const GRASS = [[0xa9b062, 0x98a356], null, [0x6a8a3c, 0x7a9446], [0xb3ab6c, 0xa39d62, 0xbfb47a], [0xa8a272, 0x9a9468]];
 
@@ -33,7 +36,6 @@ export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
   tile.crags.forEach(t => B.add('crag', kit.rock, kit.rockMat, mat4(t.x, t.y - t.s * 0.35, t.z, t.s * 1.3, t.s * 0.55, t.s, r() * 6, (r() - 0.5) * 0.5, (r() - 0.5) * 0.5), rockColor(r), { outline: 1.06 }));
   tile.rocks.forEach(t => B.add('rock', kit.rock, kit.rockMat, mat4(t.x, t.y - t.s * 0.2, t.z, t.s, t.s * 0.7, t.s, r() * 6, r() * 0.4), t.moss ? pick(r, [0x7b8456, 0x6e7a4c, 0x87885c]) : rockColor(r), { outline: 1.08 }));
   for (const t of tile.roots) { addRoots(B, kit, w, t, r); if (slicer.over()) yield; }
-  addBeach(B, kit, w, tile, r);
   yield* addTideLine(B, kit, w, tile, r, slicer);
   tile.bushes.forEach(t => addBush(B, kit, t, r));
 

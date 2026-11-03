@@ -22,6 +22,7 @@
  *   sleep.speed()        walking speed factor from tiredness (1 .. TIRED_SLOW)
  *   sleep.start()        lie down (when awake)
  *   sleep.wake()         get up (when asleep)
+ *   sleep.tire(days)     hard work: as if awake days longer (not past the limit)
  *   sleep.update(dt, dry = true) -> game seconds to run for dt real seconds
  *     (dt × the current time speed); also eases lie, counts the sleep down,
  *     rests or tires the castaway, and falls asleep at the limit, but only
@@ -48,6 +49,7 @@ export function createSleep(saved) {
     speed: () => 1 - (1 - TIRED_SLOW) * sleep.tired(),
     start() { if (!sleep.asleep) { sleep.asleep = true; left = SLEEP_DAYS; } },
     wake() { if (sleep.asleep) { sleep.asleep = false; left = 0; } },
+    tire(days) { if (!sleep.asleep) sleep.awake = Math.min(AWAKE_MAX, sleep.awake + days); },
     update, state: () => ({ awake: sleep.awake, asleep: sleep.asleep, left }),
   };
   if (saved) { sleep.awake = saved.awake || 0; if (saved.asleep) { sleep.asleep = true; left = saved.left || SLEEP_DAYS; sleep.lie = 1; warp = 1; } }

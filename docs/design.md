@@ -73,6 +73,29 @@ The first game element. Driftwood lies on the dry beach above the tide line, a f
 - No counter, no inventory: what you carry is what you see. Wood is never solid; you walk over it.
 - **New wood with every high water:** each high water washes up one or two new pieces per stretch of beach, on the dry sand above the tide line, each with its own look. They fade in over a few seconds. A stretch of beach never gets more loose wood than it had at the start, so the beach never fills up; your piles do not count. What you gather slowly grows back.
 - **The flood takes back** a pile laid on the wet sand of low water, below the high-water line. Wood cannot be laid down in the sea.
+- **Wet wood:** what a high water brings is wet and salty: dark when it washes up, it bleaches to its own colour over **a day**, wherever it lies or is carried. The wood that lies on the beach at the start is dry. Only dry wood makes a fire catch, so gathering ahead pays.
+
+## Coconut fibre
+
+A fire needs something that catches first: the dry fibre of a coconut husk.
+
+- **Coconuts** lie under the palms, one to three under about half of them.
+- **Husking:** click or tap a coconut; the castaway walks there, kneels and tears the husk off with his hands (about 2½ seconds). That gives **one tuft of fibre**; the nut itself is not kept. Walking off or tapping elsewhere stops him, and the nut stays where it was.
+- **Carrying:** at most **3 tufts**, tucked into the waist of his shorts, where you see them. Fibre weighs nothing.
+- **New nuts:** a palm drops a new coconut where an old one lay, three to six days after it was taken.
+
+## Fire
+
+Making fire is deliberately hard: it takes preparation and effort, so a fire that burns is precious.
+
+- **Laying a fire:** a pile of at least **4 pieces** of driftwood on dry ground, laid down as any pile.
+- **Lighting it:** hold the pile for about half a second (finger or mouse button), or press `F` standing beside it. With fibre at his waist, the castaway walks to the pile, kneels and twirls his staff upright between his palms as a fire drill, for about **14 seconds**. It is hard work: a whole attempt costs some rest (the moon wanes visibly). Walking off or tapping elsewhere stops him; the fibre is kept. A short tap on a pile still picks it up; while the press is still held he waits beside the pile.
+- **Whether it catches:** at the end the tuft is used up, and the fire catches or it does not. At best (dry wood, rested) a little more than half the attempts catch. Wet wood makes it much harder (the chance falls with the square of the pile's dryness), fresh wood never catches, and a tired castaway does worse (half the chance at the limit). A failed attempt leaves only a puff of smoke; the pile stays. Whether an attempt catches is fixed by the seed and the number of attempts, so it cannot be retried for luck.
+- **Burning:** the pile becomes a little tepee of charred wood with flames and rising smoke. Each piece burns about **2½ hours** of game time (wet wood half as long), so four pieces last most of a night; a fire holds at most eight pieces' worth. When the wood is gone it sinks to **embers** that glow for about 1½ hours, then it goes out and you start again. No counter: the size of the flames tells how much is left.
+- **Keeping it going:** click or tap the fire while carrying wood; the castaway lays one piece on it. That also works on the embers.
+- **Light:** a fire throws a warm, flickering light round it; at night a soft glow lies round it over the darkness. By day a thin column of smoke rises.
+- **The flood** puts out a fire laid on the wet sand of low water.
+- Fire is not solid, like wood (see *Known weak spots*). It burns on while the castaway sleeps.
 
 ## Ebb and flow
 
@@ -92,7 +115,7 @@ The first game element. Driftwood lies on the dry beach above the tide line, a f
 - **One day lasts 20 minutes of play.** A game starts in the middle of the morning.
 - **The sun** rises in the east, climbs over the south to about 62° and sets in the west. It is up for about 13 minutes. Low sun gives warm golden light and long shadows; at noon the light is plain style C.
 - **Dusk and dawn** last about a minute each around the horizon: the light turns lilac and mauve, the warm coast grading fades and colours lose some saturation.
-- **Night lasts about 5 minutes and is moonlit:** dark blue and dim, with soft moon shadows; the island is just readable. Darker nights (where only your fire gives light) can come once there is fire.
+- **Night lasts about 5 minutes and is moonlit:** dark blue and dim, with soft moon shadows; the island is just readable. Darker nights (where only your fire gives light) could come now that there is fire; not decided yet.
 - The light never comes from lower than about 12°, so shadows stay readable.
 - No clock on screen, no stars, moon disc or weather yet. The day drives the tide (see *Ebb and flow*) and sleeping speeds it up (see *Sleep*); what else it should mean for playing is still to be discussed.
 
@@ -133,14 +156,14 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved.
 - **Touch screens:** tap to walk to a spot, drag to steer, double tap to run there (hold and drag after the double tap to steer while running). Hold the castaway to sleep (see *Sleep*). Two fingers: pinch to zoom (same limits), twist to turn the view; the island turns with the fingers, and the castaway stops while two fingers are down. No tilting on a touch screen. The browser's own page zoom is switched off.
 - On a summit the camera zooms out a further 1.6× on top of the player's zoom (at most 14), as a reward for the climb.
-- **Almost no interface:** no HUD, map or menu. What you see is the island. The exceptions are the faint moon that shows how long you can still go without sleep (see *Sleep*), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
+- **Almost no interface:** no HUD, map or menu. What you see is the island (the wood you carry, the fibre at the castaway's waist, how big the flames are). The exceptions are the faint moon that shows how long you can still go without sleep (see *Sleep*), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
 
 ## Decisions
 
 - **Language:** everything is in English: the game, the code and the documentation.
 - **Name:** Driftwood.
 - **Engine:** Three.js in the browser for now. A large tiled world works well there. Godot may come later, for example for Steam or a console.
-- **Scope of the base:** the island and walking, then atmosphere. The first game elements are gathering driftwood, ebb and flow, and sleep (see above); more only after discussion.
+- **Scope of the base:** the island and walking, then atmosphere. The first game elements are gathering driftwood, ebb and flow, sleep, coconut fibre and fire (see above); more only after discussion.
 - **Saving:** not built. When it comes: local in the browser first, behind one interface, so a backend can be added later without changing the game (see `architecture.md`).
 - **Working method:** see `CLAUDE.md`.
 
@@ -152,9 +175,9 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 |---|---|
 | Gathering, later | Branches under trees, a barrel of nails at the wreck |
 | Digging | The ground really sinks; salt water on the beach, nails at the wreck |
-| Building | Fire (4 branches, 1 driftwood), lean-to (6 driftwood, 6 branches) |
+| Building | Lean-to (6 driftwood, 6 branches); fire is built (of driftwood only, see *Fire*) |
 | Building, later | Rope from lianas or palm fibre, lashing, palisade, storage pit, raft |
-| Day and night | At night only the light of your fire; a fire can be seen from far away |
+| Day and night | At night only the light of your fire; a fire can be seen from far away (also by the strangers) |
 | Strangers | A canoe lands on a distant beach and lights a fire; within 10 m they see you and flee; they leave footprints |
 | Journal | Messages as journal lines in an 18th-century hand |
 | Basic needs | Fresh water (rain, well, river), food (coconut, fish, crab); sleeping in a lean-to |
@@ -167,7 +190,8 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 - Who are the strangers (mutineers, slave traders, other castaways)?
 - Saving: local only, or a backend later?
 - Mood per terrace: weather over time (mist in the rain forest, wind on the summit).
-- What else should the day/night cycle mean for playing (food, strangers, fire)?
+- What else should the day/night cycle mean for playing (food, strangers, darker nights now that there is fire)?
+- Should a fire mean anything for sleep, warmth or the strangers?
 
 ## Known weak spots
 
@@ -175,3 +199,4 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 - Some roots stand slightly off the wall, so their shadow falls loose on the wall.
 - Driftwood looks flat from above (more like planks than round logs); a bark texture would help.
 - The colour transition between terraces could be softer.
+- You can walk straight through a fire, as through wood.

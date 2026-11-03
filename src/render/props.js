@@ -18,8 +18,6 @@
  *                                    lowland shrub, rain forest leaf fans, heath, summit
  *                                    tufts), sized by world/vegetation bushSize
  *   addRoots(B, kit, w, t, r)        roots curling over a wall edge, lianas in arcs
- *   addBeach(B, kit, w, tile, r)     coconuts under palms (the driftwood that can be
- *                                    gathered is drawn by render/driftwood)
  *   addTideLine(B, kit, w, tile, r, slicer)   generator: seaweed band with shells
  *   rockColor(r, dk?)
  *
@@ -191,11 +189,6 @@ export function addRoots(B, kit, w, t, r) {
       prev = q;
     }
   }
-}
-
-export function addBeach(B, kit, w, tile, r) {
-  const { H } = w;
-  tile.palms.forEach(t => { if (r() < 0.6) for (let c = 0, n = 1 + (r() * 3 | 0); c < n; c++) { const a = r() * 6, d = 0.3 + r() * 0.9, x = t.x + Math.cos(a) * d, z = t.z + Math.sin(a) * d; B.add('coco', kit.shell, kit.smallMat, mat4(x, H(x, z) + 0.07, z, 0.1, 0.085, 0.09, a), pick(r, [0x7a5a36, 0x6a4c2e, 0x8a6a3e]), { outline: 1.15 }); } });
 }
 
 export function* addTideLine(B, kit, w, tile, r, slicer) {
