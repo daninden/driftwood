@@ -21,6 +21,10 @@
  * tilt and zoom clamped to their limits; a zoom beyond 10 is kept up to 25 here
  * and clamped to 10 by the camera unless the dev panel is visible); a `view` that is not three numbers is
  * dropped, the rest of the save still loads (default view). Nothing else changes.
+ * Since 0.11 a save may also carry `thirst: { days }` (number, days since he drank;
+ * clamped to 0..2 by game/thirst; missing in older saves: not thirsty) and
+ * `fire.burnt: [{ id, x, z, left, n }]` (the burnt places of game/fire; missing:
+ * none). A wrong type makes the save unusable like any other broken field.
  * saveKey(seed) -> 'driftwood-save-<seed>'
  * serialise(state) -> string          state: game.state() (plus name, startDay); adds the format number `v`
  * parseSave(text, seed) -> state | null
@@ -74,6 +78,8 @@ function valid(s, seed) {
   const fi = s.fire; if (!obj(fi) || !arr(fi.fires) || !optArr(fi, 'torches') || !num(fi.attempts)) return false;
   if (!fi.fires.every(q => obj(q) && [q.id, q.x, q.z, q.fuel, q.embers, q.lit, q.fed].every(num))) return false;
   if (fi.torch !== null && fi.torch !== undefined && !(obj(fi.torch) && num(fi.torch.left))) return false;
+  if (s.thirst !== undefined && !(obj(s.thirst) && num(s.thirst.days))) return false;
+  if (fi.burnt !== undefined && !(arr(fi.burnt) && fi.burnt.length <= 64 && fi.burnt.every(b => obj(b) && [b.id, b.x, b.z, b.left, b.n].every(num)))) return false;
   return !fi.torches || fi.torches.every(t => obj(t) && [t.id, t.x, t.z, t.left].every(num));
 }
 

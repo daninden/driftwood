@@ -27,6 +27,11 @@
  *     drilling: it always catches when the wood is dry enough (mean dryness
  *     at least TORCH_DRY), and the torch goes into the fire. Wetter wood only
  *     smokes, and the torch is kept.
+ *   - When a fire goes out (its embers die) it leaves its burnt place: ash and
+ *     charred ends, no light and no warmth, nothing that blocks. It stays
+ *     BURNT_DAYS (two days) and fades slowly (render/fire). The flood washes it
+ *     away sooner, as it puts fires out (and a fire put out by the flood leaves
+ *     none); a new fire lit on it replaces it.
  *   - A fire, or its embers, within WARM_R warms a sleeper (game/sleep).
  *   - Whether a fire catches is fixed by the seed and how many attempts
  *     there have been, so a game plays the same way twice.
@@ -34,11 +39,13 @@
  * Pure data; no DOM, no Three.js.
  *
  * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, TIRED_CATCH, BURN, FUEL_MAX, EMBERS,
- * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R
+ * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS
  * catchChance(dry, tired) -> 0..CATCH   dry: mean dryness 0..1, tired 0..1 (game/sleep)
  * createFire(world, saved?) -> fire
  *   fire.fires             [{ id, x, z, fuel, embers, lit, fed }]  fuel and embers in
  *                          days left; lit: the day it was lit; fed: pieces laid on
+ *   fire.burnt             [{ id, x, z, left, n }]  burnt places: left: days to go (BURNT_DAYS
+ *                          at first, then counting down), n: how many charred ends
  *   fire.puffs             [{ x, z, at }]  the latest failed attempts (at: the day), for the renderer
  *   fire.attempts          how many attempts there have been
  *   fire.version           goes up with every change that shows (not with burning)
@@ -59,7 +66,7 @@
  *   fire.update(days)      burns down by days of game time; embers and torches go out
  *   fire.flood(sea) -> number of fires (and torches in the sand) the sea put out
  *   fire.strength(f) -> 0..1 how big the flames are (0 for embers)
- *   fire.state() -> { fires, attempts, nextId, torch, torches }   plain, for saving
+ *   fire.state() -> { fires, attempts, nextId, torch, torches, burnt }   plain, for saving
  *   saved: such a state, to start from
  *
  * Depends on: core/noise
@@ -77,22 +84,26 @@ export const TORCH_DAYS = 2 / 24;             // a torch burns two hours
 export const TORCH_COST = BURN / 2;           // and takes half a piece's worth out of the fire
 export const TORCH_DRY = 0.75;                // a torch lights a pile this dry, always
 export const DOUSE_DEPTH = 0.3;               // wading deeper puts a torch out
+export const BURNT_DAYS = 2;                  // a burnt place stays this long
 export const WARM_R = 3;                      // a fire this close warms a sleeper
 const FIRE_R = 0.5;                           // how far a fire reaches round its centre
 const TORCH_R = 0.2;
 const PUFFS = 4;
+const BURNT_MAX = 32;                         // at most this many burnt places are kept
+const BURNT_R = 0.7;                          // a new fire this close to a burnt place replaces it
 
 export const catchChance = (dry, tired = 0) => CATCH * Math.max(0, Math.min(1, dry)) ** 2 * (1 - (1 - TIRED_CATCH) * Math.max(0, Math.min(1, tired)));
 
 export function createFire(w, saved) {
-  const fire = { fires: [], puffs: [], attempts: 0, version: 0, torch: null, torches: [], find, attempt, kindle, feed, takeTorch, plant, pickTorch, douse, warm, update, flood, strength, state };
+  const fire = { fires: [], puffs: [], attempts: 0, version: 0, torch: null, torches: [], burnt: [], find, attempt, kindle, feed, takeTorch, plant, pickTorch, douse, warm, update, flood, strength, state };
   let nextId = 0;
   if (saved) {
     fire.fires = (saved.fires || []).map(f => ({ ...f }));
     fire.attempts = saved.attempts || 0;
     fire.torch = saved.torch ? { ...saved.torch } : null;
     fire.torches = (saved.torches || []).map(t => ({ ...t }));
-    nextId = saved.nextId || [...fire.fires, ...fire.torches].reduce((m, f) => Math.max(m, f.id + 1), 0);
+    fire.burnt = (saved.burnt || []).slice(0, BURNT_MAX).map(b => ({ ...b }));
+    nextId = saved.nextId || [...fire.fires, ...fire.torches, ...fire.burnt].reduce((m, f) => Math.max(m, f.id + 1), 0);
   }
 
   function find(x, z, reach) {
@@ -129,14 +140,15 @@ export function createFire(w, saved) {
       fire.version++; return null;
     }
     const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, logs.length * BURN), embers: EMBERS, lit: total, fed: logs.length };
-    fire.fires.push(f); fire.version++; return f;
+    fire.fires.push(f); clearBurnt(x, z); fire.version++; return f;
   }
   function kindle(x, z, logs, dry, total) {
     if (!fire.torch) return null;
     if (dry < TORCH_DRY) { fire.puffs.push({ x, z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift(); fire.version++; return null; }
     const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, logs.length * BURN), embers: EMBERS, lit: total, fed: logs.length };
-    fire.fires.push(f); fire.torch = null; fire.version++; return f;
+    fire.fires.push(f); clearBurnt(x, z); fire.torch = null; fire.version++; return f;
   }
+  function clearBurnt(x, z) { fire.burnt = fire.burnt.filter(b => Math.hypot(b.x - x, b.z - z) >= BURNT_R); }
   function feed(f, dry = 1) {
     if (!fire.fires.includes(f)) return false;
     f.fuel = Math.min(FUEL_MAX, f.fuel + BURN * (0.5 + 0.5 * dry)); f.embers = EMBERS; f.fed++;
@@ -144,21 +156,26 @@ export function createFire(w, saved) {
   }
   function update(days) {
     if (!(days > 0)) return;
+    for (let i = fire.burnt.length - 1; i >= 0; i--) { const b = fire.burnt[i]; b.left -= days; if (b.left <= 0) { fire.burnt.splice(i, 1); fire.version++; } }
     for (let i = fire.fires.length - 1; i >= 0; i--) {
       const f = fire.fires[i];
       if (f.fuel > 0) { const was = f.fuel; f.fuel = Math.max(0, f.fuel - days); if (was > 0 && f.fuel === 0) fire.version++; }
-      else { f.embers -= days; if (f.embers <= 0) { fire.fires.splice(i, 1); fire.version++; } }
+      else { f.embers -= days; if (f.embers <= 0) { fire.fires.splice(i, 1); leaveBurnt(f); fire.version++; } }
     }
     if (fire.torch) { fire.torch.left -= days; if (fire.torch.left <= 0) { fire.torch = null; fire.version++; } }
     for (let i = fire.torches.length - 1; i >= 0; i--) { const t = fire.torches[i]; t.left -= days; if (t.left <= 0) { fire.torches.splice(i, 1); fire.version++; } }
   }
+  function leaveBurnt(f) {
+    fire.burnt.push({ id: f.id, x: f.x, z: f.z, left: BURNT_DAYS, n: Math.max(3, Math.min(6, f.fed)) });
+    if (fire.burnt.length > BURNT_MAX) fire.burnt.shift();
+  }
   function flood(sea) {
     let n = 0;
-    for (const list of [fire.fires, fire.torches]) for (let i = list.length - 1; i >= 0; i--) if (w.H(list[i].x, list[i].z) < sea) { list.splice(i, 1); n++; }
+    for (const list of [fire.fires, fire.torches, fire.burnt]) for (let i = list.length - 1; i >= 0; i--) if (w.H(list[i].x, list[i].z) < sea) { list.splice(i, 1); n++; }
     if (n) fire.version++;
     return n;
   }
   function strength(f) { return f.fuel > 0 ? Math.min(1, 0.35 + f.fuel / (3 * BURN) * 0.65) : 0; }
-  function state() { return { fires: fire.fires.map(f => ({ ...f })), attempts: fire.attempts, nextId, torch: fire.torch ? { ...fire.torch } : null, torches: fire.torches.map(t => ({ ...t })) }; }
+  function state() { return { fires: fire.fires.map(f => ({ ...f })), attempts: fire.attempts, nextId, torch: fire.torch ? { ...fire.torch } : null, torches: fire.torches.map(t => ({ ...t })), burnt: fire.burnt.map(b => ({ ...b })) }; }
   return fire;
 }

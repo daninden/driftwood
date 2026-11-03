@@ -1,7 +1,7 @@
 /**
  * render/ink — the colour of the ink marks, which turns pale at night.
  *
- * All ink on screen (the moon #rest, the row #carry, the thumb stick #stick,
+ * All ink on screen (the moon #rest, the drop #thirst, the row #carry, the thumb stick #stick,
  * the dev panel #dev, the name line #who and the waking line #wake) takes its
  * colour from the CSS custom property `--ink`: dark brown by day, pale warm
  * paper at night, blending through dusk and dawn on the same curve as the

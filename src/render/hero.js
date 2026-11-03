@@ -15,16 +15,18 @@
  *
  * Carried driftwood is held under the left arm, at its real length (low
  * enough that the head and hat stay readable). A load (0.10) shortens his steps
- * (the swing gets smaller by CARRY_STRIDE per piece) and bends him slightly
- * forward, LEAN radians per piece, eased in and out. When the castaway picks up or lays down wood, the upper
+ * (the swing gets smaller by CARRY_STRIDE per piece) and bends him forward
+ * from the hips, LEAN radians per piece (0.11: twice as much, about 17 degrees with
+ * three pieces; head, hat and bundle lean with the upper body), eased in and out. When the castaway picks up or lays down wood, the upper
  * body bends down and up again (player.stoop).
  *
  * To sleep (player.lie) the castaway lies down on his back with the straw
  * hat over his face; tired (player.tired) he lets his head and shoulders
- * hang and his arms swing less.
+ * hang and his arms swing less; thirsty (player.thirsty, 0..1) his head hangs a
+ * little forward on its own joint (HANG radians at most, 0.11).
  *
  * Kneeling work (player.work): to husk a coconut he kneels, bent over, his
- * hands tearing at it in turn; to make fire he kneels and twirls his staff
+ * hands tearing at it in turn; to drink he kneels low over the water and brings his cupped hands to his mouth now and then; to make fire he kneels and twirls his staff
  * upright between his palms as a fire drill, the hands rubbing back and
  * forth. A burning torch (player.torch) he holds up in front of him in his
  * left hand.
@@ -55,7 +57,8 @@ import { makeTorch, flameWorld } from './fire.js';
 // stays in the opaque pass (custom blending), so renderOrder puts it before
 // the figure, which then covers it.
 export const SIL_OPACITY = 0.42;
-export const LEAN = 0.05;   // forward lean per carried piece, radians (three pieces: about 9 degrees)
+export const HANG = 0.3;   // his head hangs forward this much (radians) when he is about to collapse from thirst
+export const LEAN = 0.10;   // forward lean per carried piece, radians (three pieces: about 17 degrees), from the hips
 const silMat = new THREE.MeshBasicMaterial({
   color: HERO.silhouette, opacity: SIL_OPACITY, depthFunc: THREE.GreaterDepth, depthWrite: false,
   blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
@@ -98,16 +101,17 @@ export function createHero(scene) {
   box(torso, 0.07, 0.05, 0.205, shirt, 0.02, 0.51, 0);
   box(torso, 0.09, 0.1, 0.205, shirt, 0.11, 0.49, 0);
 
-  // Head: face, shaggy hair, a full beard, the straw hat.
-  part(torso, new THREE.SphereGeometry(0.12, 14, 10), skin, 0, 1.04, 0);
-  const hr = new THREE.Mesh(new THREE.SphereGeometry(0.126, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), hair); hr.position.set(0, 1.055, -0.01); torso.add(hr);
-  box(torso, 0.2, 0.09, 0.06, hair, 0, 1.0, -0.09);                             // hair hanging out under the hat
-  box(torso, 0.05, 0.06, 0.04, hair, -0.07, 0.95, -0.1);
-  box(torso, 0.05, 0.05, 0.04, hair, 0.06, 0.955, -0.1);
-  const beard = part(torso, new THREE.SphereGeometry(0.11, 12, 8), hair, 0, 0.97, 0.045); beard.scale.set(1.1, 0.85, 0.9);
+  // Head: face, shaggy hair, a full beard, the straw hat. All on the neck joint (it hangs forward when he is thirsty).
+  const NECK = 0.9, neck = joint(0, NECK, 0, torso);
+  part(neck, new THREE.SphereGeometry(0.12, 14, 10), skin, 0, 1.04 - NECK, 0);
+  const hr = new THREE.Mesh(new THREE.SphereGeometry(0.126, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), hair); hr.position.set(0, 1.055 - NECK, -0.01); neck.add(hr);
+  box(neck, 0.2, 0.09, 0.06, hair, 0, 1.0 - NECK, -0.09);                             // hair hanging out under the hat
+  box(neck, 0.05, 0.06, 0.04, hair, -0.07, 0.95 - NECK, -0.1);
+  box(neck, 0.05, 0.05, 0.04, hair, 0.06, 0.955 - NECK, -0.1);
+  const beard = part(neck, new THREE.SphereGeometry(0.11, 12, 8), hair, 0, 0.97 - NECK, 0.045); beard.scale.set(1.1, 0.85, 0.9);
   box(torso, 0.13, 0.1, 0.07, hair, 0, 0.885, 0.085);                           // long, unkempt beard over the chest
   box(torso, 0.07, 0.06, 0.05, hair, 0.01, 0.83, 0.1);
-  const hat = joint(0, 1.13, 0, torso);   // tipped over the face to sleep
+  const hat = joint(0, 1.13 - NECK, 0, neck);   // tipped over the face to sleep
   part(hat, new THREE.CylinderGeometry(0.24, 0.24, 0.025, 18), hatM, 0, 0, 0);
   part(hat, new THREE.CylinderGeometry(0.12, 0.14, 0.13, 16), hatM, 0, 0.07, 0);
 
@@ -154,24 +158,26 @@ export function createHero(scene) {
 
   function update(p, wade = 0, load = []) {
     setLoad(load); clock += 1 / 60;
-    const wk = p.work, kneel = wk ? Math.min(1, wk.f * (wk.kind === 'drill' ? 14 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill';
+    const wk = p.work, kneel = wk ? Math.min(1, wk.f * (wk.kind === 'drill' ? 14 : wk.kind === 'drink' ? 4 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && wk.kind === 'drink';
     staff.visible = !drilling; drill.visible = drilling;
     const lit = !!p.torch && !(p.lie > 0); torch.visible = lit; if (lit) torch.userData.flicker(clock);
     group.position.set(p.x, p.y - Math.min(0.35, wade * 0.6), p.z); group.rotation.y = p.heading;
-    const tired = p.tired || 0, lie = p.lie || 0, ly = lie * lie * (3 - 2 * lie);
+    const tired = p.tired || 0, thirsty = p.thirsty || 0, lie = p.lie || 0, ly = lie * lie * (3 - 2 * lie);
     const sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) * (1 - 0.35 * tired) * (1 - CARRY_STRIDE * load.length) : 0, carry = load.length > 0;
     const bend = Math.sin(Math.PI * Math.min(1, p.stoop || 0));   // down and up again
     const sit = Math.sin(Math.PI * Math.min(1, ly * 1.6)) * (ly < 0.62 ? 1 : 0);   // knees bend on the way down and up
-    const kn = kneel * kneel * (3 - 2 * kneel), rub = wk ? Math.sin(clock * (drilling ? 16 : 9)) : 0;
+    const kn = kneel * kneel * (3 - 2 * kneel), rub = wk ? Math.sin(clock * (drilling ? 16 : 9)) : 0, sip = drinking ? Math.max(0, Math.sin(clock * 2.2)) : 0;   // cupped hands up to the mouth, now and then
     hipL.rotation.x += (sw + bend * 0.5 + sit * 0.9 + kn * 0.75 - hipL.rotation.x) * 0.4; hipR.rotation.x += (-sw + bend * 0.5 + sit * 0.9 + kn * 0.55 - hipR.rotation.x) * 0.4;   // squatting
     lean += (LEAN * load.length - lean) * 0.12;   // the weight pulls him forward a little
-    upper.rotation.x = lean * (1 - ly) + bend * 0.9 + tired * 0.18 * (1 - ly) + kn * (drilling ? 0.3 : 0.6);
+    upper.rotation.x = lean * (1 - ly) + bend * 0.9 + tired * 0.18 * (1 - ly) + kn * (drilling ? 0.3 : drinking ? 0.9 - 0.35 * sip : 0.6);
+    neck.rotation.x += (HANG * thirsty * (1 - ly) + (drinking ? -0.5 * kn * (1 - sip) + 0.3 * kn * sip : 0) - neck.rotation.x) * 0.2;   // head down with thirst; looks ahead at the water
     body.rotation.x = -Math.PI / 2 * ly;   // on his back, face up, head away from where he faced
-    hat.position.set(0, 1.13 - 0.1 * ly, 0.13 * ly); hat.rotation.x = Math.PI / 2 * ly;
+    hat.position.set(0, 1.13 - NECK - 0.1 * ly, 0.13 * ly); hat.rotation.x = Math.PI / 2 * ly;
     if (kn > 0) {   // both hands forward, working: tearing the husk, or rubbing the drill between the palms
-      const fw = drilling ? -0.85 : -0.6;
-      shL.rotation.z = (drilling ? 0.55 : 0.2) * kn; shR.rotation.z = -(drilling ? 0.55 : 0.2) * kn;
-      shL.rotation.x += (fw * kn + rub * 0.18 - shL.rotation.x) * 0.5; shR.rotation.x += (fw * kn - rub * 0.18 - shR.rotation.x) * 0.5;
+      const fw = drilling ? -0.85 : drinking ? -0.9 - 0.7 * sip : -0.6;
+      shL.rotation.z = (drilling ? 0.55 : drinking ? 0.3 : 0.2) * kn; shR.rotation.z = -(drilling ? 0.55 : drinking ? 0.3 : 0.2) * kn;
+      const sh = drinking ? 0 : rub * 0.18;
+      shL.rotation.x += (fw * kn + sh - shL.rotation.x) * 0.5; shR.rotation.x += (fw * kn - sh - shR.rotation.x) * 0.5;
     } else {
       shR.rotation.z = 0;
       shL.rotation.z = carry ? -0.35 : lit ? -0.15 : 0;

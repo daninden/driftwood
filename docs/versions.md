@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.11 "Water" — 2026-11-03
+
+- The castaway gets thirsty: after about a day (20 minutes of play) he is thirsty and a little slower, after a day and a half very thirsty and his rest runs out twice as fast. After two days he collapses and sleeps like exhaustion, and wakes still thirsty. He never dies.
+- Drink at a river: tap the water or its bank, and he walks there, kneels and drinks for a few seconds. Wood in his arms is laid down first, a torch is stuck in the dry ground first. Sea and lagoon water are salt and do nothing; wading in a river does not drink by itself.
+- A small ink drop next to the moon shows his thirst: full after a drink, emptying as he gets thirsty, faint like the moon and clearer as it matters and for a moment after drinking. His head hangs a little when he is thirsty.
+- When a fire goes out it leaves its burnt place: ash and charred ends that stay for about two days, fading slowly. No light or warmth, and you walk over it. The flood washes it away sooner, and a new fire lit on it replaces it.
+- He stoops more under a load: twice as much lean per piece (about 17 degrees with three), from the hips.
+- Thirst and the burnt places are saved (older saves load as not thirsty, with no burnt places).
+
 ## 0.10 "Wet wood" — 2026-11-03
 
 - Wood that the sea has just brought looks wet until it is dry enough to burn: a dark, cool grey-brown with a slight sheen, on the beach, in a pile and under his arm. Then it bleaches to its own colour within a couple of minutes.

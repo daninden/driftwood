@@ -14,6 +14,12 @@
  *     is also laid over the picture round the nearest GLOWS lights (a DOM layer above the night grading of render/mood,
  *     which would otherwise darken the firelight with everything else).
  *
+ *   - A burnt place (game/fire `burnt`) is what a fire leaves when it goes out: a
+ *     patch of ash and a few charred ends on the ground, no flame, smoke or
+ *     light. It fades slowly over its two days (burntOpacity) and is gone.
+ *
+ * burntOpacity(left) -> 0..1   how clear a burnt place is with `left` days to
+ *   go (BURNT_DAYS at first), pure: it fades from BURNT_PEAK to BURNT_FLOOR
  * smokeAmount(fire, strength) -> 0..1 how much smoke a fire gives, pure
  *   - A torch (game/fire) is a short charred stick with a small flame; stuck
  *     in the sand it stands slightly askew. It lights its surroundings like a
@@ -37,12 +43,15 @@ import * as THREE from 'three';
 import { toon, outlineMat } from './materials.js';
 import { FIRE } from './palette.js';
 import { DAY_SECONDS } from '../game/clock.js';
-import { EMBERS } from '../game/fire.js';
+import { EMBERS, BURNT_DAYS } from '../game/fire.js';
 
 const PUFF_SECONDS = 7, WISPS = 7, LIGHT_RANGE = 14, NEAR = 60, GLOWS = 3;
 const TORCH_POW = 0.55, TORCH_RANGE = 9;
 // Gentler than the inverse square (decay 2): the light is the same one metre from the flame, but reaches further, so the wider range shows.
 const LIGHT_DECAY = 1.5;
+
+export const BURNT_PEAK = 0.8, BURNT_FLOOR = 0.12;   // opacity of a fresh burnt place, and just before it is gone
+export const burntOpacity = left => BURNT_FLOOR + (BURNT_PEAK - BURNT_FLOOR) * Math.min(1, Math.max(0, left / BURNT_DAYS));
 
 export const smokeAmount = (f, s) => f.fuel > 0 ? 0.35 + 0.25 * (1 - s) : 0.5 * Math.min(1, f.embers / EMBERS + 0.2);
 
@@ -117,8 +126,22 @@ function createTorches(scene) {
   };
 }
 
+/** A burnt place: ash and charred ends, each place with its own materials so it fades on its own. */
+function buildBurnt(b) {
+  const g = new THREE.Group(), mats = [], mat = (col, base) => { const m = toon(col, { transparent: true, opacity: base, depthWrite: false }); m.userData.base = base; mats.push(m); return m; };
+  const ash = new THREE.Mesh(ashGeo, mat(FIRE.ash, 0.85)); ash.scale.setScalar(0.5); ash.position.y = 0.012; ash.receiveShadow = true; g.add(ash);
+  const dark = new THREE.Mesh(ashGeo, mat(FIRE.char[2], 0.7)); dark.scale.set(0.3, 1, 0.24); dark.rotation.y = b.id; dark.position.y = 0.014; g.add(dark);
+  for (let i = 0; i < b.n; i++) {   // the charred ends, lying where the tepee fell
+    const a = i / b.n * Math.PI * 2 + b.id, m = new THREE.Mesh(logGeo, mat(FIRE.char[i % FIRE.char.length], 1));
+    m.position.set(Math.cos(a) * 0.2, 0.02, Math.sin(a) * 0.2); m.rotation.set(Math.PI / 2 - 0.12, 0, -a + Math.PI / 2); m.scale.set(0.045, 0.22 + 0.05 * (i % 3), 0.045);
+    const o = new THREE.Mesh(logGeo, outlineMat.clone()); o.material.transparent = true; o.scale.set(1.25, 1.02, 1.25); o.material.userData.base = 1; mats.push(o.material); m.add(o); g.add(m);
+  }
+  return { g, mats, shown: -1 };
+}
+
 export function createFireView(scene, container, fire) {
   const views = new Map();   // fire -> its meshes
+  const burnt = new Map();   // burnt place -> its meshes
   const puffs = new Map();   // failed attempt -> smoke
   // always there, so no shader is rebuilt when a fire is lit or a torch taken
   const light = new THREE.PointLight(FIRE.light, 0, LIGHT_RANGE, LIGHT_DECAY), handLight = new THREE.PointLight(FIRE.light, 0, TORCH_RANGE, LIGHT_DECAY); scene.add(light); scene.add(handLight);
@@ -163,6 +186,14 @@ export function createFireView(scene, container, fire) {
     // fires come and go
     for (const f of fire.fires) if (!views.has(f)) views.set(f, build(f));
     views.forEach((vw, f) => { if (!fire.fires.includes(f)) { dropView(vw); views.delete(f); } });
+    // burnt places: no light, no smoke, fading over their two days
+    for (const b of fire.burnt) if (!burnt.has(b)) { const vw = buildBurnt(b); scene.add(vw.g); burnt.set(b, vw); }
+    burnt.forEach((vw, b) => {
+      if (!fire.burnt.includes(b)) { scene.remove(vw.g); vw.mats.forEach(m => m.dispose()); burnt.delete(b); return; }
+      vw.g.position.set(b.x, H(b.x, b.z), b.z);
+      const o = Math.round(burntOpacity(b.left) * 50);
+      if (o !== vw.shown) { vw.shown = o; vw.mats.forEach(m => { m.opacity = m.userData.base * o / 50; }); }
+    });
     const lights = [];   // { x, y, z, pow, range, fl }: what gives light near the castaway
     views.forEach((vw, f) => {
       const s = fire.strength(f), y = H(f.x, f.z), fl = Math.sin(clock * 9 + f.id) * 0.5 + Math.sin(clock * 13.7 + f.id * 2) * 0.5;

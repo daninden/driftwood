@@ -2,7 +2,7 @@
 
 A stylised, diorama-like game: you are alone on a large, uninhabited island and slowly get to know it. Small, lonely, atmosphere first.
 
-You walk, wade rivers, gather the driftwood the tide brings, husk coconuts for fibre, make fire and a torch, and sleep when you are tired. The island (600 × 600, seed 1337) is generated from a single number, with terraces, rivers, waterfalls and natural passages through the rock walls.
+You walk, wade rivers, gather the driftwood the tide brings, husk coconuts for fibre, drink from the rivers, make fire and a torch, and sleep when you are tired. The island (600 × 600, seed 1337) is generated from a single number, with terraces, rivers, waterfalls and natural passages through the rock walls.
 
 ## Getting started
 
@@ -44,11 +44,17 @@ Every high water washes up some new wood, and the sea takes back piles laid on t
 
 Coconuts lie under the palms. Husk one and you get a tuft of fibre (the nut is not kept). You can carry at most three tufts. They show as small drawings next to the moon: faint most of the time, clearer for a moment when the number changes.
 
+### Thirst
+
+After about a day (twenty minutes of play) you are thirsty and a little slower; after a day and a half you are very thirsty and your rest runs out twice as fast. After two days you collapse and sleep where you stand, and wake still thirsty. You never die.
+
+Drink at a river: tap the water or its bank and you walk there, kneel and drink for a few seconds. Wood you carry is laid down first, a torch is stuck in the ground first. The sea and the lagoons are salt and do nothing, and wading in a river does not drink by itself. A small drop next to the moon shows your thirst: full after a drink, emptying as you get thirsty. Your head hangs a little when you are thirsty.
+
 ### Fire
 
 You need a pile of at least four pieces of dry wood and a tuft of fibre. Drill a fire on the pile: it takes about fourteen seconds, costs some of your rest and uses up the tuft. It can fail, and wet wood will not catch.
 
-A burning fire needs wood now and then: feed it by laying a piece on it. When the wood is gone it burns down to embers, and then goes out. The flood puts out a fire on the wet sand of low water.
+A burning fire needs wood now and then: feed it by laying a piece on it. When the wood is gone it burns down to embers, and then goes out. The flood puts out a fire on the wet sand of low water. A fire that goes out leaves its burnt place, ash and charred ends, which stays for about two days and fades; the flood washes it away sooner. It gives no light or warmth, and you walk over it.
 
 **The torch.** With empty hands you can take a burning brand from a fire. Holding it, you have no hand free for wood. You can stick it in the ground and take it up again. Touch it to a dry pile of four or more pieces and the pile catches at once, without fibre, so a fire can be carried to a new place. A torch burns about two hours and goes out if you wade into deep water.
 
@@ -60,13 +66,14 @@ Lie down on dry land whenever you like. Sleeping next to a fire lasts the whole 
 
 ### Day and night
 
-A day lasts twenty minutes. The sun rises in the east and sets in the west, with golden light low in the sky and lilac light at dusk and dawn. The night is dim and moonlit; a fire or torch lights its surroundings. The small marks on screen (the moon, the row of what you carry, the thumb stick, the name line) are dark brown by day and turn pale at night.
+A day lasts twenty minutes. The sun rises in the east and sets in the west, with golden light low in the sky and lilac light at dusk and dawn. The night is dim and moonlit; a fire or torch lights its surroundings. The small marks on screen (the moon, the drop, the row of what you carry, the thumb stick, the name line) are dark brown by day and turn pale at night.
 
 ## Controls
 
 - **W A S D** or arrow keys: walk; **Shift**: run
 - **Click or tap** the ground to walk there; double tap to run
 - **Click or tap** driftwood or a pile to pick it up; a coconut to husk it; the castaway to lay down what he carries; a burning fire to feed it (with wood) or take a torch (empty hands)
+- **Click or tap** river water or its bank to drink there (empty hands; wood is laid down and a torch stuck in the ground first)
 - **Click or tap** the castaway holding a torch to stick it in the ground; click or tap the torch to take it up
 - **Click or tap** a pile while holding a torch to light it
 - **Hold** a pile (or press **F** beside it) to light it

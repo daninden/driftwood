@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { flameWorld, FLAME_LOCAL } from '../src/render/fire.js';
-import { SIL_OPACITY } from '../src/render/hero.js';
+import { SIL_OPACITY, LEAN, HANG } from '../src/render/hero.js';
 import { printAlpha, MAX, FADE } from '../src/render/footprints.js';
 import { moonPath, markOpacity, CLEAR_BELOW } from '../src/render/restMark.js';
 import { carryItems, carryChanged, carryOpacity, createCarryMark, REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
@@ -12,6 +12,14 @@ import { foamWeights, FOAM_LEVELS } from '../src/render/water.js';
 describe('silhouette', () => {
   it('is an even, quiet shape: semi-transparent, in the opaque pass', () => {
     expect(SIL_OPACITY).toBeGreaterThanOrEqual(0.35); expect(SIL_OPACITY).toBeLessThanOrEqual(0.5);
+  });
+});
+
+describe('the stoop', () => {
+  it('leans clearly under a load, but all together (load, tiredness, thirst) stays upright enough to read', () => {
+    expect(LEAN).toBeCloseTo(0.1, 6); expect(LEAN * 3).toBeGreaterThan(0.25);   // three pieces: about 17 degrees
+    expect(LEAN * 3 + 0.18).toBeLessThan(0.55);   // load and the tired stoop on the hips
+    expect(HANG).toBeLessThanOrEqual(0.35);       // the head's own hang on top
   });
 });
 

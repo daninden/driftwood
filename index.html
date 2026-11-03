@@ -35,7 +35,13 @@
   #stick .ring { fill: none; stroke: var(--ink); stroke-width: 1.3; }
   #stick .knob { fill: var(--ink); transition: transform 0.18s ease-out; }
   #stick .knob.held { transition: none; }
-  #carry { position: fixed; left: calc(18px + 26px + 14px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); height: 26px; display: flex; align-items: flex-end; gap: 2px; opacity: 0.3; pointer-events: none; visibility: hidden; transition: opacity 0.5s ease; }
+  #row { position: fixed; left: calc(18px + 26px + 14px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); height: 26px; display: flex; align-items: flex-end; gap: 16px; pointer-events: none; }
+  #needs { display: flex; align-items: flex-end; gap: 10px; }
+  #thirst { width: 16px; height: 24px; opacity: 0.3; visibility: hidden; transition: opacity 0.5s ease; }
+  body.ready #thirst { visibility: visible; }
+  #thirst .rim { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linejoin: round; }
+  #thirst .lit { fill: var(--ink); fill-opacity: 0.8; }
+  #carry { height: 26px; display: flex; align-items: flex-end; gap: 2px; opacity: 0.3; visibility: hidden; transition: opacity 0.5s ease; }
   body.ready #carry { visibility: visible; }
   #carry svg { height: 24px; width: auto; fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
   #dev { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); color: var(--ink); opacity: 0.75; padding: 2px 7px; border-radius: 9px; background: var(--ink-back); font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.02em; white-space: nowrap; pointer-events: none; user-select: none; visibility: hidden; }
@@ -51,7 +57,7 @@
 <div id="island"></div>
 <svg id="rest" viewBox="-1 -1 26 26" aria-hidden="true"><circle class="rim" cx="12" cy="12" r="12"/><path class="lit"/></svg>
 <div id="stick" aria-hidden="true"><svg viewBox="-75 -75 150 150"><circle class="ring" cx="0" cy="0" r="55"/><circle class="knob" cx="0" cy="0" r="6"/></svg></div>
-<div id="carry" aria-hidden="true"></div>
+<div id="row" aria-hidden="true"><div id="needs"><svg id="thirst" viewBox="0 0 16 24"><clipPath id="thirst-clip"><rect x="0" y="0" width="16" height="24"/></clipPath><path class="lit" clip-path="url(#thirst-clip)" d="M8 1C10 5 14 10 14 15.5A6 6 0 0 1 2 15.5C2 10 6 5 8 1Z"/><path class="rim" d="M8 1C10 5 14 10 14 15.5A6 6 0 0 1 2 15.5C2 10 6 5 8 1Z"/></svg></div><div id="carry"></div></div>
 <div id="dev" aria-hidden="true"></div>
 <div id="who" aria-hidden="true"></div>
 <div id="wake" aria-hidden="true"></div>

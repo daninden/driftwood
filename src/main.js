@@ -29,7 +29,8 @@
  * `Dave wakes. Day 3.` for a few seconds. Day 1 is the day the game started.
  *
  * The moon mark #rest (render/restMark) shows how rested the castaway is;
- * the row #carry next to it (render/carryMark) shows what he carries loose.
+ * next to it the drop #thirst (render/thirstMark, in #needs) shows how thirsty
+ * he is, and the row #carry (render/carryMark) what he carries loose.
  * All ink marks take their colour from `--ink` on <html>, which render/ink
  * turns pale at night (from sky.day).
  *
@@ -71,6 +72,7 @@ import { createIslandView } from './render/islandView.js';
 import { createGame } from './game/game.js';
 import { createInput } from './game/input.js';
 import { createRestMark } from './render/restMark.js';
+import { createThirstMark } from './render/thirstMark.js';
 import { createCarryMark } from './render/carryMark.js';
 import { createThumbStick, touchOnly } from './render/thumbStick.js';
 import { createDevPanel, DEV_PANEL_VISIBLE } from './render/devPanel.js';
@@ -113,6 +115,7 @@ async function boot() {
   let game;
   try { game = createGame(world, spawn, saved || opts); } catch (err) { console.warn('save not usable, starting fresh', err); game = createGame(world, spawn, opts); }
   const mark = createRestMark(document.getElementById('rest'));
+  const drop = createThirstMark(document.getElementById('thirst'));
   const carry = createCarryMark(document.getElementById('carry'));
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
   const who = createDayLine(document.getElementById('who')), wakes = createWakeLine(document.getElementById('wake'));
@@ -122,7 +125,7 @@ async function boot() {
   let wasAsleep = game.sleep.asleep;
   const show = info => {
     const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
-    mark.update(info.rest, game.sleep.asleep); carry.update({ fibre: game.fibre.carried }, now);
+    mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); carry.update({ fibre: game.fibre.carried }, now);
     ink.update(skyAt(info.time).day);
     who.update(dayLine(name, day), now);
     if (wasAsleep && !game.sleep.asleep) wakes.show(wakeLine(name, day), now);   // any end of a sleep
