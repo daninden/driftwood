@@ -8,8 +8,13 @@
  *     his steps by CARRY_STRIDE (the walk cycle, render/hero).
  *   - A piece is picked up from the beach or from a pile; from a pile the
  *     top pieces are taken first, as many as fit.
- *   - Laying down puts everything carried at the castaway's feet: on a pile
- *     within PILE_JOIN, otherwise as a new pile a step in front. Not in water.
+ *   - Laying down puts everything carried at the castaway's feet: on the
+ *     nearest pile within PILE_JOIN that has room (a pile holds PILE_MAX
+ *     pieces) and is of the same kind (a pile has a kind, 'driftwood' for now;
+ *     branches will have their own piles), otherwise as a new pile a step in
+ *     front. Not in water. What does not fit on a pile goes into a new pile
+ *     right next to it (PILE_NEXT away, not in water, clear of other piles),
+ *     so 3 pieces on a pile of 11 put 1 on it and 2 on a new pile.
  *   - Piles stay where they are. Nothing is solid: you walk over wood.
  *   - Every high water (game/tide) washes up new wood on the dry beach above
  *     the tide line: at most WASH_MAX pieces per beach tile, and never more
@@ -26,7 +31,7 @@
  *
  * createWood(world, saved?) -> wood
  *   wood.carried            [log]  what the castaway carries (bottom first)
- *   wood.piles              [{ x, z, logs: [log] }]  (bottom first)
+ *   wood.piles              [{ x, z, kind, logs: [log] }]  (bottom first)
  *   wood.version            goes up with every change, for the renderer
  *   wood.fresh              the logs of the latest wash-up (for fading them in)
  *   wood.washes             goes up with every wash-up that brought wood
@@ -38,18 +43,22 @@
  *   wood.find(x, z, reach)  -> { kind: 'log', log, x, z } | { kind: 'pile', pile, x, z } | null
  *     the nearest thing within reach of (x, z); x, z is its nearest point
  *   wood.take(thing) -> number of pieces picked up (0 when the hands are full)
- *   wood.drop(x, z, heading, inWater?) -> true when something was laid down
+ *   wood.drop(x, z, heading, inWater?, wetAt?) -> true when something was laid down
+ *     (wetAt(x, z) -> true for water, to keep a new pile out of it)
  *   wood.washUp(n, avoid?) -> the logs high water number n brought (none
  *     within 2 m of avoid { x, z }, the castaway); deterministic in (seed, n).
  *     Each carries t, the day of that high water (game/tide), for drying.
  *   wood.takePile(pile) -> its logs, taken off the island (to burn, game/fire)
- *   wood.giveOne() -> the top piece carried, taken off the island (to feed a
- *     fire), or null
+ *   wood.giveOne(ok?) -> the top piece carried that ok(log) accepts (any, without
+ *     ok), taken off the island (to feed a fire), or null
  *   wood.flood(sea) -> number of piles the sea took (their ground below sea)
- *   wood.state() -> { carried: [id], piles: [{ x, z, logs: [id] }], washed: [log],
+ *   wood.state() -> { carried: [id], piles: [{ x, z, kind, logs: [id] }], washed: [log],
  *     lost: [id], tide, nextId }   plain, for saving
  *   saved: such a state, to start from
- * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, WASH_MAX, DRY_DAYS
+ * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, WASH_MAX, DRY_DAYS
+ * kindOf(log) -> 'driftwood' (the kind of pile a piece goes on)
+ *   An older save may hold a pile of more than PILE_MAX: it is loaded as it is
+ *   (it takes no more wood, and can be picked up from as usual).
  * dryness(log, total) -> 0 (just washed up) .. 1 (dry), total: days on the clock
  * logsNear(world, x, z, reach) -> the first logs of the tiles within reach of (x, z)
  * distToLog(log, x, z) -> { d, x, z }  distance to the log's axis and the nearest point on it
@@ -64,10 +73,14 @@ export const CARRY_MAX = 3;
 export const CARRY_SLOW = 0.12;   // per piece: three pieces walk at 64 %
 export const CARRY_STRIDE = 0.07; // per piece: his step gets this much shorter (three pieces: 79 %)
 export const PILE_JOIN = 1.0;     // laying down this close to a pile adds to it
+export const PILE_MAX = 12;       // a pile holds at most this many pieces
+export const PILE_NEXT = 0.95;    // a new pile beside a full one stands this far from it
 const PILE_R = 0.45;              // how far a pile reaches round its centre
 export const WASH_MAX = 2;        // at most this many new pieces per beach tile and high water
 const WASH_GAP = 1.3;             // a new piece keeps this far from other wood
 export const DRY_DAYS = 1;        // washed-up wood is dry after a day
+
+export const kindOf = () => 'driftwood';   // branches will come with the lean-to
 
 export const dryness = (log, total) => log.t === undefined ? 1 : Math.max(0, Math.min(1, (total - log.t) / DRY_DAYS));
 
@@ -102,7 +115,7 @@ export function createWood(w, saved) {
     for (const id of saved.lost || []) if (byId.has(id)) { taken.add(id); lost.add(id); }
     const get = id => { const l = byId.get(id); if (l) taken.add(id); return l; };
     wood.carried = (saved.carried || []).map(get).filter(Boolean).slice(0, CARRY_MAX);
-    wood.piles = (saved.piles || []).map(p => ({ x: p.x, z: p.z, logs: p.logs.map(get).filter(Boolean) })).filter(p => p.logs.length);
+    wood.piles = (saved.piles || []).map(p => ({ x: p.x, z: p.z, kind: p.kind || 'driftwood', logs: p.logs.map(get).filter(Boolean) })).filter(p => p.logs.length);
   }
 
   function onBeach(log) { return !taken.has(log.id); }
@@ -144,14 +157,35 @@ export function createWood(w, saved) {
     wood.version++; return got.length;
   }
 
-  function drop(x, z, heading, inWater = false) {
+  function drop(x, z, heading, inWater = false, wetAt = null) {
     if (!wood.carried.length || inWater) return false;
-    const fx = x + Math.sin(heading) * 0.45, fz = z + Math.cos(heading) * 0.45;
-    let pile = null, bd = PILE_JOIN;
-    for (const p of wood.piles) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; pile = p; } }
-    if (!pile) { pile = { x: fx, z: fz, logs: [] }; wood.piles.push(pile); }
-    pile.logs.push(...wood.carried.reverse()); wood.carried = [];
+    const fx = x + Math.sin(heading) * 0.45, fz = z + Math.cos(heading) * 0.45, kind = kindOf(wood.carried[0]);
+    let pile = null, bd = PILE_JOIN, close = null, cd = PILE_JOIN;   // pile: the nearest that can take more; close: the nearest of any kind or fullness
+    for (const p of wood.piles) {
+      const d = Math.hypot(p.x - x, p.z - z);
+      if (d < cd) { cd = d; close = p; }
+      if (d < bd && p.kind === kind && p.logs.length < PILE_MAX) { bd = d; pile = p; }
+    }
+    const pieces = [...wood.carried].reverse();
+    if (pile) pile.logs.push(...pieces.splice(0, PILE_MAX - pile.logs.length));
+    if (pieces.length) {   // a new pile: a step in front, or right next to the pile that was full
+      const spot = pile || close ? nextTo(pile || close, heading, wetAt) : { x: fx, z: fz };
+      if (spot) { wood.piles.push({ x: spot.x, z: spot.z, kind, logs: pieces.splice(0) }); }
+    }
+    if (pieces.length === wood.carried.length) return false;   // nowhere to lay it
+    wood.carried = pieces.reverse();
     wood.version++; return true;
+  }
+
+  // a spot close to pile p for a new pile: PILE_NEXT away, first in the direction he faces, then round it; dry and clear of other piles
+  function nextTo(p, heading, wetAt) {
+    for (let k = 0; k < 12; k++) {
+      const a = heading + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 6, sx = p.x + Math.sin(a) * PILE_NEXT, sz = p.z + Math.cos(a) * PILE_NEXT;
+      if (wetAt && wetAt(sx, sz)) continue;
+      if (wood.piles.some(q => Math.hypot(q.x - sx, q.z - sz) < PILE_NEXT * 0.9)) continue;
+      return { x: sx, z: sz };
+    }
+    return null;
   }
 
   function washUp(n, avoid) {
@@ -193,15 +227,17 @@ export function createWood(w, saved) {
     wood.piles.splice(i, 1); p.logs.forEach(gone); wood.version++;
     return p.logs;
   }
-  function giveOne() {
-    const l = wood.carried.pop(); if (!l) return null;
+  function giveOne(ok) {
+    let i = wood.carried.length - 1; while (i >= 0 && ok && !ok(wood.carried[i])) i--;
+    if (i < 0) return null;
+    const l = wood.carried.splice(i, 1)[0];
     gone(l); wood.version++; return l;
   }
 
   function state() {
     const all = []; washed.forEach(list => { for (const l of list) all.push({ id: l.id, x: l.x, y: l.y, z: l.z, len: l.len, a: l.a, rad: l.rad, ...(l.t === undefined ? {} : { t: l.t }) }); });
     return {
-      carried: wood.carried.map(l => l.id), piles: wood.piles.map(p => ({ x: p.x, z: p.z, logs: p.logs.map(l => l.id) })),
+      carried: wood.carried.map(l => l.id), piles: wood.piles.map(p => ({ x: p.x, z: p.z, kind: p.kind, logs: p.logs.map(l => l.id) })),
       washed: all, lost: [...lost], tide: Number.isFinite(wood.tide) ? wood.tide : null, nextId,
     };
   }

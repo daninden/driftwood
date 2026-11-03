@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.12 "Piles" — 2026-11-03
+
+- A pile holds at most twelve pieces, and (for later) only one kind of wood. Wood laid on a full pile starts a new pile right next to it, and what does not fit on a pile goes into the new one. Older saves with bigger piles still load.
+- Tally marks in ink appear above a pile and above a fire while you stand beside it: strokes in bundles of five, with a double line under when it is full (12 for a pile, 8 for a fire). On a fire they count the pieces still burning, a half-burnt piece as a short stroke, none for embers. They fade in and out and turn pale at night with the other ink. Piles grow and shrink with their count, and so does the fire's tepee.
+- Wet wood cannot be laid on a fire: you lay a dry piece from a mixed load, and nothing happens with only wet wood.
+- The day line top left and the waking line are easier to read: bigger (15 and 22 px), the day line more present (opacity 0.55, 0.9 when a day turns), the waking line stays 5 seconds, and both have a soft glow behind the letters in the opposite colour of the ink.
+
 ## 0.11.1 "Still shadows" — 2026-11-03
 
 - Fixed: around sunrise and sunset the shadows trembled, even standing still; they now hold still and move on in tiny steps as the sun moves.

@@ -21,7 +21,8 @@
  *     the driftwood of game/wood (beach logs with the detailed tiles, piles,
  *     the castaway's load, drying: render/driftwood), the coconuts
  *     (game/fibre, render/coconuts), and the fires
- *     (game/fire, render/fire)
+ *     (game/fire, render/fire), with the tally marks of piles and fires while
+ *     he stands beside them (render/tallyMarks)
  *   view.pickGround(clientX, clientY, touch?) -> { x, z, hero? } | null
  *     hero when the screen point is on the castaway (with a finger: near it);
  *     on a piece of beach driftwood as drawn (its trunk, a branch or the
@@ -57,6 +58,7 @@ import { skyAt } from './sky.js';
 import { createWoodView, driftColor, woodLook, logParts } from './driftwood.js';
 import { createCocoView } from './coconuts.js';
 import { createFireView } from './fire.js';
+import { createTallyView } from './tallyMarks.js';
 import { dryness } from '../game/wood.js';
 
 const BUILD_MS = 9, FAR_MS = 3;
@@ -74,7 +76,7 @@ export async function createIslandView(world, container, progress, start) {
   if (start) far.rest.sort((a, b) => Math.hypot(a.x0 - start.x, a.z0 - start.z) - Math.hypot(b.x0 - start.x, b.z0 - start.z));
   const slicer = createSlicer();
   const near = new Map();   // tile -> { group }
-  let woodView = null, cocoView = null, fireView = null, game = null;
+  let woodView = null, cocoView = null, fireView = null, tallyView = null, game = null;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso),
@@ -102,6 +104,7 @@ export async function createIslandView(world, container, progress, start) {
     updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
     const sky = skyAt(info.time);
     if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H, heroFlame: hero.flame });
+    if (tallyView) tallyView.update(dt, { game, camera: cam.camera, H: world.H, player });
     stage.followSun(cam.target, Math.max(24, Math.min(90, cam.zoom * 3.2)), sky.light.dir);
     mood.update(world.tierAt(t.L), dt, sky);
     renderer.render(scene, cam.camera);
@@ -112,6 +115,7 @@ export async function createIslandView(world, container, progress, start) {
     woodView = createWoodView(scene, world, kit, g.wood); cocoView = createCocoView(scene, world, kit, g.fibre);
     near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); });
     fireView = createFireView(scene, container, g.fire);
+    tallyView = createTallyView(container);
   }
 
   const feet = new THREE.Vector3(), head = new THREE.Vector3(), ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), onLog = new THREE.Vector3();

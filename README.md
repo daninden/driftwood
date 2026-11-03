@@ -36,7 +36,7 @@ The tide comes in and goes out twice a day. At low water there is more beach to 
 
 ### Driftwood
 
-Pick up driftwood and carry at most three pieces; each one slows you down, and with three you take shorter steps and stoop a little. Lay it down at your feet, alone or on a pile. A pile stays where it is, and you can pick it up again.
+Pick up driftwood and carry at most three pieces; each one slows you down, and with three you take shorter steps and stoop a little. Lay it down at your feet, alone or on a pile. A pile stays where it is, and you can pick it up again. A pile holds at most twelve pieces: wood laid on a full pile starts a new pile right next to it. Stand beside a pile and tally marks appear above it in ink, one stroke for each piece, in bundles of five, with a double line under them when it is full. They fade when you walk away.
 
 Every high water washes up some new wood, and the sea takes back piles laid on the wet sand of low water. Fresh wood is wet: it looks dark and a little glossy, with a damp patch in the sand under it, and stays that way until it is dry enough to burn; then it quickly bleaches to its own colour. A wet piece will not light a fire, so gather ahead.
 
@@ -54,7 +54,7 @@ Drink at a river: tap the water or its bank and you walk there, kneel and drink 
 
 You need a pile of at least four pieces of dry wood and a tuft of fibre. Drill a fire on the pile: it takes about fourteen seconds, costs some of your rest and uses up the tuft. It can fail, and wet wood will not catch.
 
-A burning fire needs wood now and then: feed it by laying a piece on it. When the wood is gone it burns down to embers, and then goes out. The flood puts out a fire on the wet sand of low water. A fire that goes out leaves its burnt place, ash and charred ends, which stays for about two days and fades; the flood washes it away sooner. It gives no light or warmth, and you walk over it.
+A burning fire needs wood now and then: feed it by laying a piece on it. Only dry wood goes on a fire: with wet and dry wood in your arms you lay a dry piece, and with only wet wood nothing happens. Stand beside a fire and tally marks above it count the pieces still on it (up to eight; a half-burnt piece is a short stroke, embers get none), and the little tepee of charred wood grows and shrinks with that number. When the wood is gone it burns down to embers, and then goes out. The flood puts out a fire on the wet sand of low water. A fire that goes out leaves its burnt place, ash and charred ends, which stays for about two days and fades; the flood washes it away sooner. It gives no light or warmth, and you walk over it.
 
 **The torch.** With empty hands you can take a burning brand from a fire. Holding it, you have no hand free for wood. You can stick it in the ground and take it up again. Touch it to a dry pile of four or more pieces and the pile catches at once, without fibre, so a fire can be carried to a new place. A torch burns about two hours and goes out if you wade into deep water.
 
@@ -72,7 +72,7 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 
 - **W A S D** or arrow keys: walk; **Shift**: run
 - **Click or tap** the ground to walk there; double tap to run
-- **Click or tap** driftwood or a pile to pick it up; a coconut to husk it; the castaway to lay down what he carries; a burning fire to feed it (with wood) or take a torch (empty hands)
+- **Click or tap** driftwood or a pile to pick it up; a coconut to husk it; the castaway to lay down what he carries; a burning fire to feed it (with dry wood) or take a torch (empty hands)
 - **Click or tap** river water or its bank to drink there (empty hands; wood is laid down and a torch stuck in the ground first)
 - **Click or tap** the castaway holding a torch to stick it in the ground; click or tap the torch to take it up
 - **Click or tap** a pile while holding a torch to light it

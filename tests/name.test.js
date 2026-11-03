@@ -6,9 +6,9 @@ import { NAME_MAX, PROMPT_LABEL, FALLBACK, cleanName, shouldAsk, dayNumber, call
 import { createClock, DAY_SECONDS, START_TIME } from '../src/game/clock.js';
 import { createSleep, SLEEP_DAYS } from '../src/game/sleep.js';
 import { serialise, parseSave, createSaveStore } from '../src/save.js';
-import { inkStep, inkColor, inkBack, createInk, STEPS, INK_DAY, INK_NIGHT } from '../src/render/ink.js';
+import { inkStep, inkColor, inkBack, inkGlow, createInk, STEPS, INK_DAY, INK_NIGHT } from '../src/render/ink.js';
 import { skyAt } from '../src/render/sky.js';
-import { wakeOpacity, createDayLine, createWakeLine, WAKE_TIME, WAKE_PEAK } from '../src/render/nameLines.js';
+import { wakeOpacity, createDayLine, createWakeLine, WAKE_TIME, WAKE_PEAK, DAY_REST, DAY_PEAK } from '../src/render/nameLines.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 import { createNamePrompt } from '../src/render/namePrompt.js';
 import { createInput } from '../src/game/input.js';
@@ -137,12 +137,17 @@ describe('the ink', () => {
     expect(inkBack(STEPS)).toBe('rgba(239, 224, 194, 0.4)');
     expect(inkBack(0)).toBe('rgba(46, 36, 24, 0.4)');
   });
+  it('gives the day and waking lines a glow in the opposite colour', () => {
+    expect(inkGlow(STEPS)).toBe('rgba(239, 224, 194, 0.85)');   // pale paper by day
+    expect(inkGlow(0)).toBe('rgba(46, 36, 24, 0.85)');          // dark at night
+    expect(inkGlow(STEPS / 2)).not.toBe(inkGlow(STEPS));
+  });
   it('writes the style only when the step changes', () => {
     const set = []; const root = { style: { setProperty: (k, v) => set.push([k, v]) } };
     const ink = createInk(root);
-    ink.update(1); expect(set.length).toBe(2);
-    ink.update(1); ink.update(0.999); expect(set.length).toBe(2);
-    ink.update(0); expect(set.length).toBe(4); expect(set[2]).toEqual(['--ink', '#efe0c2']);
+    ink.update(1); expect(set.length).toBe(3);
+    ink.update(1); ink.update(0.999); expect(set.length).toBe(3);
+    ink.update(0); expect(set.length).toBe(6); expect(set[3]).toEqual(['--ink', '#efe0c2']);
     expect(() => createInk(null).update(0.5)).not.toThrow();
   });
 });
@@ -150,29 +155,29 @@ describe('the ink', () => {
 const fakeEl = () => ({ style: {}, textContent: '' });
 
 describe('the day line and the waking line', () => {
-  it('the day line is faint, clear when it first shows and when the day turns, then eases back', () => {
+  it('the day line rests at 0.55, goes to 0.9 when it first shows and when the day turns, then eases back', () => {
     const el = fakeEl(), line = createDayLine(el);
     line.update('Dave, day 1', 100);
-    expect(el.textContent).toBe('Dave, day 1'); expect(+el.style.opacity).toBeCloseTo(PEAK_OPACITY);
+    expect(el.textContent).toBe('Dave, day 1'); expect(+el.style.opacity).toBeCloseTo(DAY_PEAK);
     line.update('Dave, day 1', 100 + HOLD + EASE + 1);
-    expect(+el.style.opacity).toBeCloseTo(REST_OPACITY);
+    expect(+el.style.opacity).toBeCloseTo(DAY_REST);
     line.update('Dave, day 2', 500);
-    expect(el.textContent).toBe('Dave, day 2'); expect(+el.style.opacity).toBeCloseTo(PEAK_OPACITY);
+    expect(el.textContent).toBe('Dave, day 2'); expect(+el.style.opacity).toBeCloseTo(DAY_PEAK);
     line.update('Dave, day 2', 500 + HOLD + EASE / 2);
-    expect(+el.style.opacity).toBeGreaterThan(REST_OPACITY); expect(+el.style.opacity).toBeLessThan(PEAK_OPACITY);
+    expect(+el.style.opacity).toBeGreaterThan(DAY_REST); expect(+el.style.opacity).toBeLessThan(DAY_PEAK);
     expect(() => createDayLine(null).update('x', 0)).not.toThrow();
   });
-  it('the waking line fades in and out over about four seconds', () => {
-    expect(WAKE_TIME).toBe(4);
+  it('the waking line fades in and out over about five seconds', () => {
+    expect(WAKE_TIME).toBe(5); expect(WAKE_PEAK).toBe(0.95); expect(DAY_REST).toBe(0.55); expect(DAY_PEAK).toBe(0.9);
     expect(wakeOpacity(0)).toBe(0); expect(wakeOpacity(-1)).toBe(0); expect(wakeOpacity(WAKE_TIME)).toBe(0); expect(wakeOpacity(99)).toBe(0);
     expect(wakeOpacity(0.5)).toBeGreaterThan(0); expect(wakeOpacity(0.5)).toBeLessThan(WAKE_PEAK);
     expect(wakeOpacity(2)).toBeCloseTo(WAKE_PEAK);
-    expect(wakeOpacity(3.7)).toBeGreaterThan(0); expect(wakeOpacity(3.7)).toBeLessThan(WAKE_PEAK);
+    expect(wakeOpacity(4.7)).toBeGreaterThan(0); expect(wakeOpacity(4.7)).toBeLessThan(WAKE_PEAK);
     const el = fakeEl(), w = createWakeLine(el);
     w.update(10); expect(+el.style.opacity).toBe(0);
     w.show('Dave wakes. Day 3.', 10); w.update(12);
     expect(el.textContent).toBe('Dave wakes. Day 3.'); expect(+el.style.opacity).toBeCloseTo(WAKE_PEAK);
-    w.update(15); expect(+el.style.opacity).toBe(0);
+    w.update(15.1); expect(+el.style.opacity).toBe(0);
   });
 });
 

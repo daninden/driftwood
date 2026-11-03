@@ -20,6 +20,8 @@
  *
  * burntOpacity(left) -> 0..1   how clear a burnt place is with `left` days to
  *   go (BURNT_DAYS at first), pure: it fades from BURNT_PEAK to BURNT_FLOOR
+ * pieces(fire) -> 1..8 the pieces the tepee is laid with (one per piece still on the
+ *   fire, so it grows when wood is laid on and sinks as it burns; 3 for embers), pure
  * smokeAmount(fire, strength) -> 0..1 how much smoke a fire gives, pure
  *   - A torch (game/fire) is a short charred stick with a small flame; stuck
  *     in the sand it stands slightly askew. It lights its surroundings like a
@@ -43,7 +45,7 @@ import * as THREE from 'three';
 import { toon, outlineMat } from './materials.js';
 import { FIRE } from './palette.js';
 import { DAY_SECONDS } from '../game/clock.js';
-import { EMBERS, BURNT_DAYS } from '../game/fire.js';
+import { EMBERS, BURNT_DAYS, BURN, FUEL_MAX } from '../game/fire.js';
 
 const PUFF_SECONDS = 7, WISPS = 7, LIGHT_RANGE = 14, NEAR = 60, GLOWS = 3;
 const TORCH_POW = 0.55, TORCH_RANGE = 9;
@@ -52,6 +54,9 @@ const LIGHT_DECAY = 1.5;
 
 export const BURNT_PEAK = 0.8, BURNT_FLOOR = 0.12;   // opacity of a fresh burnt place, and just before it is gone
 export const burntOpacity = left => BURNT_FLOOR + (BURNT_PEAK - BURNT_FLOOR) * Math.min(1, Math.max(0, left / BURNT_DAYS));
+
+/** How many charred pieces the tepee of a fire is laid with: one for each piece still on it (1..8), a sunk heap of three for embers. */
+export const pieces = f => f.fuel > 0 ? Math.max(1, Math.min(Math.round(FUEL_MAX / BURN), Math.ceil(f.fuel / BURN - 0.05))) : 3;
 
 export const smokeAmount = (f, s) => f.fuel > 0 ? 0.35 + 0.25 * (1 - s) : 0.5 * Math.min(1, f.embers / EMBERS + 0.2);
 
@@ -166,14 +171,14 @@ export function createFireView(scene, container, fire) {
     return { g, wood, flames, embers, smoke: createSmoke(scene, f.id + 1), key: '' };
   }
   function layWood(vw, f, s) {
-    const n = Math.max(3, Math.min(6, f.fed)), key = n + ':' + (s > 0 ? Math.round(s * 4) : 'e');
+    const n = pieces(f), key = n + ':' + (s > 0 ? 'f' : 'e');
     if (key === vw.key) return; vw.key = key;
     for (const c of [...vw.wood.children]) { vw.wood.remove(c); c.material.dispose(); }
-    const tall = s > 0 ? 0.25 + 0.3 * s : 0.06;   // the tepee sinks as it burns down
+    const tall = s > 0 ? 0.2 + 0.045 * n : 0.06, rim = 0.28 + 0.012 * n;   // the tepee grows with the pieces on the fire and sinks as it burns down
     for (let i = 0; i < n; i++) {
       const a = i / n * Math.PI * 2 + f.id, m = new THREE.Mesh(logGeo, toon(FIRE.char[i % FIRE.char.length]));
-      m.position.set(Math.cos(a) * 0.34, 0.02, Math.sin(a) * 0.34);
-      m.lookAt(0, tall, 0); m.rotateX(Math.PI / 2); m.scale.set(0.055, Math.hypot(0.34, tall) * 1.05, 0.055);
+      m.position.set(Math.cos(a) * rim, 0.02, Math.sin(a) * rim);
+      m.lookAt(0, tall, 0); m.rotateX(Math.PI / 2); m.scale.set(0.055, Math.hypot(rim, tall) * 1.05, 0.055);
       m.castShadow = true; const o = new THREE.Mesh(logGeo, outlineMat); o.scale.set(1.25, 1.02, 1.25); m.add(o);
       vw.wood.add(m);
     }

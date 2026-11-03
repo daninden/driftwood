@@ -42,7 +42,8 @@
  *     driftwood, a pile or a coconut (closer for a mouse than for a finger,
  *     target.touch) the castaway walks there and picks it up (a coconut he
  *     husks for its fibre, kneeling); on a fire he lays one piece of the
- *     wood he carries on it, or, empty-handed, takes a burning torch out of
+ *     wood he carries on it (the top one that is dry enough to burn, game/fire
+ *     TORCH_DRY; wet wood stays with him, and with only wet wood nothing happens), or, empty-handed, takes a burning torch out of
  *     it. On fresh river water or its bank (game/water; sea and lagoon do
  *     nothing) he walks to the water, lays down wood or sticks a torch in the
  *     dry ground beside him first, kneels for DRINK_TIME and is no longer
@@ -84,7 +85,7 @@ import { createSleep } from './sleep.js';
 import { createFibre, FIBRE_MAX } from './fibre.js';
 import { createThirst } from './thirst.js';
 import { findWater } from './water.js';
-import { createFire, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH } from './fire.js';
+import { createFire, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH, TORCH_DRY } from './fire.js';
 
 export const STOOP = 0.55;         // seconds to bend down and up again
 export const REACH = 0.55;         // wood within this distance of the feet can be picked up
@@ -113,12 +114,13 @@ export function createGame(world, spawn, opts = {}) {
     const dx = player.x - x, dz = player.z - z, d = Math.hypot(dx, dz) || 1;
     return { x: x + dx / d * SIDE, z: z + dz / d * SIDE };
   };
+  const lay = heading => wood.drop(player.x, player.z, heading, wet(here()), (x, z) => wet(terrainAt(world, x, z, game.sea)));   // a pile never goes in the water
   const meanDry = logs => logs.reduce((s, l) => s + dryness(l, clock.total), 0) / Math.max(1, logs.length);
 
   function look(tg, input) {
     tg.seen = true;
     if (tg.hero) {
-      if (fire.torch ? plantTorch() : wood.drop(player.x, player.z, player.heading, wet(here()))) stoop();
+      if (fire.torch ? plantTorch() : lay(player.heading)) stoop();
       input.clearTarget(); return;
     }
     const aim = tg.touch ? AIM.touch : AIM.mouse, dist = t => t ? Math.hypot(t.x - tg.x, t.z - tg.z) : Infinity;
@@ -169,7 +171,10 @@ export function createGame(world, spawn, opts = {}) {
     else if (a.kind === 'torch') { if (!wood.carried.length && fire.pickTorch(a.torch)) stoop(); }
     else if (a.kind === 'coco') { if (fibre.carried < FIBRE_MAX && fibre.onGround(a.coco)) work = { kind: 'husk', t: 0, dur: HUSK_TIME, thing: a.coco }; }
     else if (a.kind === 'fire') {
-      if (wood.carried.length && fire.fires.includes(a.fire)) { const l = wood.giveOne(); fire.feed(a.fire, dryness(l, clock.total)); stoop(); }
+      if (wood.carried.length && fire.fires.includes(a.fire)) {   // only a piece dry enough to burn goes on; wet wood stays in his arm
+        const l = wood.giveOne(p => dryness(p, clock.total) >= TORCH_DRY);
+        if (l) { fire.feed(a.fire, dryness(l, clock.total)); stoop(); }
+      }
       else if (!wood.carried.length && fire.takeTorch(a.fire)) stoop();   // empty-handed: a burning brand out of the fire
     } else if (a.kind === 'kindle') {
       if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && !wet(here()) && fire.kindle(a.pile.x, a.pile.z, a.pile.logs, meanDry(a.pile.logs), clock.total)) wood.takePile(a.pile);
@@ -213,7 +218,7 @@ export function createGame(world, spawn, opts = {}) {
     let res;
     if (sleep.asleep || sleep.lie > 0) {
       if (input.target) input.clearTarget();
-      if (sleep.asleep && wood.carried.length) wood.drop(player.x, player.z, player.heading, wet(here()));
+      if (sleep.asleep && wood.carried.length) lay(player.heading);
       player.stoop = 0;
       res = stepPlayer(world, player, null, dt);
     } else if (work) {
@@ -232,7 +237,7 @@ export function createGame(world, spawn, opts = {}) {
       } else if (a && a.kind === 'drink' && findWater(world, player.x, player.z, DRINK_REACH, game.sea)) {
         if (wood.carried.length || fire.torch) {   // hands first: wood down, torch in the dry ground
           const heading = player.heading + Math.PI;
-          if (fire.torch ? plantBeside() : wood.drop(player.x, player.z, heading, wet(here()))) stoop(); else input.clearTarget();
+          if (fire.torch ? plantBeside() : lay(heading)) stoop(); else input.clearTarget();
         } else { input.clearTarget(); act(a); }
         res = stepPlayer(world, player, null, dt);
       } else if (a && Math.hypot(input.target.x - player.x, input.target.z - player.z) < (a.kind === 'light' || a.kind === 'fire' || a.kind === 'kindle' ? 0.15 : REACH)) {

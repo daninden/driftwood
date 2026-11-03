@@ -10,7 +10,9 @@
 // smoke-0.png shows the loader while it is filling (with the question); smoke-5 low water,
 // smoke-6 the castaway asleep, smoke-7 awake with new wood on the beach,
 // smoke-8 husking a coconut, smoke-9 drilling fire, smoke-10 the fire by day,
-// smoke-11 the fire at night, smoke-12 walking away from it with a torch.
+// smoke-11 the fire at night, smoke-12 walking away from it with a torch,
+// smoke-13 tally marks beside the fire at night, smoke-14 the same by day,
+// smoke-15 beside a pile of twelve.
 //
 // A headless browser here has no GPU and draws only a few frames per second,
 // so after loading the test does not play in real time: it pauses drawing,
@@ -174,6 +176,22 @@ const torch = await page.evaluate(() => {
 console.log('torch', torch);
 if (!torch) errors.push('did not take a torch out of the fire');
 await shot('smoke-12.png');
+// Tally marks (0.12): beside the fire at night and by day, and beside a full pile.
+await page.evaluate(() => { const { game, input, step } = window.__driftwood, p = game.player, f = game.fire.fires[0]; game.fire.torch = null; p.x = f.x + 1.0; p.z = f.z + 0.4; p.y = window.__driftwood.world.H(p.x, p.z); input.target = null; step(0.1); });
+await shot('smoke-13.png');
+const marks = await page.evaluate(() => document.querySelectorAll('#island svg path[stroke]').length);
+console.log('tally marks shown', marks);
+if (marks < 1) errors.push('no tally marks beside the fire');
+await page.evaluate(() => { const { game, step } = window.__driftwood; game.clock.time = 0.5; step(0.1); });
+await shot('smoke-14.png');
+await page.evaluate(() => {
+  const { world, game, step } = window.__driftwood, p = game.player, w = game.wood;
+  const dry = world.tiles.flatMap(t => t.drift).filter(l => w.onBeach(l)).slice(0, 12);
+  for (const l of dry) w.take({ kind: 'log', log: l, x: l.x, z: l.z }), w.carried.length >= 3 && w.drop(p.x, p.z, p.heading);
+  w.drop(p.x, p.z, p.heading); p.x += 6; p.z += 6; p.y = world.H(p.x, p.z);
+  const pile = w.piles.reduce((a, b) => b.logs.length > a.logs.length ? b : a); p.x = pile.x + 0.9; p.z = pile.z + 0.3; step(0.1);
+});
+await shot('smoke-15.png');
 await browser.close();
 console.log('done after', secs());
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
