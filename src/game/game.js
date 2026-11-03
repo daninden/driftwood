@@ -15,6 +15,8 @@
  *   more (the island changed) is moved to the nearest spot he can
  *   (movement nearestStandable), else he starts at spawn. Kneeling work and
  *   a pending tap are not saved.
+ *   wantsToMove(input) -> true while keys, the thumb stick or a target ask to walk;
+ *   it stops kneeling work and drops a queued action (a resting stick is null)
  *   REACH (0.55), BESIDE (1.2), AIM, HUSK_TIME, DRINK_TIME, STOOP: reaches and times
  *   game.player                 { x, y, z, heading, moving, speed, phase, stoop, lie, tired, work }
  *     stoop: 1..0 while bending down to pick up or lay down wood (counts
@@ -103,6 +105,9 @@ export const HUSK_TIME = 2.5;      // seconds of kneeling to tear the husk off a
 export const DRINK_TIME = 4;       // seconds of kneeling to drink
 const DRINK_REACH = 0.8;           // fresh water this close to the feet can be drunk (the bank of a brook counts)
 const SIDE = 0.75;                 // kneeling this far from the middle of a pile or a fire
+
+// true while the input asks to walk: keys, the thumb stick (null at rest, see game/input) or a target
+export const wantsToMove = input => !!(input.up || input.down || input.left || input.right || input.stick || input.target);
 
 export function createGame(world, spawn, opts = {}) {
   const clock = createClock(opts.time, opts.day);
@@ -250,8 +255,8 @@ export function createGame(world, spawn, opts = {}) {
     const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z), { drain: thirst.drain(), faint: thirst.faint() });
     settle();
     player.lie = sleep.lie; player.tired = sleep.tired(); player.thirsty = thirst.level();
-    if (work && (sleep.asleep || input.up || input.down || input.left || input.right || input.target)) work = null;   // stopped early
-    if (queued && (sleep.asleep || input.up || input.down || input.left || input.right || input.stick || input.target)) queued = null;
+    if (work && (sleep.asleep || wantsToMove(input))) work = null;   // stopped early
+    if (queued && (sleep.asleep || wantsToMove(input))) queued = null;
 
     let res;
     if (sleep.asleep || sleep.lie > 0) {

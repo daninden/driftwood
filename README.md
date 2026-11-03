@@ -8,6 +8,7 @@ You walk, wade rivers, gather the driftwood the tide brings, husk coconuts for f
 
 ```
 npm install
+npx playwright install chromium   once, for the smoke test
 npm run dev        development server at http://localhost:5173
 npm test           unit tests
 npm run build      dist/ plus dist/driftwood.html (everything in one file)
@@ -49,7 +50,7 @@ The tide comes in and goes out twice a day. At low water there is more beach to 
 
 ### Driftwood
 
-Pick up driftwood and carry at most three pieces; each one slows you down, and with three you take shorter steps and stoop a little. Lay it down at your feet, alone or on a pile (stand beside the pile and press the button). A pile stays where it is, and you can pick it up again once your arms are empty. A pile holds at most twelve pieces: wood laid on a full pile starts a new pile right next to it. Stand beside a pile and tally marks appear above it in ink, one stroke for each piece, in bundles of five, with a double line under them when it is full. They fade when you walk away.
+Pick up driftwood and carry at most three pieces; each one slows you down, and with three you take shorter steps and stoop a little. Lay it down at your feet, alone or on a pile (stand beside the pile and press the button). Wood never goes down in the water: if the spot in front of you is wet, it goes on a dry spot beside you, and if there is none you keep it in your arms. A pile stays where it is, and you can pick it up again once your arms are empty. A pile holds at most twelve pieces: wood laid on a full pile starts a new pile right next to it. Stand beside a pile and tally marks appear above it in ink, one stroke for each piece, in bundles of five, with a double line under them when it is full. They fade when you walk away.
 
 Every high water washes up some new wood, and the sea takes back piles laid on the wet sand of low water. Fresh wood is wet: it looks dark and a little glossy, with a damp patch in the sand under it, and stays that way until it is dry enough to burn; then it quickly bleaches to its own colour. A wet piece will not light a fire, so gather ahead.
 
@@ -88,7 +89,7 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 - **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks, feeds a fire, takes or sticks a torch, or drinks, whatever the drawing in the ring shows
 - **Hold** the action button (about half a second) to light a pile beside you (or press **F** there), or to sleep (or press **Z**)
 - A left click, a tap, the action button or a walking key wakes him; the view controls do not
-- **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop
+- **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, drinking, drilling a fire), like walking off
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)
 - **Enter** (or the arrow): confirm your name at the start of an island
 - **Shift + `**: start over (forget this island's save and begin again; the name is asked again)

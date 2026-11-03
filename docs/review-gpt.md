@@ -1,3 +1,5 @@
+> **Status (0.14.1 "Dry ground"):** taken over from this review: the two bugs (a first pile could go in the water; the thumb stick did not stop kneeling work), the missing setup step `npx playwright install chromium` in the README, and the smoke test now runs on the graphics card (full Chromium, software fallback). The performance, tile lifecycle and Vitest advice is listed under "Bugs, later" in `docs/handover.md`.
+
 # Repository, architecture and performance review
 
 ## Scope and overall conclusion

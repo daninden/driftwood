@@ -174,7 +174,7 @@ async function boot() {
     const idle = quiet.idle(now), due = nextFrame(now, anchor, targetFps(cap, idle));
     if (!due.render) return;
     anchor = due.anchor;
-    const real = (now - last) / 1000, dt = Math.min(maxDt(idle), real); last = now;
+    const real = (now - last) / 1000, dt = Math.max(0, Math.min(maxDt(idle), real)); last = now;
     const t0 = performance.now();
     view.setZoomMax(zoomMax(dev.visible()));
     view.zoomBy(input.takeZoom());

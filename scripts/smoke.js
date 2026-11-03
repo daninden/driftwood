@@ -17,15 +17,19 @@
 // smoke-17 beside the fire with dry wood (at night), smoke-18 its ring filling while held,
 // smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night).
 //
-// Software drawing costs time in proportion to pixels, so two sizes are used. The quick run
+// The browser is the full Chromium (channel 'chromium', new headless mode), which uses the real graphics
+// card (ANGLE on Direct3D 11 on Windows) where there is one. Without a usable card (a CI machine, or the
+// full Chromium not installed) it falls back to the headless shell with software drawing (SwiftShader),
+// which costs time in proportion to pixels. The renderer in use is logged once at the start.
+// Two sizes are used to keep that fallback bearable. The quick run
 // (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button) and 19 (on a phone) at 640x400 (the phone at scale 1).
 // The full run (--full) takes every shot; those a person looks at are 1280x800 (the phone at
 // scale 2), the ones that only check something (smoke-0, 2, 3, 4, 7, 18) stay at 640x400.
 // All the checks on the game state run in both. Pixels are checked without a PNG: right
 // after a draw the canvas is drawImage'd into a tiny 2D canvas in the page (see `shot`).
 //
-// A headless browser here has no GPU and draws only a few frames per second,
-// so after loading the test does not play in real time: it pauses drawing,
+// Even with a card, a headless browser draws at an uneven rate (and on the software fallback only a few
+// frames per second), so after loading the test does not play in real time: it pauses drawing,
 // runs the game in fixed steps (__driftwood.step) and draws one settled frame
 // per screenshot (__driftwood.draw). See src/main.js.
 import { createRequire } from 'node:module';
@@ -39,7 +43,27 @@ const spawnArg = args.find(a => !a.startsWith('--'));
 const spawn = spawnArg ? '?spawn=' + spawnArg : '';
 const SMALL = { width: 640, height: 400 }, BIG = { width: 1280, height: 800 };
 
-const browser = await chromium.launch();
+// Prefer the real graphics card: the full Chromium in new headless mode (on Windows it picks ANGLE on
+// Direct3D 11 by itself, no flags needed). Fall back to the plain launch (headless shell, software
+// drawing) when it is not installed or has only a software renderer.
+const rendererOf = async b => {
+  const p = await b.newPage();
+  try {
+    return await p.evaluate(() => {
+      const gl = document.createElement('canvas').getContext('webgl');
+      const e = gl && gl.getExtension('WEBGL_debug_renderer_info');
+      return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl ? 'unknown (no renderer info)' : 'no WebGL';
+    });
+  } finally { await p.close(); }
+};
+let browser = null, renderer = '';
+try {
+  browser = await chromium.launch({ channel: 'chromium' });
+  renderer = await rendererOf(browser);
+  if (/swiftshader|llvmpipe|software|no webgl/i.test(renderer)) { await browser.close(); browser = null; }
+} catch (e) { browser = null; }
+if (!browser) { browser = await chromium.launch(); renderer = await rendererOf(browser); }
+console.log('renderer:', renderer);
 const page = await browser.newPage({ viewport: SMALL });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
@@ -55,7 +79,7 @@ if (!spawn) {   // with ?spawn (a test parameter) the question is skipped
   await page.press('#ask input', 'Enter');
 }
 await page.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
-// The bar eases to full with a short CSS transition; without a GPU the first
+// The bar eases to full with a short CSS transition; on the software fallback the first
 // frames are slow, so give it time instead of reading it after a fixed wait.
 await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || new DOMMatrix(getComputedStyle(f).transform).a >= 0.99; }, null, { timeout: 10000, polling: 100 }).catch(() => {});
 const bar = await barAt();
@@ -254,7 +278,7 @@ await shot('smoke-17.png', { quick: true, settle: 800 });
 const feedIcon = await iconOf();
 console.log('action button by the fire', JSON.stringify(feedIcon));
 if (!feedIcon.on) errors.push('the action button is empty beside a fire with dry wood in his arm');
-// Held for 250 ms of a frozen clock (drawing is slow here, so real time would run past the hold): the ring is part full.
+// Held for 250 ms of a frozen clock (drawing time is uneven here, so real time could run past the hold): the ring is part full.
 await setSize(SMALL);   // only checked: small
 const ring = await page.evaluate(() => {
   const { input } = window.__driftwood, real = performance.now.bind(performance), t0 = real();

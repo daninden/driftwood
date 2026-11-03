@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.14.1 "Dry ground" — 2026-11-03
+
+- Fixed: a first pile no longer goes in the water. When no pile is near, the spot a step in front is checked too; if it is wet, a dry spot round him is used, and if there is none he keeps the wood (as with a full pile that has no room beside it).
+- Fixed: the thumb stick now stops kneeling work (husking, drinking, drilling a fire) like the keys and a click do, through one helper, `wantsToMove(input)`, which also drops a queued action.
+- Fixed: the first frame's time step is never negative (`Math.max(0, ...)` in `src/main.js`).
+- The smoke test now starts the full Chromium (new headless mode) on the graphics card, with the old software drawing as fallback: the quick run takes about 15 seconds instead of about 35. One-time setup: `npx playwright install chromium`.
+- `REVIEW_GPT.md` moved to `docs/review-gpt.md`. No change to the look or to the game's elements.
+
 ## 0.14 "Moving water" — 2026-11-03
 
 - The water moves, stylised and subtle, in the existing water shaders only. Rivers: light streaks and flecks drift downstream, faster on steep stretches, fords and falls, and the white water at fords and falls breaks up and moves. Sea: a slow long swell with glints on the crests (the sun, the moon and fires and torches do the glinting: faint and silvery at night, warm by a fire) and faint pale lines by day. Lagoons and sheltered bays are calmer. The surf breathes up and down the beach over a few seconds on top of the tide.

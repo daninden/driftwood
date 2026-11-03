@@ -12,7 +12,9 @@
  *     nearest pile within PILE_JOIN that has room (a pile holds PILE_MAX
  *     pieces) and is of the same kind (a pile has a kind, 'driftwood' for now;
  *     branches will have their own piles), otherwise as a new pile a step in
- *     front. Not in water. What does not fit on a pile goes into a new pile
+ *     front (FRONT). A pile never goes in water: when the spot in front is wet
+ *     (wetAt), the first dry spot round him is used, and when there is none he
+ *     keeps the wood (drop returns false). What does not fit on a pile goes into a new pile
  *     right next to it (PILE_NEXT away, not in water, clear of other piles),
  *     so 3 pieces on a pile of 11 put 1 on it and 2 on a new pile.
  *   - Piles stay where they are. Nothing is solid: you walk over wood.
@@ -77,6 +79,7 @@ export const CARRY_STRIDE = 0.07; // per piece: his step gets this much shorter 
 export const PILE_JOIN = 1.0;     // laying down this close to a pile adds to it
 export const PILE_MAX = 12;       // a pile holds at most this many pieces
 export const PILE_NEXT = 0.95;    // a new pile beside a full one stands this far from it
+const FRONT = 0.45;               // a first pile is laid this far in front of him
 const PILE_R = 0.45;              // how far a pile reaches round its centre
 export const WASH_MAX = 2;        // at most this many new pieces per beach tile and high water
 const WASH_GAP = 1.3;             // a new piece keeps this far from other wood
@@ -161,7 +164,7 @@ export function createWood(w, saved) {
 
   function drop(x, z, heading, inWater = false, wetAt = null) {
     if (!wood.carried.length || inWater) return false;
-    const fx = x + Math.sin(heading) * 0.45, fz = z + Math.cos(heading) * 0.45, kind = kindOf(wood.carried[0]);
+    const kind = kindOf(wood.carried[0]);
     let pile = null, bd = PILE_JOIN, close = null, cd = PILE_JOIN;   // pile: the nearest that can take more; close: the nearest of any kind or fullness
     for (const p of wood.piles) {
       const d = Math.hypot(p.x - x, p.z - z);
@@ -171,7 +174,7 @@ export function createWood(w, saved) {
     const pieces = [...wood.carried].reverse();
     if (pile) pile.logs.push(...pieces.splice(0, PILE_MAX - pile.logs.length));
     if (pieces.length) {   // a new pile: a step in front, or right next to the pile that was full
-      const spot = pile || close ? nextTo(pile || close, heading, wetAt) : { x: fx, z: fz };
+      const c = pile || close, spot = c ? spotAround(c.x, c.z, PILE_NEXT, heading, wetAt) : spotAround(x, z, FRONT, heading, wetAt);
       if (spot) { wood.piles.push({ x: spot.x, z: spot.z, kind, logs: pieces.splice(0) }); }
     }
     if (pieces.length === wood.carried.length) return false;   // nowhere to lay it
@@ -179,10 +182,10 @@ export function createWood(w, saved) {
     wood.version++; return true;
   }
 
-  // a spot close to pile p for a new pile: PILE_NEXT away, first in the direction he faces, then round it; dry and clear of other piles
-  function nextTo(p, heading, wetAt) {
+  // a spot for a new pile, dist away from (cx, cz) (a pile, or the castaway): first in the direction he faces, then round it; dry and clear of other piles
+  function spotAround(cx, cz, dist, heading, wetAt) {
     for (let k = 0; k < 12; k++) {
-      const a = heading + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 6, sx = p.x + Math.sin(a) * PILE_NEXT, sz = p.z + Math.cos(a) * PILE_NEXT;
+      const a = heading + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 6, sx = cx + Math.sin(a) * dist, sz = cz + Math.cos(a) * dist;
       if (wetAt && wetAt(sx, sz)) continue;
       if (wood.piles.some(q => Math.hypot(q.x - sx, q.z - sz) < PILE_NEXT * 0.9)) continue;
       return { x: sx, z: sz };

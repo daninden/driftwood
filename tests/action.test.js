@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
-import { createGame, HUSK_TIME, DRINK_TIME, REACH, BESIDE, STOOP } from '../src/game/game.js';
+import { createGame, wantsToMove, HUSK_TIME, DRINK_TIME, REACH, BESIDE, STOOP } from '../src/game/game.js';
 import { FIRE_MIN, FUEL_MAX, BURN, EMBERS, TORCH_DAYS, TORCH_COST, DRILL_TIME, createFire } from '../src/game/fire.js';
 import { CARRY_MAX, PILE_MAX } from '../src/game/wood.js';
 import { createInput, HOLD_MS } from '../src/game/input.js';
@@ -435,5 +435,26 @@ describe('the pile limit and the full-fire constant stay in step', () => {
   it('createFire refuses to feed a full fire', () => {
     const f = createFire(w, { fires: [fireAt(0, 0, FUEL_MAX)] });
     expect(f.feed(f.fires[0], 1)).toBe(false); f.fires[0].fuel -= 0.001; expect(f.feed(f.fires[0], 1)).toBe(true);
+  });
+});
+
+describe('the thumb stick stops kneeling work', () => {
+  // a resting stick is null (game/input), a held one a direction { x, z }
+  const starts = {
+    husk: () => { const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z)); press(g, 'tap', 0.3); return g; },
+    drink: () => { const g = createGame(w, at(BANK.x - 0.5, BANK.z), { thirst: { days: 1.4 } }); press(g, 'tap', 0.3); return g; },
+    drill: () => { const g = scene({ pile: FIRE_MIN, fibre: 2 }); press(g, 'hold', 1); return g; },
+  };
+  for (const [kind, start] of Object.entries(starts)) {
+    it(`stops ${kind} when the stick is pushed, and not when it rests`, () => {
+      const g = start(); expect(g.player.work && g.player.work.kind).toBe(kind);
+      run(g, makeInput({ stick: null }), 0.3); expect(g.player.work && g.player.work.kind).toBe(kind);
+      run(g, makeInput({ stick: { x: 1, z: 0 } }), 0.1); expect(g.player.work).toBeNull();
+    });
+  }
+  it('wantsToMove: keys, the stick or a target; a resting stick is not asking', () => {
+    expect(wantsToMove(makeInput())).toBe(false); expect(wantsToMove(makeInput({ stick: null }))).toBe(false);
+    expect(wantsToMove(makeInput({ left: true }))).toBe(true); expect(wantsToMove(makeInput({ stick: { x: 0, z: 1 } }))).toBe(true);
+    expect(wantsToMove(makeInput({ target: { x: 1, z: 1 } }))).toBe(true);
   });
 });

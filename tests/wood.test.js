@@ -132,6 +132,27 @@ describe('laying down', () => {
     expect(wood.drop(spawn.x, spawn.z, 0, true)).toBe(false);
     expect(wood.carried.length).toBe(3);
   });
+  it('keeps a first pile out of the water: a dry spot round him, or he keeps the wood', () => {
+    const wood = createWood(w, full()), seen = [];
+    expect(wood.drop(spawn.x, spawn.z, 0, false, (x, z) => { seen.push([x, z]); return true; })).toBe(false);   // all wet
+    expect(seen.length).toBeGreaterThan(0); expect(wood.carried.length).toBe(3); expect(wood.piles.length).toBe(0);
+    const front = (x, z) => Math.hypot(x - spawn.x, z - (spawn.z + 0.45)) < 0.05;   // wet in front only
+    const calls = []; expect(wood.drop(spawn.x, spawn.z, 0, false, (x, z) => { calls.push([x, z]); return front(x, z); })).toBe(true);
+    expect(calls.length).toBeGreaterThan(1); expect(wood.carried.length).toBe(0); expect(wood.piles.length).toBe(1);
+    const p = wood.piles[0]; expect(front(p.x, p.z)).toBe(false); expect(Math.hypot(p.x - spawn.x, p.z - spawn.z)).toBeCloseTo(0.45);
+    const dry = createWood(w, full()); expect(dry.drop(spawn.x, spawn.z, 0, false, () => false)).toBe(true);
+    expect(dry.piles[0].x).toBeCloseTo(spawn.x); expect(dry.piles[0].z).toBeCloseTo(spawn.z + 0.45);   // in front, as before
+  });
+  it('lays a first pile on the bank of a brook, not in it (the button, seed 1337)', () => {
+    const wetAt = (x, z) => { const t = terrainAt(w, x, z, 0); return t.inRiver || t.y < 0.05; };
+    let spot = null;   // dry here, wet a step ahead to the west (heading -pi/2)
+    for (let x = -75; x > -77 && !spot; x -= 0.02) if (!wetAt(x, 180) && wetAt(x - 0.45, 180)) spot = { x, z: 180 };
+    expect(spot).toBeTruthy();
+    const g = createGame(w, { ...spot, y: w.H(spot.x, spot.z) }, { wood: full() }); g.player.heading = -Math.PI / 2;
+    g.update(makeInput({ action: 'tap' }), 1 / 60);
+    expect(g.wood.carried.length).toBe(0); expect(g.wood.piles.length).toBe(1);
+    expect(wetAt(g.wood.piles[0].x, g.wood.piles[0].z)).toBe(false);
+  });
   it('saves and restores what is carried and where the piles are', () => {
     const g = createGame(w, spawn, { wood: full() });
     g.update(makeInput({ action: 'tap' }), 1 / 60);
