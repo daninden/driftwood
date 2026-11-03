@@ -11,7 +11,7 @@
   #island canvas { display: block; width: 100%; height: 100%; touch-action: none; opacity: 0; transition: opacity 1.2s ease; }
   body.ready #island canvas { opacity: 1; }
   #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: #2e2418; font-family: Georgia, 'Times New Roman', serif; transition: opacity 0.8s ease; pointer-events: none; }
-  #loader .name { font-size: 44px; letter-spacing: 0.06em; }
+  #loader .name { font-size: 44px; letter-spacing: 0.12em; }
   #loader .bar { width: 200px; height: 4px; border: 1px solid rgba(46, 36, 24, 0.45); border-radius: 3px; overflow: hidden; }
   #loader .fill { height: 100%; background: #2e2418; transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease-out; }
   body.ready #loader { opacity: 0; }
@@ -41,7 +41,7 @@
 <div id="stick" aria-hidden="true"><svg viewBox="-75 -75 150 150"><circle class="ring" cx="0" cy="0" r="55"/><circle class="knob" cx="0" cy="0" r="6"/></svg></div>
 <div id="carry" aria-hidden="true"></div>
 <div id="dev" aria-hidden="true"></div>
-<div id="loader"><div class="name">Driftwood</div><div class="bar"><div class="fill"></div></div></div>
+<div id="loader"><div class="name">DRIFTWOOD</div><div class="bar"><div class="fill"></div></div></div>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

@@ -79,6 +79,6 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 
 - [docs/design.md](docs/design.md): what the game is, the art style, the world and the decisions
 - [docs/architecture.md](docs/architecture.md): layers, modules, testing and saving
-- [docs/versions.md](docs/versions.md): a list of versions with their short names
+- [docs/versions.md](docs/versions.md): the release log, every version with its short name and what changed
 - [CLAUDE.md](CLAUDE.md): working agreements
 - [prototypes/](prototypes/): the prototypes the game grew out of

@@ -1,12 +1,50 @@
-# Versions
+# Release log
 
-A version is bumped and named with every push that delivers something. The current one is in `src/version.js` (and `package.json`) and shows in the dev panel.
+Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
-- **0.1 Fire** — everything up to fire, sleeping by the fire and the torch.
-- **0.2 Fords** — wading to the waist, fords in the rivers.
-- **0.3 Ink row** — the carried fibre drawn next to the moon, the waist tufts gone.
-- **0.4 Dev panel** — this panel (version, name, fps), toggled with the backtick key.
-- **0.5 Thumb stick** — a thumb stick bottom right on touch-only devices: drag to walk, to the rim to run.
-- **0.6 Saved** — the game saves itself in the browser, one save per island, and picks up where you left off; Shift+` or `#new` starts over.
-- **0.7 Quiet frames** — low power use on phones: at most 30 frames a second on touch-only devices, and 15 on every device when nothing has happened for 3 seconds.
-- **0.8 Wider light** — wider light from the fire (14 m) and the torch (9 m), torch light at the flame, darker nights, slightly darker smoke, no stippled veil round the castaway behind trees (an even silhouette instead), no paper grain.
+## 0.8 "Wider light" — 2026-11-03
+
+- The firelight reaches further, about 14 m round a fire and 9 m round a torch; the torch lights the ground at its flame.
+- Nights are darker, and the smoke a little darker.
+- Behind trees the castaway is now an even silhouette, not a stippled veil, and the paper grain is gone.
+- The loading screen reads DRIFTWOOD in capitals.
+
+## 0.7 "Quiet frames" — 2026-11-03
+
+- On phones and tablets the game uses less power: at most 30 frames a second on touch-only devices.
+- On every device it drops to 15 frames a second when nothing has happened for three seconds.
+
+## 0.6 "Saved" — 2026-11-03
+
+- The island saves itself in this browser, one save per island, and picks up where you left off.
+- Shift + ` (or `#new` in the address) starts the island over.
+
+## 0.5 "Thumb stick" — 2026-11-03
+
+- On touch-only screens a thumb stick sits bottom right: drag from its centre to walk that way, to the rim to run.
+- Let go to stop.
+
+## 0.4 "Dev panel" — 2026-11-03
+
+- A faint line top right shows the version, its name, the frames per second and the work time per frame.
+- The backtick key (`) shows or hides it.
+
+## 0.3 "Ink row" — 2026-11-03
+
+- The fibre you carry is drawn as a row of small ink tufts next to the moon, not at the castaway's waist.
+- The tufts are faint most of the time and clearer for a moment when their number changes.
+
+## 0.2 "Fords" — 2026-11-03
+
+- You can wade rivers up to your waist.
+- Where a river is a narrow brook you can cross anywhere; along the middle reach you cross only at fords, marked by stones sticking out of the water and white rippling water.
+- The deep stretch towards the sea cannot be crossed.
+
+## 0.1 "Fire" — 2026-11-03
+
+- You are alone on a large island of terraces, rock walls, rivers and waterfalls. You walk it and climb through its natural passages: a scree slope, a ravine, rock benches, roots and lianas, a mossy route by a waterfall. Trunks, boulders and the open sea stop you.
+- Driftwood washes up with the tide, which comes in and goes out twice a day. You carry up to three pieces and lay them in piles; every high water brings new wood.
+- Husk coconuts under the palms for a tuft of fibre.
+- You sleep when you are tired. The moon in the corner shows how rested you are; sleep by a fire and you wake fully rested.
+- Drill a fire on a pile of four dry pieces with a tuft of fibre, and feed it with wood. Take a burning brand from the fire as a torch and light a pile with it.
+- A day lasts twenty minutes, with a golden sun and a dim, moonlit night that the fire and the torch light.
