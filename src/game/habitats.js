@@ -18,7 +18,7 @@
  * Bird cells: 64 m squares of the coast with 2 to 4 seabirds that circle high
  * over a stretch of shore, with the direction to the nearest rocky shore.
  *
- * COLONY_MAX, CELL (64), SEA_FISH
+ * COLONY_MAX, CELL (64), SEA_FISH, FLY_SPACING, EDGE_F, FLY_GROUP
  * isBeach(w, x, z) -> true on gentle sand where crabs can have a hole (also the wet strip down to 0.4 m below high water)
  * coloniesOfTile(w, tile) -> [colony]
  *   colony: { id, x, z, holes: [{ x, y, z, wet }], crabs: [{ id, hole, x, z, u }] }
@@ -28,9 +28,20 @@
  *   group: { id, kind: 'river' | 'lagoon' | 'sea', x, z, dir, fish: [{ ox, oz, ph, len }] }
  *   dir: the angle (atan2(dz, dx)) fish face: upstream in rivers, free in lagoons and the sea
  *   river groups also carry lw, the water level of the river there
+ * firefliesOfTile(w, tile) -> [group]
+ *   group: { id, kind: 'edge' | 'river', x, z, r, sync: { period, off }, flies: [{ id, x, z, y, h, ha, hw, hp, dx, dz, wx, wz, px, pz, period, bph, sk }] }
+ *   (x, z, y) the home of a fly; its height above the ground is h + ha sin(hw t + hp) (always 0.3 to 2 m),
+ *   it drifts dx, dz metres round its home (wx, wz rad/s, phases px, pz); blinks every period s from phase bph;
+ *   sk 0..1 picks the flies that join a group flash
  * birdCell(w, cx, cz) -> null | { id, x, z, n, r, alt, omega, ph, away: { x, z } }
  *   the circling birds over the shore point (x, z) of cell (cx, cz); away is
  *   the unit direction to the nearest rocky shore (where they go in the evening)
+ *
+ * Firefly groups (0.17.4): 10 to 30 fireflies round a point at a forest edge (forestF
+ * between EDGE_F, with trees close by) or on a river bank, in the lowland and rain
+ * forest (tiers 1 and 2, ground at least 1 m above high water: never the open beach,
+ * the plateau or the summit); each with its own drift, blink and a group rhythm for
+ * the small synchronized flashes. Its own PRNG streams, so nothing else moves.
  *
  * Pure data on a world; no DOM, no Three.js.
  *
@@ -41,6 +52,7 @@ import { HALF, T, NT } from '../world/constants.js';
 
 export const COLONY_MAX = 6;
 export const CELL = 64;
+export const FLY_SPACING = 14, EDGE_F = [0.2, 0.78], FLY_GROUP = [10, 30];
 export const SEA_FISH = [-3.0, -0.55];   // sea groups lie over a bed between 3 m and 0.55 m below high water
 
 /** Gentle ground on the coast where a crab can dig a hole; the wet strip counts too (down to 0.4 m below high water). */
@@ -150,6 +162,65 @@ export function fishOfTile(w, tile) {
       if (fish.length < 3) continue;
       list.push({ id: bs + ns++, kind: 'sea', x, z, dir: rs() * Math.PI * 2, fish });
     }
+  }
+  return list;
+}
+
+const flyCache = new WeakMap(), flyRivers = new WeakMap();
+const flyGround = (w, x, z) => { const L = w.Lat(x, z), k = w.tierAt(L); return L >= 0 && (k === 1 || k === 2) && w.H(x, z) >= 1.0 && w.slope(x, z) < 0.6 && w.dryOfRiver(x, z, 0.3); };
+
+/** The fireflies of one group round (x, z): up to the wanted number of homes within the group radius that are lowland or rain forest ground. */
+function makeFlies(w, r, gid, x, z, rad) {
+  const want = FLY_GROUP[0] + Math.floor(r() * (FLY_GROUP[1] - FLY_GROUP[0] + 1)), flies = [];
+  for (let i = 0; i < want * 3 && flies.length < want; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * rad, fx = x + Math.cos(a) * d, fz = z + Math.sin(a) * d;
+    const c = 0.55 + r() * 0.9, ha = Math.min(c - 0.3, 2 - c, 0.15 + r() * 0.45);
+    if (!flyGround(w, fx, fz)) continue;
+    flies.push({ id: gid * 32 + flies.length, x: fx, z: fz, y: w.H(fx, fz), h: c, ha, hw: 0.15 + r() * 0.2, hp: r() * 6.28,
+      dx: 0.4 + r() * 0.8, dz: 0.4 + r() * 0.8, wx: 0.1 + r() * 0.2, wz: 0.1 + r() * 0.2, px: r() * 6.28, pz: r() * 6.28,
+      period: 3 + r() * 3, bph: r(), sk: r() });
+  }
+  return flies.length >= FLY_GROUP[0] ? flies : null;
+}
+
+/** Firefly groups on the river banks of the whole island, sorted into tiles once. */
+function riverFlies(w) {
+  let idx = flyRivers.get(w); if (idx) return idx;
+  idx = new Map(); flyRivers.set(w, idx);
+  w.rivers.forEach((rv, ri) => {
+    for (let k = 8; k < rv.kMouth - 4; k += 7) {
+      const p = rv.pts[k], r = mulberry32(hashInt(Math.round(p.x * 8), Math.round(p.z * 8), 337));
+      if (r() >= 0.85) continue;
+      const a = rv.pts[Math.max(0, k - 2)], b = rv.pts[Math.min(rv.n - 1, k + 2)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+      const hw = rv.W(k / (rv.n - 1)) / 2, off = (hw + 1.2 + r() * 2.5) * (r() < 0.5 ? 1 : -1);
+      const x = p.x - (b.z - a.z) / l * off, z = p.z + (b.x - a.x) / l * off;
+      if (!flyGround(w, x, z)) continue;
+      const id = 7000 + ri * 400 + k, flies = makeFlies(w, r, id, x, z, 3 + r() * 2.5);
+      if (!flies) continue;
+      const tile = Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
+      if (!idx.has(tile)) idx.set(tile, []);
+      idx.get(tile).push({ id, kind: 'river', x, z, r: 6, sync: { period: 30 + r() * 40, off: r() * 60 }, flies });
+    }
+  });
+  return idx;
+}
+
+export function firefliesOfTile(w, tile) {
+  let list = flyCache.get(tile); if (list) return list;
+  list = (riverFlies(w).get(tile.tz * NT + tile.tx) || []).slice(); flyCache.set(tile, list);
+  if (tile.hmax < 1.0) return list;
+  const r = mulberry32(hashInt(w.seed + 337, tile.tx, tile.tz)), base = 20000 + (tile.tz * NT + tile.tx) * 4;
+  let n = 0;
+  for (let k = 0; k < 60 && n < 2; k++) {
+    const x = tile.x0 + r() * T, z = tile.z0 + r() * T, keep = r() < 0.6;
+    if (!keep || !flyGround(w, x, z)) continue;
+    const F = w.forestF(w.tierAt(w.Lat(x, z)), w.forestB(x, z));
+    if (F < EDGE_F[0] || F > EDGE_F[1]) continue;
+    if (tile.trees.filter(t => Math.hypot(t.x - x, t.z - z) < 7).length < 2) continue;   // trees close by
+    if (list.some(g => Math.hypot(g.x - x, g.z - z) < FLY_SPACING)) continue;
+    const id = base + n, flies = makeFlies(w, r, id, x, z, 3 + r() * 2.5);
+    if (!flies) continue;
+    n++; list.push({ id, kind: 'edge', x, z, r: 6, sync: { period: 30 + r() * 40, off: r() * 60 }, flies });
   }
   return list;
 }

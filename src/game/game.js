@@ -37,6 +37,7 @@
  *   game.thirst                 days since he drank (game/thirst)
  *   game.hunger                 days since he ate (game/hunger)
  *   game.wildlife               crabs, fish and birds within 30 m of him: atmosphere only, not saved (game/wildlife)
+ *   game.fireflies              the fireflies within 30 m of him, from dusk to an hour before sunrise: atmosphere only, not saved (game/fireflies)
  *   game.sea                    the current sea level (game/tide)
  *   game.update(input, dt) -> { distance, terrain, time, sea, rest }
  *     dt is real time. Moves the player from the input (game/input; Shift
@@ -103,7 +104,7 @@
  *   for 'husk' (he eats it); the tuft comes only when there is room for it (game/fibre husk).
  *
  * Depends on: game/movement, game/clock, game/wood, game/branches, game/leanto, game/tide, game/sleep,
- *   game/fibre, game/fire, game/thirst, game/hunger, game/water, game/wildlife
+ *   game/fibre, game/fire, game/thirst, game/hunger, game/water, game/wildlife, game/fireflies
  */
 import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable, weariStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
@@ -118,6 +119,7 @@ import { createThirst } from './thirst.js';
 import { createHunger } from './hunger.js';
 import { findWater } from './water.js';
 import { createWildlife } from './wildlife.js';
+import { createFireflies } from './fireflies.js';
 import { createFire, full, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH, TORCH_DRY, TORCH_COST, BRANCH_BURN } from './fire.js';
 
 export const STOOP = 0.55;         // seconds to bend down and up again
@@ -141,7 +143,7 @@ export function createGame(world, spawn, opts = {}) {
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
-  const wildlife = createWildlife(world), game = { player, clock, wood, sleep, fibre, branches, leantos, fire, thirst, hunger, wildlife, sea: seaLevel(clock.total), update, state, action };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), game = { player, clock, wood, sleep, fibre, branches, leantos, fire, thirst, hunger, wildlife, fireflies, sea: seaLevel(clock.total), update, state, action };
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
   const here = () => terrainAt(world, player.x, player.z, game.sea);
@@ -371,6 +373,7 @@ export function createGame(world, spawn, opts = {}) {
     if (sleep.asleep && wet(here())) sleep.wake();   // the flood wakes him
     settle();
     wildlife.update(dt, { x: player.x, z: player.z, time: clock.time, sea: game.sea, wading: here().depth > 0.05, asleep: sleep.asleep });   // crabs, fish and birds near him (not saved)
+    fireflies.update(dt, { x: player.x, z: player.z, time: clock.time });   // the fireflies near him at night (not saved)
     return { distance: res.distance, terrain: here(), time: clock.time, sea: game.sea, rest: sleep.rest() };
   }
   function state() {

@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.17.4 "Fireflies" — 2026-11-03
+
+- New: fireflies, atmosphere only. Groups of 10 to 30 at forest edges (forest density in the transition range with at least two trees within 7 m) and along river banks, in the lowland and rain forest only (tiers 1 and 2, ground at least 1 m above high water: never the open beach, plateau or summit), fixed per island by the seed (`firefliesOfTile` in `game/habitats`, own PRNG streams, derived from existing world data: the island and its fixture are unchanged). Seed 1337: 81 groups (70 edge, 11 river), 1580 fireflies.
+- Behaviour in `game/fireflies` (pure, `game.fireflies`, not saved): out from dusk to an hour before sunrise (`activity(time)`: in over 0.04 day after sunset, out over the 0.04 day before that hour, none by day); each drifts 0.3 to 2 m above the ground and up to about 1 m sideways, blinks slowly in its own rhythm (1.6 s of light every 3 to 6 s, faint glow between), a third of a group flashes together every 30 to 70 s, and within 3 m of him a firefly is pushed away (at most 3.5 m) and drifts back with a time constant of 3 s. Only within 30 m.
+- Drawing in `render/fireflies`: a transparent 2D canvas over the picture, above the night grading (as the fire glow), additive, one baked sprite (warm yellow centre, soft halo) per firefly, at most 300 a frame; no point lights, nothing in the 3D scene, so the light count stays constant. By day the list is empty and the canvas is hidden. Like the fire glow it ignores scene depth. They do not count as "something happening" for the 15 fps idle rate.
+- Cost (desktop card, 1280x800, seed 1337, walking among about 215 listed fireflies at night): 60 fps, 2 to 3 ms work per frame between tile-building spikes, the same as the same place by day.
+- Tests: `tests/fireflies.test.js` (placement seeded and island untouched, groups of 10 to 30, only tiers 1 and 2 and never on the beach, activity by time, blinking within bounds and slow, synchronized flashes, drifting aside and back, nothing beyond 30 m, not saved, not counted as activity). Smoke: `smoke-29.png`, a night shot among a river group (also in the quick run); the smoke test restores the clock afterwards, so the tide of the later shots is unchanged.
+- README: one paragraph on the fireflies.
+
 ## 0.17.3 "Restless" — 2026-11-03
 
 - Fish: why the user saw none (checked on seed 1337): only 23 groups on the whole island, 2 within 30 m of the start beach (the nearest 18.7 m away, outside the view) and 3 within 30 m of the brook at (-77, 180), none in the open sea, and small (30 to 45 cm), light (opacity 0.62) shadows. Drawing was not the problem: the fish plane lies 1.5 cm above the river surface and 3 cm above the sea, drawn after the water meshes (render order 5, no depth write), and fish are listed within 30 m as designed.

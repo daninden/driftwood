@@ -22,13 +22,14 @@
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
 // smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
 // smoke-28 fish by day on the start beach at the default zoom (0.17.3, also in the quick run).
+// smoke-29 fireflies at night among a group by a lowland river (0.17.4, also in the quick run).
 //
 // The browser is the full Chromium (channel 'chromium', new headless mode), which uses the real graphics
 // card (ANGLE on Direct3D 11 on Windows) where there is one. Without a usable card (a CI machine, or the
 // full Chromium not installed) it falls back to the headless shell with software drawing (SwiftShader),
 // which costs time in proportion to pixels. The renderer in use is logged once at the start.
 // Two sizes are used to keep that fallback bearable. The quick run
-// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to), 26 (the flock), 27 (many lights) and 19 (on a phone) at 640x400 (the phone at scale 1).
+// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to), 26 (the flock), 27 (many lights), 29 (fireflies) and 19 (on a phone) at 640x400 (the phone at scale 1).
 // The full run (--full) takes every shot; those a person looks at are 1280x800 (the phone at
 // scale 2), the ones that only check something (smoke-0, 2, 3, 4, 7, 18) stay at 640x400.
 // All the checks on the game state run in both. Pixels are checked without a PNG: right
@@ -407,6 +408,25 @@ const fishShot = await page.evaluate(start => {
 console.log('fish by day', JSON.stringify(fishShot));
 if (!fishShot.sea) errors.push('no sea fish within 30 m of the start beach: ' + JSON.stringify(fishShot));
 await shot('smoke-28.png', { quick: true });
+// Fireflies (0.17.4): a night shot by a lowland river among a group (smoke-29, also in the quick run). Set up directly:
+// stand 3.5 m from the middle of the nearest river group of fireflies, midnight.
+const clockBefore = await page.evaluate(() => ({ day: window.__driftwood.game.clock.day, time: window.__driftwood.game.clock.time }));
+const flyShot = await page.evaluate(() => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, c = game.clock, ff = game.fireflies;
+  c.day += 1; c.time = 0.97; game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0; game.fire.torch = null; game.fire.fires.length = 0; game.fire.torches.length = 0; game.wood.carried.length = 0;
+  const all = ff.groupsNear(0, 0, 600).filter(g => g.kind === 'river' && world.tierAt(world.Lat(g.x, g.z)) === 1).sort((a, b) => b.flies.length - a.flies.length);
+  const g = all[0]; if (!g) return { groups: 0 };
+  p.x = g.x + 3.5; p.z = g.z; p.y = world.H(p.x, p.z); p.heading = 0; step(3);
+  const pose = view.pose; view.setPose({ yaw: pose.yaw, tilt: pose.tilt, zoom: 7 }); step(1);
+  window.__driftwood.draw();
+  const canvases = [...document.querySelectorAll('canvas')].filter(cv => cv.style.mixBlendMode === 'screen' && cv.style.display === 'block').length;
+  let lit = 0; for (const f of ff.list()) if (f.glow > 0.5) lit++;
+  return { groups: all.length, at: [g.x, g.z].map(v => +v.toFixed(1)), flies: g.flies.length, listed: ff.list().length, lit, active: +ff.active.toFixed(2), layer: canvases, player: [p.x, p.z].map(v => +v.toFixed(1)) };
+});
+console.log('fireflies at night', JSON.stringify(flyShot));
+if (!flyShot.groups) errors.push('no lowland river group of fireflies'); else if (flyShot.listed < 5 || flyShot.layer < 1) errors.push('fireflies not listed or not drawn: ' + JSON.stringify(flyShot));
+await shot('smoke-29.png', { quick: true });
+await page.evaluate(b => { const c = window.__driftwood.game.clock; c.day = b.day; c.time = b.time; }, clockBefore);   // the tide of the later shots stays as it was
 const flockShot = await page.evaluate(start => {
   const { world, game, step, view } = window.__driftwood, p = game.player, wl = game.wildlife, c = game.clock;
   c.day += 1; c.time = 0.45; p.x = start.x + 2; p.z = start.z + 1.5; p.y = world.H(p.x, p.z); game.wood.carried.length = 0;
