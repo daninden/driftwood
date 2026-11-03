@@ -15,6 +15,7 @@ In this order, each with its decisions in `docs/design.md`:
 3. **0.15 "Coconut"**: hunger, eating the nut when husking, the half-coconut mark. See *Basic needs* in `docs/design.md`.
 4. **0.16 "Lean-to"**: branches, the lean-to, sleeping under it. The lean-to now needs two piles close together, one with at least 6 driftwood and one with at least 6 branches (hold either to build). See *Basic needs* in `docs/design.md`.
 5. **0.17 "Wildlife"**: crabs, fish and birds, atmosphere only. See *Wildlife* in `docs/design.md`.
+6. **0.17.1 "River mouth"** (fix): the river does not meet the sea well. Beyond the mouth its bed runs on into the sea floor as a deep, dark trough with a rounded end, clearly visible through the water (seen on seed 1337 at a mouth with sand on both sides). The river bed should flatten out into the sea floor at the mouth, so the shallows run on smoothly. This changes the island: `tests/world.test.js` guards seed 1337 against the style prototype, so the prototype gets the same change and the fixture is regenerated with `prototypes/make-golden.js` (see `CLAUDE.md`).
 
 ## Open, not decided
 
