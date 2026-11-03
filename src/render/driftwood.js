@@ -16,6 +16,8 @@
  * driftLook(log) -> { col, branch, roots }   pure; branch and roots are
  *   null or parameters
  * driftColor(log, dry?) -> its colour at dryness dry (0 wet .. 1 dry), pure
+ * logParts(H, log) -> [{ a, b, r, key }]   the sticks a beach log is drawn
+ *   with (trunk, side branch, roots), for drawing and for clicking on it
  * addBeachLog(B, kit, H, log, dry?)  a log as it washed up
  * addPile(B, kit, H, pile, total?)   logs stacked crosswise, two per layer
  *   (total: the days on the clock, for how dry each piece is)
@@ -55,21 +57,31 @@ export function driftLook(log) {
   return { col, branch, roots };
 }
 
-export function addBeachLog(B, kit, H, log, dry = 1) {
-  const { x, z, y, len, rad } = log, ca = Math.cos(log.a), sa = Math.sin(log.a), { branch, roots } = driftLook(log), col = driftColor(log, dry);
+/**
+ * The parts of a beach log as drawn: [{ a, b, r, key }] sticks from a to b
+ * (THREE.Vector3) of radius r: the trunk, a side branch, the roots of a
+ * root plate. Used for drawing and for clicking on what you see.
+ */
+export function logParts(H, log) {
+  const { x, z, y, len, rad } = log, ca = Math.cos(log.a), sa = Math.sin(log.a), { branch, roots } = driftLook(log);
   const A = new THREE.Vector3(x - ca * len / 2, 0, z - sa * len / 2), Bv = new THREE.Vector3(x + ca * len / 2, 0, z + sa * len / 2);
   A.y = Math.max(H(A.x, A.z), y - 0.2) + rad * 0.7; Bv.y = Math.max(H(Bv.x, Bv.z), y - 0.2) + rad * 0.6;
-  B.add('log', kit.driftwood, kit.smallMat, stickMatrix(A, Bv, rad / 0.09), col, { outline: 1.12 });
+  const parts = [{ a: A, b: Bv, r: rad, key: 'log' }];
   if (branch) {
     const { u, side, bl, up } = branch, P0 = new THREE.Vector3().lerpVectors(A, Bv, u);
-    const P1 = P0.clone().add(new THREE.Vector3((ca * 0.6 - sa * side) * bl, up, (sa * 0.6 + ca * side) * bl));
-    B.add('logb', kit.driftwood, kit.smallMat, stickMatrix(P0, P1, rad * 0.4 / 0.09), col, { outline: 1.15 });
+    parts.push({ a: P0, b: P0.clone().add(new THREE.Vector3((ca * 0.6 - sa * side) * bl, up, (sa * 0.6 + ca * side) * bl)), r: rad * 0.4, key: 'logb' });
   }
   if (roots) roots.forEach((v, k) => {
     const ang = k / 5 * Math.PI * 2 + v, P1 = A.clone().add(new THREE.Vector3(-ca * 0.15 + Math.cos(ang) * -sa * 0.45, Math.sin(ang) * 0.4 + 0.1, -sa * 0.15 + Math.cos(ang) * ca * 0.45));
     P1.y = Math.max(P1.y, H(P1.x, P1.z) + 0.03);
-    B.add('logr', kit.driftwood, kit.smallMat, stickMatrix(A, P1, rad * 0.35 / 0.09), col, { outline: 1.15 });
+    parts.push({ a: A, b: P1, r: rad * 0.35, key: 'logr' });
   });
+  return parts;
+}
+
+export function addBeachLog(B, kit, H, log, dry = 1) {
+  const col = driftColor(log, dry);
+  for (const p of logParts(H, log)) B.add(p.key, kit.driftwood, kit.smallMat, stickMatrix(p.a, p.b, p.r / 0.09), col, { outline: p.key === 'log' ? 1.12 : 1.15 });
 }
 
 export function addPile(B, kit, H, pile, total = 0) {

@@ -12,6 +12,8 @@
  *   Some shapes are made lumpy with the island's noise, so they belong to a seed.
  * stickMatrix(a, b, r)   matrix that stretches the unit cylinder from a to b
  * mat4(x, y, z, sx, sy, sz, ry, rx, rz)   compose position, scale, rotation
+ * opaqueCutout(material)   alpha-tested leaves write full alpha, so the page
+ *   behind the canvas never shows through their edges
  *
  * Depends on: three, core/noise, render/materials, render/cutout
  */
@@ -25,6 +27,17 @@ export function stickMatrix(a, b, r) {
   const d = new THREE.Vector3().subVectors(b, a), len = d.length();
   const q = new THREE.Quaternion().setFromUnitVectors(UP, d.clone().normalize());
   return new THREE.Matrix4().compose(a.clone().addScaledVector(d, 0.5), q, new THREE.Vector3(r, len, r));
+}
+/**
+ * Leaves cut out of a texture (alphaTest) would write their soft edge alpha
+ * into the canvas, and the light page behind it would shine through as a
+ * pale rim (most visible at night). Write them fully opaque.
+ */
+export function opaqueCutout(mat) {
+  const key = mat.customProgramCacheKey;
+  mat.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.a = 1.0;'); };
+  mat.customProgramCacheKey = () => (key ? key.call(mat) : '') + '|opaque';
+  return mat;
 }
 export const mat4 = (x, y, z, sx, sy, sz, ry, rx, rz) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx, sy, sz));
 
@@ -67,9 +80,9 @@ export function createKit(noise) {
     pebble: new THREE.IcosahedronGeometry(1, 0), shell: new THREE.SphereGeometry(1, 6, 4),
     driftwood: lumpy(new THREE.CylinderGeometry(0.09, 0.07, 1, 8, 4), 0.5, 7),
     canopyMat: withCutout(toon(0xffffff, { vertexColors: true })), trunkMat: withCutout(toon()), rockMat: toon(), palmTrunkMat: withCutout(toon()),
-    frondMat: withCutout(toon(0xffffff, { map: frondTex, alphaTest: 0.4, side: THREE.DoubleSide })),
+    frondMat: withCutout(opaqueCutout(toon(0xffffff, { map: frondTex, alphaTest: 0.4, side: THREE.DoubleSide }))),
     frondDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: frondTex, alphaTest: 0.4 }),
-    dryFrondMat: withCutout(toon(0xffffff, { map: dryTex, alphaTest: 0.4, side: THREE.DoubleSide })),
+    dryFrondMat: withCutout(opaqueCutout(toon(0xffffff, { map: dryTex, alphaTest: 0.4, side: THREE.DoubleSide }))),
     dryFrondDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: dryTex, alphaTest: 0.4 }),
     grassMat: toon(0xffffff, { side: THREE.DoubleSide }), fernMat: withCutout(toon(0xffffff, { side: THREE.DoubleSide })), smallMat: toon(),
   };

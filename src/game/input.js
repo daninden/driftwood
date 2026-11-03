@@ -12,7 +12,8 @@
  *   Z                      lie down to sleep
  *   hold anywhere else     (about HOLD_MS) on a pile: light it (the game decides)
  *   F                      light the pile at the castaway's feet
- *   any key or tap         while asleep: wake up (the game decides)
+ *   left click, tap, WASD  while asleep: wake up (the game decides); turning,
+ *                          tilting or zooming the view does not wake him
  *   double tap             run to that spot (touch: hold and drag to steer
  *                          while running)
  *   two fingers            pinch to zoom, twist to turn the view; walking
@@ -38,8 +39,10 @@
  *   now() -> milliseconds, for telling a double tap (defaults to performance.now)
  *   input.takeSleep() -> true once when the castaway was held long enough
  *     (without moving off him) or Z was pressed
- *   input.takeWake() -> true once when a key went down (not a held key
- *     repeating) or a pointer was pressed since the last call
+ *   input.takeWake() -> true once when a walking key went down (not a held
+ *     key repeating), or the left mouse button or a finger was pressed,
+ *     since the last call (not the right mouse button, a second finger or
+ *     the view keys)
  *   input.takeHold() -> once, when a press somewhere else than on the
  *     castaway was held long enough without moving: { x, z, touch? } (the
  *     pressed spot), or { key: true } when F was pressed; otherwise null
@@ -83,7 +86,7 @@ export function createInput(element, pickGround, now = () => performance.now()) 
 
   const onKey = down => e => {
     const k = KEYS[e.code];
-    if (down && !e.repeat) woke = true;
+    if (down && !e.repeat && k) woke = true;
     if (down && !e.repeat && e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey) sleepKey = true;
     if (down && !e.repeat && e.code === 'KeyF' && !e.ctrlKey && !e.metaKey) lightKey = true;
     if (k) { input[k] = down; if (down) input.target = null; e.preventDefault(); }
@@ -112,7 +115,8 @@ export function createInput(element, pickGround, now = () => performance.now()) 
     return { d: Math.hypot(b.x - a.x, b.y - a.y) || 1, a: Math.atan2(b.y - a.y, b.x - a.x) };
   };
   const pdown = e => {
-    woke = true; hold = null;
+    hold = null;
+    if (e.button === 0 && (e.pointerType !== 'touch' || touches.size === 0)) woke = true;
     if (e.button === 2) { dragging = true; e.preventDefault(); return; }
     if (e.pointerType === 'touch') {
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });

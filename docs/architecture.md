@@ -39,7 +39,7 @@ Rules:
 | `world/spots` | Finding places: the start spot, examples of each passage (for tests). |
 | `world/world` | Builds everything from a seed and returns one read-only object with queries. |
 | `game/movement` | Walking rules: walls block, passages let you climb, the sea blocks below the current sea level (you can always wade back), sliding along walls; trunks, boulders and crags (from the tile data, cached per tile) block and you slide round them. |
-| `game/input` | Keys and clicks/taps to a movement intent (a double tap runs; the tapped spot itself is marked, steering after it is not; a finger may wobble a little); holding the castaway or `Z` to sleep, any key or tap to wake; holding anywhere else or `F` for the game to light a pile (and whether a press is still being held); mouse wheel, `+`/`-` and a two-finger pinch to zoom steps; `Q`/`E`, right-mouse drag and a two-finger twist to turn (the mouse also tilts). |
+| `game/input` | Keys and clicks/taps to a movement intent (a double tap runs; the tapped spot itself is marked, steering after it is not; a finger may wobble a little); holding the castaway or `Z` to sleep, a left click, tap or walking key to wake (not the view controls); holding anywhere else or `F` for the game to light a pile (and whether a press is still being held); mouse wheel, `+`/`-` and a two-finger pinch to zoom steps; `Q`/`E`, right-mouse drag and a two-finger twist to turn (the mouse also tilts). |
 | `game/wood` | Gathering: driftwood still on the beach, what is carried (at most 3, each piece slows you), piles; finding the nearest piece or pile, taking, laying down; washing up new wood at high water (deterministic per high water, never more per tile than at the start), piles the flood takes; washed-up wood is wet and dries over a day (`dryness`); piles and pieces taken off to burn; a plain saveable state. |
 | `game/fibre` | Coconuts under the palms, husked for a tuft of fibre (at most 3 carried, one used up per attempt to light a fire); palms drop new nuts after some days; a plain saveable state. |
 | `game/fire` | Fires: an attempt to light a pile (catches or not, from the dryness and tiredness, fixed by the seed and the number of attempts), burning down to embers and going out, feeding one piece at a time, the flood putting them out; a plain saveable state. |
@@ -50,7 +50,7 @@ Rules:
 | `render/palette` | All colours of style C in one place, the castaway's included. |
 | `render/terrainColor` | Painted ground colour per point (pure, tested against the prototype). |
 | `render/materials` | Toon shading, outlines (also a cut version for vegetation), the rock shader for steep walls. |
-| `render/geometry` | Shared shapes (crowns, rocks, grass, ferns, driftwood) and matrix helpers. |
+| `render/geometry` | Shared shapes (crowns, rocks, grass, ferns, driftwood) and matrix helpers; palm fronds write full alpha (`opaqueCutout`), so the light page behind the transparent canvas never shows through their edges. |
 | `render/batch` | Many small objects into a few InstancedMeshes with outlines. |
 | `render/props` | Detailed trees, palms, roots and lianas, the tide line. Trees, pines and palms each pick a shape and colours from the tile generator. |
 | `render/terrainTile` | Ground mesh and painted texture of one tile. |
@@ -58,14 +58,14 @@ Rules:
 | `render/nearTile` | The full-detail version of one tile. |
 | `render/streaming` | Which detailed tiles exist for the current view; building one at a time, dropping old ones. |
 | `render/cutout` | The thinned veil in the vegetation round the castaway: a shader patch on the vegetation materials that discards, with an ordered dither, part of what lies in front of the figure inside a screen circle (40% kept in the middle, filling in to all at the edge). |
-| `render/water` | Sea, river ribbons, surf, foam and spray at waterfalls. The sea planes move with the tide; the surf is built for five levels of the tide and the two next to the sea level fade in. |
+| `render/water` | Sea, river ribbons, surf, foam and spray at waterfalls. The sea planes move with the tide; the surf is built for five levels of the tide and the two next to the sea level fade in; a river's water runs on past its mouth down to wherever the sea stands (a shader uniform). No decoration that looks like driftwood: every piece you see can be picked up. |
 | `render/driftwood` | The driftwood of `game/wood`: logs on the beach per detailed tile (rebuilt when wood is taken or washes up), piles stacked crosswise, and each piece's look, fixed by its place; wet wood is dark and bleaches in steps as it dries. Freshly washed-up wood fades in over 3 s. |
 | `render/coconuts` | The coconuts of `game/fibre` under the palms, per detailed tile (rebuilt when one is taken or falls again). |
 | `render/fire` | The fires of `game/fire`: a tepee of charred wood that sinks as it burns, flickering unlit flame cones, embers, rising smoke (also a puff after a failed attempt and a wisp while drilling), one warm point light over the strongest fire near the castaway (always in the scene, so no shader is rebuilt), and at night a warm glow over the picture round it (a DOM layer above the night grading). |
 | `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle, carried wood under the arm, tufts of fibre at the waist, bending down, kneeling to husk a coconut or to twirl the staff as a fire drill, a tired stoop, lying down to sleep with the hat over his face, and a light stippled silhouette (drawn with an inverted depth test before the figure) where something solid hides it. |
 | `render/footprints` | Footprints in the sand: at most 80, the oldest fading out; those the tide covers are wiped out. |
 | `render/restMark` | The moon mark (`#rest` in `index.html`) that wanes as the castaway needs sleep; drawn by `main` from `game.update`'s `rest`. |
-| `render/camera` | Orthographic camera that follows; player zoom within fixed limits; free turning and limited tilting, eased; zooms out on the summits; ground picking. (`islandView.pickGround` also tells whether a point is on the castaway.) |
+| `render/camera` | Orthographic camera that follows; player zoom within fixed limits; free turning and limited tilting, eased; zooms out on the summits; ground picking. (`islandView.pickGround` also tells whether a point is on the castaway, and picks a beach log by its drawn shape, branch and roots included, rather than the ground behind it.) |
 | `render/sky` | The light of the day from the time (pure): sun and moon paths, light and fill colours, grading for golden hour, dusk and night. |
 | `render/mood` | Atmosphere per terrace and per time of day: colour grading, mist, cooler light, light colours, paper grain, vignette. |
 | `render/stage` | Renderer, scene, lights (placed by `render/sky`, fixed in the world) and the shadow that follows the view. |

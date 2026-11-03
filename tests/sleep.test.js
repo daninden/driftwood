@@ -164,4 +164,14 @@ describe('sleep input', () => {
     expect(input.takeWake()).toBe(true);
     input.dispose();
   });
+  it('is not woken by turning, tilting or zooming the view', () => {
+    const { el, input } = setup();
+    fire(el, 'pointerdown', { button: 2, pointerType: 'mouse', pointerId: 5, clientX: 200, clientY: 10 });
+    fire(window, 'pointerup', { button: 2, pointerType: 'mouse', pointerId: 5 });
+    for (const code of ['KeyQ', 'KeyE', 'Equal', 'Minus', 'ShiftLeft']) fire(window, 'keydown', { code });
+    expect(input.takeWake()).toBe(false);
+    fire(el, 'pointerdown', { button: 0, pointerType: 'mouse', pointerId: 6, clientX: 200, clientY: 10 });
+    expect(input.takeWake()).toBe(true);
+    input.dispose();
+  });
 });

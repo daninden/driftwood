@@ -19,7 +19,10 @@
  *     fibre carried (game/fibre, render/coconuts), and the fires
  *     (game/fire, render/fire)
  *   view.pickGround(clientX, clientY, touch?) -> { x, z, hero? } | null
- *     hero when the screen point is on the castaway (with a finger: near it)
+ *     hero when the screen point is on the castaway (with a finger: near it);
+ *     on a piece of beach driftwood as drawn (its trunk, a branch or the
+ *     roots standing up, with a finger a little wider) a point on that piece,
+ *     rather than the ground behind it
  *   view.canvas
  *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
  *   view.prepare(player, progress?)  builds the detailed tiles in view before
@@ -39,7 +42,7 @@ import { createTerrainColor } from './terrainColor.js';
 import { buildWater } from './water.js';
 import { buildFarTiles, pumpFarTiles, updateFarTiles } from './farTiles.js';
 import { SUMMIT_MAX } from './camera.js';
-import { T } from '../world/constants.js';
+import { T, HALF, NT } from '../world/constants.js';
 import { buildNearTile, disposeGroup } from './nearTile.js';
 import { createStreamer, tileInView } from './streaming.js';
 import { updateCutout } from './cutout.js';
@@ -48,7 +51,7 @@ import { createFootprints } from './footprints.js';
 import { createCamera } from './camera.js';
 import { createMood } from './mood.js';
 import { skyAt } from './sky.js';
-import { createWoodView, driftColor } from './driftwood.js';
+import { createWoodView, driftColor, logParts } from './driftwood.js';
 import { createCocoView } from './coconuts.js';
 import { createFireView } from './fire.js';
 import { dryness } from '../game/wood.js';
@@ -109,10 +112,28 @@ export async function createIslandView(world, container, progress, start) {
     fireView = createFireView(scene, container, g.fire);
   }
 
-  const feet = new THREE.Vector3(), head = new THREE.Vector3();
+  const feet = new THREE.Vector3(), head = new THREE.Vector3(), ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), onLog = new THREE.Vector3();
+  /** The beach log whose drawn shape (trunk, branch, roots) the view ray passes through, near ground point g: a point on its trunk. */
+  function pickLog(g, touch) {
+    if (!game || !g) return null;
+    const r = ray.ray, slack = touch ? 0.12 : 0.04, tx = Math.floor((g.x + HALF) / T), tz = Math.floor((g.z + HALF) / T);
+    let best = null, bd = Infinity;
+    for (let j = tz - 1; j <= tz + 1; j++) for (let i = tx - 1; i <= tx + 1; i++) {
+      const tile = i >= 0 && j >= 0 && i < NT && j < NT ? world.tiles[j * NT + i] : null; if (!tile) continue;
+      for (const log of game.wood.beachLogs(tile)) {
+        if (Math.hypot(log.x - g.x, log.z - g.z) > 4) continue;
+        for (const p of logParts(world.H, log)) {
+          const d = Math.sqrt(r.distanceSqToSegment(p.a, p.b, null, onLog)) - p.r - slack;
+          if (d < 0 && d < bd) { bd = d; const t = p.key === 'log' ? onLog : p.a; best = { x: t.x, z: t.z }; }
+        }
+      }
+    }
+    return best;
+  }
   function pickGround(cx, cy, touch) {
-    const rc = renderer.domElement.getBoundingClientRect();
-    const g = cam.pick((cx - rc.left) / rc.width * 2 - 1, -(cy - rc.top) / rc.height * 2 + 1, world.H);
+    const rc = renderer.domElement.getBoundingClientRect(), nx = (cx - rc.left) / rc.width * 2 - 1, ny = -(cy - rc.top) / rc.height * 2 + 1;
+    ndc.set(nx, ny); ray.setFromCamera(ndc, cam.camera);
+    const ground = cam.pick(nx, ny, world.H), g = pickLog(ground, touch) || ground;
     // on the castaway: near the line from the feet to the head on screen
     const px = v => ({ x: rc.left + (v.x + 1) / 2 * rc.width, y: rc.top + (1 - v.y) / 2 * rc.height });
     const hp = hero.group.position, a = px(feet.copy(hp).project(cam.camera)), b = px(head.set(hp.x, hp.y + 0.8, hp.z).project(cam.camera));
@@ -137,5 +158,5 @@ export async function createIslandView(world, container, progress, start) {
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, setGame, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, pickGround, canvas: renderer.domElement, stats, settle, prepare };
+  return { render, setGame, zoomBy: cam.zoomBy, turn: cam.turn, get yaw() { return cam.yaw; }, pickGround, canvas: renderer.domElement, scene, stats, settle, prepare };
 }
