@@ -37,8 +37,11 @@
  *     wood he carries on it, or, empty-handed, takes a burning torch out of
  *     it. With a torch he has no hand free for wood; a tap on the castaway
  *     sticks the torch in the ground in front of him, and a tap on a torch
- *     in the ground takes it up again. Wading deep puts the torch out. While a press on a pile is still held
- *     (input.pressing) he waits by it instead of picking it up.
+ *     in the ground takes it up again. A tap or hold on a pile (or F) with
+ *     a torch kneels beside it and lights it with the torch (game/fire
+ *     kindle), no fibre needed. Wading deep puts the torch out. While a
+ *     press on a pile is still held (input.pressing) he waits by it instead
+ *     of picking it up.
  *     input.takeHold() (a long press on a pile, or F by a pile at his
  *     feet) walks to the pile and, with fibre and at least FIRE_MIN pieces,
  *     kneels to drill fire (game/fire): it costs rest, uses up the fibre,
@@ -99,7 +102,10 @@ export function createGame(world, spawn, opts = {}) {
     const aim = tg.touch ? AIM.touch : AIM.mouse, dist = t => t ? Math.hypot(t.x - tg.x, t.z - tg.z) : Infinity;
     const piece = wood.find(tg.x, tg.z, aim), coco = fibre.find(tg.x, tg.z, aim);
     const thing = fire.find(tg.x, tg.z, aim) || (dist(coco) < dist(piece) ? coco : piece);   // a fire first
-    if (thing) { const at = thing.kind === 'fire' ? beside(thing.x, thing.z) : thing; tg.act = thing; tg.x = at.x; tg.z = at.z; }
+    if (thing) {
+      const kneel = thing.kind === 'fire' || (thing.kind === 'pile' && fire.torch), at = kneel ? beside(thing.x, thing.z) : thing;
+      tg.act = thing.kind === 'pile' && fire.torch ? { kind: 'kindle', pile: thing.pile, x: thing.x, z: thing.z } : thing; tg.x = at.x; tg.z = at.z;
+    }
   }
 
   function plantTorch() {   // a step in front, in the ground; not in the water
@@ -111,6 +117,11 @@ export function createGame(world, spawn, opts = {}) {
     const at = h.key ? { x: player.x, z: player.z } : h, reach = h.key ? KEY_REACH : (h.touch ? AIM.touch : AIM.mouse);
     const thing = wood.find(at.x, at.z, reach);
     if (!thing || thing.kind !== 'pile') return;
+    if (fire.torch) {   // a torch lights it without fibre
+      const side = beside(thing.x, thing.z);
+      input.target = { x: side.x, z: side.z, tap: true, seen: true, act: { kind: 'kindle', pile: thing.pile, x: thing.x, z: thing.z } };
+      return;
+    }
     if (!fibre.carried || thing.pile.logs.length < FIRE_MIN) {   // nothing to light it with: leave the pile be
       if (input.target && input.target.act && input.target.act.pile === thing.pile) input.clearTarget();
       return;
@@ -126,6 +137,9 @@ export function createGame(world, spawn, opts = {}) {
     else if (a.kind === 'fire') {
       if (wood.carried.length && fire.fires.includes(a.fire)) { const l = wood.giveOne(); fire.feed(a.fire, dryness(l, clock.total)); stoop(); }
       else if (!wood.carried.length && fire.takeTorch(a.fire)) stoop();   // empty-handed: a burning brand out of the fire
+    } else if (a.kind === 'kindle') {
+      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && !wet(here()) && fire.kindle(a.pile.x, a.pile.z, a.pile.logs, meanDry(a.pile.logs), clock.total)) wood.takePile(a.pile);
+      stoop();
     } else if (a.kind === 'light') {
       if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && fibre.carried && !wet(here())) work = { kind: 'drill', t: 0, dur: DRILL_TIME, thing: a.pile };
     }
@@ -170,7 +184,7 @@ export function createGame(world, spawn, opts = {}) {
       if (player.stoop > 0) {
         player.stoop = Math.max(0, player.stoop - dt / STOOP);
         res = stepPlayer(world, player, null, dt);
-      } else if (a && Math.hypot(input.target.x - player.x, input.target.z - player.z) < (a.kind === 'light' || a.kind === 'fire' ? 0.15 : REACH)) {
+      } else if (a && Math.hypot(input.target.x - player.x, input.target.z - player.z) < (a.kind === 'light' || a.kind === 'fire' || a.kind === 'kindle' ? 0.15 : REACH)) {
         if (!(a.kind === 'pile' && input.pressing && input.pressing())) { input.clearTarget(); act(a); }   // a press still held may become a hold
         res = stepPlayer(world, player, null, dt);
       } else {

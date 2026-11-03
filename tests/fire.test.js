@@ -2,7 +2,7 @@
 // a pile with the fire drill (hard work, uses up the fibre, may fail),
 // burning down to embers, feeding, the flood, saving, and the input (a long
 // press on a pile, or F); sleeping warm by a fire or cold without one; and
-// the torch.
+// the torch, which also lights a pile without fibre.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
@@ -315,5 +315,36 @@ describe('a torch', () => {
     expect(g.fire.torch).toBeNull(); expect(g.fire.torches.length).toBe(1);
     const s = JSON.parse(JSON.stringify(g.state()));
     expect(createGame(w, spawn, { fire: s.fire }).fire.torches).toEqual(g.fire.torches);
+  });
+});
+
+describe('lighting a pile with a torch', () => {
+  const torchAndPile = (dry = true) => {
+    const g = withPile(FIRE_MIN, { fibre: { carried: 0 }, fire: { torch: { left: TORCH_DAYS } } });
+    if (!dry) for (const l of g.wood.piles[0].logs) l.t = g.clock.total;   // as if just washed up
+    return g;
+  };
+  it('catches with a tap on a dry pile, without fibre; the torch goes into the fire', () => {
+    const g = torchAndPile(), p = g.wood.piles[0];
+    run(g, makeInput({ target: { x: p.x, z: p.z, tap: true } }), 2);
+    expect(g.fire.fires.length).toBe(1); expect(g.wood.piles.length).toBe(0); expect(g.fire.torch).toBeNull();
+    expect(g.wood.carried.length).toBe(0);
+  });
+  it('also with F beside the pile', () => {
+    const g = torchAndPile();
+    run(g, makeInput({ hold: { key: true } }), 2);
+    expect(g.fire.fires.length).toBe(1);
+  });
+  it('only smokes on wet wood, and the torch is kept', () => {
+    const g = torchAndPile(false), p = g.wood.piles[0];
+    run(g, makeInput({ target: { x: p.x, z: p.z, tap: true } }), 2);
+    expect(g.fire.fires.length).toBe(0); expect(g.fire.puffs.length).toBe(1); expect(g.fire.torch).not.toBeNull();
+    expect(g.wood.piles[0].logs.length).toBe(FIRE_MIN);
+    for (const l of logs.slice(0, FIRE_MIN)) delete l.t;   // the world's logs are shared between tests
+  });
+  it('does not light too small a pile', () => {
+    const g = withPile(FIRE_MIN - 1, { fire: { torch: { left: TORCH_DAYS } } }), p = g.wood.piles[0];
+    run(g, makeInput({ target: { x: p.x, z: p.z, tap: true } }), 2);
+    expect(g.fire.fires.length).toBe(0); expect(g.fire.torch).not.toBeNull();
   });
 });

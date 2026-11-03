@@ -97,6 +97,7 @@ Making fire is deliberately hard: it takes preparation and effort, so a fire tha
 - **The flood** puts out a fire laid on the wet sand of low water.
 - **Warmth:** a fire close by lets the castaway sleep the night through (see *Sleep*).
 - **A torch:** click or tap a burning fire with empty hands and the castaway takes a burning brand out of it (it costs the fire half a piece's worth; not from embers). He holds it up in his left hand; it lights a small warm circle round him at night and burns about **two hours** of game time. With a torch he has no hand free for wood. A click or tap on the castaway sticks it in the ground in front of him, where it burns on as a light; a click or tap on it takes it up again. Lying down to sleep, he sticks it in the ground first. Wading in deeper than about 30 cm puts it out, and the flood puts out a torch stuck in the wet sand.
+- **Lighting with a torch:** click or tap a pile of at least 4 pieces while holding a torch (or hold it, or press `F` beside it): the castaway kneels and pushes the torch into it. No fibre and no drilling: dry wood (dry for at least three quarters of the day it takes) always catches, and the torch goes into the fire. Wetter wood only smokes, and he keeps the torch. So a fire, once made, can be carried to a new place.
 - Fire is not solid, like wood (see *Known weak spots*). It burns on while the castaway sleeps.
 
 ## Ebb and flow
@@ -194,7 +195,7 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 - Saving: local only, or a backend later?
 - Mood per terrace: weather over time (mist in the rain forest, wind on the summit).
 - What else should the day/night cycle mean for playing (food, strangers, darker nights now that there is fire)?
-- Should a fire mean anything for the strangers? Should a torch light a pile (without fibre)?
+- Should a fire mean anything for the strangers?
 - Loneliness: the castaway growing lonelier without a fire, shown without a meter (an idea, to be thought through).
 
 ## Known weak spots

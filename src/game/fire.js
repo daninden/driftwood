@@ -23,6 +23,10 @@
  *     and lights the way at night. It can be stuck in the ground, where it
  *     burns on, and taken up again. Wading deeper than DOUSE_DEPTH puts out a
  *     carried torch; the flood puts out one stuck in the sand.
+ *   - A torch lights a pile of at least FIRE_MIN pieces without fibre or
+ *     drilling: it always catches when the wood is dry enough (mean dryness
+ *     at least TORCH_DRY), and the torch goes into the fire. Wetter wood only
+ *     smokes, and the torch is kept.
  *   - A fire, or its embers, within WARM_R warms a sleeper (game/sleep).
  *   - Whether a fire catches is fixed by the seed and how many attempts
  *     there have been, so a game plays the same way twice.
@@ -30,7 +34,7 @@
  * Pure data; no DOM, no Three.js.
  *
  * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, TIRED_CATCH, BURN, FUEL_MAX, EMBERS,
- * TORCH_DAYS, TORCH_COST, DOUSE_DEPTH, WARM_R
+ * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R
  * catchChance(dry, tired) -> 0..CATCH   dry: mean dryness 0..1, tired 0..1 (game/sleep)
  * createFire(world, saved?) -> fire
  *   fire.fires             [{ id, x, z, fuel, embers, lit, fed }]  fuel and embers in
@@ -49,6 +53,8 @@
  *   fire.warm(x, z) -> true when a fire or its embers are within WARM_R
  *   fire.attempt(x, z, logs, dry, tired, total) -> the new fire, or null when it did
  *     not catch (logs: the pile's pieces, dry: their mean dryness)
+ *   fire.kindle(x, z, logs, dry, total) -> the new fire lit with the torch carried,
+ *     or null (no torch, or the wood too wet: a puff of smoke)
  *   fire.feed(f, dry) -> true when a piece of dryness dry went on fire f
  *   fire.update(days)      burns down by days of game time; embers and torches go out
  *   fire.flood(sea) -> number of fires (and torches in the sand) the sea put out
@@ -69,6 +75,7 @@ export const FUEL_MAX = 8 * BURN;
 export const EMBERS = 1.5 / 24;               // embers glow on for an hour and a half
 export const TORCH_DAYS = 2 / 24;             // a torch burns two hours
 export const TORCH_COST = BURN / 2;           // and takes half a piece's worth out of the fire
+export const TORCH_DRY = 0.75;                // a torch lights a pile this dry, always
 export const DOUSE_DEPTH = 0.3;               // wading deeper puts a torch out
 export const WARM_R = 3;                      // a fire this close warms a sleeper
 const FIRE_R = 0.5;                           // how far a fire reaches round its centre
@@ -78,7 +85,7 @@ const PUFFS = 4;
 export const catchChance = (dry, tired = 0) => CATCH * Math.max(0, Math.min(1, dry)) ** 2 * (1 - (1 - TIRED_CATCH) * Math.max(0, Math.min(1, tired)));
 
 export function createFire(w, saved) {
-  const fire = { fires: [], puffs: [], attempts: 0, version: 0, torch: null, torches: [], find, attempt, feed, takeTorch, plant, pickTorch, douse, warm, update, flood, strength, state };
+  const fire = { fires: [], puffs: [], attempts: 0, version: 0, torch: null, torches: [], find, attempt, kindle, feed, takeTorch, plant, pickTorch, douse, warm, update, flood, strength, state };
   let nextId = 0;
   if (saved) {
     fire.fires = (saved.fires || []).map(f => ({ ...f }));
@@ -123,6 +130,12 @@ export function createFire(w, saved) {
     }
     const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, logs.length * BURN), embers: EMBERS, lit: total, fed: logs.length };
     fire.fires.push(f); fire.version++; return f;
+  }
+  function kindle(x, z, logs, dry, total) {
+    if (!fire.torch) return null;
+    if (dry < TORCH_DRY) { fire.puffs.push({ x, z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift(); fire.version++; return null; }
+    const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, logs.length * BURN), embers: EMBERS, lit: total, fed: logs.length };
+    fire.fires.push(f); fire.torch = null; fire.version++; return f;
   }
   function feed(f, dry = 1) {
     if (!fire.fires.includes(f)) return false;
