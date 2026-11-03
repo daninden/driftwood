@@ -2,6 +2,16 @@
  * main — boots the game: world, view, game state, input, loop.
  *
  * Seed: from the page address `#seed-<n>`, otherwise 1337 (the fixed demo).
+ * `new` in the hash (`#new`, `#seed-2024&new`) starts this island over: the
+ * save is cleared and `new` removed from the address, so a refresh keeps
+ * the game. Shift + backtick clears the save and reloads.
+ *
+ * Saving (src/save): the game is saved to localStorage every SAVE_EVERY
+ * seconds of play, when wood is laid down, a fire is lit or goes out, a torch
+ * is planted or taken, or he falls asleep or wakes, and when the page is
+ * hidden or closed. At start-up a valid save is laid over the generated
+ * island, silently. With `?spawn`, `?time` or `?awake` (tests) nothing is
+ * loaded or saved.
  * For tests and development only: `?spawn=x,z` starts somewhere else, and
  * `?time=t` starts at another time of day (0 midnight, 0.5 noon), and
  * `?awake=d` as if the castaway had been awake d days.
@@ -41,6 +51,7 @@ import { createCarryMark } from './render/carryMark.js';
 import { createThumbStick } from './render/thumbStick.js';
 import { createDevPanel } from './render/devPanel.js';
 import { VERSION, NAME } from './version.js';
+import { createSaveStore, parseHash, withoutNew, isResetKey, momentKey, SAVE_EVERY } from './save.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
 import HeightWorker from './heightWorker.js?worker&inline';
@@ -50,17 +61,24 @@ const loading = createLoading(v => { if (fill) fill.style.transform = `scaleX(${
 const breathe = (label, f) => { loading.report(label, f); return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); };
 
 async function boot() {
-  const seed = parseInt(((location.hash || '').match(/seed-(\d+)/) || [])[1] || '1337', 10);
+  const { seed, fresh } = parseHash(location.hash);
+  const store = createSaveStore(seed);
+  if (fresh) { store.clear(); try { history.replaceState(null, '', location.pathname + location.search + withoutNew(location.hash)); } catch (e) { /* keep the address */ } }
   const container = document.getElementById('island');
   const cores = (navigator.hardwareConcurrency || 4), parallel = createParallelHeights(() => new HeightWorker(), Math.max(2, Math.min(8, cores - 1)));
   // the height grids in Web Workers when the browser allows it, else on this thread (same result)
   const world = await generateWorld(seed, { progress: breathe, heightfield: parallel }).catch(err => { console.warn('height workers unavailable, building on the main thread', err); return generateWorld(seed, { progress: breathe }); });
   const q = new URLSearchParams(location.search).get('spawn');
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
-  const view = await createIslandView(world, container, breathe, spawn);
-  await view.prepare(spawn, breathe);   // no simple stand-in tiles round the castaway at the start
   const qs = new URLSearchParams(location.search), qt = qs.get('time'), qa = qs.get('awake');
-  const game = createGame(world, spawn, { ...(qt === null ? {} : { time: Number(qt) }), ...(qa === null ? {} : { sleep: { awake: Number(qa) } }) });
+  const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no loading, no saving
+  const saved = testing ? null : store.load();
+  const at = saved ? { x: saved.player.x, z: saved.player.z, y: world.H(saved.player.x, saved.player.z) } : spawn;   // where the view opens
+  const view = await createIslandView(world, container, breathe, at);
+  await view.prepare(at, breathe);   // no simple stand-in tiles round the castaway at the start
+  const opts = { ...(qt === null ? {} : { time: Number(qt) }), ...(qa === null ? {} : { sleep: { awake: Number(qa) } }) };
+  let game;
+  try { game = createGame(world, spawn, saved || opts); } catch (err) { console.warn('save not usable, starting fresh', err); game = createGame(world, spawn, opts); }
   const mark = createRestMark(document.getElementById('rest'));
   const carry = createCarryMark(document.getElementById('carry'));
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
@@ -69,6 +87,12 @@ async function boot() {
   const input = createInput(view.canvas, view.pickGround);
 
   createThumbStick(document.getElementById('stick'), input);
+  let stopSaving = testing, sinceSave = 0, moment = momentKey(game);
+  const save = () => { if (!stopSaving) { store.save(game.state()); sinceSave = 0; } };
+  const autosave = dt => { sinceSave += dt; const m = momentKey(game); if (m !== moment || sinceSave >= SAVE_EVERY) { moment = m; save(); } };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+  window.addEventListener('pagehide', save);
+  window.addEventListener('keydown', e => { if (isResetKey(e)) { stopSaving = true; store.clear(); location.reload(); } });
   let last = performance.now(), paused = false;
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };
@@ -85,6 +109,7 @@ async function boot() {
     view.turn(input.takeTurn(dt));
     input.yaw = view.yaw;
     view.render(game.player, show(game.update(input, dt)), dt);
+    autosave(dt);
     requestAnimationFrame(frame);
   });
 }

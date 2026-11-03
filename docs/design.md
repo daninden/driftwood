@@ -178,7 +178,7 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - **Name:** Driftwood.
 - **Engine:** Three.js in the browser for now. A large tiled world works well there. Godot may come later, for example for Steam or a console.
 - **Scope of the base:** the island and walking, then atmosphere. The first game elements are gathering driftwood, ebb and flow, sleep, coconut fibre and fire (see above); more only after discussion.
-- **Saving:** not built. When it comes: local in the browser first, behind one interface, so a backend can be added later without changing the game (see `architecture.md`).
+- **Saving (0.6, built):** automatic and silent, no menu and no message. One save **per island** (per seed), kept in the browser's local storage, so it belongs to this browser on this device; another browser or device starts fresh. The game is laid over the generated island at start-up: where he stands, the time, how long he has been awake or asleep, the wood carried, in piles and washed up, the coconuts taken, the fibre, fires, torches. Not saved: the view (turn, tilt, zoom), footprints, kneeling work in progress. **Start over** with Shift + backtick (`` Shift+` ``), or by opening the island with `#new` in the address (it starts fresh and `new` is removed from the address again). A save that cannot be read is ignored. A local save is all there is for now; a backend could come later behind the same interface (see `architecture.md`).
 - **Working method:** see `CLAUDE.md`.
 
 ## Game ideas (not built, not decided)
@@ -202,7 +202,7 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 ## Open questions
 
 - Who are the strangers (mutineers, slave traders, other castaways)?
-- Saving: local only, or a backend later?
+- Saving: local only for now (0.6); a backend later?
 - Mood per terrace: weather over time (mist in the rain forest, wind on the summit).
 - What else should the day/night cycle mean for playing (food, strangers, darker nights now that there is fire)?
 - Should a fire mean anything for the strangers?

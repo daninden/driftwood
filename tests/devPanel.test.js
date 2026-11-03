@@ -39,7 +39,7 @@ describe('label and version', () => {
     expect(devLabel('0.4', 'Dev panel', null)).toBe('v0.4 · Dev panel · – fps');
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.5'); expect(NAME).toBe('Thumb stick');
+    expect(VERSION).toBe('0.6'); expect(NAME).toBe('Saved');
   });
   it('starts visible for now', () => { expect(DEV_PANEL_VISIBLE).toBe(true); });
 });
@@ -49,6 +49,7 @@ describe('toggle key', () => {
     expect(isToggleKey({ code: 'Backquote' })).toBe(true);
     expect(isToggleKey({ code: 'Backquote', repeat: true })).toBe(false);
     expect(isToggleKey({ code: 'Backquote', ctrlKey: true })).toBe(false);
+    expect(isToggleKey({ code: 'Backquote', shiftKey: true })).toBe(false);   // Shift+backtick starts the game over
     expect(isToggleKey({ code: 'KeyW' })).toBe(false);
   });
 });

@@ -17,7 +17,7 @@
  * devLabel(version, name, fps) -> string   e.g. 'v0.4 · Dev panel · 60 fps'
  *   ('– fps' while there is no value yet). Pure.
  * isToggleKey(e) -> bool       true for the backtick key (code 'Backquote',
- *   not repeating, no Ctrl/Cmd/Alt). Pure.
+ *   not repeating, no Shift/Ctrl/Cmd/Alt: Shift+backtick starts the game over, see src/save). Pure.
  * createDevPanel(el, version, name, visible?) -> { frame(dt), toggle(), visible() }
  *   el: the #dev element (index.html); frame(dt) is called every frame with
  *   the real frame time and touches the DOM only when the text changed;
@@ -44,7 +44,7 @@ export function createFpsMeter(window = FPS_WINDOW) {
 
 export const devLabel = (version, name, fps) => `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps`;
 
-export const isToggleKey = e => e.code === 'Backquote' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey;
+export const isToggleKey = e => e.code === 'Backquote' && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
 
 export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
   const meter = createFpsMeter();

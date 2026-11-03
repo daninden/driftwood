@@ -8,7 +8,13 @@
  * now and then (game/sleep). The state is kept small and plain so it can be saved later
  * (see docs/architecture.md, "Saving").
  *
- * createGame(world, spawn, { time, day, wood, sleep, fibre, fire }?) -> game
+ * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire }?) -> game
+ *   The options are what state() returns, so restoring a save is
+ *   createGame(world, spawn, saved) (see save.js): each part starts from its
+ *   saved state. A saved player { x, z, heading } who cannot stand there any
+ *   more (the island changed) is moved to the nearest spot he can
+ *   (movement nearestStandable), else he starts at spawn. Kneeling work and
+ *   a pending tap are not saved.
  *   game.player                 { x, y, z, heading, moving, speed, phase, stoop, lie, tired, work }
  *     stoop: 1..0 while bending down to pick up or lay down wood (counts
  *     down over STOOP seconds); the castaway stands still meanwhile
@@ -62,7 +68,7 @@
  * Depends on: game/movement, game/clock, game/wood, game/tide, game/sleep,
  *   game/fibre, game/fire
  */
-import { createPlayer, moveIntent, stepPlayer, terrainAt } from './movement.js';
+import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
 import { createWood, CARRY_SLOW, dryness } from './wood.js';
 import { seaLevel, highWaters } from './tide.js';
@@ -78,8 +84,11 @@ const KEY_REACH = 1.2;             // F lights a pile this close to the feet
 const SIDE = 0.75;                 // kneeling this far from the middle of a pile or a fire
 
 export function createGame(world, spawn, opts = {}) {
-  const player = createPlayer(spawn), clock = createClock(opts.time, opts.day), wood = createWood(world, opts.wood), sleep = createSleep(opts.sleep);
+  const clock = createClock(opts.time, opts.day);
+  const saved = opts.player && nearestStandable(world, opts.player.x, opts.player.z, seaLevel(clock.total));
+  const player = createPlayer(saved ? { x: saved.x, z: saved.z, y: world.H(saved.x, saved.z) } : spawn), wood = createWood(world, opts.wood), sleep = createSleep(opts.sleep);
   const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire);
+  if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch;
   const game = { player, clock, wood, sleep, fibre, fire, sea: seaLevel(clock.total), update, state };

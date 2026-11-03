@@ -10,6 +10,8 @@
  * createClock(time = START_TIME, day = 0) -> { time, day, total, advance(dt) }
  *   time stays in 0..1 and wraps round at midnight, when day goes up by one.
  *   total = day + time: the days since the start of day 0.
+ *   A time in 0..1 with a whole day is taken exactly as given, so a saved
+ *   clock comes back to the same numbers.
  *
  * Depends on: nothing
  */
@@ -23,6 +25,7 @@ export function createClock(time = START_TIME, day = 0) {
     get total() { return clock.day + clock.time; },
     advance(dt) { const t = clock.day + clock.time + dt / DAY_SECONDS, d = Math.floor(t); clock.day = d; clock.time = t - d; },
   };
+  if (time >= 0 && time < 1 && Number.isInteger(day)) { clock.day = day; clock.time = time; return clock; }
   const t0 = time + day, d0 = Math.floor(t0); clock.day = d0; clock.time = t0 - d0;
   return clock;
 }

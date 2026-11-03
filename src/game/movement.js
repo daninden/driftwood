@@ -36,6 +36,12 @@
  * bushFactor(world, x, z) -> speed factor 0..1 from bushes at (x, z)
  * pushOut(world, from, x, z) -> { x, z } moved back onto the rim of any
  *   obstacle that stepping from `from` to (x, z) would enter
+ * canStand(world, x, z, sea?) -> true when the castaway can be put at (x, z):
+ *   on the island, not in open sea or river water deeper than WADE_MAX, not
+ *   on a wall (unless a passage) and not inside a trunk, boulder or crag
+ * nearestStandable(world, x, z, sea?, maxR?) -> { x, z } | null   (x, z) itself
+ *   when he can stand there, else the nearest such spot on rings of 0.5 m
+ *   steps out to maxR (15 m), or null
  * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase, stoop }
  * moveIntent(input, player) -> unit direction { x, z } or null, from the thumb
  *   stick (input.stick, already a direction on the island), keys or target;
@@ -148,6 +154,27 @@ export function stepFactor(w, a, x, z, sea = 0) {
   if (b.depth > 0.05) f *= b.depth > 0.25 ? 0.45 : 0.7;
   if (w.tiles && b.climb <= 0.25) f *= bushFactor(w, x, z);
   return f;
+}
+
+export function canStand(w, x, z, sea = 0) {
+  if (!(Math.abs(x) < HALF - 1 && Math.abs(z) < HALF - 1)) return false;
+  const t = terrainAt(w, x, z, sea);
+  if (!Number.isFinite(t.y) || t.y < sea - 0.6 || (t.inRiver && t.depth > WADE_MAX)) return false;
+  if (!(t.s < 0.85 || (t.climb > 0.25 && t.s < 3.2))) return false;
+  return !(w.tiles && obstaclesNear(w, x, z).some(o => Math.hypot(x - o.x, z - o.z) < o.r));
+}
+
+export function nearestStandable(w, x, z, sea = 0, maxR = 15) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+  if (canStand(w, x, z, sea)) return { x, z };
+  for (let r = 0.5; r <= maxR; r += 0.5) {
+    const n = Math.max(8, Math.ceil(2 * Math.PI * r / 0.5));
+    for (let i = 0; i < n; i++) {
+      const a = 2 * Math.PI * i / n, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+      if (canStand(w, px, pz, sea)) return { x: px, z: pz };
+    }
+  }
+  return null;
 }
 
 export function createPlayer(spot) {

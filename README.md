@@ -14,11 +14,13 @@ npm run build      dist/ plus dist/driftwood.html (everything in one file)
 npm run smoke      open the build in headless Chromium and take screenshots
 ```
 
-Another island: add `#seed-2024` to the address.
+Another island: add `#seed-2024` to the address. Start an island over: add `new` (`#new`, or `#seed-2024&new`); it starts fresh and `new` disappears from the address again.
 
 ## How to play
 
 There is no goal, no map and no menu. What you see is the island.
+
+The game remembers where you were. It saves itself as you play, one save per island, in this browser on this device, and picks up where you left off the next time. Nothing to press, nothing to show.
 
 ### The island
 
@@ -70,6 +72,7 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 - A left click, a tap or a walking key wakes him; the view controls do not
 - **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom
+- **Shift + `**: start over (forget this island's save and begin again)
 - **`** (backtick): show or hide the developer panel (version, name, frame rate)
 
 ## More
