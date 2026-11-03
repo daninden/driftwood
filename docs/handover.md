@@ -21,6 +21,8 @@ See *Open questions* in `docs/design.md`: loneliness without a fire (to be thoug
 
 ## Bugs, later
 
+- **Agreed fix, with the next version:** a full fire (8 pieces) takes no more wood. Tapping it while carrying wood does nothing, and he keeps the piece (it is now wasted). See *Fire* in `docs/design.md`.
+
 - Only the nearest torch shines brightly: with several torches burning at once only one gives full light (`render/fire` uses one point light for the strongest light near the castaway plus the carried torch). Every torch (and fire) nearby should light its surroundings.
 - The first frame's dt can be slightly negative (rAF timestamp before the `performance.now()` taken at boot); in headless runs it briefly sets `sleep.lie` and clears a tap in the first frame.
 - The dev panel shows garbled characters when `dist/driftwood.html` is opened from disk (no charset meta in the single-file build).
