@@ -1,14 +1,16 @@
 // Fire: coconuts husked for fibre, washed-up wood that has to dry, lighting
 // a pile with the fire drill (hard work, uses up the fibre, may fail),
 // burning down to embers, feeding, the flood, saving, and the input (a long
-// press on a pile, or F).
+// press on a pile, or F); sleeping warm by a fire or cold without one; and
+// the torch.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, HUSK_TIME } from '../src/game/game.js';
 import { createWood, dryness, DRY_DAYS } from '../src/game/wood.js';
 import { createFibre, FIBRE_MAX, REGROW, REGROW_SPREAD } from '../src/game/fibre.js';
-import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, BURN, EMBERS, FUEL_MAX } from '../src/game/fire.js';
+import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, BURN, EMBERS, FUEL_MAX, TORCH_DAYS, TORCH_COST, WARM_R } from '../src/game/fire.js';
+import { COLD_SLEEP, SLEEP_DAYS } from '../src/game/sleep.js';
 import { createInput, HOLD_MS } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { FIRST_HIGH, PERIOD } from '../src/game/tide.js';
@@ -237,5 +239,81 @@ describe('fire input', () => {
     fire(window, 'keydown', { code: 'KeyF' });
     expect(input.takeHold()).toEqual({ key: true }); expect(input.takeHold()).toBeNull();
     input.dispose();
+  });
+});
+
+describe('sleeping by the fire', () => {
+  const sleepFor = (g, s) => { g.sleep.start(); run(g, makeInput(), s); };
+  it('is short and cold without a fire: he wakes after four hours, half rested', () => {
+    const g = createGame(w, spawn, { sleep: { awake: 1.9 } });
+    sleepFor(g, 40);
+    expect(g.sleep.asleep).toBe(false);
+    expect(g.sleep.slept).toBeGreaterThan(COLD_SLEEP * 0.95); expect(g.sleep.slept).toBeLessThan(COLD_SLEEP * 1.2);
+    expect(g.sleep.rest()).toBeGreaterThan(0.4); expect(g.sleep.rest()).toBeLessThan(0.65);
+  });
+  it('lasts the whole night by a fire, and rests him completely', () => {
+    const g = createGame(w, spawn, { sleep: { awake: 1.9 }, fire: { fires: [{ id: 0, x: spawn.x + 1.5, z: spawn.z, fuel: FUEL_MAX, embers: EMBERS, lit: 0, fed: 8 }], attempts: 0, nextId: 1 } });
+    sleepFor(g, 40);
+    expect(g.sleep.slept).toBeGreaterThan(SLEEP_DAYS * 0.95);
+    expect(g.sleep.rest()).toBeGreaterThan(0.95);
+  });
+  it('wakes him in the cold when the fire goes out in the night', () => {
+    const g = createGame(w, spawn, { sleep: { awake: 1.9 }, fire: { fires: [{ id: 0, x: spawn.x + 1.5, z: spawn.z, fuel: BURN, embers: EMBERS, lit: 0, fed: 1 }], attempts: 0, nextId: 1 } });
+    sleepFor(g, 40);
+    expect(g.sleep.slept).toBeGreaterThan(COLD_SLEEP); expect(g.sleep.slept).toBeLessThan(SLEEP_DAYS * 0.8);
+  });
+  it('is not warmed by a fire further away', () => {
+    const g = createGame(w, spawn, { fire: { fires: [{ id: 0, x: spawn.x + WARM_R + 1, z: spawn.z, fuel: FUEL_MAX, embers: EMBERS, lit: 0, fed: 8 }], attempts: 0, nextId: 1 } });
+    expect(g.fire.warm(spawn.x, spawn.z)).toBe(false); expect(g.fire.warm(spawn.x + 2, spawn.z)).toBe(true);
+  });
+});
+
+describe('a torch', () => {
+  const burning = (fuel = FUEL_MAX) => ({ fires: [{ id: 0, x: spawn.x + 2, z: spawn.z, fuel, embers: EMBERS, lit: 0, fed: 8 }], attempts: 0, nextId: 1 });
+  const tapFire = (g, s = 2) => { const f = g.fire.fires[0], input = makeInput({ target: { x: f.x, z: f.z, tap: true } }); run(g, input, s); return input; };
+  it('is taken out of a burning fire with empty hands, at a cost to the fire', () => {
+    const g = createGame(w, spawn, { fire: burning() }), f0 = g.fire.fires[0].fuel;
+    tapFire(g);
+    expect(g.fire.torch).not.toBeNull(); expect(g.player.torch).toBe(true);
+    expect(f0 - g.fire.fires[0].fuel).toBeGreaterThan(TORCH_COST * 0.95);
+  });
+  it('is not taken from embers, nor while carrying wood (then the wood goes on the fire)', () => {
+    const a = createGame(w, spawn, { fire: burning(0) }); tapFire(a); expect(a.fire.torch).toBeNull();
+    const b = createGame(w, spawn, { fire: burning() }); b.wood.take({ kind: 'log', log: logs[0] }); tapFire(b);
+    expect(b.fire.torch).toBeNull(); expect(b.wood.carried.length).toBe(0);
+  });
+  it('leaves no hand free for wood', () => {
+    const g = createGame(w, spawn, { fire: { ...burning(), torch: { left: TORCH_DAYS } } }), log = logs[0];
+    g.player.x = log.x + 1; g.player.z = log.z; g.player.y = w.H(g.player.x, g.player.z);
+    run(g, makeInput({ target: { x: log.x, z: log.z, tap: true } }), 2);
+    expect(g.wood.carried.length).toBe(0);
+  });
+  it('is stuck in the ground with a tap on the castaway, taken up again with a tap on it', () => {
+    const g = createGame(w, spawn, { fire: { torch: { left: TORCH_DAYS } } });
+    run(g, makeInput({ target: { x: spawn.x, z: spawn.z, tap: true, hero: true } }), 0.1);
+    expect(g.fire.torch).toBeNull(); expect(g.fire.torches.length).toBe(1);
+    const t = g.fire.torches[0];
+    run(g, makeInput({ right: true }), 1);
+    run(g, makeInput({ target: { x: t.x, z: t.z, tap: true } }), 2);
+    expect(g.fire.torch).not.toBeNull(); expect(g.fire.torches.length).toBe(0);
+  });
+  it('burns out after two hours, also stuck in the ground', () => {
+    const f = createFire(w, { torch: { left: TORCH_DAYS }, torches: [{ id: 0, x: 0, z: 0, left: TORCH_DAYS / 2 }] });
+    f.update(TORCH_DAYS * 0.6); expect(f.torch).not.toBeNull(); expect(f.torches.length).toBe(0);
+    f.update(TORCH_DAYS * 0.5); expect(f.torch).toBeNull();
+  });
+  it('goes out when he wades in deep, and when the flood reaches it in the sand', () => {
+    const f = createFire(w, { torches: [{ id: 0, x: spawn.x, z: spawn.z, left: 1 }] });
+    expect(f.flood(-0.4)).toBe(0); expect(f.flood(w.H(spawn.x, spawn.z) + 0.1)).toBe(1);
+    const g = createGame(w, spawn, { fire: { torch: { left: TORCH_DAYS } } });
+    run(g, makeInput({ target: { x: -350, z: -350 } }), 20);
+    expect(g.fire.torch).toBeNull();
+  });
+  it('is stuck in the ground before he lies down to sleep, and saved', () => {
+    const g = createGame(w, spawn, { fire: { torch: { left: TORCH_DAYS } } });
+    g.sleep.start(); run(g, makeInput(), 0.2);
+    expect(g.fire.torch).toBeNull(); expect(g.fire.torches.length).toBe(1);
+    const s = JSON.parse(JSON.stringify(g.state()));
+    expect(createGame(w, spawn, { fire: s.fire }).fire.torches).toEqual(g.fire.torches);
   });
 });

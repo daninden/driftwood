@@ -95,6 +95,8 @@ Making fire is deliberately hard: it takes preparation and effort, so a fire tha
 - **Keeping it going:** click or tap the fire while carrying wood; the castaway lays one piece on it. That also works on the embers.
 - **Light:** a fire throws a warm, flickering light round it; at night a soft glow lies round it over the darkness. By day a thin column of smoke rises.
 - **The flood** puts out a fire laid on the wet sand of low water.
+- **Warmth:** a fire close by lets the castaway sleep the night through (see *Sleep*).
+- **A torch:** click or tap a burning fire with empty hands and the castaway takes a burning brand out of it (it costs the fire half a piece's worth; not from embers). He holds it up in his left hand; it lights a small warm circle round him at night and burns about **two hours** of game time. With a torch he has no hand free for wood. A click or tap on the castaway sticks it in the ground in front of him, where it burns on as a light; a click or tap on it takes it up again. Lying down to sleep, he sticks it in the ground first. Wading in deeper than about 30 cm puts it out, and the flood puts out a torch stuck in the wet sand.
 - Fire is not solid, like wood (see *Known weak spots*). It burns on while the castaway sleeps.
 
 ## Ebb and flow
@@ -107,7 +109,8 @@ Making fire is deliberately hard: it takes preparation and effort, so a fire tha
 
 - The castaway has to sleep **at least every two days** (40 minutes of play). After a day and a half he is tired: his head and shoulders hang, his arms swing less and he walks slower, down to 75 % at the limit. At two days he falls asleep where he stands.
 - **Going to sleep:** hold the castaway for about half a second (finger or mouse button), or press `Z`. A short tap on the castaway still lays wood down. You can sleep anywhere on dry land, not in the water and not on a climbing route, and at any time of day. He first lays down what he carries, then lies on his back with the straw hat over his face.
-- **A sleep lasts eight hours** of game time; meanwhile time runs **20 times as fast** (about 20 seconds), easing in and out. The sun or moon, the tide and the wood all go on: wood that washes up meanwhile lies there when you wake. A full sleep rests you completely. A left click, a tap or a walking key (WASD, arrows) wakes you early, only partly rested; turning, tilting or zooming the view does not. The flood wakes you too: you can lie down on the wet sand of low water, but when the rising water reaches you, you wake and get up, only partly rested. Worn out in the water, you wade on and only fall asleep once on dry ground.
+- **Sleeping by a fire:** with a burning fire (or its embers) within about 3 m, the castaway sleeps the whole night through and wakes fully rested. Without one the sleep is cold: he wakes after **four hours**, about half rested. If the fire goes out while he sleeps, the cold wakes him once he has slept four hours. So a fire that lasts the night is worth the work.
+- **A sleep lasts eight hours** of game time (by a fire); meanwhile time runs **20 times as fast** (about 20 seconds), easing in and out. The sun or moon, the tide and the wood all go on: wood that washes up meanwhile lies there when you wake. A full sleep rests you completely. A left click, a tap or a walking key (WASD, arrows) wakes you early, only partly rested; turning, tilting or zooming the view does not. The flood wakes you too: you can lie down on the wet sand of low water, but when the rising water reaches you, you wake and get up, only partly rested. Worn out in the water, you wade on and only fall asleep once on dry ground.
 - **How long still:** a small moon in the bottom left corner, in the dark brown of the loading screen. Full when rested, it wanes to a thin sickle and to nothing as the two days run out, and waxes again while you sleep. It is faint most of the time and grows clearer in the last half day. No numbers.
 
 ## Day and night
@@ -115,7 +118,7 @@ Making fire is deliberately hard: it takes preparation and effort, so a fire tha
 - **One day lasts 20 minutes of play.** A game starts in the middle of the morning.
 - **The sun** rises in the east, climbs over the south to about 62° and sets in the west. It is up for about 13 minutes. Low sun gives warm golden light and long shadows; at noon the light is plain style C.
 - **Dusk and dawn** last about a minute each around the horizon: the light turns lilac and mauve, the warm coast grading fades and colours lose some saturation.
-- **Night lasts about 5 minutes and is moonlit:** dark blue and dim, with soft moon shadows; the island is just readable. Darker nights (where only your fire gives light) could come now that there is fire; not decided yet.
+- **Night lasts about 5 minutes and is moonlit:** dark blue and dim, with soft moon shadows; the island is just readable. A fire and a torch light their surroundings. Darker nights (where only your fire gives light) could come now that there is fire; not decided yet.
 - The light never comes from lower than about 12°, so shadows stay readable.
 - No clock on screen, no stars, moon disc or weather yet. The day drives the tide (see *Ebb and flow*) and sleeping speeds it up (see *Sleep*); what else it should mean for playing is still to be discussed.
 
@@ -156,7 +159,7 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved.
 - **Touch screens:** tap to walk to a spot, drag to steer, double tap to run there (hold and drag after the double tap to steer while running). Hold the castaway to sleep (see *Sleep*). Two fingers: pinch to zoom (same limits), twist to turn the view; the island turns with the fingers, and the castaway stops while two fingers are down. No tilting on a touch screen. The browser's own page zoom is switched off.
 - On a summit the camera zooms out a further 1.6× on top of the player's zoom (at most 14), as a reward for the climb.
-- **Almost no interface:** no HUD, map or menu. What you see is the island (the wood you carry, the fibre at the castaway's waist, how big the flames are). The exceptions are the faint moon that shows how long you can still go without sleep (see *Sleep*), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
+- **Almost no interface:** no HUD, map or menu. What you see is the island (the wood you carry, the fibre at the castaway's waist, the torch in his hand, how big the flames are). The exceptions are the faint moon that shows how long you can still go without sleep (see *Sleep*), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
 
 ## Decisions
 
@@ -191,7 +194,8 @@ An early atmosphere prototype tried most of these. They are ideas until we decid
 - Saving: local only, or a backend later?
 - Mood per terrace: weather over time (mist in the rain forest, wind on the summit).
 - What else should the day/night cycle mean for playing (food, strangers, darker nights now that there is fire)?
-- Should a fire mean anything for sleep, warmth or the strangers?
+- Should a fire mean anything for the strangers? Should a torch light a pile (without fibre)?
+- Loneliness: the castaway growing lonelier without a fire, shown without a meter (an idea, to be thought through).
 
 ## Known weak spots
 

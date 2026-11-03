@@ -15,6 +15,7 @@
  *     lie: 0..1 lying down to sleep (game/sleep); tired: 0..1
  *     work: null, or { kind: 'husk' | 'drill', f: 0..1 } while kneeling to
  *     husk a coconut (HUSK_TIME) or to drill fire (game/fire DRILL_TIME)
+ *     torch: true while he carries a burning torch (game/fire)
  *   game.clock                  { time, day, total } (game/clock)
  *   game.wood                   carried pieces, piles, washed-up wood (game/wood)
  *   game.sleep                  awake, asleep, rest (game/sleep)
@@ -33,7 +34,10 @@
  *     driftwood, a pile or a coconut (closer for a mouse than for a finger,
  *     target.touch) the castaway walks there and picks it up (a coconut he
  *     husks for its fibre, kneeling); on a fire he lays one piece of the
- *     wood he carries on it. While a press on a pile is still held
+ *     wood he carries on it, or, empty-handed, takes a burning torch out of
+ *     it. With a torch he has no hand free for wood; a tap on the castaway
+ *     sticks the torch in the ground in front of him, and a tap on a torch
+ *     in the ground takes it up again. Wading deep puts the torch out. While a press on a pile is still held
  *     (input.pressing) he waits by it instead of picking it up.
  *     input.takeHold() (a long press on a pile, or F by a pile at his
  *     feet) walks to the pile and, with fibre and at least FIRE_MIN pieces,
@@ -45,7 +49,9 @@
  *     input.takeWake() (any key or tap) wakes early. Both are optional.
  *     The flood wakes him early when it reaches him (he can lie down on
  *     the wet sand of low water); worn out in the water, he wades on and
- *     only falls asleep once he is on dry ground. Fires burn down (faster
+ *     only falls asleep once he is on dry ground. Lying down, he first
+ *     sticks a torch in the ground. Without a fire close by (game/fire
+ *     warm) the sleep is cold and short (game/sleep COLD_SLEEP). Fires burn down (faster
  *     while asleep) and the flood puts out those it reaches; palms drop new
  *     coconuts.
  *   game.state() -> plain object with what would need saving
@@ -59,7 +65,7 @@ import { createWood, CARRY_SLOW, dryness } from './wood.js';
 import { seaLevel, highWaters } from './tide.js';
 import { createSleep } from './sleep.js';
 import { createFibre, FIBRE_MAX } from './fibre.js';
-import { createFire, FIRE_MIN, DRILL_TIME, DRILL_COST } from './fire.js';
+import { createFire, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH } from './fire.js';
 
 export const STOOP = 0.55;         // seconds to bend down and up again
 export const REACH = 0.55;         // wood within this distance of the feet can be picked up
@@ -72,7 +78,7 @@ export function createGame(world, spawn, opts = {}) {
   const player = createPlayer(spawn), clock = createClock(opts.time, opts.day), wood = createWood(world, opts.wood), sleep = createSleep(opts.sleep);
   const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire);
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
-  player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null;
+  player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch;
   const game = { player, clock, wood, sleep, fibre, fire, sea: seaLevel(clock.total), update, state };
   let blockedFor = 0, work = null;   // work: { kind, t, dur, thing } while kneeling
   const stoop = () => { player.stoop = 1; };
@@ -87,13 +93,18 @@ export function createGame(world, spawn, opts = {}) {
   function look(tg, input) {
     tg.seen = true;
     if (tg.hero) {
-      if (wood.drop(player.x, player.z, player.heading, wet(here()))) stoop();
+      if (fire.torch ? plantTorch() : wood.drop(player.x, player.z, player.heading, wet(here()))) stoop();
       input.clearTarget(); return;
     }
     const aim = tg.touch ? AIM.touch : AIM.mouse, dist = t => t ? Math.hypot(t.x - tg.x, t.z - tg.z) : Infinity;
     const piece = wood.find(tg.x, tg.z, aim), coco = fibre.find(tg.x, tg.z, aim);
     const thing = fire.find(tg.x, tg.z, aim) || (dist(coco) < dist(piece) ? coco : piece);   // a fire first
     if (thing) { const at = thing.kind === 'fire' ? beside(thing.x, thing.z) : thing; tg.act = thing; tg.x = at.x; tg.z = at.z; }
+  }
+
+  function plantTorch() {   // a step in front, in the ground; not in the water
+    const x = player.x + Math.sin(player.heading) * 0.4, z = player.z + Math.cos(player.heading) * 0.4, t = terrainAt(world, x, z, game.sea);
+    return !wet(t) && !wet(here()) && fire.plant(x, z);
   }
 
   function hold(h, input) {
@@ -109,10 +120,12 @@ export function createGame(world, spawn, opts = {}) {
   }
 
   function act(a) {   // at reach of what was tapped
-    if (a.kind === 'log' || a.kind === 'pile') { if (wood.take(a)) stoop(); }
+    if (a.kind === 'log' || a.kind === 'pile') { if (!fire.torch && wood.take(a)) stoop(); }   // no hand free with a torch
+    else if (a.kind === 'torch') { if (!wood.carried.length && fire.pickTorch(a.torch)) stoop(); }
     else if (a.kind === 'coco') { if (fibre.carried < FIBRE_MAX && fibre.onGround(a.coco)) work = { kind: 'husk', t: 0, dur: HUSK_TIME, thing: a.coco }; }
     else if (a.kind === 'fire') {
       if (wood.carried.length && fire.fires.includes(a.fire)) { const l = wood.giveOne(); fire.feed(a.fire, dryness(l, clock.total)); stoop(); }
+      else if (!wood.carried.length && fire.takeTorch(a.fire)) stoop();   // empty-handed: a burning brand out of the fire
     } else if (a.kind === 'light') {
       if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && fibre.carried && !wet(here())) work = { kind: 'drill', t: 0, dur: DRILL_TIME, thing: a.pile };
     }
@@ -133,7 +146,8 @@ export function createGame(world, spawn, opts = {}) {
     const held = input.takeHold ? input.takeHold() : null;
     if (sleep.asleep) { if (wantWake && sleep.lie > 0.5) sleep.wake(); }
     else if (wantSleep && canSleep()) { work = null; sleep.start(); }
-    const gameDt = sleep.update(dt, !wet(here()));
+    if (sleep.asleep && fire.torch && !plantTorch()) fire.douse();   // he sticks the torch in the ground before he lies down
+    const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z));
     player.lie = sleep.lie; player.tired = sleep.tired();
     if (work && (sleep.asleep || input.up || input.down || input.left || input.right || input.target)) work = null;   // stopped early
 
@@ -168,6 +182,8 @@ export function createGame(world, spawn, opts = {}) {
       }
     }
     player.work = work ? { kind: work.kind, f: Math.min(1, work.t / work.dur) } : null;
+    if (fire.torch && here().depth > DOUSE_DEPTH) fire.douse();   // wading too deep puts the torch out
+    player.torch = !!fire.torch;
 
     clock.advance(gameDt);
     game.sea = seaLevel(clock.total);

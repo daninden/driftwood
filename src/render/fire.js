@@ -9,16 +9,22 @@
  *   - Smoke rises and drifts away: thin over a good fire, thicker over embers
  *     and wet wood. A failed attempt (game/fire `puffs`) leaves a short puff;
  *     drilling (player.work) raises a thin wisp near the end.
- *   - One warm point light stands over the strongest fire near the castaway,
- *     brighter at night. At night a soft warm glow is also laid over the
- *     picture round it (a DOM layer above the night grading of render/mood,
+ *   - One warm point light stands over the strongest fire (or torch in the
+ *     ground) near the castaway, brighter at night. At night a soft warm glow
+ *     is also laid over the picture round the nearest GLOWS lights (a DOM layer above the night grading of render/mood,
  *     which would otherwise darken the firelight with everything else).
  *
  * smokeAmount(fire, strength) -> 0..1 how much smoke a fire gives, pure
+ *   - A torch (game/fire) is a short charred stick with a small flame; stuck
+ *     in the sand it stands slightly askew. It lights its surroundings like a
+ *     small fire: a second point light follows the torch in his hand.
+ *
+ * makeTorch() -> Group   a torch, foot at its origin; userData.flicker(time)
  * createFireView(scene, container, fire) -> fireView
  *   fireView.update(dt, { total, day, camera, player, H })
  *     total: days on the clock; day: 1 by day .. 0 at night (render/sky);
- *     camera: for the glow on screen; player: for the light and the wisp;
+ *     camera: for the glow on screen; player: for the lights, the wisp and
+ *     the torch he carries (player.torch);
  *     H: the world's ground height
  *
  * Depends on: three, render/materials, render/palette, game/clock, game/fire
@@ -29,7 +35,8 @@ import { FIRE } from './palette.js';
 import { DAY_SECONDS } from '../game/clock.js';
 import { EMBERS } from '../game/fire.js';
 
-const PUFF_SECONDS = 7, WISPS = 7, LIGHT_RANGE = 9, NEAR = 60;
+const PUFF_SECONDS = 7, WISPS = 7, LIGHT_RANGE = 9, NEAR = 60, GLOWS = 3;
+const TORCH_POW = 0.55, TORCH_RANGE = 6;
 
 export const smokeAmount = (f, s) => f.fuel > 0 ? 0.35 + 0.25 * (1 - s) : 0.5 * Math.min(1, f.embers / EMBERS + 0.2);
 
@@ -70,10 +77,42 @@ function createSmoke(scene, seed) {
   };
 }
 
+/** A torch: a short stick with a small flame at its head (also used by render/hero). */
+export function makeTorch() {
+  const g = new THREE.Group();
+  const stick = new THREE.Mesh(logGeo, toon(FIRE.char[1])); stick.scale.set(0.025, 0.55, 0.025); stick.castShadow = true;
+  const o = new THREE.Mesh(logGeo, outlineMat); o.scale.set(1.5, 1.02, 1.5); stick.add(o); g.add(stick);
+  const head = new THREE.Mesh(blobGeo, toon(FIRE.char[2])); head.position.y = 0.56; head.scale.set(0.045, 0.06, 0.045); g.add(head);
+  const flames = [0, 1].map(i => { const m = new THREE.Mesh(coneGeo, flameMat); m.position.set(i * 0.02 - 0.01, 0.58, 0); g.add(m); return m; });
+  g.userData.flicker = t => flames.forEach((m, i) => { const k = 1 + 0.2 * Math.sin(t * (9 + i * 4) + i); m.scale.set(0.05 - i * 0.012, (0.2 - i * 0.06) * k, 0.05 - i * 0.012); });
+  return g;
+}
+
+/** Torches stuck in the ground. */
+function createTorches(scene) {
+  const views = new Map();
+  return {
+    update(list, t, H) {
+      for (const tc of list) if (!views.has(tc)) { const m = makeTorch(); m.rotation.z = 0.12; m.rotation.y = tc.id; scene.add(m); views.set(tc, m); }
+      views.forEach((m, tc) => {
+        if (!list.includes(tc)) { scene.remove(m); views.delete(tc); return; }
+        m.position.set(tc.x, H(tc.x, tc.z) - 0.08, tc.z); m.userData.flicker(t + tc.id);
+      });
+    },
+  };
+}
+
 export function createFireView(scene, container, fire) {
   const views = new Map();   // fire -> its meshes
   const puffs = new Map();   // failed attempt -> smoke
-  const light = new THREE.PointLight(FIRE.light, 0, LIGHT_RANGE, 2); light.castShadow = false; scene.add(light);   // always there, so no shader is rebuilt when a fire is lit
+  // always there, so no shader is rebuilt when a fire is lit or a torch taken
+  const light = new THREE.PointLight(FIRE.light, 0, LIGHT_RANGE, 2), handLight = new THREE.PointLight(FIRE.light, 0, TORCH_RANGE, 2); scene.add(light); scene.add(handLight);
+  const place = (pl, l, night) => {
+    if (!l) { pl.intensity = 0; return; }
+    pl.position.set(l.x, l.y, l.z); pl.intensity = l.pow * 1.1 * night * night * (1 + 0.08 * l.fl);   // by day the sun drowns it
+    pl.distance = l.range * (0.6 + 0.4 * l.pow);
+  };
+  const torchView = createTorches(scene);
   const wisp = createSmoke(scene, 0.3);
   const glow = document.createElement('div'); glow.style.cssText = 'position:fixed;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0;';
   container.appendChild(glow);
@@ -109,7 +148,7 @@ export function createFireView(scene, container, fire) {
     // fires come and go
     for (const f of fire.fires) if (!views.has(f)) views.set(f, build(f));
     views.forEach((vw, f) => { if (!fire.fires.includes(f)) { dropView(vw); views.delete(f); } });
-    let best = null, bestW = 0;
+    const lights = [];   // { x, y, z, pow, range, fl }: what gives light near the castaway
     views.forEach((vw, f) => {
       const s = fire.strength(f), y = H(f.x, f.z), fl = Math.sin(clock * 9 + f.id) * 0.5 + Math.sin(clock * 13.7 + f.id * 2) * 0.5;
       vw.g.position.y = y;
@@ -126,8 +165,7 @@ export function createFireView(scene, container, fire) {
       emberMat.opacity = 1;
       vw.embers.forEach((m, i) => { m.visible = true; m.scale.y = 0.035 * (0.8 + 0.2 * Math.sin(clock * 2 + i)) * glowE; });
       vw.smoke.update(dt, f.x, y + (s > 0 ? 0.3 + 0.5 * s : 0.05), f.z, smokeAmount(f, s));
-      const d = Math.hypot(f.x - player.x, f.z - player.z), wgt = (s > 0 ? s : 0.25 * glowE) * (d < NEAR ? 1 : 0) / (1 + d * 0.05);
-      if (wgt > bestW) { bestW = wgt; best = { f, s, y, fl, glowE }; }
+      lights.push({ x: f.x, y: y + 0.6, z: f.z, pow: s > 0 ? s : 0.2 * glowE, range: LIGHT_RANGE, fl });
     });
     // failed attempts: a short puff of smoke
     for (const p of fire.puffs) if (!puffs.has(p) && (total - p.at) * DAY_SECONDS < PUFF_SECONDS) puffs.set(p, createSmoke(scene, p.at * 97));
@@ -140,19 +178,29 @@ export function createFireView(scene, container, fire) {
     const wk = player.work;
     if (wk && wk.kind === 'drill') { const fx = player.x + Math.sin(player.heading) * 0.3, fz = player.z + Math.cos(player.heading) * 0.3; wisp.update(dt, fx, H(fx, fz) - 0.2, fz, Math.max(0, (wk.f - 0.45) / 0.55) ** 2 * 0.6); }
     else wisp.update(dt, 0, 0, 0, 0);
-    // the light and the glow of the strongest fire close by
-    if (best) {
-      const { f, s, y, fl, glowE } = best, pow = s > 0 ? s : 0.2 * glowE;
-      light.position.set(f.x, y + 0.6, f.z);
-      light.intensity = pow * 1.1 * night * night * (1 + 0.08 * fl);   // by day the sun drowns it
-      light.distance = LIGHT_RANGE * (0.6 + 0.4 * pow);
-      v.set(f.x, y + 0.3, f.z).project(camera);
-      const rc = container.getBoundingClientRect(), sx = (v.x + 1) / 2 * rc.width, sy = (1 - v.y) / 2 * rc.height;
-      const px = light.distance / (camera.top - camera.bottom) * rc.height * 0.5, [r, g, b] = FIRE.glow;
-      const core = (px * 0.12).toFixed(0), cy = (sy - px * 0.05).toFixed(0);   // the flames themselves, bright over the night grading
-      glow.style.background = `radial-gradient(circle ${core}px at ${sx.toFixed(0)}px ${cy}px, rgba(255,214,140,0.95), rgba(255,170,90,0.5) 55%, rgba(255,170,90,0) 100%), radial-gradient(circle ${px.toFixed(0)}px at ${sx.toFixed(0)}px ${sy.toFixed(0)}px, rgba(${r},${g},${b},0.6), rgba(${r},${g},${b},0.22) 30%, rgba(${r},${g},${b},0.06) 65%, rgba(${r},${g},${b},0) 100%)`;
-      glow.style.opacity = (night * night * pow * (0.8 + 0.2 * fl)).toFixed(3);
-    } else { light.intensity = 0; glow.style.opacity = '0'; }
+    // torches: stuck in the ground, and the one he carries (drawn by render/hero)
+    torchView.update(fire.torches, clock, H);
+    for (const t of fire.torches) lights.push({ x: t.x, y: H(t.x, t.z) + 0.75, z: t.z, pow: TORCH_POW, range: TORCH_RANGE, fl: Math.sin(clock * 11 + t.id) });
+    if (player.torch) {
+      const hx = player.x + Math.sin(player.heading) * 0.15 - Math.cos(player.heading) * 0.2, hz = player.z + Math.cos(player.heading) * 0.15 + Math.sin(player.heading) * 0.2;
+      lights.push({ x: hx, y: (player.y || H(player.x, player.z)) + 0.8, z: hz, pow: TORCH_POW, range: TORCH_RANGE, fl: Math.sin(clock * 12), carried: true });
+    }
+    // the point lights: the carried torch, and the strongest other light near the castaway
+    const near = lights.filter(l => Math.hypot(l.x - player.x, l.z - player.z) < NEAR);
+    const weight = l => l.pow / (1 + Math.hypot(l.x - player.x, l.z - player.z) * 0.05);
+    const carried = near.find(l => l.carried), other = near.filter(l => !l.carried).sort((a, b) => weight(b) - weight(a))[0];
+    place(light, other, night); place(handLight, carried, night);
+    // at night a warm glow round the nearest lights, over the night grading
+    const rc = container.getBoundingClientRect(), [r, g, b] = FIRE.glow, grads = [];
+    for (const l of near.sort((a, b) => weight(b) - weight(a)).slice(0, GLOWS)) {
+      v.set(l.x, l.y - 0.3, l.z).project(camera);
+      const sx = ((v.x + 1) / 2 * rc.width).toFixed(0), sy = (1 - v.y) / 2 * rc.height, px = l.range * (0.6 + 0.4 * l.pow) / (camera.top - camera.bottom) * rc.height * 0.5;
+      const k = l.pow * (0.8 + 0.2 * l.fl), a = x => (x * k).toFixed(3);
+      grads.push(`radial-gradient(circle ${(px * 0.12).toFixed(0)}px at ${sx}px ${(sy - px * 0.05).toFixed(0)}px, rgba(255,214,140,${a(0.95)}), rgba(255,170,90,${a(0.5)}) 55%, rgba(255,170,90,0) 100%)`);
+      grads.push(`radial-gradient(circle ${px.toFixed(0)}px at ${sx}px ${sy.toFixed(0)}px, rgba(${r},${g},${b},${a(0.6)}), rgba(${r},${g},${b},${a(0.22)}) 30%, rgba(${r},${g},${b},${a(0.06)}) 65%, rgba(${r},${g},${b},0) 100%)`);
+    }
+    glow.style.background = grads.join(',') || 'none';
+    glow.style.opacity = (night * night).toFixed(3);
   }
   return { update };
 }

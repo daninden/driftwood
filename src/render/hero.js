@@ -24,7 +24,8 @@
  * Kneeling work (player.work): to husk a coconut he kneels, bent over, his
  * hands tearing at it in turn; to make fire he kneels and twirls his staff
  * upright between his palms as a fire drill, the hands rubbing back and
- * forth. The tufts of coconut fibre he carries (one to three) hang at the
+ * forth. A burning torch (player.torch) he holds up in front of him in his
+ * left hand. The tufts of coconut fibre he carries (one to three) hang at the
  * waist of his shorts.
  *
  * createHero(scene) -> { group, update(player, wadeDepth, load?, fibre?) }
@@ -39,6 +40,7 @@
 import * as THREE from 'three';
 import { toon, outlineMat } from './materials.js';
 import { HERO } from './palette.js';
+import { makeTorch } from './fire.js';
 
 const silMat = new THREE.MeshBasicMaterial({ color: HERO.silhouette, depthFunc: THREE.GreaterDepth, depthWrite: false });
 silMat.onBeforeCompile = sh => {
@@ -98,6 +100,9 @@ export function createHero(scene) {
   const drill = joint(0, 0.2, 0.34, body);   // the staff upright as a fire drill, its foot on the hearth in front of his knees
   part(drill, staffGeo, staffMat, 0, 0.62, 0); drill.visible = false;
 
+  // A burning torch, held up in the left hand (render/fire draws its light).
+  const torch = makeTorch(); torch.scale.setScalar(1 / 0.62); torch.position.set(0, -0.44, 0.02); torch.rotation.x = 1.0; torch.visible = false; shL.add(torch);
+
   // Tufts of coconut fibre tucked into the waist of the shorts.
   const fibreMat = toon(HERO.fibre), tufts = [[0.13, 0.49, 0.08], [0.16, 0.48, -0.03], [-0.14, 0.49, 0.06]].map(([x, y, z], i) => {
     const t = part(torso, new THREE.BoxGeometry(0.07, 0.12, 0.06), fibreMat, x, y, z); t.rotation.z = (i - 1) * 0.3; t.visible = false; return t;
@@ -141,6 +146,7 @@ export function createHero(scene) {
     tufts.forEach((t, i) => { t.visible = i < fibre; });
     const wk = p.work, kneel = wk ? Math.min(1, wk.f * (wk.kind === 'drill' ? 14 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill';
     staff.visible = !drilling; drill.visible = drilling;
+    const lit = !!p.torch && !(p.lie > 0); torch.visible = lit; if (lit) torch.userData.flicker(clock);
     group.position.set(p.x, p.y - Math.min(0.35, wade * 0.6), p.z); group.rotation.y = p.heading;
     const tired = p.tired || 0, lie = p.lie || 0, ly = lie * lie * (3 - 2 * lie);
     const sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) * (1 - 0.35 * tired) : 0, carry = load.length > 0;
@@ -157,8 +163,8 @@ export function createHero(scene) {
       shL.rotation.x += (fw * kn + rub * 0.18 - shL.rotation.x) * 0.5; shR.rotation.x += (fw * kn - rub * 0.18 - shR.rotation.x) * 0.5;
     } else {
       shR.rotation.z = 0;
-      shL.rotation.z = carry ? -0.35 : 0;
-      shL.rotation.x += ((carry ? -0.35 : -sw * 0.8) - bend * 0.5 - shL.rotation.x) * 0.4;   // the left arm holds the bundle
+      shL.rotation.z = carry ? -0.35 : lit ? -0.15 : 0;
+      shL.rotation.x += ((carry ? -0.35 : lit ? -1.0 - sw * 0.1 : -sw * 0.8) - bend * 0.5 - shL.rotation.x) * 0.4;   // the left arm holds the bundle, or the torch up in front
       shR.rotation.x += (sw * 0.5 - 0.15 - bend * 0.6 - shR.rotation.x) * 0.4;
     }
     drill.rotation.y = clock * 22;   // spinning

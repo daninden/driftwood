@@ -2,13 +2,14 @@
 // Run `npm run build` first. Usage: npm run smoke [-- x,z]
 // Loads dist/driftwood.html, waits for the world, builds the detailed tiles
 // around the start (or around x,z), walks for a moment, gathers driftwood and
-// lays it down, waits for low water, sleeps (with Z) through the next high
-// water, husks a coconut, lights a fire with the drill (F), and saves
+// lays it down, waits for low water, sleeps (with Z) a short, cold sleep
+// without a fire, waits for the next high water to bring wood, husks a coconut, lights a fire with the drill (F), takes a torch
+// out of it, and saves
 // screenshots.
 // smoke-0.png shows the loader while it is filling; smoke-5 low water,
-// smoke-6 the castaway asleep, smoke-7 awake again with new wood on the beach,
+// smoke-6 the castaway asleep, smoke-7 awake with new wood on the beach,
 // smoke-8 husking a coconut, smoke-9 drilling fire, smoke-10 the fire by day,
-// smoke-11 the fire at night.
+// smoke-11 the fire at night, smoke-12 walking away from it with a torch.
 //
 // A headless browser here has no GPU and draws only a few frames per second,
 // so after loading the test does not play in real time: it pauses drawing,
@@ -101,11 +102,14 @@ if (!asleep.asleep || asleep.lie < 1) errors.push('did not lie down to sleep');
 await shot('smoke-6.png');
 const woke = await page.evaluate(() => {
   const { game, step } = window.__driftwood, t = step(60, () => !game.sleep.asleep && game.player.lie === 0);
-  return { t, rest: game.sleep.rest(), washes: game.wood.washes, fresh: game.wood.fresh.length, time: game.clock.time };
+  const slept = game.sleep.slept;
+  step(600, () => game.wood.washes > 0);   // awake again, until the next high water brings wood
+  return { t, slept, rest: game.sleep.rest(), washes: game.wood.washes, fresh: game.wood.fresh.length, time: game.clock.time };
 });
 console.log('woke', JSON.stringify(woke));
-if (woke.rest < 0.95) errors.push('not rested after sleeping: ' + woke.rest);
-if (woke.washes < 1 || woke.fresh < 1) errors.push('no wood washed up while sleeping');
+if (woke.slept < 0.15 || woke.slept > 0.2) errors.push('a cold sleep without a fire lasted ' + (woke.slept * 24).toFixed(1) + ' h instead of 4');
+if (woke.rest < 0.8) errors.push('not rested after sleeping: ' + woke.rest);
+if (woke.washes < 1 || woke.fresh < 1) errors.push('no wood washed up at the next high water');
 await page.evaluate(() => { const { game } = window.__driftwood, l = game.wood.fresh[0]; console.log('fresh wood at', l.x.toFixed(1), l.z.toFixed(1)); });
 await shot('smoke-7.png');
 
@@ -151,6 +155,17 @@ await page.evaluate(() => { const { game, input, step } = window.__driftwood, p 
 await shot('smoke-10.png');
 await page.evaluate(() => { const { game, step } = window.__driftwood; game.clock.time = 0.95; step(0.1); });
 await shot('smoke-11.png');
+// A torch: tap the fire empty-handed, then walk off into the night with it.
+const torch = await page.evaluate(() => {
+  const { game, input, step } = window.__driftwood, p = game.player, f = game.fire.fires[0];
+  input.target = { x: f.x, z: f.z, tap: true }; step(5, () => game.fire.torch);
+  const lit = !!game.fire.torch;
+  input.target = { x: p.x - 7, z: p.z + 4 }; step(6, () => !input.target);
+  return lit && !!game.fire.torch;
+});
+console.log('torch', torch);
+if (!torch) errors.push('did not take a torch out of the fire');
+await shot('smoke-12.png');
 await browser.close();
 console.log('done after', secs());
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
