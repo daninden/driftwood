@@ -6,8 +6,8 @@
  *   - Fallen coconuts lie under the palms (world/vegetation `tile.cocos`).
  *   - Picking one up, the castaway kneels and tears off the husk (game/game):
  *     that gives one tuft of fibre. The nut itself is not kept.
- *   - He carries at most FIBRE_MAX tufts, tucked into the waist of his
- *     shorts. Fibre weighs nothing and does not slow him down.
+ *   - He carries at most FIBRE_MAX tufts, kept loose in his shorts
+ *     (drawn in the inventory row, render/carryMark). Fibre weighs nothing and does not slow him down.
  *   - A tuft is used up by every attempt to light a fire, whether it
  *     catches or not (game/fire).
  *   - A palm drops a new nut where an old one lay, REGROW to REGROW + REGROW_SPREAD

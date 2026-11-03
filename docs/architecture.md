@@ -18,7 +18,7 @@ Rules:
 - **Arrows point one way.** `world` does not know `game` or `render`. `game` does not know `render`. `render` reads the world and the player state but never changes them.
 - **`world` and `game` are pure.** They touch neither the DOM nor WebGL, so they run in Node (the tests) and in Web Workers (the height grids, see Loading).
 - **Everything follows from the seed.** The same number gives the same island, the same trees and the same colours. Every tile has its own generator (seed, tx, tz), so the order in which tiles are built does not matter.
-- **Almost no interface.** There is deliberately no HUD, map or menu. What you see is the island. The one mark on screen is the moon that shows how rested the castaway is (`render/restMark`).
+- **Almost no interface.** There is deliberately no HUD, map or menu. What you see is the island. The marks on screen are the moon that shows how rested the castaway is (`render/restMark`) and, next to it, the row of what he carries loose (`render/carryMark`).
 
 ## Modules
 
@@ -62,8 +62,9 @@ Rules:
 | `render/driftwood` | The driftwood of `game/wood`: logs on the beach per detailed tile (rebuilt when wood is taken or washes up), piles stacked crosswise, and each piece's look, fixed by its place; wet wood is dark and bleaches in steps as it dries. Freshly washed-up wood fades in over 3 s. |
 | `render/coconuts` | The coconuts of `game/fibre` under the palms, per detailed tile (rebuilt when one is taken or falls again). |
 | `render/fire` | The fires of `game/fire`: a tepee of charred wood that sinks as it burns, flickering unlit flame cones, embers, rising smoke (also a puff after a failed attempt and a wisp while drilling), torches stuck in the ground; one warm point light over the strongest fire or torch near the castaway and one for the torch in his hand (always in the scene, so no shader is rebuilt), and at night a warm glow over the picture round the nearest lights (a DOM layer above the night grading). |
-| `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle, carried wood under the arm, tufts of fibre at the waist, a torch held up in the left hand, bending down, kneeling to husk a coconut or to twirl the staff as a fire drill, a tired stoop, lying down to sleep with the hat over his face, and a light stippled silhouette (drawn with an inverted depth test before the figure) where something solid hides it. |
+| `render/hero` | The castaway (hat, beard, torn shirt, shorts, bare feet) with a walk cycle, carried wood under the arm, a torch held up in the left hand, bending down, kneeling to husk a coconut or to twirl the staff as a fire drill, a tired stoop, lying down to sleep with the hat over his face, and a light stippled silhouette (drawn with an inverted depth test before the figure) where something solid hides it. |
 | `render/footprints` | Footprints in the sand: at most 80, the oldest fading out; those the tide covers are wiped out. |
+| `render/carryMark` | The row of small ink drawings (`#carry` in `index.html`) next to the moon that shows what he carries loose (for now the fibre tufts, from `game.fibre.carried`): faint, clear for a few seconds after a change. Pure `carryItems`, `carryChanged` and `carryOpacity` are tested; `main` feeds it each frame. |
 | `render/restMark` | The moon mark (`#rest` in `index.html`) that wanes as the castaway needs sleep; drawn by `main` from `game.update`'s `rest`. |
 | `render/camera` | Orthographic camera that follows; player zoom within fixed limits; free turning and limited tilting, eased; zooms out on the summits; ground picking. (`islandView.pickGround` also tells whether a point is on the castaway, and picks a beach log by its drawn shape, branch and roots included, rather than the ground behind it.) |
 | `render/sky` | The light of the day from the time (pure): sun and moon paths, light and fill colours, grading for golden hour, dusk and night. |
@@ -85,6 +86,7 @@ input ──> view.zoomBy(input.takeZoom()), view.turn(input.takeTurn(dt))
                 │                the clock runs, the tide (game/tide) washes up wood, fires burn down
                 │
                 ├─> { rest } ──> the moon mark (render/restMark)
+                ├─> fibre.carried ──> the carry row (render/carryMark)
                 └─> { distance, terrain, time, sea } ──> view.render(player, info, dt)
                                                 ├ camera follows; sun or moon from the time (render/sky)
                                                 ├ sea level and surf of the tide
@@ -113,7 +115,7 @@ npm run smoke     opens the build in headless Chromium, walks, gathers wood, wai
 
 - `tests/world.test.js` compares seed 1337 with a golden file exported from the style prototype: heights, levels, slopes, rivers, passages, vegetation per tile and ground colours. Any change to the generation shows up here.
 - `tests/movement.test.js` really walks over the island: every passage must lead up, walls without a passage must stop you, and so must the sea; trunks, palms and boulders must stop you while you slide past them, small stones must not; rivers stop you at waist depth, every ford can be crossed, the deep reach cannot, and upstream brooks can be waded anywhere.
-- `tests/streaming.test.js`, `tests/render.test.js` (window round the castaway, fading footprints, the moon mark, the surf levels) and `tests/core.test.js` test the pure logic without a browser.
+- `tests/streaming.test.js`, `tests/render.test.js` (window round the castaway, fading footprints, the moon mark, the carry row, the surf levels) and `tests/core.test.js` test the pure logic without a browser.
 - `tests/heights.test.js` checks that building the height grids in strips (as the workers do) gives exactly the same grids, and that a failing worker lets `main` fall back.
 - `tests/loading.test.js` tests the loading bar: steps in order, never backwards, ends full. The smoke test also saves the loader halfway (`smoke-0.png`) and checks the bar ends full.
 - `tests/stage.test.js` checks that the shadow depth bias stays a few centimetres at every zoom level.

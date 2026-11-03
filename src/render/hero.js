@@ -25,15 +25,14 @@
  * hands tearing at it in turn; to make fire he kneels and twirls his staff
  * upright between his palms as a fire drill, the hands rubbing back and
  * forth. A burning torch (player.torch) he holds up in front of him in his
- * left hand. The tufts of coconut fibre he carries (one to three) hang at the
- * waist of his shorts.
+ * left hand.
  *
- * createHero(scene) -> { group, update(player, wadeDepth, load?, fibre?) }
+ * createHero(scene) -> { group, update(player, wadeDepth, load?) }
  *   update copies position and heading from the player state
  *   (game/movement) and animates the walk cycle from player.phase. In water
  *   he sinks by wadeDepth * 0.6, but never deeper than 0.35 (his waist).
  *   load: the carried pieces as [{ len, rad, col }] (bottom first); the
- *   bundle is rebuilt when it changes. fibre: the tufts carried (0..3).
+ *   bundle is rebuilt when it changes.
  *   The figure faces +z in its own space.
  *
  * Depends on: three, render/materials, render/palette
@@ -104,11 +103,6 @@ export function createHero(scene) {
   // A burning torch, held up in the left hand (render/fire draws its light).
   const torch = makeTorch(); torch.scale.setScalar(1 / 0.62); torch.position.set(0, -0.44, 0.02); torch.rotation.x = 1.0; torch.visible = false; shL.add(torch);
 
-  // Tufts of coconut fibre tucked into the waist of the shorts.
-  const fibreMat = toon(HERO.fibre), tufts = [[0.13, 0.49, 0.08], [0.16, 0.48, -0.03], [-0.14, 0.49, 0.06]].map(([x, y, z], i) => {
-    const t = part(torso, new THREE.BoxGeometry(0.07, 0.12, 0.06), fibreMat, x, y, z); t.rotation.z = (i - 1) * 0.3; t.visible = false; return t;
-  });
-
   // Silhouette: where something solid hides the figure, a light stippled
   // shape shows through. It is drawn after the world and before the figure
   // itself (renderOrder), with an inverted depth test.
@@ -142,9 +136,8 @@ export function createHero(scene) {
     silhouette(bundle);
   }
 
-  function update(p, wade = 0, load = [], fibre = 0) {
+  function update(p, wade = 0, load = []) {
     setLoad(load); clock += 1 / 60;
-    tufts.forEach((t, i) => { t.visible = i < fibre; });
     const wk = p.work, kneel = wk ? Math.min(1, wk.f * (wk.kind === 'drill' ? 14 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill';
     staff.visible = !drilling; drill.visible = drilling;
     const lit = !!p.torch && !(p.lie > 0); torch.visible = lit; if (lit) torch.userData.flicker(clock);

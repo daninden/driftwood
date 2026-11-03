@@ -6,7 +6,8 @@
  * `?time=t` starts at another time of day (0 midnight, 0.5 noon), and
  * `?awake=d` as if the castaway had been awake d days.
  *
- * The moon mark #rest (render/restMark) shows how rested the castaway is.
+ * The moon mark #rest (render/restMark) shows how rested the castaway is;
+ * the row #carry next to it (render/carryMark) shows what he carries loose.
  *
  * The height grids, the slowest part of generating the world, are built in
  * Web Workers (heightWorker, parallelHeights), one per spare core.
@@ -30,6 +31,7 @@ import { createIslandView } from './render/islandView.js';
 import { createGame } from './game/game.js';
 import { createInput } from './game/input.js';
 import { createRestMark } from './render/restMark.js';
+import { createCarryMark } from './render/carryMark.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
 import HeightWorker from './heightWorker.js?worker&inline';
@@ -51,7 +53,8 @@ async function boot() {
   const qs = new URLSearchParams(location.search), qt = qs.get('time'), qa = qs.get('awake');
   const game = createGame(world, spawn, { ...(qt === null ? {} : { time: Number(qt) }), ...(qa === null ? {} : { sleep: { awake: Number(qa) } }) });
   const mark = createRestMark(document.getElementById('rest'));
-  const show = info => { mark.update(info.rest, game.sleep.asleep); return info; };
+  const carry = createCarryMark(document.getElementById('carry'));
+  const show = info => { mark.update(info.rest, game.sleep.asleep); carry.update({ fibre: game.fibre.carried }, performance.now() / 1000); return info; };
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
 

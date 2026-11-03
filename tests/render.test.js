@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { cutoutParams, cutKeep, CUT_RADIUS, CUT_CORE_KEEP } from '../src/render/cutout.js';
 import { printAlpha, MAX, FADE } from '../src/render/footprints.js';
 import { moonPath, markOpacity, CLEAR_BELOW } from '../src/render/restMark.js';
+import { carryItems, carryChanged, carryOpacity, createCarryMark, REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 import { foamWeights, FOAM_LEVELS } from '../src/render/water.js';
 
 describe('cutout window', () => {
@@ -53,6 +54,43 @@ describe('rest mark', () => {
     expect(markOpacity(0, false)).toBeCloseTo(0.85);
     expect(markOpacity(0.1, false)).toBeGreaterThan(0.3);
     expect(markOpacity(1, true)).toBeGreaterThan(0.3);
+  });
+});
+
+describe('carry mark', () => {
+  it('draws one tuft per tuft carried, and nothing when nothing is carried', () => {
+    for (let n = 0; n <= 3; n++) expect(carryItems({ fibre: n })).toEqual(Array(n).fill('fibre'));
+    expect(carryItems({})).toEqual([]);
+    expect(carryItems(null)).toEqual([]);
+  });
+  it('is faint at rest, clear right after a change and faint again later', () => {
+    expect(carryOpacity(Infinity)).toBeCloseTo(REST_OPACITY);
+    expect(carryOpacity(0)).toBeCloseTo(PEAK_OPACITY);
+    expect(carryOpacity(HOLD)).toBeCloseTo(PEAK_OPACITY);
+    const mid = carryOpacity(HOLD + EASE / 2);
+    expect(mid).toBeLessThan(PEAK_OPACITY); expect(mid).toBeGreaterThan(REST_OPACITY);
+    expect(carryOpacity(HOLD + EASE)).toBeCloseTo(REST_OPACITY);
+    expect(carryOpacity(60)).toBeCloseTo(REST_OPACITY);
+  });
+  it('sees what was added or used up', () => {
+    expect(carryChanged({ fibre: 1 }, { fibre: 2 })).toBe(true);
+    expect(carryChanged({ fibre: 2 }, { fibre: 1 })).toBe(true);
+    expect(carryChanged({ fibre: 2 }, { fibre: 2 })).toBe(false);
+    expect(carryChanged({}, { fibre: 0 })).toBe(false);
+  });
+  it('touches the element only when something changed, and goes clear after a change', () => {
+    let writes = 0;
+    const el = { style: {}, set innerHTML(v) { writes++; this._h = v; }, get innerHTML() { return this._h; } };
+    const m = createCarryMark(el);
+    m.update({ fibre: 0 }, 100);
+    expect(el.innerHTML).toBe(''); expect(+el.style.opacity).toBeCloseTo(REST_OPACITY);
+    const w = writes; m.update({ fibre: 0 }, 100.5); expect(writes).toBe(w);
+    m.update({ fibre: 2 }, 101);
+    expect(el.innerHTML.match(/<svg/g).length).toBe(2); expect(+el.style.opacity).toBeCloseTo(PEAK_OPACITY);
+    m.update({ fibre: 2 }, 101 + HOLD + EASE + 1);
+    expect(+el.style.opacity).toBeCloseTo(REST_OPACITY);
+    m.update({ fibre: 1 }, 110);
+    expect(el.innerHTML.match(/<svg/g).length).toBe(1); expect(+el.style.opacity).toBeCloseTo(PEAK_OPACITY);
   });
 });
 

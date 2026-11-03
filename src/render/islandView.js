@@ -15,8 +15,8 @@
  *   view.yaw              the current view angle (for walking relative to the screen)
  *   view.setGame(game)   from then on draws what can be gathered and made:
  *     the driftwood of game/wood (beach logs with the detailed tiles, piles,
- *     the castaway's load, drying: render/driftwood), the coconuts and the
- *     fibre carried (game/fibre, render/coconuts), and the fires
+ *     the castaway's load, drying: render/driftwood), the coconuts
+ *     (game/fibre, render/coconuts), and the fires
  *     (game/fire, render/fire)
  *   view.pickGround(clientX, clientY, touch?) -> { x, z, hero? } | null
  *     hero when the screen point is on the castaway (with a finger: near it);
@@ -89,7 +89,7 @@ export async function createIslandView(world, container, progress, start) {
     water.setSea(sea);
     const total = game ? game.clock.total : 0;
     if (woodView) { woodView.update(dt, total); cocoView.update(); }
-    hero.update(player, t.depth, game ? game.wood.carried.map(l => ({ len: l.len, rad: l.rad, col: driftColor(l, dryness(l, total)) })) : [], game ? game.fibre.carried : 0);
+    hero.update(player, t.depth, game ? game.wood.carried.map(l => ({ len: l.len, rad: l.rad, col: driftColor(l, dryness(l, total)) })) : []);
     steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver);
     steps.wash(sea);
     const { yaw, pitch } = cam;

@@ -81,7 +81,7 @@ A fire needs something that catches first: the dry fibre of a coconut husk.
 
 - **Coconuts** lie under the palms, one to three under about half of them.
 - **Husking:** click or tap a coconut; the castaway walks there, kneels and tears the husk off with his hands (about 2½ seconds). That gives **one tuft of fibre**; the nut itself is not kept. Walking off or tapping elsewhere stops him, and the nut stays where it was.
-- **Carrying:** at most **3 tufts**, tucked into the waist of his shorts. Fibre weighs nothing. (Decided, not built yet: the tufts are also drawn in the inventory, see *Carrying and the inventory*.)
+- **Carrying:** at most **3 tufts**, kept loose in his shorts and not drawn on him; they show in the inventory row (see *Carrying and the inventory*). Fibre weighs nothing.
 - **New nuts:** a palm drops a new coconut where an old one lay, three to six days after it was taken.
 
 ## Fire
@@ -89,7 +89,7 @@ A fire needs something that catches first: the dry fibre of a coconut husk.
 Making fire is deliberately hard: it takes preparation and effort, so a fire that burns is precious.
 
 - **Laying a fire:** a pile of at least **4 pieces** of driftwood on dry ground, laid down as any pile.
-- **Lighting it:** hold the pile for about half a second (finger or mouse button), or press `F` standing beside it. With fibre at his waist, the castaway walks to the pile, kneels and twirls his staff upright between his palms as a fire drill, for about **14 seconds**. It is hard work: a whole attempt costs some rest (the moon wanes visibly). Walking off or tapping elsewhere stops him; the fibre is kept. A short tap on a pile still picks it up; while the press is still held he waits beside the pile.
+- **Lighting it:** hold the pile for about half a second (finger or mouse button), or press `F` standing beside it. With fibre on him, the castaway walks to the pile, kneels and twirls his staff upright between his palms as a fire drill, for about **14 seconds**. It is hard work: a whole attempt costs some rest (the moon wanes visibly). Walking off or tapping elsewhere stops him; the fibre is kept. A short tap on a pile still picks it up; while the press is still held he waits beside the pile.
 - **Whether it catches:** at the end the tuft is used up, and the fire catches or it does not. At best (dry wood, rested) a little more than half the attempts catch. Wet wood makes it much harder (the chance falls with the square of the pile's dryness), fresh wood never catches, and a tired castaway does worse (half the chance at the limit). A failed attempt leaves only a puff of smoke; the pile stays. Whether an attempt catches is fixed by the seed and the number of attempts, so it cannot be retried for luck.
 - **Burning:** the pile becomes a little tepee of charred wood with flames and rising smoke. Each piece burns about **2½ hours** of game time (wet wood half as long), so four pieces last most of a night; a fire holds at most eight pieces' worth. When the wood is gone it sinks to **embers** that glow for about 1½ hours, then it goes out and you start again. No counter: the size of the flames tells how much is left.
 - **Keeping it going:** click or tap the fire while carrying wood; the castaway lays one piece on it. That also works on the embers.
@@ -149,11 +149,11 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 
 ![The five passages, and the coast](images/island-1337-passages.jpg)
 
-## Carrying and the inventory (decided, not built yet)
+## Carrying and the inventory (built)
 
 - **What he holds in his hands is visible in his hands:** driftwood under the arm, the torch, later a bow or a fishing rod in hand.
 - **What he carries loose is drawn in the inventory:** a quiet row of small drawings next to the moon mark, in the same dark brown ink, drawn as in a journal: no boxes, frames or numbers. Three tufts of fibre are three little drawings. Later: nails, a knife, and so on.
-- The row is faint most of the time and grows clearer for a moment when something is added or used up.
+- The row is faint most of the time (the moon's quiet level) and grows clearer for about 3 seconds when something is added or used up, then eases back over 2 seconds. With nothing carried it is empty.
 - Wood and the torch are **not** in the row; they show only in the world.
 - Limits stay physical (what fits in the hands, at the waist, on the back), not a number of slots.
 
@@ -169,7 +169,7 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved.
 - **Touch screens:** tap to walk to a spot, drag to steer, double tap to run there (hold and drag after the double tap to steer while running). Hold the castaway to sleep (see *Sleep*). Two fingers: pinch to zoom (same limits), twist to turn the view; the island turns with the fingers, and the castaway stops while two fingers are down. No tilting on a touch screen. The browser's own page zoom is switched off.
 - On a summit the camera zooms out a further 1.6× on top of the player's zoom (at most 14), as a reward for the climb.
-- **Almost no interface:** no HUD, map or menu. What you see is the island (the wood you carry, the torch in his hand, how big the flames are). The exceptions are the faint moon that shows how long you can still go without sleep (see *Sleep*), the inventory row next to it (decided, not built yet, see *Carrying and the inventory*), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
+- **Almost no interface:** no HUD, map or menu. What you see is the island (the wood you carry, the torch in his hand, how big the flames are). The exceptions are the faint moon that shows how long you can still go without sleep (see *Sleep*), the inventory row next to it (see *Carrying and the inventory*), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
 
 ## Decisions
 

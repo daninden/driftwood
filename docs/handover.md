@@ -11,19 +11,13 @@ Where the work stands, for the next session. Read `CLAUDE.md`, `docs/design.md` 
 
 - **Wading** (`world/rivers`, `game/movement`, `render/water`): the castaway wades rivers up to his waist (`WADE_MAX` 0.35); narrow upstream brooks are shallow and can be waded anywhere, each river has 2 to 4 fords along the middle reach (`rv.fords`), shown only by stones, gravel and whiter rippling water, and the wide deep reach towards the sea cannot be waded.
 
-All tests (191) and the smoke test pass.
+- **Inventory** (`render/carryMark`, `#carry` in `index.html`, fed by `main`): a faint row of small ink drawings next to the moon, one tuft of fibre per tuft carried (`game.fibre.carried`), clearer for a few seconds after one is added or used up. The tufts at his waist in `render/hero` are gone. Later items (nails, a knife) add a key and a drawing in `carryMark`.
 
-## Next, agreed with the user (in this order)
+All tests (195) and the smoke test pass.
 
-### 1. Inventory: a row of drawings next to the moon
+## Next, agreed with the user
 
-Decided in `docs/design.md` (*Carrying and the inventory*). Not started.
-
-- Rule from the user: what he holds in his hands is visible in his hands; what he carries loose is drawn in the inventory. Wood and the torch stay out of it.
-- For now only the coconut fibre goes in it (`game.fibre.carried`, 0–3). The tufts at his waist in `render/hero` can stay or go.
-- Build it like `render/restMark` (the moon, `#rest` in `index.html`): a small module, for example `render/carryMark`, with a pure part that can be tested in `tests/render.test.js` (which drawings to show, the opacity over time) and a DOM part fed by `main` from the game state. Same dark brown ink (`#2e2418`), faint most of the time, clearer for a few seconds after a change. Simple SVG drawings in a journal style. No boxes, frames or numbers.
-- Make it general enough for later items (nails, knife, ...) without building those.
-- Run the smoke test and look at the screenshots, on a phone-sized viewport too (the moon sits bottom left with safe-area insets).
+Nothing agreed is waiting.
 
 ## Open, not decided
 
