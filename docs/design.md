@@ -70,7 +70,7 @@ The first game element. Driftwood lies on the dry beach above the tide line, a f
 - **Carrying:** at most **3 pieces**, under the left arm at their real length (low enough that the head and hat stay readable). Every piece slows walking and running by 6 % (three pieces: 82 %).
 - **Laying down:** click or tap the castaway: everything carried goes down at the feet, on a pile close by or as a new pile. Not in water.
 - **Piles** stay where they are, and can be picked up again by clicking them (the top pieces first, as many as fit).
-- No counter, no inventory: what you carry is what you see. Wood is never solid; you walk over it.
+- No counter: what you carry in your hands is what you see. Wood is never solid; you walk over it. (Small things carried loose go into the inventory, see *Carrying and the inventory*; wood does not.)
 - **New wood with every high water:** each high water washes up one or two new pieces per stretch of beach, on the dry sand above the tide line, each with its own look. They fade in over a few seconds. A stretch of beach never gets more loose wood than it had at the start, so the beach never fills up; your piles do not count. What you gather slowly grows back.
 - **The flood takes back** a pile laid on the wet sand of low water, below the high-water line. Wood cannot be laid down in the sea.
 - **Wet wood:** what a high water brings is wet and salty: dark when it washes up, it bleaches to its own colour over **a day**, wherever it lies or is carried. The wood that lies on the beach at the start is dry. Only dry wood makes a fire catch, so gathering ahead pays.
@@ -81,7 +81,7 @@ A fire needs something that catches first: the dry fibre of a coconut husk.
 
 - **Coconuts** lie under the palms, one to three under about half of them.
 - **Husking:** click or tap a coconut; the castaway walks there, kneels and tears the husk off with his hands (about 2½ seconds). That gives **one tuft of fibre**; the nut itself is not kept. Walking off or tapping elsewhere stops him, and the nut stays where it was.
-- **Carrying:** at most **3 tufts**, tucked into the waist of his shorts, where you see them. Fibre weighs nothing.
+- **Carrying:** at most **3 tufts**, tucked into the waist of his shorts. Fibre weighs nothing. (Decided, not built yet: the tufts are also drawn in the inventory, see *Carrying and the inventory*.)
 - **New nuts:** a palm drops a new coconut where an old one lay, three to six days after it was taken.
 
 ## Fire
@@ -142,11 +142,20 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 
   You recognise a passage only by nature itself: loose stones, less vegetation, moss. The higher the terrace, the scarcer the passages.
 - **Rivers:** run from a highland to the sea. Where they leave a terrace, a waterfall forms. Sometimes a tributary joins.
+- **Wading (decided, not built yet):** the castaway wades at most up to his waist, about **0.35 m**; deeper water stops him as the sea does, and he never sinks further than his waist. Upstream a river is shallow and can be waded anywhere. Along the middle reach each river gets **2 to 4 fords**: shallow stretches where the bed rises, recognisable only by nature (gravel and stones, white rippling water). The wide, deep stretch towards the sea cannot be waded. So a river is a real border you have to learn. The fords are carved into the bed by the world generation (a deliberate change of seed 1337).
 - **Coast:** beaches with palms, rocky shores and lagoons with sandbanks.
 
 ![The terraces at game zoom](images/island-1337-terraces.jpg)
 
 ![The five passages, and the coast](images/island-1337-passages.jpg)
+
+## Carrying and the inventory (decided, not built yet)
+
+- **What he holds in his hands is visible in his hands:** driftwood under the arm, the torch, later a bow or a fishing rod in hand.
+- **What he carries loose is drawn in the inventory:** a quiet row of small drawings next to the moon mark, in the same dark brown ink, drawn as in a journal: no boxes, frames or numbers. Three tufts of fibre are three little drawings. Later: nails, a knife, and so on.
+- The row is faint most of the time and grows clearer for a moment when something is added or used up.
+- Wood and the torch are **not** in the row; they show only in the world.
+- Limits stay physical (what fits in the hands, at the waist, on the back), not a number of slots.
 
 ## Camera and view
 
@@ -160,7 +169,7 @@ Every game gets a new island from a **seed**. **Seed 1337** is the fixed demo. T
 - **Zooming:** the player can zoom with the mouse wheel or `+` / `-`, between 5 and 10 (it starts at 7). Never closer than that, so the figure always stays small. No buttons on screen. The zoom is not saved.
 - **Touch screens:** tap to walk to a spot, drag to steer, double tap to run there (hold and drag after the double tap to steer while running). Hold the castaway to sleep (see *Sleep*). Two fingers: pinch to zoom (same limits), twist to turn the view; the island turns with the fingers, and the castaway stops while two fingers are down. No tilting on a touch screen. The browser's own page zoom is switched off.
 - On a summit the camera zooms out a further 1.6× on top of the player's zoom (at most 14), as a reward for the climb.
-- **Almost no interface:** no HUD, map or menu. What you see is the island (the wood you carry, the fibre at the castaway's waist, the torch in his hand, how big the flames are). The exceptions are the faint moon that shows how long you can still go without sleep (see *Sleep*), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
+- **Almost no interface:** no HUD, map or menu. What you see is the island (the wood you carry, the torch in his hand, how big the flames are). The exceptions are the faint moon that shows how long you can still go without sleep (see *Sleep*), the inventory row next to it (decided, not built yet, see *Carrying and the inventory*), and the loading screen: the word *Driftwood* in a dark brown serif (Georgia) on the sand background, with a thin bar below it that fills as the island is made, and fades out as the island fades in. No percentage, no step names.
 
 ## Decisions
 
