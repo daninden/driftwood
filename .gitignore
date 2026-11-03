@@ -3,3 +3,4 @@ dist/
 smoke-*.png
 prototypes/out/
 prototypes/island-generator/.golden.html
+*.stackdump
