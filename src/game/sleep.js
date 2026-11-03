@@ -22,9 +22,10 @@
  *   sleep.speed()        walking speed factor from tiredness (1 .. TIRED_SLOW)
  *   sleep.start()        lie down (when awake)
  *   sleep.wake()         get up (when asleep)
- *   sleep.update(dt) -> game seconds to run for dt real seconds (dt × the
- *     current time speed); also eases lie, counts the sleep down, rests or
- *     tires the castaway, and falls asleep at the limit
+ *   sleep.update(dt, dry = true) -> game seconds to run for dt real seconds
+ *     (dt × the current time speed); also eases lie, counts the sleep down,
+ *     rests or tires the castaway, and falls asleep at the limit, but only
+ *     on dry ground (dry false: he wades on, tired, until he is out)
  *   sleep.state() -> { awake, asleep, left }   plain, for saving
  *   saved: such a state, to start from
  *
@@ -51,7 +52,7 @@ export function createSleep(saved) {
   };
   if (saved) { sleep.awake = saved.awake || 0; if (saved.asleep) { sleep.asleep = true; left = saved.left || SLEEP_DAYS; sleep.lie = 1; warp = 1; } }
 
-  function update(dt) {
+  function update(dt, dry = true) {
     sleep.lie = Math.min(1, Math.max(0, sleep.lie + (sleep.asleep ? 1 : -1) * dt / LIE));
     const lying = sleep.asleep && sleep.lie >= 1;
     warp = Math.min(1, Math.max(0, warp + (lying ? 1 : -1) * dt / EASE));
@@ -61,7 +62,7 @@ export function createSleep(saved) {
       if (lying) { left -= days; if (left <= 0) sleep.wake(); }
     } else {
       sleep.awake += days;
-      if (sleep.awake >= AWAKE_MAX) { sleep.awake = AWAKE_MAX; sleep.start(); }
+      if (sleep.awake >= AWAKE_MAX) { sleep.awake = AWAKE_MAX; if (dry) sleep.start(); }
     }
     return gameDt;
   }

@@ -5,8 +5,8 @@
  * SUN_TOP high and sets in the west. It is up from SUNRISE to SUNSET (13 of
  * the 20 minutes); dusk and dawn each take about a minute around the
  * horizon, the rest is night. At night the moon takes over along a lower
- * arc: cool, dim light that still shows the island. Low sun gives golden
- * light; around the horizon the sky fill turns rose and lilac.
+ * arc: dark blue, dim light in which the island is just readable. Low sun
+ * gives golden light; around the horizon the sky fill turns rose and lilac.
  *
  * The light never comes from lower than LIGHT_MIN, so shadows of a low sun
  * stay long but never smear across the whole island.
@@ -51,14 +51,14 @@ export function skyAt(time) {
   const day = ss(-0.1, 0.1, sun.y);
   const golden = ss(-0.04, 0.06, sun.y) * (1 - ss(0.12, 0.42, sun.y));
   const dusk = ss(-0.3, -0.02, sun.y) * (1 - ss(-0.02, 0.14, sun.y));
-  const sunI = ss(-0.04, 0.16, sun.y), moonI = 0.55 * ss(-0.02, 0.15, moon.y) * (1 - day);
+  const sunI = ss(-0.04, 0.16, sun.y), moonI = 0.4 * ss(-0.02, 0.15, moon.y) * (1 - day);
   const light = sunI >= moonI
     ? { dir: lift(sun), color: mix(C.sunNoon, C.sunLow, golden), intensity: sunI }
     : { dir: lift(moon), color: C.moon, intensity: moonI };
-  const fill = { color: mix(mix(C.fillNight, C.fillDay, day), C.fillDusk, dusk * 0.7), intensity: lerp(0.55, 0.6, day) + dusk * 0.15 + golden * 0.12 };
+  const fill = { color: mix(mix(C.fillNight, C.fillDay, day), C.fillDusk, dusk * 0.7), intensity: lerp(0.4, 0.6, day) + dusk * 0.15 + golden * 0.12 };
   let grade = mix(C.gradeNight, WHITE, day);
   grade = mix(grade, C.gradeGolden, golden * 0.5);
   grade = mix(grade, C.gradeDusk, dusk * 0.7);
-  const saturation = lerp(0.7, 1, day) - dusk * 0.1;
+  const saturation = lerp(0.6, 1, day) - dusk * 0.1;
   return { sun, moon, day, golden, dusk, light, fill, grade, saturation };
 }

@@ -46,5 +46,5 @@ export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8
 export const SKY = Object.freeze({
   sunNoon: 0xffe6c4, sunLow: 0xffc690, moon: 0xb4c6ec,
   fillDay: 0xe2ebf0, fillDusk: 0xcab4dc, fillNight: 0x8494c4,
-  gradeGolden: 0xffe6cc, gradeDusk: 0xd9b8d6, gradeNight: 0x8a9ccc,
+  gradeGolden: 0xffe6cc, gradeDusk: 0xd9b8d6, gradeNight: 0x5f6e9e,
 });

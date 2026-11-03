@@ -84,7 +84,7 @@ The first game element. Driftwood lies on the dry beach above the tide line, a f
 
 - The castaway has to sleep **at least every two days** (40 minutes of play). After a day and a half he is tired: his head and shoulders hang, his arms swing less and he walks slower, down to 75 % at the limit. At two days he falls asleep where he stands.
 - **Going to sleep:** hold the castaway for about half a second (finger or mouse button), or press `Z`. A short tap on the castaway still lays wood down. You can sleep anywhere on dry land, not in the water and not on a climbing route, and at any time of day. He first lays down what he carries, then lies on his back with the straw hat over his face.
-- **A sleep lasts eight hours** of game time; meanwhile time runs **20 times as fast** (about 20 seconds), easing in and out. The sun or moon, the tide and the wood all go on: wood that washes up meanwhile lies there when you wake. A full sleep rests you completely. Any key or tap wakes you early, only partly rested.
+- **A sleep lasts eight hours** of game time; meanwhile time runs **20 times as fast** (about 20 seconds), easing in and out. The sun or moon, the tide and the wood all go on: wood that washes up meanwhile lies there when you wake. A full sleep rests you completely. Any key or tap wakes you early, only partly rested. The flood wakes you too: you can lie down on the wet sand of low water, but when the rising water reaches you, you wake and get up, only partly rested. Worn out in the water, you wade on and only fall asleep once on dry ground.
 - **How long still:** a small moon in the bottom left corner, in the dark brown of the loading screen. Full when rested, it wanes to a thin sickle and to nothing as the two days run out, and waxes again while you sleep. It is faint most of the time and grows clearer in the last half day. No numbers.
 
 ## Day and night
@@ -92,7 +92,7 @@ The first game element. Driftwood lies on the dry beach above the tide line, a f
 - **One day lasts 20 minutes of play.** A game starts in the middle of the morning.
 - **The sun** rises in the east, climbs over the south to about 62° and sets in the west. It is up for about 13 minutes. Low sun gives warm golden light and long shadows; at noon the light is plain style C.
 - **Dusk and dawn** last about a minute each around the horizon: the light turns lilac and mauve, the warm coast grading fades and colours lose some saturation.
-- **Night lasts about 5 minutes and is moonlit:** cool blue, dim, with soft moon shadows, but the island stays visible. Darker nights (where only your fire gives light) can come once there is fire.
+- **Night lasts about 5 minutes and is moonlit:** dark blue and dim, with soft moon shadows; the island is just readable. Darker nights (where only your fire gives light) can come once there is fire.
 - The light never comes from lower than about 12°, so shadows stay readable.
 - No clock on screen, no stars, moon disc or weather yet. The day drives the tide (see *Ebb and flow*) and sleeping speeds it up (see *Sleep*); what else it should mean for playing is still to be discussed.
 

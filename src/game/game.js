@@ -30,6 +30,9 @@
  *     input.takeSleep() (a long press on the castaway, or Z) lies down to
  *     sleep, on dry, walkable ground, laying down what is carried first;
  *     input.takeWake() (any key or tap) wakes early. Both are optional.
+ *     The flood wakes him early when it reaches him (he can lie down on
+ *     the wet sand of low water); worn out in the water, he wades on and
+ *     only falls asleep once he is on dry ground.
  *   game.state() -> plain object with what would need saving
  *
  * Depends on: game/movement, game/clock, game/wood, game/tide, game/sleep
@@ -70,7 +73,7 @@ export function createGame(world, spawn, opts = {}) {
     const wantSleep = input.takeSleep ? input.takeSleep() : false, wantWake = input.takeWake ? input.takeWake() : false;
     if (sleep.asleep) { if (wantWake && sleep.lie > 0.5) sleep.wake(); }
     else if (wantSleep && canSleep()) sleep.start();
-    const gameDt = sleep.update(dt);
+    const gameDt = sleep.update(dt, !wet(here()));
     player.lie = sleep.lie; player.tired = sleep.tired();
 
     let res;
@@ -103,6 +106,7 @@ export function createGame(world, spawn, opts = {}) {
     const n = highWaters(clock.total);
     if (n > wood.tide) { for (let k = Math.max(wood.tide + 1, n - 2); k <= n; k++) wood.washUp(k, player); wood.tide = n; }
     wood.flood(game.sea);
+    if (sleep.asleep && wet(here())) sleep.wake();   // the flood wakes him
     return { distance: res.distance, terrain: here(), time: clock.time, sea: game.sea, rest: sleep.rest() };
   }
   function state() {

@@ -43,8 +43,8 @@ Rules:
 | `game/wood` | Gathering: driftwood still on the beach, what is carried (at most 3, each piece slows you), piles; finding the nearest piece or pile, taking, laying down; washing up new wood at high water (deterministic per high water, never more per tile than at the start), piles the flood takes; a plain saveable state. |
 | `game/clock` | The time of day and the number of days: a 20-minute day, part of the game state. |
 | `game/tide` | Ebb and flow (pure): the sea level from the time, two high waters a day, and which high water it is. |
-| `game/sleep` | Being awake, tiredness, and sleeping: how fast game time runs (20× while asleep, eased), lying down and getting up, falling asleep after two days. |
-| `game/game` | Game state (the player, the clock, the wood and sleep) and the per-frame update: a tapped target is looked at once (on the castaway: lay down; on wood: walk there and pick it up, bending down briefly); sleeping and waking; the clock runs (faster while asleep), the tide washes up wood at high water and takes covered piles. |
+| `game/sleep` | Being awake, tiredness, and sleeping: how fast game time runs (20× while asleep, eased), lying down and getting up, falling asleep after two days (only on dry ground). |
+| `game/game` | Game state (the player, the clock, the wood and sleep) and the per-frame update: a tapped target is looked at once (on the castaway: lay down; on wood: walk there and pick it up, bending down briefly); sleeping and waking (the flood wakes the castaway when it reaches him); the clock runs (faster while asleep), the tide washes up wood at high water and takes covered piles. |
 | `render/palette` | All colours of style C in one place, the castaway's included. |
 | `render/terrainColor` | Painted ground colour per point (pure, tested against the prototype). |
 | `render/materials` | Toon shading, outlines (also a cut version for vegetation), the rock shader for steep walls. |
@@ -115,7 +115,7 @@ npm run smoke     opens the build in headless Chromium, walks, gathers wood, wai
 - `tests/wood.test.js` tests gathering: driftwood on the beach, picking up with a click or (less precise) tap, not when steering, at most three pieces and the slowdown, laying down on the castaway, piles, and the saved state.
 - `tests/game.test.js` tests click-to-walk, the running clock and the saveable state.
 - `tests/tide.test.js` tests the days on the clock, the sea level (twice a day, a little later each day), walking further out at low water and wading back, wood washing up (where there is room, never more than at the start, deterministic, away from the castaway, saved) and piles the flood takes.
-- `tests/sleep.test.js` tests tiredness, falling asleep after two days, the length and speed of a sleep, waking early, sleeping in the game (laying wood down first, not in the water) and the input (holding the castaway with a finger or mouse, `Z`, waking).
+- `tests/sleep.test.js` tests tiredness, falling asleep after two days, the length and speed of a sleep, waking early, sleeping in the game (laying wood down first, not in the water, woken by the flood on the wet sand of low water, not falling asleep while wading) and the input (holding the castaway with a finger or mouse, `Z`, waking).
 - `tests/sky.test.js` tests the clock and the light of the day: sun up and down, east to west, golden hour, enough light at night, a minimum light height, smooth changes.
 - `tests/view.test.js` tests the view controls: zoom and tilt limits, and the input (wheel, `+`/`-`, `Q`/`E`, right-mouse drag, Ctrl/Cmd left to the browser, and on touch: tap, double tap, pinch and twist). Movement and streaming tests also run from turned and tilted views.
 

@@ -8,6 +8,7 @@ import { createSleep, AWAKE_MAX, TIRED_AT, TIRED_SLOW, SLEEP_DAYS, SPEED, LIE } 
 import { createGame } from '../src/game/game.js';
 import { createInput, HOLD_MS } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
+import { FIRST_HIGH, PERIOD, RANGE } from '../src/game/tide.js';
 import { WALK_SPEED } from '../src/game/movement.js';
 
 let w, spawn;
@@ -85,6 +86,32 @@ describe('sleeping in the game', () => {
     const g = createGame(w, p, { time: 0.2 });
     g.update(makeInput({ sleep: true }), 1 / 30);
     expect(g.sleep.asleep).toBe(false);
+  });
+  const findSpot = (lo, hi) => {
+    for (let r = 1; r < 200; r += 0.25) for (let k = 0; k < 32; k++) { const a = k / 32 * Math.PI * 2, x = spawn.x + Math.cos(a) * r, z = spawn.z + Math.sin(a) * r; if (w.H(x, z) < hi && w.H(x, z) > lo) return { x, z, y: w.H(x, z) }; }
+    return null;
+  };
+  it('is woken by the flood after lying down on the wet sand of low water', () => {
+    const p = findSpot(-0.3, -0.2), low = FIRST_HIGH + PERIOD / 2;
+    expect(p).not.toBe(null);
+    const g = createGame(w, p, { day: Math.floor(low), time: low % 1, sleep: { awake: 1 } }), input = makeInput({ sleep: true });
+    expect(g.sea).toBeCloseTo(-RANGE);
+    g.update(input, 1 / 30);
+    expect(g.sleep.asleep).toBe(true);
+    let woke = null;
+    run(dt => { g.update(input, dt); if (woke === null && !g.sleep.asleep) woke = g.clock.total; }, 30);
+    expect(woke).not.toBe(null);
+    expect((woke - low) * 24).toBeLessThan(SLEEP_DAYS * 24 - 0.5);   // early, before the eight hours are over
+    expect(g.sea).toBeGreaterThan(p.y - 0.06);                        // because the water reached him
+    expect(g.sleep.rest()).toBeLessThan(0.99); expect(g.player.lie).toBe(0);
+  });
+  it('wades on when worn out in the water, and falls asleep once on dry ground', () => {
+    const p = findSpot(-0.4, -0.2);
+    const g = createGame(w, p, { time: FIRST_HIGH, sleep: { awake: AWAKE_MAX - 0.0001 } }), input = makeInput();
+    run(dt => g.update(input, dt), 2);
+    expect(g.sleep.asleep).toBe(false); expect(g.player.lie).toBe(0); expect(g.sleep.rest()).toBe(0);
+    const s = createSleep({ awake: AWAKE_MAX }); s.update(0.1, false); expect(s.asleep).toBe(false);
+    s.update(0.1); expect(s.asleep).toBe(true);
   });
   it('walks slower when tired', () => {
     const g = createGame(w, spawn, { sleep: { awake: AWAKE_MAX - 0.01 } }), input = makeInput({ up: true });
