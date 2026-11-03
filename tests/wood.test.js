@@ -164,6 +164,18 @@ describe('laying down', () => {
   });
 });
 
+it('needs slow him by the combined factor, and shorten his steps with it', () => {
+  const rested = createGame(w, spawn);
+  const weary = createGame(w, spawn, { sleep: { awake: 1.999, asleep: false, left: 0 }, thirst: { days: 1.99 }, hunger: { days: 4 } });
+  const a = makeInput({ up: true }), b = makeInput({ up: true }), x0 = { x: rested.player.x, z: rested.player.z };
+  for (let i = 0; i < 20; i++) { rested.update(a, 1 / 60); weary.update(b, 1 / 60); }
+  const factor = 0.6 * 0.65 * 0.75;
+  expect(weary.player.speed / rested.player.speed).toBeCloseTo(factor, 2);
+  const perMetre = (g, from) => g.player.phase / Math.hypot(g.player.x - from.x, g.player.z - from.z);
+  expect(perMetre(weary, x0) / perMetre(rested, x0)).toBeCloseTo(1 / (1 - 0.4 * (1 - factor)), 1);
+  expect(perMetre(weary, x0)).toBeGreaterThan(perMetre(rested, x0));
+});
+
 it('the start spot is dry beach (so the castaway can lay wood down there)', () => {
   const t = terrainAt(w, spawn.x, spawn.z); expect(t.inRiver).toBe(false); expect(t.y).toBeGreaterThan(0.05);
 });

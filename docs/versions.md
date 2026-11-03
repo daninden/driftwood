@@ -2,6 +2,12 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.16.1 "Heavy legs" — 2026-11-03
+
+- Needs slow him clearly: tired down to 60 % at two days awake (`TIRED_SLOW`, was 75 %), thirsty down to 65 % at the point of collapse (`THIRST_SLOW`, was 85 %), hungry down to 75 % at four days (`HUNGER_SLOW`, was 90 %). Each still eases in from its own threshold; they multiply together (at the worst about 29 %) and with the load.
+- Shorter steps with the slowing, as when carrying: `game/movement` `weariStride(needsSpeed)` = 1 - `WEARY_STRIDE` (0.4) x (1 - the combined needs speed), about 72 % at the worst; `game/game` multiplies it with the carrying stride and gives it to `stepPlayer`. No change in render.
+- Tests: the new numbers at the limits and halfway, the combined factor and the shorter stride in the game.
+
 ## 0.16 "Lean-to" — 2026-11-03
 
 - Branches (new `src/game/branches.js`, `src/render/branches.js`): 0 to 2 dry branches lie under about half of the broadleaf and rain forest trees, fixed per island by the seed and worked out in `game/branches` from the tree list (no change to the generated world; the seed 1337 fixture is untouched). Thinner and shorter than driftwood (0.8 to 1.2 m), dark bark, a twig or two and dry leaves, with outlines. Picked up and carried like driftwood (wood and branches together at most 3, the same slowing), never wet, grow back at the same spot 4 to 8 days after they were taken. Own piles (kind `branch`, at most 12, never mixed; a mixed load is laid down kind by kind), tally marks as for driftwood, an own twig drawing per branch carried in the inventory row. A branch burns half as long as a piece of driftwood (`BRANCH_BURN`, `fuelOf`): it feeds a fire for half a piece and a pile of branches can be lit like a driftwood pile.

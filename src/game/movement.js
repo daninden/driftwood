@@ -51,7 +51,9 @@
  *   Mutates player. load (default 1) scales the speed, for carrying
  *   (game/wood) and tiredness (game/sleep); sea is the sea level. `phase` advances with distance (for the walk cycle);
  *   stride (default 1) is the length of his step: a load makes it shorter
- *   (game/wood CARRY_STRIDE), so the phase advances faster per metre.
+ *   (game/wood CARRY_STRIDE) and so does weariness (weariStride(needsSpeed) =
+ *   1 - WEARY_STRIDE * (1 - needsSpeed), WEARY_STRIDE 0.4), so the phase
+ *   advances faster per metre.
  *
  * Depends on: core/view, world/constants, world/vegetation
  */
@@ -64,7 +66,12 @@ export const RUN_SPEED = 3.9;
 export const BODY = 0.2;        // the castaway's radius
 export const STONE_MIN = 0.35;  // smaller stones are stepped over
 export const WADE_MAX = 0.35;   // rivers deeper than this (waist deep) cannot be waded
+export const WEARY_STRIDE = 0.4;  // his step shortens by this share of what needs take off his speed
 export const BUSH_SLOW = 0.45;  // in the middle of a bush you go at 55 %
+
+/** Stride factor from the needs' combined walking speed (sleep x thirst x hunger):
+ *  1 - WEARY_STRIDE * (1 - needsSpeed); at the worst (0.29) about 0.72. */
+export function weariStride(needsSpeed) { return 1 - WEARY_STRIDE * (1 - Math.min(1, Math.max(0, needsSpeed))); }
 
 const cache = new WeakMap();
 function tileObstacles(w, tile) {

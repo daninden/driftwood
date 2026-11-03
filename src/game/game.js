@@ -104,7 +104,7 @@
  * Depends on: game/movement, game/clock, game/wood, game/branches, game/leanto, game/tide, game/sleep,
  *   game/fibre, game/fire, game/thirst, game/hunger, game/water
  */
-import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable } from './movement.js';
+import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable, weariStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
 import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, dryness } from './wood.js';
 import { seaLevel, highWaters } from './tide.js';
@@ -344,8 +344,9 @@ export function createGame(world, spawn, opts = {}) {
       } else {
         const dir = moveIntent(input, player);
         if (!dir && input.target) input.clearTarget();
-        const load = (1 - CARRY_SLOW * wood.carried.length) * sleep.speed() * thirst.speed() * hunger.speed();
-        res = stepPlayer(world, player, dir, dt, input.run || !!(input.target && input.target.run), load, game.sea, 1 - CARRY_STRIDE * wood.carried.length);
+        const needs = sleep.speed() * thirst.speed() * hunger.speed();
+        const load = (1 - CARRY_SLOW * wood.carried.length) * needs;
+        res = stepPlayer(world, player, dir, dt, input.run || !!(input.target && input.target.run), load, game.sea, (1 - CARRY_STRIDE * wood.carried.length) * weariStride(needs));
         if (res.blocked && input.target) { blockedFor += dt; if (blockedFor > 0.5) input.clearTarget(); } else blockedFor = 0;
       }
     }

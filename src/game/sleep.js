@@ -4,7 +4,7 @@
  * Rules
  *   - The castaway has to sleep at least every AWAKE_MAX days (2 days, 40
  *     minutes of play). From TIRED_AT (1½ days) on he is tired: he walks
- *     slower, down to TIRED_SLOW at the limit. At the limit he falls asleep
+ *     slower, down to TIRED_SLOW (60 %) at the limit. At the limit he falls asleep
  *     where he stands.
  *   - A sleep lasts SLEEP_DAYS (8 hours) of game time; meanwhile time runs
  *     SPEED times as fast (about 20 seconds), easing up and down over EASE
@@ -50,7 +50,7 @@
  */
 import { DAY_SECONDS } from './clock.js';
 
-export const AWAKE_MAX = 2, TIRED_AT = 1.5, TIRED_SLOW = 0.75;
+export const AWAKE_MAX = 2, TIRED_AT = 1.5, TIRED_SLOW = 0.60;
 export const SLEEP_DAYS = 8 / 24, SPEED = 20, EASE = 1.5, LIE = 1.1;
 export const REST_RATE = AWAKE_MAX / SLEEP_DAYS;
 export const COLD_SLEEP = 4 / 24;   // without a fire he wakes after four hours

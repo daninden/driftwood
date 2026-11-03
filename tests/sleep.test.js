@@ -25,9 +25,12 @@ describe('being awake', () => {
     s.update(DAY_SECONDS * 0.25);
     expect(s.tired()).toBeGreaterThan(0.4); expect(s.speed()).toBeLessThan(1); expect(s.asleep).toBe(false);
   });
+  it('is halfway between 1 and TIRED_SLOW halfway to the limit', () => {
+    expect(createSleep({ awake: (TIRED_AT + AWAKE_MAX) / 2 }).speed()).toBeCloseTo(0.8, 6);
+  });
   it('falls asleep on the spot after two days', () => {
     const s = createSleep({ awake: AWAKE_MAX - 0.001 });
-    expect(s.speed()).toBeCloseTo(TIRED_SLOW, 2);
+    expect(s.speed()).toBeCloseTo(TIRED_SLOW, 2); expect(TIRED_SLOW).toBe(0.6);
     s.update(DAY_SECONDS * 0.002);
     expect(s.asleep).toBe(true); expect(s.rest()).toBe(0);
   });

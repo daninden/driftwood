@@ -66,13 +66,13 @@ Coconuts lie under the palms. Stand beside one and press the button: he kneels a
 
 ### Thirst
 
-After about a day (twenty minutes of play) you are thirsty and a little slower; after a day and a half you are very thirsty and your rest runs out twice as fast. After two days you collapse and sleep where you stand, and wake still thirsty. You never die.
+After about a day (twenty minutes of play) you are thirsty and clearly slower, with shorter steps; after a day and a half you are very thirsty and your rest runs out twice as fast. After two days you collapse and sleep where you stand, and wake still thirsty. You never die.
 
 Drink at a river: stand in the water or on its bank and press the button; you kneel and drink for a few seconds. Wood you carry is laid down first, a torch is stuck in the ground first. The sea and the lagoons are salt and do nothing, and wading in a river does not drink by itself. A small drop next to the moon shows your thirst: full after a drink, emptying as you get thirsty. Your head hangs a little when you are thirsty.
 
 ### Hunger
 
-After about two days without eating you are hungry: a little slower, and drilling a fire costs more of your rest. After four days you are starving and your rest runs out faster, so you fall asleep exhausted sooner (and if you are thirsty as well, faster still). You never die of it, and it never gets worse than that.
+After about two days without eating you are hungry: slower, and drilling a fire costs more of your rest. After four days you are starving and your rest runs out faster, so you fall asleep exhausted sooner (and if you are thirsty as well, faster still). You never die of it, and it never gets worse than that.
 
 The food is the coconut. Husking one now takes a little longer, about four seconds: first the husk comes off (you get your tuft of fibre if you have room), then you eat the nut. One nut takes away a third of the way to starving and a bit of thirst too, also when you are not hungry. Walk off before you are done and nothing happens; the nut stays. A small half coconut next to the drop shows your hunger: full after a meal, emptying as you get hungry. Coconuts grow back after a few days, so you move along the palms.
 
@@ -86,7 +86,7 @@ A burning fire needs wood now and then: stand beside it with wood in your arms a
 
 ### Sleep
 
-The moon in the bottom left corner shows how rested you are: full when rested, a thin sickle when you are worn out. After a day and a half you grow tired and slower. After two days you fall asleep where you stand.
+The moon in the bottom left corner shows how rested you are: full when rested, a thin sickle when you are worn out. After a day and a half you grow tired and slower, with shorter steps. Being tired, thirsty and hungry all slow you, and they add up (together you walk at about a third of your speed). After two days you fall asleep where you stand.
 
 Lie down on dry land whenever you like: hold the button where there is no pile to light (or press **Z**). Sleeping next to a fire lasts the whole night and you wake fully rested. Without a fire the cold wakes you after four hours, only half rested. Lie down within about a metre of a finished lean-to and the cold sleep lasts six hours and you wake three quarters rested; with a fire close by you sleep the whole night as before, and you recover a quarter faster than by a fire alone. A click, a tap, the button or a walking key wakes you early. The rising flood wakes you too. However a sleep ends, a short line fades in and out in the middle of the screen, such as *Dave wakes. Day 3.*
 

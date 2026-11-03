@@ -7,8 +7,9 @@
  *     clock (a night of sleep is a third of a day), but never beyond
  *     COLLAPSE_AT.
  *   - From THIRSTY_AT (one day, 20 minutes of play) he is thirsty: he walks
- *     slower, down to THIRST_SLOW at COLLAPSE_AT (a little slower, like
- *     tiredness; game/game combines it with the load and game/sleep's speed).
+ *     slower, down to THIRST_SLOW at COLLAPSE_AT (65 %, clearly slower;
+ *     game/game combines it with the load, game/sleep's and game/hunger's speed,
+ *     and shortens his steps with the combined factor, see game/movement).
  *   - From VERY_AT (a day and a half) he is very thirsty: his rest
  *     (game/sleep) runs out DRAIN times as fast.
  *   - At COLLAPSE_AT (two days) he collapses and sleeps like exhaustion
@@ -40,7 +41,7 @@
  * Depends on: nothing
  */
 export const THIRSTY_AT = 1, VERY_AT = 1.5, COLLAPSE_AT = 2, REVIVE_AT = 1.75;
-export const THIRST_SLOW = 0.85;   // walking speed at the point of collapse
+export const THIRST_SLOW = 0.65;   // walking speed at the point of collapse
 export const DRAIN = 2;            // rest runs out twice as fast when very thirsty
 
 export function createThirst(saved) {

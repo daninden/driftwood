@@ -33,10 +33,13 @@ describe('thirst over time', () => {
     t.update(VERY_AT - THIRSTY_AT); expect(t.very()).toBe(true); expect(t.drain()).toBe(DRAIN);
     expect(t.speed()).toBeLessThan(1); expect(t.speed()).toBeGreaterThan(THIRST_SLOW);
   });
+  it('is at 0.825 halfway from thirsty to the collapse', () => {
+    expect(createThirst({ days: (THIRSTY_AT + COLLAPSE_AT) / 2 }).speed()).toBeCloseTo(0.825, 6);
+  });
   it('never goes past two days, and the speed stays a little slower only', () => {
     const t = createThirst(); t.update(10);
     expect(t.days).toBe(COLLAPSE_AT); expect(t.faint()).toBe(true); expect(t.fill()).toBe(0);
-    expect(t.speed()).toBeCloseTo(THIRST_SLOW, 6); expect(THIRST_SLOW).toBeGreaterThan(0.8);
+    expect(t.speed()).toBeCloseTo(THIRST_SLOW, 6); expect(THIRST_SLOW).toBe(0.65);
   });
   it('is gone after a drink, and a collapse leaves him still thirsty', () => {
     const t = createThirst({ days: 1.7 }); t.drink(); expect(t.days).toBe(0);
@@ -65,10 +68,10 @@ describe('what thirst does', () => {
     const s = createSleep(); s.update(1 / 30, false, true, { faint: true }); expect(s.asleep).toBe(false);   // wades on
     s.update(1 / 30, true, true, { faint: true }); expect(s.asleep).toBe(true); expect(s.awake).toBeLessThan(AWAKE_MAX);
   });
-  it('walks a little slower in the game', () => {
+  it('walks clearly slower in the game', () => {
     const walk = days => { const g = createGame(w, spawn, { thirst: { days } }), x0 = g.player.x, z0 = g.player.z, i = makeInput({ right: true }); i.yaw = 0; run(g, i, 2); return Math.hypot(g.player.x - x0, g.player.z - z0); };
     const fresh = walk(0), thirsty = walk(1.9);
-    expect(thirsty).toBeLessThan(fresh); expect(thirsty).toBeGreaterThan(fresh * 0.8);
+    expect(thirsty).toBeLessThan(fresh); expect(thirsty).toBeGreaterThan(fresh * 0.65);
   });
   it('keeps running while asleep, and a sleep ends still thirsty', () => {
     const g = createGame(w, spawn, { thirst: { days: 1.7 } }), i = makeInput(); i.takeSleep = () => true;

@@ -8,8 +8,8 @@
  *     stops there. It has no collapse of its own; he never dies. Starving
  *     only makes rest run out faster, so he falls asleep exhausted sooner
  *     (through game/sleep, as usual).
- *   - From HUNGRY_AT (two days) he is hungry: he walks a little slower, down
- *     to HUNGER_SLOW at STARVING_AT (game/game multiplies it with the load,
+ *   - From HUNGRY_AT (two days) he is hungry: he walks slower, down
+ *     to HUNGER_SLOW (75 %) at STARVING_AT (game/game multiplies it with the load,
  *     thirst and tiredness), and drilling a fire costs DRILL_COST times as
  *     much rest (game/game scales game/fire's DRILL_COST).
  *   - From STARVING_AT (four days) he is starving: his rest (game/sleep)
@@ -38,7 +38,7 @@
  * Depends on: nothing
  */
 export const HUNGRY_AT = 2, STARVING_AT = 4;
-export const HUNGER_SLOW = 0.9;     // walking speed when starving
+export const HUNGER_SLOW = 0.75;    // walking speed when starving
 export const DRILL_COST = 1.5;      // drilling a fire costs half as much rest again when hungry
 export const STARVE_DRAIN = 1.5;    // rest runs out one and a half times as fast when starving
 export const NUT_FOOD = 4 / 3;      // days of hunger one coconut takes away

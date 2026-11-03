@@ -44,12 +44,12 @@ describe('hunger over time', () => {
     h.update(-1); h.update(NaN); expect(h.days).toBe(STARVING_AT);
   });
   it('has the agreed numbers', () => {
-    expect([HUNGRY_AT, STARVING_AT, HUNGER_SLOW, HUNGRY_DRILL, STARVE_DRAIN]).toEqual([2, 4, 0.9, 1.5, 1.5]);
+    expect([HUNGRY_AT, STARVING_AT, HUNGER_SLOW, HUNGRY_DRILL, STARVE_DRAIN]).toEqual([2, 4, 0.75, 1.5, 1.5]);
     expect(NUT_FOOD).toBeCloseTo(4 / 3, 10); expect(NUT_DRINK).toBe(0.25); expect(HUSK_TIME).toBe(4);
   });
-  it('slows from 1 at hungry down to 0.9 at starving', () => {
+  it('slows from 1 at hungry down to 0.75 at starving', () => {
     expect(createHunger({ days: HUNGRY_AT }).speed()).toBe(1);
-    expect(createHunger({ days: 3 }).speed()).toBeCloseTo(0.95, 10);
+    expect(createHunger({ days: 3 }).speed()).toBeCloseTo(0.875, 10);
     expect(createHunger({ days: STARVING_AT }).speed()).toBeCloseTo(HUNGER_SLOW, 10);
   });
   it('eating takes 4/3 of a day off, never below 0', () => {
@@ -110,7 +110,7 @@ describe('what hunger does', () => {
     const walk = o => { const g = createGame(w, spawn, o), x0 = g.player.x, z0 = g.player.z, i = makeInput({ right: true }); i.yaw = 0; run(g, i, 2); return Math.hypot(g.player.x - x0, g.player.z - z0); };
     const fresh = walk({}), hungry = walk({ hunger: { days: STARVING_AT } }), both = walk({ hunger: { days: STARVING_AT }, thirst: { days: 1.9 } });
     expect(walk({ hunger: { days: 1.9 } })).toBeCloseTo(fresh, 6);
-    expect(hungry / fresh).toBeGreaterThan(0.87); expect(hungry / fresh).toBeLessThan(0.93);
+    expect(hungry / fresh).toBeGreaterThan(0.72); expect(hungry / fresh).toBeLessThan(0.78);
     expect(both).toBeLessThan(hungry);
   });
   it('makes drilling a fire cost half as much rest again when hungry', () => {

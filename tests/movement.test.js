@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { passageSpots, startSpot } from '../src/world/spots.js';
-import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt, obstaclesNear, pushOut, bushFactor, WALK_SPEED, RUN_SPEED, STONE_MIN, BUSH_SLOW, WADE_MAX } from '../src/game/movement.js';
+import { createPlayer, stepPlayer, moveIntent, stepFactor, terrainAt, obstaclesNear, pushOut, bushFactor, WALK_SPEED, RUN_SPEED, STONE_MIN, BUSH_SLOW, WADE_MAX, WEARY_STRIDE, weariStride } from '../src/game/movement.js';
 import { CAMDIR, basis } from '../src/core/view.js';
 import { bushSize } from '../src/world/vegetation.js';
 
@@ -95,6 +95,17 @@ describe('speed', () => {
       const p = createPlayer(s), res = stepPlayer(w, p, { x: 1, z: 0 }, 0.1, run);
       expect(res.distance).toBeCloseTo((run ? RUN_SPEED : WALK_SPEED) * 0.1, 1);
     }
+  });
+});
+
+describe('weary stride', () => {
+  it('is 1 when rested and shortens by WEARY_STRIDE of what needs take off the speed', () => {
+    expect(WEARY_STRIDE).toBe(0.4);
+    expect(weariStride(1)).toBe(1);
+    expect(weariStride(0.8)).toBeCloseTo(1 - 0.4 * 0.2, 10);
+    const worst = 0.6 * 0.65 * 0.75;
+    expect(weariStride(worst)).toBeCloseTo(0.717, 3);   // clearly shorter, not a shuffle
+    expect(weariStride(worst)).toBeGreaterThan(0.7);
   });
 });
 
