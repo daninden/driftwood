@@ -2,7 +2,7 @@
 // so shadows start at the foot of a trunk or the castaway.
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { shadowBias, snapToTexels, BIAS, softPcf, SOFT_RADIUS } from '../src/render/stage.js';
+import { shadowBias, snapToTexels, BIAS, softPcf, SOFT_RADIUS, shadowMapSize } from '../src/render/stage.js';
 import { fitShadow, lightAxes, roundUp, GROW } from '../src/render/shadowFit.js';
 
 describe('shadow bias', () => {
@@ -86,6 +86,13 @@ describe('own soft shadow filter', () => {
     expect(out).toContain((SOFT_RADIUS).toFixed(3));
     expect(out.match(/texture2DCompare\( shadowMap, shadowCoord\.xy \+ vec2\( dx0, dy0 \)/g)).toBeNull();   // the 17 hard taps are gone
   });
-  it('leaves a chunk without a PCF branch alone', () => { expect(softPcf('nothing here', 1.5)).toBe('nothing here'); });
-  it('has a radius of 1.5 texels', () => { expect(SOFT_RADIUS).toBe(1.5); });
+  it('leaves a chunk without a PCF branch alone', () => { expect(softPcf('nothing here', 3)).toBe('nothing here'); });
+  it('has a radius of 3 texels', () => { expect(SOFT_RADIUS).toBe(3); });
+  it('makes every tap a bilinear comparison of four texels', () => {
+    const out = softPcf(chunk, SOFT_RADIUS);
+    expect(out).toContain('fract( p )'); expect(out).toContain('shadowMapSize');
+    expect(out).toContain('mix( mix( a0, a1, f.x ), mix( a2, a3, f.x ), f.y )');
+    expect(out.match(/texture2DCompare\( shadowMap, b/g).length).toBe(4);
+  });
+  it('chooses the shadow map size per device', () => { expect(shadowMapSize(false)).toBe(4096); expect(shadowMapSize(true)).toBe(2048); });
 });

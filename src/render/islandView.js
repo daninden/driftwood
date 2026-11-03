@@ -1,7 +1,7 @@
 /**
  * render/islandView — puts all render modules together for one world.
  *
- * createIslandView(world, container, progress?, start?) -> Promise<view>
+ * createIslandView(world, container, progress?, start?, { touch }?) -> Promise<view>
  *   start { x, z }: where the game begins, so only the far tiles in view
  *   there are built before it starts (the rest follow in the background)
  *   view.render(player, frameInfo, dt)
@@ -62,9 +62,9 @@ import { dryness } from '../game/wood.js';
 
 const BUILD_MS = 9, FAR_MS = 3;
 
-export async function createIslandView(world, container, progress, start) {
+export async function createIslandView(world, container, progress, start, opts = {}) {
   const p = progress || (async () => {});
-  const stage = createStage(container), { scene, renderer } = stage;
+  const stage = createStage(container, { touch: !!opts.touch }), { scene, renderer } = stage;
   const kit = createKit(world.noise), colorAt = createTerrainColor(world);
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   await p('water', 0);

@@ -2,6 +2,12 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.14.2 "Still edges" — 2026-11-03
+
+- Fixed: the shadows flickered. Each tiny step of the shadow light (1/32°, about ten a second) re-drew the shadow map and its jagged texel edges fell slightly differently every time. Now there are no jaggies: the shadow map is 4096 px on desktop (2048 px on touch-only devices, as before), the soft filter's radius is 3 texels (was 1.5), and each of its 16 taps is a bilinear comparison (four texels mixed by the fraction). The light's stepping is unchanged. `shadowMapSize(touch)` in `src/render/stage.js` chooses the size; `main` passes the touch test down through `createIslandView` to `createStage`.
+- Tried live and rejected: a cross-fade between two shadow lights (shadows looked doubled during the fade).
+- No change to the game's elements.
+
 ## 0.14.1 "Dry ground" — 2026-11-03
 
 - Fixed: a first pile no longer goes in the water. When no pile is near, the spot a step in front is checked too; if it is wet, a dry spot round him is used, and if there is none he keeps the wood (as with a full pile that has no room beside it).

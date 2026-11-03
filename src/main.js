@@ -111,7 +111,7 @@ async function boot() {
   const world = await generateWorld(seed, { progress: breathe, heightfield: parallel }).catch(err => { console.warn('height workers unavailable, building on the main thread', err); return generateWorld(seed, { progress: breathe }); });
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
   const at = saved ? { x: saved.player.x, z: saved.player.z, y: world.H(saved.player.x, saved.player.z) } : spawn;   // where the view opens
-  const view = await createIslandView(world, container, breathe, at);
+  const view = await createIslandView(world, container, breathe, at, { touch: touchOnly(window.matchMedia ? q => window.matchMedia(q) : null) });   // touch-only: a 2048 px shadow map
   view.setZoomMax(zoomMax(DEV_PANEL_VISIBLE));   // the dev panel (visible at the start) allows zooming out to 25
   if (saved && saved.view) view.setPose(saved.view);   // silently, in the saved pose (before the tiles in view are chosen)
   await view.prepare(at, breathe);   // no simple stand-in tiles round the castaway at the start

@@ -2,7 +2,7 @@
  * render/stage — renderer, scene and the two lights.
  *
  * A hemisphere sky fill plus one directional light (the sun by day, the
- * moon by night) with a 2048 px shadow map. Where that light stands, and its
+ * moon by night) with a shadow map of 4096 px (2048 px on touch-only devices). Where that light stands, and its
  * colour, come from render/sky; it stands still in the world while you turn
  * the view, so shadows stay on the ground. The shadow camera is fitted tightly
  * round what the view shows (render/shadowFit: finer texels, a different size
@@ -15,15 +15,19 @@
  *
  * Shadow edges: three.js's PCF is replaced once, at start, by an own filter
  * (softPcf): 16 taps on a rotated spiral disc of a radius in texels
- * (SOFT_RADIUS, 1.5), turned per screen pixel, which turns the jagged texel edges
- * into a narrow soft band.
+ * (SOFT_RADIUS, 3), turned per screen pixel, each tap a bilinear comparison
+ * (four texels mixed by the fraction), which turns the jagged texel edges
+ * into a soft band without steps. Why: with plain taps the jagged texel edges
+ * fell slightly differently at every small step of the shadow light and
+ * looked like flicker; a finer map and bilinear taps leave no jaggies to jump.
  *
- * createStage(container) -> { renderer, scene, hemi, sun, resize(), followSun(view, dir) }
+ * createStage(container, { touch }?) -> { renderer, scene, hemi, sun, resize(), followSun(view, dir) }
  *   view { target, yaw, pitch, zoom, aspect } as for fitShadow; dir: unit vector { x, y, z } towards the light
+ * shadowMapSize(touch) -> 2048 for touch-only devices, else 4096
  * snapToTexels(p, dir, texel, texelUp) -> { x, y, z }: p moved onto the texel grid of a light shining along dir (render/shadowFit)
  * shadowBias(far) -> depth bias worth BIAS metres for a shadow camera reaching to far
  * softPcf(chunk, radius) -> the three.js shadow chunk with its PCF branch replaced by the own filter (radius in texels)
- * SOFT_RADIUS -> filter radius in texels (1.5)
+ * SOFT_RADIUS -> filter radius in texels (3)
  *
  * Depends on: three, render/shadowFit
  */
@@ -34,9 +38,10 @@ export { snapToTexels };
 export const BIAS = 0.04;   // metres along the light
 /** Depth bias for a shadow camera from near 1 to `far`: always BIAS metres. */
 export const shadowBias = far => -BIAS / (far - 1);
-export const SOFT_RADIUS = 1.5;   // texels
+export const SOFT_RADIUS = 3;   // texels
+export const shadowMapSize = touch => (touch ? 2048 : 4096);   // phones keep 2048
 const PCF_OLD = /#if defined\( SHADOWMAP_TYPE_PCF \)[\s\S]*?(?=#elif defined\( SHADOWMAP_TYPE_PCF_SOFT \))/;
-/** The shadow chunk with its PCF branch replaced: 16 taps on a spiral disc of `radius` texels, turned per screen pixel (no pattern, no crawl). */
+/** The shadow chunk with its PCF branch replaced: 16 bilinear taps on a spiral disc of `radius` texels, turned per screen pixel (no pattern, no crawl). */
 export function softPcf(chunk, radius) {
   const glsl = `#if defined( SHADOWMAP_TYPE_PCF )
 
@@ -47,7 +52,10 @@ export function softPcf(chunk, radius) {
 				float fi = float( i );
 				float ang = fi * 2.3999632 + turn;
 				vec2 off = vec2( cos( ang ), sin( ang ) ) * ( sqrt( ( fi + 0.5 ) / 16.0 ) * ${radius.toFixed(3)} );
-				sum += texture2DCompare( shadowMap, shadowCoord.xy + off * texelSize, shadowCoord.z );
+				{ vec2 p = ( shadowCoord.xy + off * texelSize ) * shadowMapSize - 0.5; vec2 f = fract( p ); vec2 b = ( floor( p ) + 0.5 ) * texelSize;
+				  float a0 = texture2DCompare( shadowMap, b, shadowCoord.z ), a1 = texture2DCompare( shadowMap, b + vec2( texelSize.x, 0.0 ), shadowCoord.z );
+				  float a2 = texture2DCompare( shadowMap, b + vec2( 0.0, texelSize.y ), shadowCoord.z ), a3 = texture2DCompare( shadowMap, b + texelSize, shadowCoord.z );
+				  sum += mix( mix( a0, a1, f.x ), mix( a2, a3, f.x ), f.y ); }
 			}
 			shadow = sum * ( 1.0 / 16.0 );
 
@@ -60,7 +68,7 @@ function installSoft(radius) {
   THREE.ShaderChunk.shadowmap_pars_fragment = softPcf(THREE.ShaderChunk.shadowmap_pars_fragment, radius);   // before any material compiles
 }
 
-export function createStage(container) {
+export function createStage(container, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; installSoft(SOFT_RADIUS);
@@ -68,7 +76,7 @@ export function createStage(container) {
   const scene = new THREE.Scene();
   const hemi = new THREE.HemisphereLight(0xe2ebf0, 0x8a7458, 0.6); scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffe6c4, 1.0);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.normalBias = 0.03;
+  sun.castShadow = true; const ms = shadowMapSize(!!opts.touch); sun.shadow.mapSize.set(ms, ms); sun.shadow.normalBias = 0.03;
   scene.add(sun); scene.add(sun.target);
 
   function resize() { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); renderer.setSize(window.innerWidth, window.innerHeight); }
