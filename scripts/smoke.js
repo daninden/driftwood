@@ -20,6 +20,7 @@
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
 // smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
 // smoke-30 wood out at low water on the wet strip, smoke-31 the same spot at high water (0.18).
+// smoke-34 the dig icon beside a hole a crab fled into, smoke-35 the crab in the row and the roast icon beside a fire (0.22, both also in the quick run).
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
 // smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
 // smoke-28 fish by day on the start beach at the default zoom (0.17.3, also in the quick run).
@@ -406,6 +407,61 @@ console.log('crabs at low water', JSON.stringify(crabsShot));
 if (crabsShot.sea > -0.3) errors.push('not at low water for the crabs: ' + crabsShot.sea);
 if (crabsShot.crabs < 2) errors.push('too few crabs out at low water: ' + crabsShot.crabs);
 await shot('smoke-25.png');
+// Crab catch (0.22): at the same low water he scares the crabs into their holes, stands beside a hole one has fled
+// into (the dig icon, smoke-34), digs for 5 s (a dig that catches is chosen from the dig number, as the game would
+// roll it), carries the crab in the row, lights a fire beside him (the roast icon and the crab in the row, smoke-35), and
+// roasts and eats it (8 s, 2/3 day of hunger). Both shots are also in the quick run.
+const crab = await page.evaluate(() => {
+  const { world, game, step } = window.__driftwood, p = game.player, wl = game.wildlife, cr = game.crabs, c = game.clock, out = {};
+  const put = (x, z) => { p.x = x; p.z = z; p.y = world.H(x, z); };
+  let k = 0; for (; k < 60; k++) { cr.digs = k; const r = cr.dig(-1, 0); cr.carried.length = 0; cr.gone.delete(-1); if (r) break; }
+  cr.digs = k; out.digs = k;
+  const col = wl.coloniesNear(p.x, p.z, 30).filter(q => q.crabs.length >= 3 && q.holes.some(h => h.y > game.sea + 0.2)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+  put(col.x + 6, col.z); step(0.5); put(col.x + 0.6, col.z + 0.3); step(4);   // within 3 m: the crabs scuttle into holes
+  let h = null;
+  for (const q of col.holes) { if (h) break; put(q.x + 0.4, q.z); step(0.1); h = wl.hiding(p.x, p.z, 0.8); }
+  out.hiding = !!h; if (!h) return out;
+  put(h.x + 0.35, h.z + 0.1); p.heading = Math.atan2(h.x - p.x, h.z - p.z); step(0.1);
+  out.offered = game.action().tap && game.action().tap.kind; out.hole = h;
+  return out;
+});
+console.log('crab hole', JSON.stringify(crab));
+if (!crab.hiding || crab.offered !== 'dig') errors.push('no crab to dig for at a hole: ' + JSON.stringify(crab));
+else {
+  await shot('smoke-34.png', { quick: true, settle: 400 });
+  const dug = await page.evaluate(() => {
+    const { game, step } = window.__driftwood, p = game.player, cr = game.crabs, out = {};
+    window.__press(); step(0.1); out.kneel = p.work && p.work.kind;
+    const t0 = game.clock.total; const spent = step(8, () => !p.work);
+    out.seconds = +spent.toFixed(1); out.carried = cr.carried.length; out.gone = cr.gone.size; out.digs = cr.digs; out.t0 = t0;
+    return out;
+  });
+  console.log('dug', JSON.stringify(dug));
+  if (dug.kneel !== 'dig') errors.push('did not kneel to dig');
+  if (dug.seconds < 4.8 || dug.seconds > 5.6) errors.push('the dig took ' + dug.seconds + ' s instead of 5');
+  if (dug.carried !== 1 || dug.gone !== 1) errors.push('the chosen dig did not catch a crab: ' + JSON.stringify(dug));
+  const fire = await page.evaluate(() => {
+    const { world, game, step } = window.__driftwood, p = game.player, f = game.fire, c = game.clock;
+    const fx = p.x + Math.sin(p.heading + 1.4) * 1.1, fz = p.z + Math.cos(p.heading + 1.4) * 1.1;
+    f.fires.push({ id: 900, x: fx, z: fz, fuel: 0.4, embers: 1.5 / 24, lit: c.total, fed: 4 }); f.version++;
+    game.hunger.days = 2.5; step(0.2); window.__driftwood.draw();   // the row is drawn with the frame
+    return { tap: game.action().tap && game.action().tap.kind, row: document.querySelectorAll('#carry svg').length - game.fibre.carried, hunger: game.hunger.days };
+  });
+  console.log('crab and fire', JSON.stringify(fire));
+  if (fire.tap !== 'roast') errors.push('roast not offered beside a fire: ' + JSON.stringify(fire));
+  if (fire.row < 1) errors.push('the crab is not in the row');
+  await shot('smoke-35.png', { quick: true, settle: 400 });
+  const ate = await page.evaluate(() => {
+    const { game, step } = window.__driftwood, p = game.player, out = {};
+    window.__press(); step(0.1); out.kneel = p.work && p.work.kind;
+    out.seconds = +step(10, () => !p.work).toFixed(1); out.carried = game.crabs.carried.length; out.hunger = +game.hunger.days.toFixed(3);
+    return out;
+  });
+  console.log('roasted', JSON.stringify(ate));
+  if (ate.kneel !== 'roast') errors.push('did not kneel to roast');
+  if (ate.seconds < 7.8 || ate.seconds > 8.6) errors.push('the roast took ' + ate.seconds + ' s instead of 8');
+  if (ate.carried !== 0 || Math.abs(ate.hunger - (2.5 - 2 / 3)) > 0.03) errors.push('eating the crab went wrong: ' + JSON.stringify(ate));
+}
 // Low water finds (0.18): wood that washed up in the strip between low and high water. At low water it lies out on the
 // wet sand (smoke-30) and can be picked up; at high water its spot is under the sea, it shows faintly through the
 // water (smoke-31) and cannot be picked up. The nearest washed-up piece to the start is used, the clock set to low and

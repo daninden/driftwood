@@ -2,7 +2,7 @@
  * render/carryMark — the quiet row of small ink drawings next to the moon
  * mark that shows what the castaway carries loose. For now only the tufts
  * of coconut fibre (game/fibre `carried`, 0..3) and, since 0.16, one twig with a
- * leaf for each branch carried (`branch`); driftwood and the torch are in
+ * leaf for each branch carried (`branch`) and, since 0.22, one small crab for each crab carried (`crab`, at most two, game/crabs); driftwood and the torch are in
  * his hands or on the ground and never in the row. Later items (nails, a
  * knife, ...) add a key to ITEMS and a drawing to DRAWINGS.
  *
@@ -25,7 +25,7 @@
  */
 import { ss } from '../core/math.js';
 
-export const ITEMS = ['fibre', 'branch'];
+export const ITEMS = ['fibre', 'branch', 'crab'];
 export const REST_OPACITY = 0.5, PEAK_OPACITY = 0.95;
 export const HOLD = 3, EASE = 2;   // seconds held clear, then easing back
 
@@ -46,10 +46,14 @@ export function carryOpacity(since) {
   return PEAK_OPACITY + (REST_OPACITY - PEAK_OPACITY) * ss(0, 1, (since - HOLD) / EASE);
 }
 
+// a crab seen from above in a -10..10 box: round body, two eye stalks, two claws and three legs a side (the action button reuses it)
+export const CRAB_PATHS = '<ellipse cx="0" cy="1" rx="6.3" ry="4.3"/><path d="M-2.4 -3V-6M2.4 -3V-6"/><path d="M-5.2 -1.6C-8.6 -2.6 -9.6 -5.6 -8 -8.2C-6.4 -7.4 -5.6 -5.4 -4.6 -3.4M5.2 -1.6C8.6 -2.6 9.6 -5.6 8 -8.2C6.4 -7.4 5.6 -5.4 4.6 -3.4"/><path d="M-6 0.2L-9.8 -0.2M-5.8 2.4L-9.6 3.6M-4.4 4.8L-7.4 7.8M6 0.2L9.8 -0.2M5.8 2.4L9.6 3.6M4.4 4.8L7.4 7.8"/>';
+
 // each drawing is the inner SVG of a 0 0 20 26 box: a few loose curved
 // strokes tied together at one end (round caps, no fill)
 export const DRAWINGS = {
   branch: '<path d="M4 23C7 17 11 11 16 3"/><path d="M8.6 17C11 16.5 13.5 17.5 15 19.5"/><path d="M12 10.8C10.5 8.6 8 8 5.5 8.8"/><path d="M13.6 7C15.5 6 17.5 6.5 18.5 8"/>',
+  crab: `<g transform="translate(10 13.5) scale(0.95)">${CRAB_PATHS}</g>`,
   fibre: '<path d="M10 20C8 14 4.5 10 3 5.5"/><path d="M10 20C9.5 14 8 9 7.5 3.5"/><path d="M10 20C10.5 13 11.5 9 12.5 3"/><path d="M10 20C12 14 15 10 17 6"/><path d="M10 20C11 16 14 14 16 12.5"/><path d="M8.2 19.6L11.8 21.4M8.4 21.6L11.6 23.4"/>',
 };
 const svg = key => `<svg viewBox="0 0 20 26" aria-hidden="true">${DRAWINGS[key]}</svg>`;

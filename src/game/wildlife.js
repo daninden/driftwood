@@ -33,6 +33,10 @@
  *     sea the sea level (game/tide); wading: he stands in water
  *   wildlife.crabs()  -> [{ id, x, y, z, ang, a, moving }]   crabs above ground within ALIVE;
  *     ang: the angle (atan2(dz, dx)) of the body's long axis; a 0..1 how far out of the hole
+ *   wildlife.hiding(x, z, reach) -> null | { id, x, z, d }   0.22: the nearest crab that fled into a hole within reach (d: distance to the hole) and is still hiding in it, with the hole's place
+ *   wildlife.isHiding(id) -> true while crab id is still hiding in the hole it fled into
+ *   wildlife.escape(id)   -> the crab ran out of the back of its hole: it stays hidden three times as long and is no longer there to dig for
+ *   (update's ctx may carry gone(id) -> true for a crab that was caught and is out of its colony: it is not there)
  *   wildlife.holes()  -> [{ x, y, z }]   the crab holes within ALIVE that the sea does not cover (dark dots in the sand)
  *   wildlife.fish()   -> [{ id, kind, x, y, z, ang, a, len, ph }]   a 0..1 how visible
  *   wildlife.birds()  -> [{ id, mode: 'air' | 'ground', x, y, z, ang, pitch, bank, glide, ph }]
@@ -77,12 +81,13 @@ export function createWildlife(w, { seed = w.seed } = {}) {
   const sandOK = (x, z, margin = 0.04) => { const y = w.H(x, z); return y > sea + margin && y > -0.4 && w.Lat(x, z) < 0.5; };
 
   // ---- crabs
-  function updateCrabs(dt) {
+  function updateCrabs(dt, ctx0) {
     const frac = OUT_MIN + (1 - OUT_MIN) * clamp(-sea / RANGE, 0, 1), list = out.crabs, holes = out.holes; list.length = 0; holes.length = 0;
     for (const tile of tilesNear(ALIVE + 4)) for (const col of coloniesOfTile(w, tile)) {
       if (dist(col.x, col.z) > ALIVE + 4) continue;
       for (const h of col.holes) if (h.y > sea + 0.02 && dist(h.x, h.z) <= ALIVE) holes.push(h);
       for (const crab of col.crabs) {
+        if (ctx0.gone && ctx0.gone(crab.id)) { crabS.delete(crab.id); continue; }   // caught (game/crabs): not there until it comes back
         const hole = col.holes[crab.hole], want = hole.y > sea + 0.05 && crab.u < frac;
         let s = crabS.get(crab.id);
         if (!s) {
@@ -99,7 +104,7 @@ export function createWildlife(w, { seed = w.seed } = {}) {
           if (scared || !want) {   // to the nearest hole (or its own, when only the sea sends it home)
             let h = hole;
             if (scared) for (const q of col.holes) if (Math.hypot(q.x - s.x, q.z - s.z) < Math.hypot(h.x - s.x, h.z - s.z)) h = q;
-            s.mode = 'home'; s.tx = h.x; s.tz = h.z; s.speed = scared ? CRAB_FLEE : CRAB_HOME;
+            s.mode = 'home'; s.tx = h.x; s.tz = h.z; s.speed = scared ? CRAB_FLEE : CRAB_HOME; s.fled = scared; s.hole = h;
           } else {
             s.t -= dt;
             if (s.run) { if (goTo(s.tx, s.tz, CRAB_RUN)) { s.run = false; s.t = 1.2 + s.r() * 3.5; } else s.moving = true; }
@@ -116,7 +121,7 @@ export function createWildlife(w, { seed = w.seed } = {}) {
           if (s.a <= 0) { s.a = 0; s.mode = 'hidden'; s.t = 0; s.need = between(s.r, HIDE); s.x = s.tx; s.z = s.tz; }
         } else if (s.mode === 'hidden') {
           if (want && d > SAFE) s.t += dt;
-          if (s.t >= s.need) { s.mode = 'emerge'; s.a = 0; }
+          if (s.t >= s.need) { s.mode = 'emerge'; s.a = 0; s.fled = false; }
         } else if (s.mode === 'emerge') {
           if (d < SCARE) { s.mode = 'in'; s.tx = s.x; s.tz = s.z; }
           else { s.a += dt / 0.4; if (s.a >= 1) { s.a = 1; s.mode = 'out'; s.t = 1 + s.r() * 2; } }
@@ -124,6 +129,23 @@ export function createWildlife(w, { seed = w.seed } = {}) {
         if (s.a > 0.01) list.push({ id: crab.id, x: s.x, y: w.H(s.x, s.z), z: s.z, ang: s.ang, a: s.a, moving: s.moving });
       }
     }
+  }
+
+  // 0.22: a crab that fled into a hole and is still in it can be dug for
+  const hidingIn = s => s.fled && (s.mode === 'in' || s.mode === 'hidden') && s.hole && s.hole.y > sea + 0.05;
+  function hiding(x, z, reach) {
+    let best = null;
+    for (const [id, s] of crabS) {
+      if (!hidingIn(s)) continue;
+      const d = Math.hypot(s.hole.x - x, s.hole.z - z);
+      if (d <= reach && (!best || d < best.d)) best = { id, x: s.hole.x, z: s.hole.z, d };
+    }
+    return best;
+  }
+  const isHiding = id => { const s = crabS.get(id); return !!s && hidingIn(s); };
+  function escape(id) {
+    const s = crabS.get(id); if (!s) return;
+    s.fled = false; s.mode = 'hidden'; s.t = 0; s.need = between(s.r, HIDE) * 3;
   }
 
   // ---- fish
@@ -313,7 +335,7 @@ export function createWildlife(w, { seed = w.seed } = {}) {
   function update(dt, ctx) {
     dt = clamp(dt, 0, 0.25);
     clock += dt; p = { x: ctx.x, z: ctx.z }; time = ctx.time; sea = ctx.sea || 0; wading = !!ctx.wading; asleep = !!ctx.asleep;
-    updateCrabs(dt); updateFish(dt); updateJump(dt);
+    updateCrabs(dt, ctx); updateFish(dt); updateJump(dt);
     if (flock) updateFlock(dt);
     else if (!asleep && time >= FLOCK_DAY[0] && time < FLOCK_DAY[1]) { nextFlock -= dt; if (nextFlock <= 0) { if (!callFlock()) nextFlock = 15; } }
     const birds = out.birds; birds.length = 0; circling(birds); flockBirds(birds);
@@ -334,5 +356,5 @@ export function createWildlife(w, { seed = w.seed } = {}) {
     return res;
   }
 
-  return { update, crabs: () => out.crabs, holes: () => out.holes, fish: () => out.fish, birds: () => out.birds, jump: jumpView, callFlock, coloniesNear, get flock() { return flock; } };
+  return { update, hiding, isHiding, escape, crabs: () => out.crabs, holes: () => out.holes, fish: () => out.fish, birds: () => out.birds, jump: jumpView, callFlock, coloniesNear, get flock() { return flock; } };
 }

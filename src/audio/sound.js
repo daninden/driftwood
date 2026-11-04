@@ -139,6 +139,12 @@ export function createSound({ enabled = true } = {}) {
       clocks.work = rand(0.8, 1.1);
       tone(d, { type: 'triangle', points: [[0, 210], [1, 120]], dur: 0.11, gain: 0.5 }); grain(d, { freq: 900, q: 1.5, dur: 0.04, gain: 0.25 });
       tone(d, { at: 0.2, type: 'triangle', points: [[0, 190], [1, 110]], dur: 0.1, gain: 0.3 });
+    } else if (w.kind === 'dig') {   // a scrape in the sand, now and then a pat
+      clocks.work = rand(0.28, 0.42);
+      grain(d, { freq: 1900, to: 700, q: 0.7, dur: 0.2, gain: 0.45, attack: 0.02 }); grain(d, { at: 0.07, freq: 3200, to: 1500, q: 0.8, dur: 0.1, gain: 0.18 });
+    } else if (w.kind === 'roast') {   // a sizzle: many tiny bright pops
+      clocks.work = rand(0.05, 0.12);
+      grain(d, { freq: rand(4500, 8500), q: 0.8, dur: rand(0.05, 0.14), gain: rand(0.12, 0.3), attack: 0.002 });
     } else clocks.work = 1;   // drinking and the rest: quiet
   }
 

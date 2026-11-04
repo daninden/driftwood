@@ -29,7 +29,7 @@
  *   hunger.drain()       1, or STARVE_DRAIN when starving: how fast rest runs out
  *   hunger.drillCost()   1, or DRILL_COST when hungry: the factor on the rest a drilled fire costs
  *   hunger.update(days)  time passes (days of game time)
- *   hunger.eat()         NUT_FOOD less hunger, not below 0
+ *   hunger.eat(food?)    `food` (default NUT_FOOD, a coconut) days less hunger, not below 0; a roasted crab is CRAB_FOOD (game/crabs)
  *   hunger.state() -> { days }   plain, for saving
  *   saved: such a state, to start from (missing or bad: not hungry)
  *
@@ -54,7 +54,7 @@ export function createHunger(saved) {
     drain: () => (hunger.starving() ? STARVE_DRAIN : 1),
     drillCost: () => (hunger.hungry() ? DRILL_COST : 1),
     update(days) { if (days > 0) hunger.days = Math.min(STARVING_AT, hunger.days + days); },
-    eat() { hunger.days = Math.max(0, hunger.days - NUT_FOOD); },
+    eat(food = NUT_FOOD) { hunger.days = Math.max(0, hunger.days - food); },
     state: () => ({ days: hunger.days }),
   };
   if (saved && Number.isFinite(saved.days)) hunger.days = Math.min(STARVING_AT, Math.max(0, saved.days));

@@ -31,6 +31,8 @@
  * and when, for their regrowing) and `leantos: { list: [{ id, x, z, heading, progress }], nextId }`
  * (the lean-tos, finished or half built); the branches in piles are part of `wood.piles`
  * (kind 'branch', ids from game/branches BRANCH_ID0). Both optional: older saves have none.
+ * Since 0.22 a save may also carry `crabs: { carried: [total], gone: [[crabId, back]], digs }` (the crabs he carries with the
+ * moment each was caught, the caught crabs with the day they return to their colony, and the number of digs); optional, older saves have none.
  * saveKey(seed) -> 'driftwood-save-<seed>'
  * serialise(state) -> string          state: game.state() (plus name, startDay); adds the format number `v`
  * parseSave(text, seed) -> state | null
@@ -43,7 +45,7 @@
  *   while turning or zooming. The first pose it sees is the baseline.
  * momentKey(game) -> string           changes when something worth saving
  *   happens: wood laid down or taken from a pile, a lean-to started or finished, a fire lit or gone out, a
- *   torch stuck in the ground or taken up, falling asleep or waking up
+ *   torch stuck in the ground or taken up, falling asleep or waking up, a crab caught or eaten or gone bad
  * parseHash(hash) -> { seed, fresh }  from `#seed-<n>` and/or `new`, joined
  *   with `&` (`#new`, `#seed-2024`, `#seed-2024&new`); seed defaults to 1337
  * withoutNew(hash) -> string          the hash with `new` removed
@@ -88,6 +90,7 @@ function valid(s, seed) {
   if (s.hunger !== undefined && !(obj(s.hunger) && num(s.hunger.days))) return false;
   if (s.branches !== undefined && !(obj(s.branches) && optArr(s.branches, 'taken') && (!s.branches.taken || s.branches.taken.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1]))))) return false;
   if (s.leantos !== undefined && !(obj(s.leantos) && arr(s.leantos.list) && s.leantos.list.length <= 64 && s.leantos.list.every(l => obj(l) && [l.id, l.x, l.z, l.heading, l.progress].every(num)) && (s.leantos.nextId === undefined || num(s.leantos.nextId)))) return false;
+  if (s.crabs !== undefined && !(obj(s.crabs) && arr(s.crabs.carried) && s.crabs.carried.length <= 2 && s.crabs.carried.every(num) && arr(s.crabs.gone) && s.crabs.gone.length <= 4096 && s.crabs.gone.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1])) && num(s.crabs.digs))) return false;
   if (fi.burnt !== undefined && !(arr(fi.burnt) && fi.burnt.length <= 64 && fi.burnt.every(b => obj(b) && [b.id, b.x, b.z, b.left, b.n].every(num)))) return false;
   return !fi.torches || fi.torches.every(t => obj(t) && [t.id, t.x, t.z, t.left].every(num));
 }
@@ -120,7 +123,7 @@ export function createViewSaver(settle = VIEW_SETTLE) {
 
 export function momentKey(game) {
   const f = game.fire;
-  return [game.wood.piles.length, game.wood.piles.reduce((n, p) => n + p.logs.length, 0), f.fires.length, f.torches.length, game.sleep.asleep ? 1 : 0, game.leantos.list.length, game.leantos.list.filter(l => l.progress >= 1).length].join(',');
+  return [game.wood.piles.length, game.wood.piles.reduce((n, p) => n + p.logs.length, 0), f.fires.length, f.torches.length, game.sleep.asleep ? 1 : 0, game.leantos.list.length, game.leantos.list.filter(l => l.progress >= 1).length, game.crabs.carried.length, game.crabs.gone.size].join(',');
 }
 
 export function parseHash(hash) {

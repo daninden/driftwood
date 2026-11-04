@@ -23,7 +23,8 @@
  * drop): wood with an arrow up (pickup), wood with an arrow down (lay), the
  * half coconut (husk), a flame over a piece of wood (feed), a torch (torch), a
  * torch with a stroke of ground (plant), the drop (drink), a flame (light, hold)
- * a small lean-to (build, hold) and the crescent moon (sleep, hold).
+ * a small lean-to (build, hold), the crescent moon (sleep, hold) and, since 0.22, a hand with claws over a
+ * hole (dig) and a crab over a flame (roast).
  *
  * The pointer handling is the button's own: a finger or the mouse on it goes
  * to input.actionStart/actionEnd and never reaches the world (no walk tap, no
@@ -44,7 +45,7 @@
  *
  * Depends on: render/carryMark, render/thirstMark
  */
-import { DRAWINGS } from './carryMark.js';
+import { DRAWINGS, CRAB_PATHS } from './carryMark.js';
 import { DROP_PATH } from './thirstMark.js';
 import { SHELL_PATH, RIM_PATH } from './hungerMark.js';
 
@@ -68,9 +69,11 @@ export const ICONS = {
   drop: `<g transform="translate(-8 -12)"><path d="${DROP_PATH}"/></g>`,
   flame: '<g transform="translate(0 2) scale(1.15)">' + FLAME + '</g>',
   leanto: '<path d="M-11 11H11"/><path d="M-7 -6V11M6 6.3V11"/><path d="M-11 -9L11 4V8L-11 -5Z"/>',
+  dig: '<ellipse cx="0" cy="9" rx="9.5" ry="2.8"/><path d="M-5.5 -4C-5 -7 -4.5 -9 -4.5 -10.5M-2 -5C-1.8 -8 -1.6 -10.5 -1.6 -12M1.8 -5C2 -8 2.2 -10.5 2.2 -12M5.5 -4C5.2 -7 5 -9 5 -10.5"/><path d="M-5.5 -4C-6 0 -4 4 0 4.5C4 4 6 0 5.5 -4"/><path d="M-12 1L-9.5 3.2M12 1L9.5 3.2M-10 -3L-8 -2M10 -3L8 -2"/>',
+  roast: `<g transform="translate(0 -5.5) scale(0.9)">${CRAB_PATHS}</g><g transform="translate(0 8.5) scale(0.58)">${FLAME}</g><path d="M-8 11.5H8"/>`,
   moon: '<path d="M3 -10.5A10 10 0 1 0 10.5 3A7.5 7.5 0 0 1 3 -10.5Z"/>',
 };
-export const ICON_OF = { pickup: 'pickup', lay: 'lay', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon' };
+export const ICON_OF = { pickup: 'pickup', lay: 'lay', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon', dig: 'dig', roast: 'roast' };
 
 export function buttonIcons(action) {
   const tap = action && action.tap ? ICON_OF[action.tap.kind] || null : null, hold = action && action.hold ? ICON_OF[action.hold.kind] || null : null;

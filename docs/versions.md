@@ -2,6 +2,18 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.22 "Crab catch" — 2026-11-04
+
+- New: crabs can be caught and eaten, the second food after the coconut. Digging: beside a hole a crab has just fled into (the crab stays in its hole while he is within 5 m, as always) a short press of the action button makes him kneel and dig for 5 s (work kind `dig`, icon a hand with claws over a hole); the dig catches with chance 0.5, fixed by the seed and the number of digs so far (`game/crabs`, like `fire.attempt`, so it cannot be repeated for luck); a failed dig sends the crab out of the back (`wildlife.escape`: it stays hidden three times as long and is no longer there to dig for). More crabs are out at low water, so there are more fled crabs then.
+- Carrying: at most 2 crabs, a small crab each in the row of what he carries (ink like the other drawings); separate from `CARRY_MAX` and no slowing. A crab carried one game day goes bad and leaves the row.
+- Eating: never raw. Beside a fire with flames (not embers) a short press makes him kneel 8 s (work kind `roast`, icon a crab over a flame) and eat the crab carried longest: `hunger.eat(CRAB_FOOD)` takes 2/3 day off (the coconut stays 4/3; `hunger.eat` gets an optional amount). Choices: dry wood in his arm still feeds the fire first; otherwise roast comes before taking a torch at the same fire, and a nearer coconut or hole wins; no torch in his hand for either. If the flames are gone when the 8 s end, the crab is kept.
+- Colonies: a caught crab is gone from its colony (`wildlife.update` is given `gone(id)`) and comes back 3 to 5 days after it was caught, one crab at a time, so a colony caught empty grows back.
+- Sound: a short scrape while digging and a sizzle while roasting (work sounds of `audio/sound`, kinds `dig` and `roast`).
+- Save: optional `crabs: { carried, gone, digs }`; older saves load; `momentKey` counts crabs carried and gone.
+- Structure: new pure module `game/crabs`; `game/wildlife` gets `hiding`, `isHiding`, `escape` and the `gone` test; `game/game` the tap kinds `dig` and `roast`; `render/carryMark` the `crab` drawing (`CRAB_PATHS`), `render/actionButton` the icons `dig` and `roast`; `render/hero` kneels for both (no new animation).
+- Tests: `tests/crab.test.js` (24), `tests/action.test.js` and `tests/wildlife.test.js` follow. 701 tests in all. Smoke: at low water he scares the crabs, digs at a hole (a dig number that catches is chosen), carries the crab in the row, roasts and eats it by a fire (smoke-34 the dig icon, smoke-35 the crab in the row and the roast icon).
+- Not heard or tried by hand by the maker: the sounds, and how often a person finds a crab in a hole in real play (the fled crab must be walked up to; the dig icon is a hand over a hole and reads less clearly than the roast icon).
+
 ## 0.21 "Rain" — 2026-11-04
 
 - New: showers of rain, about once a week. The first shower starts 5 to 9 days in, each next one 5 to 9 days after the start of the last, one to two hours of game time (one to two minutes of play) with a soft start and end of ten game minutes and a strength of 0.75 to 1 of its own; all fixed per island by the seed, so never in the first two days and nothing to save for the schedule. `game/weather` (pure): `createWeather(seed)` with `showers`, `intensity`, `raining` (from 0.25), `shower`, `next`; `game.weather` and `game.rain`. On seed 1337 the showers start at day 7.97, 14.55, 22.62, 30.40, 38.14 and so on.

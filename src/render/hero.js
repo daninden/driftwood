@@ -28,7 +28,7 @@
  * Kneeling work (player.work): to husk a coconut he kneels, bent over, his
  * hands tearing at it in turn; to drink he kneels low over the water and brings his cupped hands to his mouth now and then; to make fire he kneels and twirls his staff
  * upright between his palms as a fire drill, the hands rubbing back and
- * forth. A burning torch (player.torch) he holds up in front of him in his
+ * forth; to dig for a crab he kneels the same way, hands forward and scraping, and he kneels the same way at a fire to roast one (0.22). A burning torch (player.torch) he holds up in front of him in his
  * left hand.
  *
  * SIL_OPACITY   opacity of the silhouette (0..1)
@@ -158,7 +158,7 @@ export function createHero(scene) {
 
   function update(p, wade = 0, load = []) {
     setLoad(load); clock += 1 / 60;
-    const wk = p.work, kneel = wk ? Math.min(1, wk.f * (wk.kind === 'drill' || wk.kind === 'build' ? 14 : wk.kind === 'drink' ? 4 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && wk.kind === 'drink';
+    const wk = p.work, kneel = wk ? Math.min(1, wk.f * (wk.kind === 'drill' || wk.kind === 'build' ? 14 : wk.kind === 'drink' || wk.kind === 'dig' ? 4 : wk.kind === 'roast' ? 6 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && wk.kind === 'drink';
     staff.visible = !drilling; drill.visible = drilling;
     const lit = !!p.torch && !(p.lie > 0); torch.visible = lit; if (lit) torch.userData.flicker(clock);
     group.position.set(p.x, p.y - Math.min(0.35, wade * 0.6), p.z); group.rotation.y = p.heading;

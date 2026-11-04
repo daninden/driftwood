@@ -271,7 +271,7 @@ describe('nothing beyond 30 m is alive', () => {
   it('is not saved, and the game runs it with the castaway', () => {
     const g = createGame(w, spawn, { time: 0.4 });
     for (let i = 0; i < 60; i++) g.update({}, 1 / 30);
-    expect(g.wildlife).toBeTruthy(); expect(Object.keys(g.state())).not.toContain('wildlife'); expect(JSON.stringify(g.state())).not.toMatch(/crab|flock/);
+    expect(g.wildlife).toBeTruthy(); expect(Object.keys(g.state())).not.toContain('wildlife'); expect(JSON.stringify(g.state())).not.toMatch(/flock|crabS|"holes"/);
   });
 });
 

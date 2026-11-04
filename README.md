@@ -2,7 +2,7 @@
 
 A stylised, diorama-like game: you are alone on a large, uninhabited island and slowly get to know it. Small, lonely, atmosphere first.
 
-You walk, wade rivers, gather the driftwood the tide brings, husk coconuts for fibre, drink from the rivers, make fire and a torch, and sleep when you are tired. The island (600 × 600, seed 1337) is generated from a single number, with terraces, rivers, waterfalls and natural passages through the rock walls.
+You walk, wade rivers, gather the driftwood the tide brings, husk coconuts for fibre, catch and roast crabs, drink from the rivers, make fire and a torch, and sleep when you are tired. The island (600 × 600, seed 1337) is generated from a single number, with terraces, rivers, waterfalls and natural passages through the rock walls.
 
 ## Getting started
 
@@ -32,6 +32,8 @@ Clicking or tapping only walks. Click the ground and he walks there; click a pie
 
 - wood with an arrow up: pick it up (a piece, or from a pile); wood with an arrow down: lay down what you carry
 - a half coconut: husk and eat the coconut
+- a hand over a hole: dig for a crab that has just hidden in its hole
+- a crab over a flame: roast a crab beside a fire and eat it
 - a flame over a piece of wood: lay a piece on the fire
 - a torch: take a burning brand from the fire, or take up a torch stuck in the ground; a torch with a stroke of ground: stick the torch in the ground
 - a drop: drink
@@ -80,6 +82,12 @@ After about two days without eating you are hungry: slower, and drilling a fire 
 
 The food is the coconut. Husking one now takes a little longer, about four seconds: first the husk comes off (you get your tuft of fibre if you have room), then you eat the nut. One nut takes away a third of the way to starving and a bit of thirst too, also when you are not hungry. Walk off before you are done and nothing happens; the nut stays. A small half coconut next to the drop shows your hunger: full after a meal, emptying as you get hungry. Coconuts grow back after a few days, so you move along the palms.
 
+### Crabs
+
+Crabs live in holes in the sand of the beach, more of them out on the wet sand at low water. Walk up to a colony and the crabs scuttle into their holes. Stand beside a hole one has hidden in (while you stay close it keeps hiding) and press the button: he kneels and digs, about five seconds. About half the time he gets the crab; otherwise it has run out of the back of the hole and stays hidden a good while longer. You cannot dig again for luck: whether a dig catches is decided by the island and the number of digs so far. At low water, with all the crabs out, there are many more holes to try than at high water.
+
+You can carry two crabs at most, shown as small crabs in the row next to the moon. They do not slow you and do not count against the three pieces of wood. A crab is never eaten raw: beside a fire that has flames (not just embers) press the button and he kneels about eight seconds to roast and eat one. That takes away two thirds of a day of hunger, half of what a coconut does. A raw crab you have not roasted within a day (twenty minutes of play) goes bad and is gone from the row. A crab you caught is missing from its colony; it comes back after three to five days. Walk off before you are done and nothing happens (the crab stays with you).
+
 ### Fire
 
 You need a pile of at least four pieces of dry wood and a tuft of fibre. Stand beside the pile and hold the button (or press **F**): he kneels and drills a fire, which takes about fourteen seconds, costs some of your rest and uses up the tuft. It can fail, and wet wood will not catch. A short press beside the pile just picks it up.
@@ -122,10 +130,10 @@ On a slow computer the game lowers the quality of its shadows (and, as a last st
 
 - **W A S D** or arrow keys: walk; **Shift**: run
 - **Click or tap** the ground to walk there; double tap to run. Clicking or tapping a thing (driftwood, a branch, a pile, a coconut, a fire, a torch in the ground) walks to beside it and does nothing else
-- **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks (and eats) a coconut, picks up a branch, feeds a fire, takes or sticks a torch, or drinks, whatever the drawing in the ring shows
+- **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks (and eats) a coconut, digs for a crab, roasts and eats one, picks up a branch, feeds a fire, takes or sticks a torch, or drinks, whatever the drawing in the ring shows
 - **Hold** the action button (about half a second) to light a pile beside you (or press **F** there), to build a lean-to beside a pile of driftwood and a pile of branches that are close together (or press **F** there), or to sleep (or press **Z**; only after about half a day awake)
 - A left click, a tap, the action button or a walking key wakes him; the view controls do not
-- **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, drinking, drilling a fire), like walking off
+- **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, digging, roasting, drinking, drilling a fire), like walking off
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)
 - **M**: turn sound on or off (on a phone: tap the small speaker above the moon)
 - **Enter** (or the arrow): confirm your name at the start of an island
