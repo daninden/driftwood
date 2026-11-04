@@ -142,14 +142,14 @@
         }
         // advance along the cells
         { let bj = pi, bd = 1e9; for (let j = pi; j < Math.min(plan.pts.length, pi + 8); j++) { const dd = Math.hypot(plan.pts[j].x - p.x, plan.pts[j].z - p.z); if (dd < bd) { bd = dd; bj = j; } } pi = bj; if (bd > 5) { plan = null; finalSet = false; if (++replans > 6) { idleInput(); return false; } yield; continue; } }
-        while (pi < plan.pts.length - 1 && Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 1.1) pi++;
+        while (pi < plan.pts.length - 1 && (Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 0.45 || (Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 1.1 && pth.clear(p, plan.pts[pi + 1])))) pi++;   // reached (tight: a climbing route is a narrow band), or passed on a clear line
         const last = pi >= plan.pts.length - 1 || plan.direct || Math.hypot(plan.pts.at(-1).x - p.x, plan.pts.at(-1).z - p.z) < 2.2;
         let remaining = d;
         if (last) {
           if (tap) { if (!finalSet) { input.target = { x, z, tap: true }; finalSet = true; } else if (!input.target) { return true; } }
           else input.target = { x, z };
         } else {
-          const w = plan.pts[Math.min(pi + 1, plan.pts.length - 1)]; input.target = { x: w.x, z: w.z }; if (cur) cur.dbg = [pi, plan.pts.length, w.x, w.z];
+          const w = plan.pts[pi]; input.target = { x: w.x, z: w.z }; if (cur) cur.dbg = [pi, plan.pts.length, w.x, w.z];
           remaining = (plan.pts.length - pi) * C;
         }
         input.run = (o.run !== false) && remaining > 14 && !p.winded;

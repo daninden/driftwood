@@ -26,7 +26,8 @@
  * carried, he walks out from home into the unknown, ring after ring, to the nearest unknown spot that borders what he knows (downhill for water, the low coast for
  * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water or food is known; then he is back on known ground only.
  * A higher need breaks into a lower goal (checked every CHECK seconds); a goal keeps going otherwise and a failing one is left alone for a while (`cool`).
- * He walks; only very thirsty (thirst >= 1.3) and far (20 m or more) does he run.
+ * Walking a path: he heads for the next waypoint and moves on at 0.45 m; he cuts a corner (moves on at up to 1.1 m) only when path.clear says the line to the one after is open
+ * (0.28.1: a climbing route is a narrow band). He walks; only very thirsty (thirst >= 1.3) and far (20 m or more) does he run.
  *
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
@@ -225,13 +226,14 @@ export function createMind(world, game, opts = {}) {
         if (d < 3.5 && plan.pts.length <= 3) plan.direct = true;
       }
       { let bj = pi, bd = 1e9; for (let j = pi; j < Math.min(plan.pts.length, pi + 8); j++) { const dd = Math.hypot(plan.pts[j].x - p.x, plan.pts[j].z - p.z); if (dd < bd) { bd = dd; bj = j; } } pi = bj; if (bd > 5) { plan = null; finalSet = false; if (++replans > 6) { idleInput(); return false; } yield; continue; } }
-      while (pi < plan.pts.length - 1 && Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 1.1) pi++;
+      while (pi < plan.pts.length - 1 && (Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 0.45   // reached: on to the next (tight, a climbing route can be a narrow band) ...
+        || (Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 1.1 && fd.clear(p, plan.pts[pi + 1])))) pi++;   // ... or passed: he cuts the corner only on a line that is clear (open ground)
       const last = pi >= plan.pts.length - 1 || plan.direct || Math.hypot(plan.pts.at(-1).x - p.x, plan.pts.at(-1).z - p.z) < 2.2;
       let remaining = d;
       if (last) {
         if (tap) { if (!finalSet) { inp.target = { x, z, tap: true }; finalSet = true; } else if (!inp.target) return true; }
         else inp.target = { x, z };
-      } else { const w = plan.pts[Math.min(pi + 1, plan.pts.length - 1)]; inp.target = { x: w.x, z: w.z }; remaining = (plan.pts.length - pi) * 1.5; }
+      } else { const w = plan.pts[pi]; inp.target = { x: w.x, z: w.z }; remaining = (plan.pts.length - pi) * 1.5; }
       inp.run = !!o.hurry && remaining > 20 && !p.winded;
       if (now - seen > 0.5) chk = { x: p.x, z: p.z, t: now };   // he was busy (kneeling, sleeping): count again
       seen = now;

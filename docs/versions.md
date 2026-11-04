@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.28.1 "Scramble" — 2026-11-04
+
+A bug fix for the habit and the playtest bot: they stalled for seconds, again and again, on steep scrambles and in thickets (seed 7: the water lay up a scramble, 313 stalls, 7 thirst collapses in 10 days; seed 11: 338 stalls at the stores). No walking rule changed: the paths were wrong, not the rules.
+
+- Cause: `game/path` joined two neighbouring 1.5 m cells when the step between their two centres was allowed (`stepFactor` at the end points only). A climbing route is a narrow band, so the straight line between two cells that were both on it cut across the wall; in a thicket the line ran through a pair of overlapping trunks. `stepPlayer` refused the first step on the wall (or stuck in the cusp between the trunks), and he stood still. The follower also aimed at the waypoint after the next one and turned at 1.1 m, which cut those corners off the route.
+- `game/path`: an edge is now checked the way he would walk it, in steps of 0.25 m (the probe of `stepPlayer`) with `stepFactor`: one wall or one place deeper than `WADE_MAX` anywhere on the line and the edge is closed (this also keeps wading routes out of water at the edge of `WADE_MAX`), the pace over the line is the harmonic mean of the steps, and a line that runs through a trunk, boulder or crag costs four times as much (it is slid round, and he can stick between two trunks), so open ground is preferred but a thicket is never cut off. New `path.clear(a, b)`: the line is open ground (no wall, no obstacle).
+- `game/mind` (and the playtest bot): he heads for the waypoint ahead, not the one after, and moves on at 0.45 m; he cuts a corner (moves on at up to 1.1 m) only when `path.clear` says the line to the next one is open. `game/movement` `stepFactor` has an optional last argument to leave the bushes out of a step (the path checks them at the end of a line only).
+- Measured, 10 days, walked / fresh: seed 7 max thirst 1.14 / 1.06, hunger 1.01 / 1.10, no collapse, 10 / 10 nights of his own, stuck detections 0 / 0 (was 313 stuck, 7 collapses, thirst 2.0, hunger 3.67 walked); seed 11 stuck 0 / 4 (was 338 / 297); seeds 1337 and 2024 unchanged, none stuck.
+- Tests: `tests/pathFollow.test.js` (new, with `tests/helpers/follow.js`) walks paths between the places that stalled on seeds 7 and 11 with the real `stepPlayer`; `tests/mindLife7.test.js` now holds seed 7 to the bounds of the other islands.
+- The river crossings at 0.32 to 0.35 m of the seed 7 bot and the flat-ground stall at (-106.4, 118.4): see `docs/handover.md`.
+
 ## 0.28 "Habit" — 2026-11-04
 
 Dave looks after himself when he is left alone (agreed the same day, option B: he does the ordinary, the player the special).

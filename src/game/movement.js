@@ -30,7 +30,7 @@
  * terrainAt(world, x, z, sea?) -> { y, L, s, rv, inRiver, depth, pa, fr, climb }
  *   sea: the current sea level (default 0, high water); depth is the depth
  *   of the river or the sea at (x, z)
- * stepFactor(world, from, x, z, sea?) -> 0 (blocked) or a speed factor 0..1. The steepness rule is symmetric: a step
+ * stepFactor(world, from, x, z, sea?, bushes?) -> 0 (blocked) or a speed factor 0..1 (bushes false leaves the bushes out, the dear part, for game/path). The steepness rule is symmetric: a step
  *   is allowed when it would be allowed onto the ground at either end (each judged by its own slope, the step's grade,
  *   and the climbing route there), so a step you took up into a steep pocket can always be taken back out. Water is
  *   not symmetric on purpose (only going deeper is blocked).
@@ -167,7 +167,7 @@ function climbFactor(b, steep) {
   return steep < 3.2 ? 0.42 : steep < limit ? 0.3 : 0;
 }
 
-export function stepFactor(w, a, x, z, sea = 0) {
+export function stepFactor(w, a, x, z, sea = 0, bushes = true) {
   const b = terrainAt(w, x, z, sea), dist = Math.hypot(x - a.x, z - a.z) || 1e-6, grade = (b.y - a.y) / dist;
   const deep = sea - 0.6;   // a rising tide may have overtaken you down to RANGE deeper: from there you can wade back
   if ((b.y < deep && (b.y <= a.y || a.y < deep - 0.5)) || (b.inRiver && b.depth > WADE_MAX && (b.y <= a.y || terrainAt(w, a.x, a.z, sea).depth <= WADE_MAX))) return 0;
@@ -177,7 +177,7 @@ export function stepFactor(w, a, x, z, sea = 0) {
   if (!f) { const t = terrainAt(w, a.x, a.z, sea); f = climbFactor(t, Math.max(t.s, Math.abs(grade))); }
   if (!f) return 0;
   if (b.depth > 0.05) f *= b.depth > 0.25 ? 0.45 : 0.7;
-  if (w.tiles && b.climb <= 0.25) f *= bushFactor(w, x, z);
+  if (bushes && w.tiles && b.climb <= 0.25) f *= bushFactor(w, x, z);
   return f;
 }
 

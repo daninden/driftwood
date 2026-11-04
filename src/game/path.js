@@ -3,7 +3,10 @@
  *
  * The island is laid over with a grid of C (1.5) metre cells. A cell can be stood on when game/movement `canStand` says so (at the
  * high water level), and a step from one cell to a neighbour (8 directions; a diagonal also needs both cells beside it) costs its
- * length divided by game/movement `stepFactor`, so steep scrambles, bushes and wading are dearer than open ground. A* with a
+ * length divided by game/movement `stepFactor`, so steep scrambles, bushes and wading are dearer than open ground. Since 0.28.1 the line between
+ * two cells is checked in steps of 0.25 m (the probe of `stepPlayer`): a wall, or water deeper than WADE_MAX, anywhere on it closes the edge (a climbing
+ * route is a narrow band, and the line between two cells on it can cross the wall); its pace is the harmonic mean of the steps; a trunk, boulder or
+ * crag on the line makes it four times dearer (he slides round it, and can stick between two). A* with a
  * straight-line guess. The stand and step results are cached for the life of the finder (the island does not change).
  * The finder knows nothing about the game state: `allow` keeps a walk inside a part of the island (game/mind passes "known ground").
  *
@@ -13,6 +16,7 @@
  *     from the start to the goal; cost is in seconds of walking at full pace. With `allow`, every cell after the first has to be allowed,
  *     and so has the goal's (the start may be anywhere). null when there is no way (or more than maxExp, 90000, cells were looked at); a
  *     first failure with banned cells clears the bans and tries once more (retry)
+ *   path.clear(a, b) -> true when the straight line a -> b can be walked at once: no wall, no deep water, no trunk, boulder or crag on it (game/mind cuts a corner only then)
  *   path.cost(from, to) -> cost | Infinity
  *   path.isStand(ix, iz) -> true when the cell can be stood on and is not banned (not asking `allow`)
  *   path.nearestCell(x, z, rings?, ok?) -> [ix, iz] | null   the nearest standable cell within `rings` rings (4), ok(ix, iz) may refuse some
@@ -24,10 +28,11 @@
  *
  * Depends on: game/movement, world/constants
  */
-import { canStand, stepFactor } from './movement.js';
+import { canStand, stepFactor, obstaclesNear } from './movement.js';
 import { HALF } from '../world/constants.js';
 
 export const C = 1.5, N = Math.round(2 * HALF / C);
+const STEP = 0.25;   // the length of the short steps an edge is checked in (the probe of game/movement stepPlayer)
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 class Heap {
@@ -46,17 +51,41 @@ export function createPath(world, opts = {}) {
     let v = stand.get(k); if (v === undefined) { v = canStand(world, centre(ix), centre(iz), 0) ? 1 : 0; stand.set(k, v); }
     return v === 1;
   };
+  // true when the line a -> b passes through a trunk, boulder or crag (their circles already include his own radius)
+  const hitsObstacle = (a, b) => {
+    const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1e-9;
+    for (const at of [a, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, b]) for (const o of obstaclesNear(world, at.x, at.z)) {
+      const u = Math.min(1, Math.max(0, ((o.x - a.x) * dx + (o.z - a.z) * dz) / l2));
+      if (Math.hypot(a.x + dx * u - o.x, a.z + dz * u - o.z) < o.r) return true;
+    }
+    return false;
+  };
+  // The speed factor of walking the straight line a -> b in the short steps stepPlayer takes (a probe 0.25 m ahead): 0 when any step of it is
+  // a wall, else the pace over the whole line (the harmonic mean of the steps). The ground between two cells can be a good deal steeper than at
+  // the cells themselves (a climbing route is a narrow band), so a line judged only at its ends could not always be walked.
+  const walkFactor = (a, b) => {
+    const len = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(len / STEP)), sea = 0;
+    let prev = { x: a.x, z: a.z, y: world.H(a.x, a.z) }, inv = 0;
+    for (let i = 1; i <= n; i++) {
+      const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n, f = stepFactor(world, prev, x, z, sea, i === n);   // the bushes only where the line ends (they are dear to look up)
+      if (f <= 0) return 0;
+      inv += 1 / f; prev = { x, z, y: world.H(x, z) };
+    }
+    return n / inv * (world.tiles && hitsObstacle(a, b) ? 0.25 : 1);   // a trunk or boulder on the line is slid round, and he can stick between two: dear, not a wall
+  };
+  // clear(a, b): true when the straight line a -> b can be walked at once, with no wall, trunk or boulder on it (the follower cuts a corner only then)
+  const clear = (a, b) => walkFactor(a, b) > 0.3 && !(world.tiles && hitsObstacle(a, b));
   const edgeF = (ix, iz, d) => {
     const k = (iz * N + ix) * 8 + d; let f = efs.get(k);
     if (f === undefined) {
       const [dx, dz] = DIRS[d], ax = centre(ix), az = centre(iz);
       if (!isStand(ix + dx, iz + dz) || (dx && dz && (!isStand(ix + dx, iz) || !isStand(ix, iz + dz)))) f = 0;
-      else f = stepFactor(world, { x: ax, z: az, y: world.H(ax, az) }, centre(ix + dx), centre(iz + dz), 0);
+      else f = walkFactor({ x: ax, z: az }, { x: centre(ix + dx), z: centre(iz + dz) });
       efs.set(k, f);
     }
     return f;
   };
-  const path = { allow: opts.allow || null, banned, isStand, centre, cell, find, cost, nearestCell, ban };
+  const path = { allow: opts.allow || null, banned, isStand, centre, cell, find, cost, nearestCell, ban, clear };
   const ok = (ix, iz) => !path.allow || path.allow(centre(ix), centre(iz));
   function nearestCell(x, z, rings = 4, accept = null) {
     const ix = cell(x), iz = cell(z);
