@@ -29,11 +29,12 @@
  *     breathes up and down a few centimetres every few seconds (breath) on
  *     top of the tide, so the water edge slides up and down the beach
  *
- * buildWater(world, kit, scene) -> { setSea(level), tick(dt, day) }
+ * buildWater(world, kit, scene) -> { setSea(level), tick(dt, day), clock }
  *   setSea moves the sea planes, the surf and the river mouths with the
  *   tide (game/tide) plus the breath; tick advances the water's own clock
  *   (any frame rate: it moves as fast as frames are drawn) and takes the
- *   daylight (0..1) that fades the pale lines of the swell at night
+ *   daylight (0..1) that fades the pale lines of the swell at night; clock is the water's own time in
+ *   seconds (the sound of the surf, audio/mix, breathes with it)
  * FOAM_LEVELS, foamWeights(level) -> weight 0..1 per foam level, pure
  * flowSpeed(slope, ford, fall) -> m/s a river's water moves, pure
  * breath(t) -> metres the water level breathes at time t, pure
@@ -233,5 +234,5 @@ export function buildWater(w, kit, scene) {
   setSea(0);
   /** Advance the water's own clock by dt (real seconds between drawn frames) and set the daylight 0..1. */
   function tick(dt, day) { clock += dt; uT.value = clock; uDay.value = day; setSea(tide); }
-  return { setSea, tick };
+  return { setSea, tick, get clock() { return clock; } };
 }

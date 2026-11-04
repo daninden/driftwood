@@ -40,6 +40,12 @@
  * the bottom right corner on a desktop: each frame it is given what
  * game.action() says a press would do, and input.actionFill() for its ring.
  *
+ * Sound (0.20, audio/): audio/mix (pure) decides what should be heard from the world and the game state,
+ * audio/sound builds the Web Audio graph and follows it. Sound starts with the first key or tap (the browser rule;
+ * answering the name counts); M turns it on or off, and on touch-only devices the speaker mark #sound
+ * (render/soundMark) above the moon does the same; the choice is kept in localStorage (audio/pref). The fade-out
+ * when the tab is hidden is in audio/sound.
+ *
  * The dev panel #dev (render/devPanel, src/version) shows version, name, fps,
  * the work time per frame and `idle` top right; the backtick key toggles it.
  * It is fed the real time between drawn frames and the ms update + render took.
@@ -65,7 +71,7 @@
  * While loading, the bar in #loader (index.html) shows how far it is
  * (core/loading); it fades out with the class `ready` on <body>.
  *
- * window.__driftwood exposes { world, game, view, input, ready, quality } for the smoke
+ * window.__driftwood exposes { world, game, view, input, ready, quality, sound, soundSwitch } for the smoke
  * test (and `frames`, a read-only count of drawn frames, for checking the pacing), plus three hooks so it does not have to play in real time (a
  * headless browser without a GPU draws only a few frames per second):
  *   pause(on)              stop or restart drawing in the frame loop
@@ -90,6 +96,11 @@ import { createDevPanel, DEV_PANEL_VISIBLE } from './render/devPanel.js';
 import { createNamePrompt } from './render/namePrompt.js';
 import { createDayLine, createWakeLine } from './render/nameLines.js';
 import { createInk } from './render/ink.js';
+import { createSoundMark } from './render/soundMark.js';
+import { createSound } from './audio/sound.js';
+import { createMixer } from './audio/mix.js';
+import { createSoundSwitch, isSoundKey } from './audio/pref.js';
+import { windState } from './render/wind.js';
 import { skyAt } from './render/sky.js';
 import { shouldAsk, dayNumber, dayLine, wakeLine } from './game/castaway.js';
 import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
@@ -136,6 +147,18 @@ async function boot() {
   dev.setQuality(start.level);
   const who = createDayLine(document.getElementById('who')), wakes = createWakeLine(document.getElementById('wake'));
   const ink = createInk(document.documentElement);
+  const store0 = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+  const soundSwitch = createSoundSwitch(store0), sound = createSound({ enabled: soundSwitch.on }), mixer = createMixer(world);
+  const soundEl = document.getElementById('sound'), toggleSound = () => { sound.gesture(); sound.setEnabled(soundSwitch.toggle()); mixer.reset(); soundMark.update(soundSwitch.on); };
+  const soundMark = createSoundMark(soundEl, toggleSound);
+  if (touch && soundEl) soundEl.hidden = false;   // touch-only devices have no M key
+  soundMark.update(soundSwitch.on);
+  for (const type of ['keydown', 'pointerup', 'touchend', 'click']) window.addEventListener(type, () => { sound.gesture(); }, { capture: true, passive: true });   // the first key or tap starts sound
+  window.addEventListener('keydown', e => { if (isSoundKey(e)) toggleSound(); }, true);
+  const hear = (info, dt) => {
+    const day = skyAt(info.time).day, p = game.player;
+    sound.update(mixer.update({ player: p, terrain: info.terrain, sea: info.sea, day, wind: windState(world.seed, view.windTime, game.clock.total, day), waterTime: view.waterTime, fire: game.fire, birds: game.wildlife.birds(), carried: game.wood.carried.length }, dt), dt);
+  };
   let name = saved && typeof saved.name === 'string' ? saved.name : '';   // set from the prompt below when asked
   const startDay = saved && Number.isInteger(saved.startDay) ? saved.startDay : (saved ? 0 : game.clock.day);   // day 1 is the day the game started
   let wasAsleep = game.sleep.asleep, button = null;
@@ -181,7 +204,7 @@ async function boot() {
   }
   document.body.classList.add('ready');
   const governor = createGovernor({ level: start.level, adapt: start.adapt, touch, dpr });   // starts measuring now, the island has faded in
-  window.__driftwood = { world, game, view, input, ready: true, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
+  window.__driftwood = { world, game, view, input, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     requestAnimationFrame(frame);
     if (paused) { last = now; return; }
@@ -194,7 +217,9 @@ async function boot() {
     view.zoomBy(input.takeZoom());
     view.turn(input.takeTurn(dt));
     input.yaw = view.yaw;
-    view.render(game.player, show(game.update(input, dt)), dt);
+    const info = show(game.update(input, dt));
+    view.render(game.player, info, dt);
+    if (sound.active) hear(info, dt);
     autosave(dt);
     frames++;
     if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input })) quiet.poke(now);

@@ -24,6 +24,7 @@
 // smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
 // smoke-28 fish by day on the start beach at the default zoom (0.17.3, also in the quick run).
 // smoke-29 fireflies at night among a group by a lowland river (0.17.4, also in the quick run).
+// Sound (0.20): after the first key the audio context exists and M turns sound off and on again (checked right after loading; no picture, nothing audible is judged).
 //
 // The browser is the full Chromium (channel 'chromium', new headless mode), which uses the real graphics
 // card (ANGLE on Direct3D 11 on Windows) where there is one. Without a usable card (a CI machine, or the
@@ -99,6 +100,18 @@ if (who !== 'The castaway, day 1') errors.push('name line says ' + JSON.stringif
 const err = await page.evaluate(() => document.body.dataset.error);
 if (err) { console.error('boot failed:', err); process.exit(1); }
 console.log('ready after', secs());
+
+// Sound (0.20): the audio context exists after the first key (or the answer to the name question) and M flips it, twice back.
+await page.keyboard.press('x');   // a key that does nothing in the game
+const sound0 = await page.evaluate(() => { const d = window.__driftwood; return { ctx: !!d.sound.context, on: d.soundSwitch.on, enabled: d.sound.enabled }; });
+if (!sound0.ctx) errors.push('no audio context after the first key');
+await page.keyboard.press('m');
+const sound1 = await page.evaluate(() => { const d = window.__driftwood; return { on: d.soundSwitch.on, enabled: d.sound.enabled, stored: localStorage.getItem('driftwood-sound') }; });
+if (sound1.on === sound0.on || sound1.enabled === sound0.enabled || sound1.stored !== (sound1.on ? '1' : '0')) errors.push('M did not flip the sound: ' + JSON.stringify([sound0, sound1]));
+await page.keyboard.press('m');
+const sound2 = await page.evaluate(() => { const d = window.__driftwood; return { on: d.soundSwitch.on, enabled: d.sound.enabled }; });
+if (sound2.on !== sound0.on || sound2.enabled !== sound0.enabled) errors.push('M did not flip the sound back: ' + JSON.stringify(sound2));
+console.log('sound: context', sound0.ctx, ', M', sound0.on, '->', sound1.on, '->', sound2.on);
 
 await page.evaluate(() => {
   window.__driftwood.pause(true);

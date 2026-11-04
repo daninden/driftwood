@@ -77,7 +77,24 @@ The plants move, a little, atmosphere only: nothing in the rules depends on it, 
 - **Shadows move with it:** the shadow map gets the same displacement (the shadows of fronds, crowns and bushes sway), and so does the place a plant looks up its own shadow, so there is no acne. The shadow filter is unchanged; the shadow light itself still turns in the same small steps.
 - **Quality:** on at every level (it costs a fraction of a millisecond; measured at the start view, before and after the same within the noise), so no level turns it off.
 - **Idle:** wind does not count as something happening, as moving water does not (see *Quiet frames*): an idle game draws 15 frames a second and the wind then moves at that rate. The wind keeps its own clock, advancing with the drawn frames, so a fast-forwarded sleep does not make gusts race.
-- **Sound (0.20 "Sound"):** the wind layer there will follow these gusts and the strength per height.
+- **Sound (0.20 "Sound"):** the wind layer there follows these gusts and the strength per height (see *Sound*).
+
+### Sound (0.20 "Sound", built)
+
+Everything is made in the browser (Web Audio: filtered noise, a few simple tones, envelopes); there are no sound files. It is quiet and soft, a few layers under the picture that depend on where he is; nothing is louder than the surf at the water's edge, and nothing is added that has no place on the island.
+
+- **Surf:** swells and falls back in the rhythm of the breathing surf of 0.14 (the same `breath` clock as the water level, so the sound and the water's edge move together). Loud at the water's edge, fading with the distance to the nearest sea (a fifth of the volume at 40 m, a few per cent far inland), duller and darker the further away.
+- **Rivers:** a murmur near running water, fading over about 10 m from the water's edge; louder and brighter at fords and clearly louder, with a deeper rush, near waterfalls. Heard only within 12 m of a river, as the world knows rivers (`riverAt`).
+- **Wind:** a soft breath that follows the gusts at his place and the strength per height of 0.19 (calm in the rain forest and at night, more on the plateau); a rustle of leaves and fronds when palms and trees stand near, in step with the wind; and on the summit a thin, wavering howl.
+- **Fire and torch:** a low flutter of flames and small crackles, more and louder with bigger flames; embers hush. A fire or planted torch close by is heard, further than about 15 m it is gone; the torch in his hand always.
+- **Footsteps:** one for each step (twice per walk cycle of the figure), by what is underfoot: dry sand (soft, grainy), wet sand (damp, lower, a small squelch), water (a splash) and grass or forest floor (a light swish). A run is louder; being tired, thirsty, hungry or loaded makes the steps heavier (lower, longer, a bit louder), the same needs that shorten his steps since 0.16.1.
+- **Work:** husking (dry tearing and a thump now and then), drilling fire (a quick rubbing, rising as the glow nears), building (soft knocks of wood on wood). Drinking has no sound of its own.
+- **Gulls:** the cries of seabirds when birds are near, more of them and louder for a landed flock close by; the high circling birds are heard rarely and faintly; none at night (there are none then).
+- **Crickets:** in the forest at night, a soft pulsing of a few voices; not on the open beach, not by day.
+- **Rain:** 0.21 adds it; the mix keeps an empty rain layer (gain 0) for it.
+- **Switching:** **M** turns sound on or off. On touch-only devices there is a small ink sound mark (a speaker, crossed out when off) above the moon, and a tap on it does the same. The choice is remembered per device (`localStorage`, `driftwood-sound`); the default is on. Browsers allow sound only after a key or tap, so sound starts with the first key press or tap (answering the name question counts); until then it is silent. When the tab is hidden the sound fades out and stops, and comes back when he returns.
+- **Levels:** a master gain of 0.5 and a soft limiter after it so that nothing clips; the sum of the layers stays well below it. The levels were set by the maker's reasoning, not by ear: the user listens and judges the mix, and the numbers are in `audio/mix` (one table, `LEVELS`).
+- **Pure and presentation apart:** `audio/mix` decides what should be heard from the state (testable in Node); `audio/sound` builds the Web Audio graph and applies it every frame with smoothing. Sound is presentation, so it sits beside `render` and reads the world and the game like it does.
 
 ## The castaway
 
