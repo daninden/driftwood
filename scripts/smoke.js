@@ -20,6 +20,7 @@
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
 // smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
 // smoke-30 wood out at low water on the wet strip, smoke-31 the same spot at high water (0.18).
+// smoke-36 the row with a nut, an empty and a full half shell beside the fibre tuft (0.25, also in the quick run).
 // smoke-34 the dig icon beside a hole a crab fled into, smoke-35 the crab in the row and the roast icon beside a fire (0.22, both also in the quick run).
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
 // smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
@@ -232,6 +233,19 @@ console.log('fibre', fibre);
 const hunger = await page.evaluate(() => window.__driftwood.game.hunger.days);
 if (hunger > 1.9) errors.push('hunger ' + hunger.toFixed(2) + ' after eating the nut, expected about 1.67');
 if (fibre !== 1) errors.push('carries ' + fibre + ' tufts of fibre instead of 1');
+// Shells (0.25): after eating the nut he keeps its empty half shell; with a filled shell and a carried nut added the row
+// shows them next to the fibre tuft (smoke-36, also in the quick run); the stores are emptied again afterwards.
+const shells = await page.evaluate(() => {
+  const { game, step } = window.__driftwood, s = game.shells, out = { kept: s.list.slice() };
+  s.keep(); s.fill(); s.addNut(); step(0.2); window.__driftwood.draw();   // the row is drawn with the frame
+  out.row = document.querySelectorAll('#carry svg').length - game.fibre.carried; out.list = s.list.slice(); out.nuts = s.nuts;
+  return out;
+});
+console.log('shells', JSON.stringify(shells));
+if (shells.kept.length !== 1 || shells.kept[0] !== false) errors.push('did not keep the empty half shell after eating: ' + JSON.stringify(shells.kept));
+if (shells.row !== 3) errors.push('the row shows ' + shells.row + ' drawings for two shells and a nut, expected 3');
+await shot('smoke-36.png', { quick: true, settle: 400 });
+await page.evaluate(() => { const s = window.__driftwood.game.shells; s.list.length = 0; s.nuts = 0; });
 
 // Fire: lay a pile of four dry pieces (the first beach wood) on the dry sand
 // above the tide line, press F beside it and drill (smoke-9); when it does

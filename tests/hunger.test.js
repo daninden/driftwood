@@ -31,7 +31,7 @@ const makeInput = (o = {}) => {
 };
 const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
 const at = (x, z) => ({ x, z, y: w.H(x, z) });
-const husking = o => { const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z), o), input = makeInput({ action: 'tap' }); run(g, input, 0.2); return { g, input, c }; };
+const husking = o => { const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z), { hunger: { days: 1 }, ...o }), input = makeInput({ action: 'tap' }); run(g, input, 0.2); return { g, input, c }; };
 
 describe('hunger over time', () => {
   it('starts not hungry, hungry after two days, starving after four, and stops there', () => {
@@ -81,8 +81,8 @@ describe('eating when husking', () => {
     expect(g.player.work).toBeNull(); expect(g.fibre.carried).toBe(1);
     expect(g.hunger.days).toBeCloseTo(3 - NUT_FOOD, 2); expect(g.thirst.days).toBeCloseTo(1 - NUT_DRINK, 2);
   });
-  it('also when not hungry or thirsty: nothing goes below 0', () => {
-    const { g, input } = husking(); run(g, input, HUSK_TIME + 0.5);
+  it('also when hardly hungry or thirsty: nothing goes below 0', () => {
+    const { g, input } = husking({ hunger: { days: 0.6 } }); run(g, input, HUSK_TIME + 0.5);
     expect(g.fibre.carried).toBe(1); expect(g.hunger.days).toBeLessThan(0.01); expect(g.thirst.days).toBeLessThan(0.01);
   });
   it('does nothing when stopped early, and the nut stays', () => {

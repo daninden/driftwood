@@ -2,6 +2,16 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.25 "Shell" — 2026-11-04
+
+- New: storing water and coconuts (`game/shells`, pure). After eating a coconut (husked on the ground or carried) he keeps the empty half shell, at most 2 (`SHELL_MAX`); shells do not count as wood and do not slow him.
+- Filling: at river water (where drinking is offered) a short press drinks when thirst is above 0.1 day (`DRINK_AT`), otherwise it fills an empty shell (`fill`, 2 s kneeling; wood is laid down and a torch planted first, as for drinking). Without an empty shell it always drinks.
+- Drinking a shell: with empty hands, out of the water and nothing else offered, a short press drinks a full shell when thirst is above a quarter day (`SIP_AT`): half a day of thirst less (`SIP_DRINK`, never below 0), 1.5 s. Water does not spoil. A press for wood is never taken by a drink.
+- Coconuts: at a nut on the ground a press husks and eats it when hunger is above half a day (`EAT_AT`), when he has no fibre at all (so a fire can always be started) or when he already carries 2 nuts; otherwise he picks it up (`take`, at most 2, `NUT_MAX`). A carried nut is eaten later by a press with empty hands when hungry or without fibre (same `HUSK_TIME`, food, drink and tuft); a full shell comes first when he is also thirsty. Carried nuts do not spoil; a taken nut regrows like a husked one (`fibre.pick`).
+- Row: a small coconut, an empty shell and a full shell (a wavy water line) after the crabs. Button icons: `take` (a nut with an arrow up), `fill` (a shell with a drop), `sip` (a tilted full shell); eating a carried nut uses the half coconut. He kneels in the drinking pose for fill and sip. No new sounds.
+- Save: optional `shells: { full, nuts }`; older saves load; `momentKey` counts them.
+- Tests: `tests/shells.test.js` (new), `tests/action.test.js`, `tests/fire.test.js`, `tests/hunger.test.js` follow; the smoke test keeps a shell after eating a nut and checks the row (smoke-36). 754 tests in all. Filling and sipping are covered by unit tests only, not the smoke run.
+
 ## 0.24 "Lean times" — 2026-11-04
 
 - Food is scarcer, so finding it takes a little searching every day. Coconuts: only the first nut of a palm is kept, and only for a third of the palms that have nuts (`nutsOfTile` and `NUT_SHARE` in `game/fibre`, by a hash of the seed, the tile and the palm), so about 1 palm in 5 has one nut (seed 1337: 339 nuts on 1680 palms, was 1961). A nut grows back after 6 to 10 days (was 3 to 6). Thinned in the game layer: the generated world and its fixture are unchanged; taken ids of nuts that no longer exist are dropped when an old save loads.

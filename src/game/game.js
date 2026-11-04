@@ -8,7 +8,7 @@
  * the rivers (game/thirst, game/water), and sleeping now and then (game/sleep). The state is kept small and plain so it can be saved later
  * (see docs/architecture.md, "Saving").
  *
- * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire, thirst, hunger, branches, leantos, crabs }?) -> game
+ * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire, thirst, hunger, branches, leantos, crabs, shells }?) -> game
  *   The options are what state() returns, so restoring a save is
  *   createGame(world, spawn, saved) (see save.js): each part starts from its
  *   saved state. A saved player { x, z, heading } who cannot stand there any
@@ -25,7 +25,7 @@
      thirsty: 0..1 how thirsty (game/thirst level)
  *     hungry: 0..1 how hungry (game/hunger level)
  *     running: true while he runs this frame; winded: true while he is out of breath (game/breath; for the footsteps and the panting)
- *     work: null, or { kind: 'husk' | 'drill', f: 0..1 } while kneeling to
+ *     work: null, or { kind: 'husk' | 'drill', f: 0..1 } (0.25: 'fill' FILL_TIME and 'sip' SIP_TIME too) while kneeling to
  *     husk a coconut (HUSK_TIME) or to drill fire (game/fire DRILL_TIME); 0.22: 'dig' (DIG_TIME) and 'roast' (ROAST_TIME) too
  *     torch: true while he carries a burning torch (game/fire)
  *   game.clock                  { time, day, total } (game/clock)
@@ -38,6 +38,7 @@
  *   game.thirst                 days since he drank (game/thirst)
  *   game.hunger                 days since he ate (game/hunger)
  *   game.breath                 how long he can still run (game/breath); out of breath he walks even when run is asked
+ *   game.shells                 the half shells he keeps (empty or full of water) and the coconuts he carries (game/shells, 0.25)
  *   game.crabs                  the crabs he carries and the caught ones missing from their colonies (game/crabs, 0.22)
  *   game.wildlife               crabs, fish and birds within 30 m of him: atmosphere only, not saved (game/wildlife)
  *   game.fireflies              the fireflies within 30 m of him, from dusk to an hour before sunrise: atmosphere only, not saved (game/fireflies)
@@ -58,6 +59,11 @@
  *     water, its bank and the castaway himself are just ground.
  *     Everything he does goes through the action button (input.takeAction(),
  *     Space or render/actionButton): game.action() says what it would do now.
+ *   0.25 "Shell": tap kinds 'take' (a coconut within REACH, hunger not above EAT_AT, at least one tuft of fibre carried, room for a carried nut: picks it up whole), 'husk' (the same
+ *   coconut when he is hungry, has no fibre at all or carries two already; or, with `carried: true` and no `thing`, a carried nut eaten anywhere), 'fill' (river water within 0.8 m,
+ *   thirst not above DRINK_AT, an empty shell: kneels FILL_TIME and fills it; otherwise the water offers 'drink') and 'sip' (a full shell drunk
+ *   anywhere: SIP_DRINK off the thirst). The order of priority is written out in `action` and in docs/design.md, "The action button".
+ *   Finishing a husk (on the ground or carried) also keeps the empty half shell (game/shells keep, at most 2).
  *   game.action() -> { tap, hold }   pure: what a short press and what a hold
  *     of the button would do for what he stands beside (the renderer draws the
  *     icon from it). Each is null or { kind, ... }. tap kinds, in the order of
@@ -110,7 +116,7 @@
  *   about a metre of a finished one is sheltered (game/sleep). A coconut is always offered
  *   for 'husk' (he eats it); the tuft comes only when there is room for it (game/fibre husk).
  *
- * Depends on: game/movement, game/clock, game/wood, game/branches, game/leanto, game/tide, game/sleep,
+ * Depends on: game/shells, game/movement, game/clock, game/wood, game/branches, game/leanto, game/tide, game/sleep,
  *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/water, game/wildlife, game/fireflies, game/weather
  */
 import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable, weariStride } from './movement.js';
@@ -119,6 +125,7 @@ import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, dryness } from './wood
 import { seaLevel, highWaters } from './tide.js';
 import { createSleep } from './sleep.js';
 import { createFibre } from './fibre.js';
+import { createShells, FILL_TIME, SIP_TIME, SIP_DRINK, DRINK_AT, SIP_AT, EAT_AT, NUT_MAX } from './shells.js';
 import { createBranches } from './branches.js';
 import { createLeantos, siteFor, NEED, BUILD_TIME, BUILD_COST, REACH as LEANTO_REACH } from './leanto.js';
 import { YAW } from '../core/view.js';
@@ -151,11 +158,11 @@ export function createGame(world, spawn, opts = {}) {
   const clock = createClock(opts.time, opts.day);
   const saved = opts.player && nearestStandable(world, opts.player.x, opts.player.z, seaLevel(clock.total));
   const player = createPlayer(saved ? { x: saved.x, z: saved.z, y: world.H(saved.x, saved.z) } : spawn), branches = createBranches(world, opts.branches), wood = createWood(world, opts.wood, branches), leantos = createLeantos(world, opts.leantos), sleep = createSleep(opts.sleep);
-  const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger), breath = createBreath(), crabs = createCrabs(world.seed, opts.crabs);
+  const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger), breath = createBreath(), crabs = createCrabs(world.seed, opts.crabs), shells = createShells(opts.shells);
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, leantos, fire, thirst, hunger, breath, crabs, wildlife, fireflies, weather, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, leantos, fire, thirst, hunger, breath, crabs, shells, wildlife, fireflies, weather, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action };
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
@@ -224,8 +231,8 @@ export function createGame(world, spawn, opts = {}) {
         if (log) cands.push({ d: log.d, a: { kind: 'pickup', thing: log } });
         if (pile) cands.push({ d: pile.d, a: { kind: 'pickup', thing: pile } });
       }
-      const coco = fibre.find(px, pz, REACH);   // always offered: husking is eating too, a tuft only comes with room
-      if (coco) cands.push({ d: coco.d, a: { kind: 'husk', thing: coco } });
+      const coco = fibre.find(px, pz, REACH);   // hungry (or two nuts carried already): husked and eaten on the spot, a tuft only comes with room; else picked up whole
+      if (coco) cands.push({ d: coco.d, a: { kind: hunger.days > EAT_AT || !fibre.carried || shells.nuts >= NUT_MAX ? 'husk' : 'take', thing: coco } });
       if (!torch && !swim) {   // 0.22: crabs; the roast comes before the torch at the same fire (equal distances keep their order)
         const f = crabs.carried.length ? fire.find(px, pz, BESIDE, 'fire') : null;
         if (f && fire.strength(f.fire) > 0) cands.push({ d: f.d, a: { kind: 'roast', fire: f.fire, thing: f } });
@@ -238,11 +245,15 @@ export function createGame(world, spawn, opts = {}) {
         if (t) cands.push({ d: t.d, a: { kind: 'torch', torch: t.torch, thing: t } });
       }
       const wp = findWater(world, px, pz, DRINK_REACH, game.sea);
-      if (wp && (load ? !swim : torch ? !!plantBesideSpot() : true)) cands.push({ d: Math.hypot(wp.x - px, wp.z - pz), a: { kind: 'drink', thing: wp } });   // wood is laid down and a torch stuck in the ground first
+      if (wp && (load ? !swim : torch ? !!plantBesideSpot() : true)) cands.push({ d: Math.hypot(wp.x - px, wp.z - pz), a: { kind: thirst.days <= DRINK_AT && shells.empty() ? 'fill' : 'drink', thing: wp } });   // wood is laid down and a torch stuck in the ground first
       cands.sort((p, q) => p.d - q.d);
       if (cands.length) tap = cands[0].a;
       else if (torch) tap = plantSpot() ? { kind: 'plant' } : null;
       else if (load) tap = swim ? null : { kind: 'lay' };
+      else if (!swim) {   // empty hands, nothing near to do: a full shell when thirsty, else a carried nut when hungry
+        if (shells.full() && thirst.days > SIP_AT) tap = { kind: 'sip' };
+        else if (shells.nuts && (hunger.days > EAT_AT || !fibre.carried)) tap = { kind: 'husk', carried: true };
+      }
     }
     const b = buildable(), l = b ? null : lightable();
     return { tap, hold: b || l || (sleepable() && sleep.canLie() ? { kind: 'sleep' } : null) };
@@ -260,23 +271,25 @@ export function createGame(world, spawn, opts = {}) {
 
   function press(a, input) {   // a short press of the action button
     input.clearTarget();
-    if (a.thing && a.kind !== 'drink') face(a.thing);
+    if (a.thing && a.kind !== 'drink' && a.kind !== 'fill') face(a.thing);
     if (a.kind === 'pickup') { if (wood.take(a.thing, clock.total)) stoop(); }
-    else if (a.kind === 'husk') work = { kind: 'husk', t: 0, dur: HUSK_TIME, thing: a.thing.coco };
+    else if (a.kind === 'husk') work = { kind: 'husk', t: 0, dur: HUSK_TIME, thing: a.thing ? a.thing.coco : null };   // no thing: a carried nut
+    else if (a.kind === 'take') { if (shells.nuts < NUT_MAX && fibre.pick(a.thing.coco, clock.total)) { shells.addNut(); stoop(); } }
+    else if (a.kind === 'sip') work = { kind: 'sip', t: 0, dur: SIP_TIME, thing: null };
     else if (a.kind === 'dig') work = { kind: 'dig', t: 0, dur: DIG_TIME, thing: a.thing.id };
     else if (a.kind === 'roast') work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: a.fire };
     else if (a.kind === 'feed') {   // only a piece dry enough to burn goes on; wet wood stays in his arm
       const l = wood.giveOne(p => dryness(p, clock.total) >= TORCH_DRY);
       if (l) { fire.feed(a.fire, dryness(l, clock.total), l.branch ? BRANCH_BURN : 1); stoop(); }
     } else if (a.kind === 'torch') { if (a.fire ? fire.takeTorch(a.fire) : fire.pickTorch(a.torch)) stoop(); }
-    else if (a.kind === 'drink') {
-      if (wood.carried.length || fire.torch) { if (fire.torch ? plantBeside() : lay(player.heading + Math.PI)) { stoop(); queued = 'drink'; } }   // hands first, then drink
-      else drink(a.thing);
+    else if (a.kind === 'drink' || a.kind === 'fill') {
+      if (wood.carried.length || fire.torch) { if (fire.torch ? plantBeside() : lay(player.heading + Math.PI)) { stoop(); queued = a.kind; } }   // hands first, then drink or fill
+      else drink(a.thing, a.kind);
     } else if (a.kind === 'lay') { if (lay(player.heading)) stoop(); }
     else if (a.kind === 'plant') { if (plantTorch()) stoop(); }
   }
 
-  function drink(wp) { work = { kind: 'drink', t: 0, dur: DRINK_TIME, thing: null }; face(wp); }
+  function drink(wp, kind = 'drink') { work = { kind, t: 0, dur: kind === 'fill' ? FILL_TIME : DRINK_TIME, thing: null }; face(wp); }
 
   function act(a) {   // at the spot he walked to: light the pile, or build
     if (a.kind === 'build') {
@@ -303,8 +316,13 @@ export function createGame(world, spawn, opts = {}) {
 
   function finish(wk) {
     if (wk.kind === 'build') { wk.thing.progress = 1; return; }
-    if (wk.kind === 'husk') { fibre.husk(wk.thing, clock.total); hunger.eat(); thirst.sip(NUT_DRINK); return; }
+    if (wk.kind === 'husk') {
+      if (wk.thing) fibre.husk(wk.thing, clock.total); else if (shells.eatNut()) fibre.tuft(); else return;   // a carried nut
+      hunger.eat(); thirst.sip(NUT_DRINK); shells.keep(); return;   // he keeps the empty half shell
+    }
     if (wk.kind === 'drink') { thirst.drink(); return; }
+    if (wk.kind === 'fill') { shells.fill(); return; }
+    if (wk.kind === 'sip') { if (shells.pour()) thirst.sip(SIP_DRINK); return; }
     if (wk.kind === 'dig') { if (wildlife.isHiding(wk.thing) && !crabs.dig(wk.thing, clock.total)) wildlife.escape(wk.thing); return; }   // the crab is caught, or it ran out of the back
     if (wk.kind === 'roast') { if (fire.fires.includes(wk.thing) && fire.strength(wk.thing) > 0 && crabs.eat()) hunger.eat(CRAB_FOOD); return; }
     const pile = wk.thing; if (!wood.piles.includes(pile) || !fibre.use()) return;
@@ -362,9 +380,9 @@ export function createGame(world, spawn, opts = {}) {
         player.stoop = Math.max(0, player.stoop - dt / STOOP);
         res = stepPlayer(world, player, null, dt);
       } else if (queued) {   // hands are free now: kneel and drink
-        queued = null;
+        const q = queued; queued = null;
         const wp = findWater(world, player.x, player.z, DRINK_REACH, game.sea);
-        if (wp && !wood.carried.length && !fire.torch) drink(wp);
+        if (wp && !wood.carried.length && !fire.torch) drink(wp, q);
         res = stepPlayer(world, player, null, dt);
       } else if (a && Math.hypot(input.target.x - player.x, input.target.z - player.z) < (a.kind === 'light' || a.kind === 'kindle' || a.kind === 'build' || a.close ? 0.15 : REACH)) {
         input.clearTarget(); if (a.kind !== 'stand') act(a);   // arrived: stand there, or light the pile
@@ -409,7 +427,7 @@ export function createGame(world, spawn, opts = {}) {
     return { distance: res.distance, terrain: here(), time: clock.time, sea: game.sea, rest: sleep.rest() };
   }
   function state() {
-    return { seed: world.seed, time: clock.time, day: clock.day, player: { x: player.x, z: player.z, heading: player.heading }, sleep: sleep.state(), wood: wood.state(), fibre: fibre.state(), fire: fire.state(), thirst: thirst.state(), hunger: hunger.state(), branches: branches.state(), leantos: leantos.state(), crabs: crabs.state() };
+    return { seed: world.seed, time: clock.time, day: clock.day, player: { x: player.x, z: player.z, heading: player.heading }, sleep: sleep.state(), wood: wood.state(), fibre: fibre.state(), fire: fire.state(), thirst: thirst.state(), hunger: hunger.state(), branches: branches.state(), leantos: leantos.state(), crabs: crabs.state(), shells: shells.state() };
   }
   return game;
 }

@@ -54,7 +54,7 @@ describe('coconuts and fibre', () => {
     expect(again.tiles.flatMap(t => t.cocos)).toEqual(w.tiles.flatMap(t => t.cocos));   // the world itself keeps all its nuts
   }, 120000);
   it('are husked for fibre: walk there, press the button, kneel a while, and carry a tuft', () => {
-    const c = cocos[0], g = createGame(w, at(c.x + 1, c.z)), input = makeInput({ target: { x: c.x, z: c.z, tap: true } });
+    const c = cocos[0], g = createGame(w, at(c.x + 1, c.z), { hunger: { days: 1 } }), input = makeInput({ target: { x: c.x, z: c.z, tap: true } });
     run(g, input, 1.5);
     expect(g.player.work).toBeNull();   // clicking only walks
     input.action = 'tap'; run(g, input, 0.5);
@@ -65,7 +65,7 @@ describe('coconuts and fibre', () => {
     expect(g.fibre.carried).toBe(1); expect(cocos.filter(q => !g.fibre.onGround(q)).length).toBe(1);   // the nearest nut to where he stands
   });
   it('gives nothing when husking is broken off by walking away', () => {
-    const c = cocos[0], g = createGame(w, at(c.x + 1, c.z)), input = makeInput({ target: { x: c.x, z: c.z, tap: true } });
+    const c = cocos[0], g = createGame(w, at(c.x + 1, c.z), { hunger: { days: 1 } }), input = makeInput({ target: { x: c.x, z: c.z, tap: true } });
     run(g, input, 1.5); input.action = 'tap'; run(g, input, 0.5); expect(g.player.work).not.toBeNull();
     input.up = true; run(g, input, HUSK_TIME);
     expect(g.fibre.carried).toBe(0); expect(g.fibre.onGround(c)).toBe(true);

@@ -29,6 +29,8 @@
  *     total: the days on the clock (game/clock), for when it grows back
  *   fibre.husk(coco, total) -> true when the nut was taken off the ground: it gives a tuft only
  *     when there is room (FIBRE_MAX), else none (he still eats it; game/game); false: gone already
+ *   fibre.pick(coco, total) -> true when the nut was picked up whole (0.25: it is carried, game/shells; no tuft, no regrowth change: it grows back like a husked one)
+ *   fibre.tuft() -> true when a tuft was added (room under FIBRE_MAX)
  *   fibre.use() -> true when a tuft was used up
  *   fibre.update(total)      lets taken nuts fall again when their time has come
  *   fibre.state() -> { carried, taken: [[id, total]] }   plain, for saving
@@ -61,7 +63,7 @@ export function createFibre(w, saved) {
   const byId = new Map();
   for (const t of w.tiles) for (const c of nutsOfTile(w, t)) byId.set(c.id, c);
   const taken = new Map();   // id -> the day it was taken
-  const fibre = { carried: 0, version: 0, onGround, groundCocos, find, take, husk, use, update, state };
+  const fibre = { carried: 0, version: 0, onGround, groundCocos, find, take, husk, pick, tuft, use, update, state };
   if (saved) {
     fibre.carried = Math.max(0, Math.min(FIBRE_MAX, saved.carried | 0));
     for (const [id, at] of saved.taken || []) if (byId.has(id)) taken.set(id, at);
@@ -91,6 +93,11 @@ export function createFibre(w, saved) {
     if (!c || taken.has(c.id)) return false;
     taken.set(c.id, total); if (fibre.carried < FIBRE_MAX) fibre.carried++; fibre.version++; return true;
   }
+  function pick(c, total) {
+    if (!c || taken.has(c.id)) return false;
+    taken.set(c.id, total); fibre.version++; return true;
+  }
+  function tuft() { if (fibre.carried >= FIBRE_MAX) return false; fibre.carried++; fibre.version++; return true; }
   function use() { if (fibre.carried <= 0) return false; fibre.carried--; fibre.version++; return true; }
   function update(total) {
     let n = 0;

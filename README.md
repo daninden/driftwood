@@ -31,12 +31,15 @@ The first time you start an island, the loading screen asks *What is your name?*
 Clicking or tapping only walks. Click the ground and he walks there; click a piece of driftwood, a branch, a pile, a coconut or a fire and he walks to beside it and stands there, doing nothing. Everything he does is done with the **action button**: press **Space**, or the small ring in the bottom right corner (on a phone or tablet it sits just above the thumb stick). The ring is faint and empty when there is nothing to do, and clearer with a small drawing inside when there is:
 
 - wood with an arrow up: pick it up (a piece, or from a pile); wood with an arrow down: lay down what you carry
-- a half coconut: husk and eat the coconut
+- a half coconut: husk and eat the coconut (one you stand beside, when you are hungry, or one you carry)
+- a whole coconut with an arrow up: pick the coconut up to eat later
 - a hand over a hole: dig for a crab that has just hidden in its hole
 - a crab over a flame: roast a crab beside a fire and eat it
 - a flame over a piece of wood: lay a piece on the fire
 - a torch: take a burning brand from the fire, or take up a torch stuck in the ground; a torch with a stroke of ground: stick the torch in the ground
 - a drop: drink
+- a half shell with a drop over it: fill an empty shell with river water
+- a tilted shell with water in it: drink a full shell
 
 A short press does the obvious thing for what you stand beside: what is in your hands decides first, then what is nearest, and laying down comes last. Some things take a **hold** (about half a second): hold the button to light a pile of wood (a flame) to build a lean-to (a small lean-to), or to lie down and sleep (a crescent moon). A thin ring fills round the drawing while you hold, so a short press never starts them by accident. When a short press and a hold both do something, the drawing of the short press is large and the one of the hold small beside it. Pressing the button also wakes you.
 
@@ -68,7 +71,7 @@ To build a **lean-to**, make a pile of at least six pieces of driftwood and a pi
 
 ### Coconut fibre
 
-Coconuts lie under the palms. Stand beside one and press the button: he kneels and husks it, and you eat the nut (see Hunger); you also get a tuft of fibre, as long as you have room for it. You can carry at most three tufts; with three he still eats the nut, but gets no fourth tuft. They show as small drawings next to the moon: faint most of the time, clearer for a moment when the number changes. The same row shows each piece of driftwood you carry as a small weathered log, each branch as a twig and each crab as a small crab.
+Coconuts lie under the palms. Stand beside one and press the button: when you are hungry (more than half a day since you ate) or have no fibre at all, he kneels and husks it, and you eat the nut (see Hunger); when you are not hungry and already have a tuft he picks it up instead (see Shells and coconuts to carry); you also get a tuft of fibre, as long as you have room for it. You can carry at most three tufts; with three he still eats the nut, but gets no fourth tuft. They show as small drawings next to the moon: faint most of the time, clearer for a moment when the number changes. The same row shows each piece of driftwood you carry as a small weathered log, each branch as a twig and each crab as a small crab, each coconut as a small coconut and each half shell as a small bowl.
 
 ### Thirst
 
@@ -76,11 +79,17 @@ After about a day (twenty minutes of play) you are thirsty and clearly slower, w
 
 Drink at a river: stand in the water or on its bank and press the button; you kneel and drink for a few seconds. Wood you carry is laid down first, a torch is stuck in the ground first. The sea and the lagoons are salt and do nothing, and wading in a river does not drink by itself. A small drop next to the moon shows your thirst: full after a drink, emptying as you get thirsty. Your head hangs a little when you are thirsty.
 
+### Shells and coconuts to carry
+
+After you have husked and eaten a coconut you keep its empty half shell, two at most (with two, you do not keep a third). They show in the row as small bowls. At a river, with an empty shell and hardly thirsty, a short press fills a shell instead of drinking (a short kneel, about two seconds); if you are thirsty (more than a tenth of a day since you drank) or have no empty shell, the press drinks as always. A full shell shows a line of water in it. Away from the water, with your hands empty, a press drinks a full shell when you are thirsty (more than a quarter of a day since you drank): it takes away half a day of thirst. Water in a shell does not spoil.
+
+When you are not hungry, a press beside a coconut picks it up whole instead of eating it, two at most, shown as small coconuts in the row. With two in your arms (or hungry, or with no fibre) the press husks and eats it on the spot as before. Later, when you are hungry (more than half a day since you ate) or have no fibre, and your hands are empty with nothing else to do, a press eats a carried coconut (the same four seconds, the same meal, a tuft of fibre if you have room, and the shell). A press never takes the place of something nearer: laying down or picking up wood, a coconut, a fire and a crab hole come first, and a drink from a shell comes before eating a carried coconut. Shells and coconuts weigh nothing and do not slow you, and carried coconuts do not spoil.
+
 ### Hunger
 
 After about two days without eating you are hungry: slower, and drilling a fire costs more of your rest. After four days you are starving and your rest runs out faster, so you fall asleep exhausted sooner (and if you are thirsty as well, faster still). You never die of it, and it never gets worse than that.
 
-The food is the coconut. Husking one now takes a little longer, about four seconds: first the husk comes off (you get your tuft of fibre if you have room), then you eat the nut. One nut takes away a third of the way to starving and a bit of thirst too, also when you are not hungry. Walk off before you are done and nothing happens; the nut stays. A small half coconut next to the drop shows your hunger: full after a meal, emptying as you get hungry. Coconuts are few, about one palm in five has one, and a nut grows back after six to ten days, so you search along the palms every day.
+The food is the coconut. Husking one now takes a little longer, about four seconds: first the husk comes off (you get your tuft of fibre if you have room), then you eat the nut. One nut takes away a third of the way to starving and a bit of thirst too (and when you are not hungry you can take the nut with you instead, see above). Walk off before you are done and nothing happens; the nut stays. A small half coconut next to the drop shows your hunger: full after a meal, emptying as you get hungry. Coconuts are few, about one palm in five has one, and a nut grows back after six to ten days, so you search along the palms every day.
 
 ### Crabs
 
@@ -130,10 +139,10 @@ On a slow computer the game lowers the quality of its shadows (and, as a last st
 
 - **W A S D** or arrow keys: walk; **Shift**: run, but only for a short while: after about twelve seconds he is out of breath and walks until he has recovered (sooner when he is tired, thirsty, hungry or loaded)
 - **Click or tap** the ground to walk there; double tap to run (he gets out of breath like this too). Clicking or tapping a thing (driftwood, a branch, a pile, a coconut, a fire, a torch in the ground) walks to beside it and does nothing else
-- **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks (and eats) a coconut, digs for a crab, roasts and eats one, picks up a branch, feeds a fire, takes or sticks a torch, or drinks, whatever the drawing in the ring shows
+- **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks (and eats) a coconut, picks it up, digs for a crab, roasts and eats one, picks up a branch, feeds a fire, takes or sticks a torch, or drinks, picks up a coconut, fills a shell or drinks from one, whatever the drawing in the ring shows
 - **Hold** the action button (about half a second) to light a pile beside you (or press **F** there), to build a lean-to beside a pile of driftwood and a pile of branches that are close together (or press **F** there), or to sleep (or press **Z**; only after about half a day awake)
 - A left click, a tap, the action button or a walking key wakes him; the view controls do not
-- **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run (for a short while); let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, digging, roasting, drinking, drilling a fire), like walking off
+- **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run (for a short while); let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, digging, roasting, drinking, filling a shell, drilling a fire), like walking off
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)
 - **M**, or a click or tap on the small speaker above the moon: turn sound on or off
 - **Enter** (or the arrow): confirm your name at the start of an island
