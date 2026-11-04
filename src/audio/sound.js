@@ -11,7 +11,8 @@
  *   plus a faint hiss on the crest), river (band-passed noise with a babbling second voice), wind (band-passed
  *   noise), rustle (high-passed noise with fast uneven amplitude), howl (a narrow, slowly wavering band of
  *   noise, summit only), fire (low rumble with random crackles), crickets (scheduled 4 to 5 kHz pulse trains),
- *   gulls (scheduled gliding cries), rain (an empty gain node, left for 0.21), and the buses for footsteps and work.
+ *   gulls (scheduled gliding cries), rain (0.21: noise through a high-pass and a low-pass whose cutoff drops under a
+ *   roof, with a faint patter), and the buses for footsteps, work and single effects (the hiss of a fire put out by the rain).
  *   Master gain (MASTER) into a soft limiter (DynamicsCompressor) into the speakers, so nothing clips.
  *
  * The browser only allows sound after a key or tap: gesture() creates (or resumes) the context. M or the
@@ -66,8 +67,7 @@ export function createSound({ enabled = true } = {}) {
     const lfo = (rate, depth, param) => { const o = c.createOscillator(), d = c.createGain(); o.frequency.value = rate; d.gain.value = depth; o.connect(d); d.connect(param); o.start(); return o; };
     const layer = () => gain(0, master);
 
-    const L = { surf: layer(), hiss: layer(), river: layer(), babble: layer(), wind: layer(), rustle: layer(), howl: layer(), fire: layer(), crickets: layer(), gulls: layer(), rain: layer(), steps: gain(1, master), work: gain(LEVELS.work, master) };
-    // rain (0.21): noise -> high-pass -> L.rain; audio/mix already gives a `rain` target (gain 0) that update() applies to it.
+    const L = { surf: layer(), hiss: layer(), river: layer(), babble: layer(), wind: layer(), rustle: layer(), howl: layer(), fire: layer(), crickets: layer(), gulls: layer(), rain: layer(), patter: layer(), steps: gain(1, master), work: gain(LEVELS.work, master), fx: gain(1, master) };
 
     const F = {};
     F.surf = filter('lowpass', 800, 0.4, L.surf); noise(F.surf);
@@ -80,6 +80,8 @@ export function createSound({ enabled = true } = {}) {
     noise(filter('highpass', 2800, 0.5, rustle));
     const howl = gain(5, L.howl); lfo(0.21, 0.5, howl.gain);
     F.howl = filter('bandpass', 450, 14, howl); lfo(0.13, 45, F.howl.frequency); noise(F.howl);
+    F.rain = filter('lowpass', 7500, 0.5, L.rain); noise(filter('highpass', 600, 0.5, F.rain));   // rain: a steady hiss, darker under a roof
+    const patter = gain(0.5, L.patter); lfo(8.3, 0.3, patter.gain); lfo(12.7, 0.2, patter.gain); noise(filter('bandpass', 3200, 1.2, patter));   // and a faint uneven patter
     const rumble = gain(0.8, L.fire); lfo(2.3, 0.35, rumble.gain);
     noise(filter('lowpass', 240, 0.7, rumble));
 
@@ -138,6 +140,11 @@ export function createSound({ enabled = true } = {}) {
       tone(d, { type: 'triangle', points: [[0, 210], [1, 120]], dur: 0.11, gain: 0.5 }); grain(d, { freq: 900, q: 1.5, dur: 0.04, gain: 0.25 });
       tone(d, { at: 0.2, type: 'triangle', points: [[0, 190], [1, 110]], dur: 0.1, gain: 0.3 });
     } else clocks.work = 1;   // drinking and the rest: quiet
+  }
+
+  function hiss(level) {   // a fire put out by the rain: a burst of steam
+    const bus = g.c.createGain(); bus.gain.value = level; bus.connect(g.L.fx);
+    grain(bus, { freq: 6000, to: 2600, q: 0.6, dur: 1.5, gain: 1, attack: 0.03 }); grain(bus, { at: 0.05, freq: 3000, to: 1400, q: 0.7, dur: 1.0, gain: 0.7, attack: 0.03 });
   }
 
   function crackle(rate, dt) {
@@ -205,11 +212,12 @@ export function createSound({ enabled = true } = {}) {
     set(L.fire.gain, m.fire.gain, 0.3);
     set(L.crickets.gain, m.crickets.gain, 1);
     set(L.gulls.gain, m.gulls.gain, 0.2);
-    set(L.rain.gain, m.rain.gain, 1);
+    set(L.rain.gain, m.rain.gain, 1); set(F.rain.frequency, m.rain.cutoff, 0.6); set(L.patter.gain, m.rain.gain * 0.22, 1);
     if (m.fire.rate > 0) crackle(m.fire.rate, dt);
     if (m.gulls.rate > 0) gull(m.gulls.rate, dt);
     crickets(m.crickets.gain);
     for (const s of heard.steps) step(s);
+    for (const h of heard.hisses || []) hiss(h);
     work(heard.work, dt);
   }
 

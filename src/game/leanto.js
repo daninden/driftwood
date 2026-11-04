@@ -31,6 +31,7 @@
  *   leantos.start(x, z, heading) -> the new lean-to, progress 0
  *   leantos.unfinished(x, z, reach) -> the nearest half-built lean-to whose centre is within reach, or null
  *   leantos.shelter(x, z) -> true when a finished lean-to's centre is within SLEEP_R
+ *   leantos.covers(x, z, r) -> true when a finished lean-to's centre is within r (the rain stays off wood and fires there, game/weather)
  *   leantos.flood(sea) -> number of lean-tos the sea took
  *   leantos.state() -> { list, nextId }   plain, for saving
  *   saved: such a state, to start from
@@ -62,7 +63,7 @@ export function siteFor(piles, pile) {
 }
 
 export function createLeantos(w, saved) {
-  const leantos = { list: [], version: 0, start, unfinished, shelter, flood, state };
+  const leantos = { list: [], version: 0, start, unfinished, shelter, covers, flood, state };
   let nextId = 0;
   if (saved) {
     leantos.list = (saved.list || []).map(l => ({ id: l.id, x: l.x, z: l.z, heading: l.heading, progress: Math.max(0, Math.min(1, l.progress)) }));
@@ -77,7 +78,8 @@ export function createLeantos(w, saved) {
     for (const l of leantos.list) { const d = Math.hypot(l.x - x, l.z - z); if (l.progress < 1 && d < bd) { bd = d; best = l; } }
     return best;
   }
-  function shelter(x, z) { return leantos.list.some(l => l.progress >= 1 && Math.hypot(l.x - x, l.z - z) <= SLEEP_R); }
+  function covers(x, z, r) { return leantos.list.some(l => l.progress >= 1 && Math.hypot(l.x - x, l.z - z) <= r); }
+  function shelter(x, z) { return covers(x, z, SLEEP_R); }
   function flood(sea) {
     let n = 0;
     for (let i = leantos.list.length - 1; i >= 0; i--) if (w.H(leantos.list[i].x, leantos.list[i].z) < sea) { leantos.list.splice(i, 1); n++; }

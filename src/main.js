@@ -101,6 +101,7 @@ import { createSound } from './audio/sound.js';
 import { createMixer } from './audio/mix.js';
 import { createSoundSwitch, isSoundKey } from './audio/pref.js';
 import { windState } from './render/wind.js';
+import { WOOD_SHELTER } from './game/weather.js';
 import { skyAt } from './render/sky.js';
 import { shouldAsk, dayNumber, dayLine, wakeLine } from './game/castaway.js';
 import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
@@ -157,7 +158,7 @@ async function boot() {
   window.addEventListener('keydown', e => { if (isSoundKey(e)) toggleSound(); }, true);
   const hear = (info, dt) => {
     const day = skyAt(info.time).day, p = game.player;
-    sound.update(mixer.update({ player: p, terrain: info.terrain, sea: info.sea, day, wind: windState(world.seed, view.windTime, game.clock.total, day), waterTime: view.waterTime, fire: game.fire, birds: game.wildlife.birds(), carried: game.wood.carried.length }, dt), dt);
+    sound.update(mixer.update({ player: p, terrain: info.terrain, sea: info.sea, day, wind: windState(world.seed, view.windTime, game.clock.total, day), waterTime: view.waterTime, fire: game.fire, birds: game.wildlife.birds(), carried: game.wood.carried.length, rain: game.rain, covered: game.leantos.covers(p.x, p.z, WOOD_SHELTER) }, dt), dt);
   };
   let name = saved && typeof saved.name === 'string' ? saved.name : '';   // set from the prompt below when asked
   const startDay = saved && Number.isInteger(saved.startDay) ? saved.startDay : (saved ? 0 : game.clock.day);   // day 1 is the day the game started

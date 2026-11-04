@@ -18,6 +18,7 @@
  *     above the night grading of render/mood, which would otherwise darken the
  *     firelight with everything else).
  *
+ *   - A burnt place put out by the rain (`wet: true`, 0.21) is wet ash: the ash darker, the char ends the same.
  *   - A burnt place (game/fire `burnt`) is what a fire leaves when it goes out: a
  *     patch of ash and a few charred ends on the ground, no flame, smoke or
  *     light. It fades slowly over its two days (burntOpacity) and is gone.
@@ -165,7 +166,7 @@ function createTorches(scene) {
 /** A burnt place: ash and charred ends, each place with its own materials so it fades on its own. */
 function buildBurnt(b) {
   const g = new THREE.Group(), mats = [], mat = (col, base) => { const m = toon(col, { transparent: true, opacity: base, depthWrite: false }); m.userData.base = base; mats.push(m); return m; };
-  const ash = new THREE.Mesh(ashGeo, mat(FIRE.ash, 0.85)); ash.scale.setScalar(0.5); ash.position.y = 0.012; ash.receiveShadow = true; g.add(ash);
+  const ash = new THREE.Mesh(ashGeo, mat(b.wet ? new THREE.Color(FIRE.ash).multiplyScalar(0.55).getHex() : FIRE.ash, 0.85)); ash.scale.setScalar(0.5); ash.position.y = 0.012; ash.receiveShadow = true; g.add(ash);
   const dark = new THREE.Mesh(ashGeo, mat(FIRE.char[2], 0.7)); dark.scale.set(0.3, 1, 0.24); dark.rotation.y = b.id; dark.position.y = 0.014; g.add(dark);
   for (let i = 0; i < b.n; i++) {   // the charred ends, lying where the tepee fell
     const a = i / b.n * Math.PI * 2 + b.id, m = new THREE.Mesh(logGeo, mat(FIRE.char[i % FIRE.char.length], 1));

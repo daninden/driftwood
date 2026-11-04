@@ -29,7 +29,11 @@
  *     breathes up and down a few centimetres every few seconds (breath) on
  *     top of the tide, so the water edge slides up and down the beach
  *
- * buildWater(world, kit, scene) -> { setSea(level), tick(dt, day), clock }
+ * Rain (0.21): a uniform uRain (0..1, the intensity of the shower) lets small rings spread and fade on the sea and the
+ *   rivers (rainRings in RAIN_GLSL: a grid of cells, each with a drop of its own now and then, a thin ring growing
+ *   from it); nothing else changes, and with uRain at 0 the shader does the same as before.
+ *
+ * buildWater(world, kit, scene) -> { setSea(level), tick(dt, day, rain?), clock }
  *   setSea moves the sea planes, the surf and the river mouths with the
  *   tide (game/tide) plus the breath; tick advances the water's own clock
  *   (any frame rate: it moves as fast as frames are drawn) and takes the
@@ -87,11 +91,27 @@ float wNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 *
   return mix(mix(wHash(i), wHash(i + vec2(1.0, 0.0)), f.x), mix(wHash(i + vec2(0.0, 1.0)), wHash(i + vec2(1.0, 1.0)), f.x), f.y); }
 `;
 
+// rings of rain drops: cells of a metre, each with a drop of its own (a chance of uRain), a ring growing to 0.2 m while it fades
+const RAIN_GLSL = `
+uniform float uRain;
+float rainRings(vec2 p, float t) {
+  float acc = 0.0;
+  for (int i = 0; i < 2; i++) {
+    vec2 q = p * (1.0 + 0.7 * float(i)) + 17.0 * float(i), id = floor(q), f = fract(q);
+    float h = wHash(id), on = step(h, uRain * 0.55);
+    vec2 c = vec2(wHash(id + 3.1), wHash(id + 7.7)) * 0.4 + 0.3;
+    float age = fract(t * (0.5 + 0.4 * wHash(id + 1.3)) + h * 9.0);
+    acc += on * smoothstep(0.035, 0.0, abs(length(f - c) - age * 0.26)) * (1.0 - age) * (1.0 - age);
+  }
+  return clamp(acc, 0.0, 1.0);
+}
+`;
+
 function perpOf(rv, k) { const a = rv.pts[Math.max(0, k - 2)], b = rv.pts[Math.min(rv.n - 1, k + 2)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1; return { x: -(b.z - a.z) / l, z: (b.x - a.x) / l }; }
 
 const LOW = -0.5;   // a main river's ribbon runs on past its mouth until its water is this far below high water
 
-function riverRibbon(w, rv, sea, uT, uDay) {
+function riverRibbon(w, rv, sea, uT, uDay, uRain) {
   const { hash2 } = w.noise, pos = [], col = [], al = [], lvs = [], rfs = [], idx = [], X = 7, wc = hex(P.water), white = [1, 1, 1];
   let kEnd = rv.n - 1;
   if (rv.main) { kEnd = rv.kMouth; while (kEnd < rv.n - 1 && rv.L(kEnd / (rv.n - 1)) > LOW) kEnd++; }
@@ -118,10 +138,10 @@ function riverRibbon(w, rv, sea, uT, uDay) {
   const mt = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 0.25, metalness: 0, depthWrite: false, side: THREE.DoubleSide });
   mt.onBeforeCompile = sh => {
     // the water stands at its own level, or at the sea's where that is higher, and fades into the sea
-    sh.uniforms.uSea = sea; sh.uniforms.uT = uT; sh.uniforms.uDay = uDay;
-    sh.vertexShader = 'attribute float alpha;\nattribute float lv;\nattribute vec3 rf;\nuniform float uSea;\nvarying float vA;\nvarying vec3 vRF;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.y = max(lv, uSea) + 0.015;\nvA = alpha * smoothstep(uSea - 0.3, uSea + 0.15, lv);\nvRF = rf;');
+    sh.uniforms.uSea = sea; sh.uniforms.uT = uT; sh.uniforms.uDay = uDay; sh.uniforms.uRain = uRain;
+    sh.vertexShader = 'attribute float alpha;\nattribute float lv;\nattribute vec3 rf;\nuniform float uSea;\nvarying float vA;\nvarying vec3 vRF;\nvarying vec3 vWP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.y = max(lv, uSea) + 0.015;\nvA = alpha * smoothstep(uSea - 0.3, uSea + 0.15, lv);\nvRF = rf;\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     // light streaks and flecks drift downstream; white water breaks up and moves (rf: flow time, metres across, whiteness)
-    sh.fragmentShader = 'varying float vA;\nvarying vec3 vRF;\nuniform float uT;\nuniform float uDay;\n' + NOISE_GLSL + sh.fragmentShader
+    sh.fragmentShader = 'varying float vA;\nvarying vec3 vRF;\nvarying vec3 vWP;\nuniform float uT;\nuniform float uDay;\n' + NOISE_GLSL + RAIN_GLSL + sh.fragmentShader
       .replace('#include <color_fragment>', `#include <color_fragment>
       {
         float e = vRF.z, x = (vRF.x - uT) * 0.35, y = vRF.y * 2.2, lit = 0.45 + 0.55 * uDay;
@@ -130,6 +150,8 @@ function riverRibbon(w, rv, sea, uT, uDay) {
         float broken = smoothstep(0.42, 0.72, wNoise(vec2(x * 2.2 + 3.0, y * 1.6 + 5.0)));
         diffuseColor.rgb *= 1.0 - e * 0.12 * (1.0 - broken);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), clamp((streak + fleck + e * 0.45 * broken) * lit, 0.0, 0.85));
+        float ring = rainRings(vWP.xz, uT) * (1.0 - e * 0.7) * (0.35 + 0.65 * uDay);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.97, 1.0), ring * 0.55);
       }`)
       .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.a *= vA;');
   };
@@ -140,16 +162,16 @@ function riverRibbon(w, rv, sea, uT, uDay) {
 export function buildWater(w, kit, scene) {
   const { H, Lat, slope } = w;
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2), toon(new THREE.Color().setRGB(...mix(PC.seabed, PC.waterDeep, 0.55)).getHex())); floor.position.y = -9.05; scene.add(floor);
-  const uT = { value: 0 }, uDay = { value: 1 };
+  const uT = { value: 0 }, uDay = { value: 1 }, uRain = { value: 0 };
   const calm = calmField(w), calmTex = new THREE.DataTexture(calm.data, calm.n, calm.n, THREE.LuminanceFormat, THREE.UnsignedByteType);
   calmTex.magFilter = calmTex.minFilter = THREE.LinearFilter; calmTex.wrapS = calmTex.wrapT = THREE.ClampToEdgeWrapping; calmTex.generateMipmaps = false; calmTex.needsUpdate = true;
   const seaMat = new THREE.MeshStandardMaterial({ color: P.water, transparent: true, opacity: 0.5, roughness: 0.15, metalness: 0, depthWrite: false });
   seaMat.onBeforeCompile = sh => {
-    sh.uniforms.uT = uT; sh.uniforms.uDay = uDay; sh.uniforms.uCalm = { value: calmTex };
+    sh.uniforms.uT = uT; sh.uniforms.uDay = uDay; sh.uniforms.uRain = uRain; sh.uniforms.uCalm = { value: calmTex };
     sh.vertexShader = 'varying vec3 vWP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     // a slow long swell tilts the surface (crossing plane waves bent by a little noise) and fine ripples ride its crests, so the lights glint on it;
     // faint pale lines on the crests by day; lagoons and bays are calmer
-    sh.fragmentShader = 'varying vec3 vWP;\nuniform float uT;\nuniform float uDay;\nuniform sampler2D uCalm;\n' + NOISE_GLSL + sh.fragmentShader
+    sh.fragmentShader = 'varying vec3 vWP;\nuniform float uT;\nuniform float uDay;\nuniform sampler2D uCalm;\n' + NOISE_GLSL + RAIN_GLSL + sh.fragmentShader
       .replace('#include <color_fragment>', `#include <color_fragment>
       float swH = 0.0; vec2 swG = vec2(0.0), rpG = vec2(0.0);
       {
@@ -169,6 +191,9 @@ export function buildWater(w, kit, scene) {
         float line = smoothstep(0.35, 0.9, swH) * still * far;
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.97, 1.0), line * 0.12 * uDay);
         diffuseColor.a = min(1.0, diffuseColor.a + line * 0.1 * uDay);
+        float ring = rainRings(p, uT) * (1.0 - smoothstep(60.0, 220.0, length(vViewPosition))) * (0.35 + 0.65 * uDay);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.97, 1.0), ring * 0.5);
+        diffuseColor.a = min(1.0, diffuseColor.a + ring * 0.25);
       }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       normal = normalize(normal + (viewMatrix * vec4(-(swG.x + rpG.x), 0.0, -(swG.y + rpG.y), 0.0)).xyz);`);
@@ -177,7 +202,7 @@ export function buildWater(w, kit, scene) {
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2), seaMat); sea.renderOrder = 2; scene.add(sea);
   const seaTop = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: P.waterDeep, transparent: true, opacity: 0.18, roughness: 0.1, depthWrite: false })); seaTop.position.y = 0.005; seaTop.renderOrder = 3; scene.add(seaTop);
   const seaU = { value: 0 };
-  w.rivers.forEach(rv => { const m = riverRibbon(w, rv, seaU, uT, uDay); m.frustumCulled = false; scene.add(m); });
+  w.rivers.forEach(rv => { const m = riverRibbon(w, rv, seaU, uT, uDay, uRain); m.frustumCulled = false; scene.add(m); });
 
   const foamGeo = new THREE.CircleGeometry(1, 10).rotateX(-Math.PI / 2);
   const foamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false });
@@ -232,7 +257,7 @@ export function buildWater(w, kit, scene) {
     foamWeights(s).forEach((k, i) => { const f = surf[i]; f.g.visible = k > 0.001; f.m1.opacity = 0.7 * k; f.m2.opacity = 0.4 * k; });
   }
   setSea(0);
-  /** Advance the water's own clock by dt (real seconds between drawn frames) and set the daylight 0..1. */
-  function tick(dt, day) { clock += dt; uT.value = clock; uDay.value = day; setSea(tide); }
+  /** Advance the water's own clock by dt (real seconds between drawn frames) and set the daylight 0..1 and the rain 0..1. */
+  function tick(dt, day, rain = 0) { clock += dt; uT.value = clock; uDay.value = day; uRain.value = rain; setSea(tide); }
   return { setSea, tick, get clock() { return clock; } };
 }

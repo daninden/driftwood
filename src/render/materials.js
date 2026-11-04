@@ -8,7 +8,9 @@
  * outlineMat          dark brown back-face hull, scaled copies give outlines
  * terrainMat(map)     toon material for a terrain tile; in the shader, steep
  *                     faces get painted rock: strata, cracks and ledges,
- *                     greyer and cooler higher up
+ *                     greyer and cooler higher up; in the rain (0.21) the
+ *                     ground is a little darker and has a soft sheen
+ * setGroundWet(v)     0..1 how wet the ground looks (the intensity of the rain); one shared uniform
  *
  * Depends on: three
  */
@@ -58,15 +60,24 @@ const ROCK_GLSL = `#include <map_fragment>
     diffuseColor.rgb = mix(diffuseColor.rgb, rc, st);
   }`;
 
+const groundWet = { value: 0 };
+export const setGroundWet = v => { groundWet.value = v; };
+
 export function terrainMat(map) {
   const m = toon(0xffffff, { map });
   m.onBeforeCompile = sh => {
+    sh.uniforms.uWet = groundWet;
     sh.vertexShader = 'varying vec3 vWP;\nvarying vec3 vWN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWN = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = `varying vec3 vWP;
 varying vec3 vWN;
+uniform float uWet;
 float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vn2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
-` + sh.fragmentShader.replace('#include <map_fragment>', ROCK_GLSL);
+` + sh.fragmentShader.replace('#include <map_fragment>', ROCK_GLSL + '\ndiffuseColor.rgb *= 1.0 - 0.16 * uWet;')
+      .replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;', `vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;
+    #if NUM_DIR_LIGHTS > 0
+    outgoingLight += smoothstep(0.78, 0.97, dot(normal, normalize(directionalLights[0].direction + vec3(0.0, 0.0, 1.0)))) * directionalLights[0].color * 0.09 * uWet;
+    #endif`);
   };
   m.customProgramCacheKey = () => 'terrain';
   return m;

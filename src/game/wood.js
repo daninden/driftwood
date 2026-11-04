@@ -38,6 +38,12 @@
  *   - Freshly washed-up wood is wet and salty. It dries over DRY_DAYS (a day)
  *     wherever it lies or is carried; the wood that lay on the beach at the
  *     start is dry. Only dry wood makes a fire catch (game/fire).
+ *   - Rain (0.21, game/weather) wets wood again: wood.rain soaks what lies in the open
+ *     (loose pieces within RAIN_REACH of him, every pile, and what he carries) by setting
+ *     its log.t to now, so it dries again from the moment the rain stops. Wood under a roof
+ *     (the sheltered callback) stays as it is. A branch dries in BRANCH_DRY_DAYS (half a day),
+ *     driftwood in DRY_DAYS. What rain soaked and is not washed-up wood (start wood, branches)
+ *     is saved in the optional field `wet`.
  *
  * Pure data on a world (world/vegetation `tile.drift`); no DOM, no Three.js.
  *
@@ -67,15 +73,18 @@
  *     Each carries t, the day of that high water (game/tide), for drying.
  *   wood.tideUpdate(sea, total)  tells the wood the sea level (pieces under it cannot be picked
  *     up) and restarts the drying (log.t = total) of every washed-up piece the sea covers
- *   wood.drying(total)  true while some washed-up or carried piece can still be wet
+ *   wood.rain(total, falling, sheltered, at)  while falling is true, soaks the wood in the open near at { x, z } (the
+ *     castaway) that sheltered(x, z) does not cover: loose pieces within RAIN_REACH, all piles, what is carried
+ *     (by his place). Always lets go of wood that has dried. Bumps wood.version when a dry piece got wet.
+ *   wood.drying(total)  true while some washed-up, carried or rain-soaked piece can still be wet
  *   wood.takePile(pile) -> its logs, taken off the island (to burn, game/fire)
  *   wood.giveOne(ok?) -> the top piece carried that ok(log) accepts (any, without
  *     ok), taken off the island (to feed a fire), or null
  *   wood.flood(sea) -> number of piles the sea took (their ground below sea)
  *   wood.state() -> { carried: [id], piles: [{ x, z, kind, logs: [id] }], washed: [log],
- *     lost: [id], tide, nextId }   plain, for saving
+ *     lost: [id], tide, nextId, wet?: [[id, t]] }   plain, for saving (wet: rain-soaked start wood and branches)
  *   saved: such a state, to start from
- * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, WASH_MAX, DRY_DAYS
+ * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, WASH_MAX, DRY_DAYS, BRANCH_DRY_DAYS, RAIN_REACH
  * kindOf(log) -> 'branch' for a branch, else 'driftwood' (the kind of pile a piece goes on)
  *   An older save may hold a pile of more than PILE_MAX: it is loaded as it is
  *   (it takes no more wood, and can be picked up from as usual).
@@ -102,10 +111,13 @@ const LOW = -RANGE;                // the sea level at low water
 export const WASH_MAX = 2;        // at most this many new pieces per beach tile and high water
 const WASH_GAP = 1.3;             // a new piece keeps this far from other wood
 export const DRY_DAYS = 1;        // washed-up wood is dry after a day
+export const BRANCH_DRY_DAYS = 0.5;   // a wet branch dries in half that
+export const RAIN_REACH = 40;     // rain wets loose wood this close to him (what he cannot see is not worked out)
 
 export const kindOf = log => log && log.branch ? 'branch' : 'driftwood';
 
-export const dryness = (log, total) => log.t === undefined ? 1 : Math.max(0, Math.min(1, (total - log.t) / DRY_DAYS));
+const dryDays = log => log.branch ? BRANCH_DRY_DAYS : DRY_DAYS;
+export const dryness = (log, total) => log.t === undefined ? 1 : Math.max(0, Math.min(1, (total - log.t) / dryDays(log)));
 
 export function distToLog(log, x, z) {
   const ca = Math.cos(log.a), sa = Math.sin(log.a), h = log.len / 2;
@@ -130,8 +142,10 @@ export function createWood(w, saved, branches = null) {
   const taken = new Set(), lost = new Set();   // lost: first logs the sea took back
   const washed = new Map();                      // tile index -> [log] washed up since the start
   let sea = -Infinity;   // the current sea level (tideUpdate)
-  const wood = { carried: [], tideUpdate, drying, piles: [], version: 0, fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, take, drop, washUp, flood, takePile, giveOne, consume, state };
-  const addWashed = l => { const k = tileOf(l.x, l.z); if (!washed.has(k)) washed.set(k, []); washed.get(k).push(l); byId.set(l.id, l); };
+  const washedIds = new Set();   // ids of the wood washed up since the start (saved in full, with its t)
+  const soaked = new Map();   // id -> log: wood the rain wet that is not saved with the washed-up wood (start wood, branches)
+  const wood = { carried: [], tideUpdate, drying, rain, piles: [], version: 0, fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, take, drop, washUp, flood, takePile, giveOne, consume, state };
+  const addWashed = l => { washedIds.add(l.id); const k = tileOf(l.x, l.z); if (!washed.has(k)) washed.set(k, []); washed.get(k).push(l); byId.set(l.id, l); };
   if (saved) {
     for (const l of saved.washed || []) addWashed({ ...l });
     nextId = Math.max(nextId, saved.nextId || 0);
@@ -140,6 +154,10 @@ export function createWood(w, saved, branches = null) {
     const get = id => { if (id >= BRANCH_ID0) return branches ? branches.piece(id) : null; const l = byId.get(id); if (l) taken.add(id); return l; };
     wood.carried = (saved.carried || []).map(get).filter(Boolean).slice(0, CARRY_MAX);
     wood.piles = (saved.piles || []).map(p => ({ x: p.x, z: p.z, kind: p.kind || 'driftwood', logs: p.logs.map(get).filter(Boolean) })).filter(p => p.logs.length);
+    for (const e of saved.wet || []) {   // rain-soaked start wood and branches
+      const l = e[0] >= BRANCH_ID0 ? (branches ? branches.piece(e[0]) : null) : byId.get(e[0]);
+      if (l && !washedIds.has(l.id) && Number.isFinite(e[1])) { l.t = e[1]; soaked.set(l.id, l); }
+    }
   }
 
   function onBeach(log) { return !taken.has(log.id); }
@@ -230,9 +248,27 @@ export function createWood(w, saved, branches = null) {
     for (const list of washed.values()) for (const l of list) if (l.y < level && l.t !== undefined && !taken.has(l.id)) l.t = total;   // carried up, it dries
   }
   function drying(total) {
-    const wet = l => l.t !== undefined && total - l.t < DRY_DAYS + 0.05;
+    const wet = l => l.t !== undefined && total - l.t < dryDays(l) + 0.05;
     for (const list of washed.values()) for (const l of list) if (wet(l)) return true;
+    for (const l of soaked.values()) if (wet(l)) return true;
     return wood.carried.some(wet);
+  }
+
+  // rain: soak the wood in the open near at, let go of what has dried
+  function rain(total, falling, sheltered, at) {
+    for (const [id, l] of soaked) if (dryness(l, total) >= 1) soaked.delete(id);
+    if (!falling) return;
+    let fresh = false;
+    const soak = l => { if (dryness(l, total) > 0.02) fresh = true; l.t = total; if (!washedIds.has(l.id)) soaked.set(l.id, l); };
+    if (!sheltered(at.x, at.z)) wood.carried.forEach(soak);
+    for (const p of wood.piles) if (!sheltered(p.x, p.z)) p.logs.forEach(soak);
+    const loose = [...logsNear(w, at.x, at.z, RAIN_REACH), ...(branches ? branches.near(at.x, at.z, RAIN_REACH) : [])];
+    for (const list of washed.values()) loose.push(...list);
+    for (const l of loose) {
+      if (taken.has(l.id) || Math.hypot(l.x - at.x, l.z - at.z) > RAIN_REACH || sheltered(l.x, l.z)) continue;
+      soak(l);
+    }
+    if (fresh) wood.version++;
   }
 
   // the metre cells of a tile that lie in the strip between low and high water on gentle ground, not in a river (worked out once per tile)
@@ -311,6 +347,7 @@ export function createWood(w, saved, branches = null) {
     return {
       carried: wood.carried.map(l => l.id), piles: wood.piles.map(p => ({ x: p.x, z: p.z, kind: p.kind, logs: p.logs.map(l => l.id) })),
       washed: all, lost: [...lost], tide: Number.isFinite(wood.tide) ? wood.tide : null, nextId,
+      ...(soaked.size ? { wet: [...soaked.values()].map(l => [l.id, l.t]) } : {}),
     };
   }
   return wood;

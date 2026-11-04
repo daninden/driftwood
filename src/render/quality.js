@@ -11,12 +11,13 @@
  *   2  the lighter shadow filter (16 plain taps, radius 1.5 texels)
  *   3  pixel ratio 1
  *   4  the terrain no longer casts shadows (trees, props and the castaway do)
+ *   rainStreaks: how many streaks of rain the rain layer draws at most (220, 220, 160, 110, 70 for levels 0 to 4; render/rain). It is no step of its own.
  *   fireLights: how many fires and torches in the ground get a point light (4 at levels 0 and 1, 2 below; 0.17.2).
  *      render/fire keeps the pool of the level the session starts at in the scene for good and only gives out
  *      fewer when the level drops, so no shader is rebuilt. It is no step of its own (nextLevel ignores it).
  *
  * MAX_LEVEL                    4
- * settingsFor(level, { touch }?) -> { shadowSize, filter: 'bilinear' | 'plain', pixelRatioMax, terrainShadows, fireLights }
+ * settingsFor(level, { touch }?) -> { shadowSize, filter: 'bilinear' | 'plain', pixelRatioMax, terrainShadows, fireLights, rainStreaks }
  *   (a level beyond the range counts as the nearest one)
  * nextLevel(level, { touch, dpr }?) -> the next level down whose settings differ in effect (on a touch device
  *   level 0 is level 1, on a screen with a pixel ratio of 1 level 3 is level 2, so those steps are skipped),
@@ -52,6 +53,7 @@ export function settingsFor(level, { touch = false } = {}) {
     pixelRatioMax: l >= 3 ? 1 : 1.5,
     terrainShadows: l < 4,
     fireLights: l <= 1 ? 4 : 2,
+    rainStreaks: [220, 220, 160, 110, 70][l],
   };
 }
 

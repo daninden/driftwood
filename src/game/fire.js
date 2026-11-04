@@ -33,6 +33,10 @@
  *     BURNT_DAYS (two days) and fades slowly (render/fire). The flood washes it
  *     away sooner, as it puts fires out (and a fire put out by the flood leaves
  *     none); a new fire lit on it replaces it.
+ *   - Rain (0.21, game/weather): a fire in the open burns RAIN_BURN (3) times as fast while it rains and
+ *     goes out after RAIN_OUT (fifteen game minutes) of rain: it leaves a burnt place with `wet: true`
+ *     (wet ash) and counts a hiss (`hissed`, `hissAt`). A torch, carried or in the ground, burns TORCH_RAIN (2)
+ *     times as fast in the rain. Under a roof (game/game decides, `rain(x, z)` is false there) nothing changes.
  *   - A full fire (FUEL_MAX) takes no more wood: `full(f)`.
  *   - A fire, or its embers, within WARM_R warms a sleeper (game/sleep).
  *   - Whether a fire catches is fixed by the seed and how many attempts
@@ -42,14 +46,15 @@
  *
  * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, TIRED_CATCH, BURN, FUEL_MAX, EMBERS,
  * BRANCH_BURN, fuelOf(logs) -> the fuel in days of a list of pieces (a branch counts BRANCH_BURN of a piece)
- * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS
+ * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS, RAIN_BURN, RAIN_OUT, TORCH_RAIN
  * full(f) -> true when fire f holds as much as it can (FUEL_MAX)
  * catchChance(dry, tired) -> 0..CATCH   dry: mean dryness 0..1, tired 0..1 (game/sleep)
  * createFire(world, saved?) -> fire
- *   fire.fires             [{ id, x, z, fuel, embers, lit, fed }]  fuel and embers in
- *                          days left; lit: the day it was lit; fed: pieces laid on
- *   fire.burnt             [{ id, x, z, left, n }]  burnt places: left: days to go (BURNT_DAYS
- *                          at first, then counting down), n: how many charred ends
+ *   fire.fires             [{ id, x, z, fuel, embers, lit, fed, rained? }]  fuel and embers in
+ *                          days left; lit: the day it was lit; fed: pieces laid on; rained: days of rain on it so far
+ *   fire.burnt             [{ id, x, z, left, n, wet? }]  burnt places: left: days to go (BURNT_DAYS
+ *                          at first, then counting down), n: how many charred ends; wet: rain put the fire out
+ *   fire.hissed            counts the fires the rain put out (for the sound); fire.hissAt is where the latest was { x, z }
  *   fire.puffs             [{ x, z, at }]  the latest failed attempts (at: the day), for the renderer
  *   fire.attempts          how many attempts there have been
  *   fire.version           goes up with every change that shows (not with burning)
@@ -69,7 +74,9 @@
  *     or null (no torch, or the wood too wet: a puff of smoke)
  *   fire.feed(f, dry, burn?) -> true when a piece of dryness dry went on fire f (false: not a fire of ours, or it is full);
  *     burn: 1 for driftwood, BRANCH_BURN for a branch
- *   fire.update(days)      burns down by days of game time; embers and torches go out
+ *   fire.update(days, rain?, at?, total?)  burns down by days of game time; embers and torches go out.
+ *     rain: null, or rain(x, z) -> true where the rain reaches (not under a lean-to); at { x, z }: where the carried torch is;
+ *     total: the days on the clock, to stamp the puff of steam a fire put out by the rain leaves
  *   fire.flood(sea) -> number of fires (and torches in the sand) the sea put out
  *   fire.strength(f) -> 0..1 how big the flames are (0 for embers)
  *   fire.state() -> { fires, attempts, nextId, torch, torches, burnt }   plain, for saving
@@ -94,6 +101,9 @@ export const TORCH_DRY = 0.75;                // a torch lights a pile this dry,
 export const DOUSE_DEPTH = 0.3;               // wading deeper puts a torch out
 export const BURNT_DAYS = 2;                  // a burnt place stays this long
 export const WARM_R = 3;                      // a fire this close warms a sleeper
+export const RAIN_BURN = 3;                   // in the rain a fire in the open burns down this many times as fast
+export const RAIN_OUT = 15 / 1440;            // and goes out after this much rain (fifteen game minutes)
+export const TORCH_RAIN = 2;                  // a torch burns this many times as fast in the rain
 const FIRE_R = 0.5;                           // how far a fire reaches round its centre
 const TORCH_R = 0.2;
 const PUFFS = 4;
@@ -104,7 +114,7 @@ export const full = f => f.fuel >= FUEL_MAX - 1e-9;
 export const catchChance = (dry, tired = 0) => CATCH * Math.max(0, Math.min(1, dry)) ** 2 * (1 - (1 - TIRED_CATCH) * Math.max(0, Math.min(1, tired)));
 
 export function createFire(w, saved) {
-  const fire = { fires: [], puffs: [], attempts: 0, version: 0, torch: null, torches: [], burnt: [], find, attempt, kindle, feed, takeTorch, plant, pickTorch, douse, warm, update, flood, strength, state };
+  const fire = { fires: [], puffs: [], attempts: 0, version: 0, hissed: 0, hissAt: null, torch: null, torches: [], burnt: [], find, attempt, kindle, feed, takeTorch, plant, pickTorch, douse, warm, update, flood, strength, state };
   let nextId = 0;
   if (saved) {
     fire.fires = (saved.fires || []).map(f => ({ ...f }));
@@ -163,19 +173,21 @@ export function createFire(w, saved) {
     f.fuel = Math.min(FUEL_MAX, f.fuel + BURN * burn * (0.5 + 0.5 * dry)); f.embers = EMBERS; f.fed++;
     fire.version++; return true;
   }
-  function update(days) {
+  function update(days, rain = null, at = null, total = null) {
     if (!(days > 0)) return;
     for (let i = fire.burnt.length - 1; i >= 0; i--) { const b = fire.burnt[i]; b.left -= days; if (b.left <= 0) { fire.burnt.splice(i, 1); fire.version++; } }
     for (let i = fire.fires.length - 1; i >= 0; i--) {
-      const f = fire.fires[i];
-      if (f.fuel > 0) { const was = f.fuel; f.fuel = Math.max(0, f.fuel - days); if (was > 0 && f.fuel === 0) fire.version++; }
-      else { f.embers -= days; if (f.embers <= 0) { fire.fires.splice(i, 1); leaveBurnt(f); fire.version++; } }
+      const f = fire.fires[i], wet = !!rain && rain(f.x, f.z), k = wet ? RAIN_BURN : 1;
+      if (wet) f.rained = (f.rained || 0) + days; else if (f.rained) delete f.rained;
+      if (f.rained >= RAIN_OUT) { fire.fires.splice(i, 1); leaveBurnt(f, true); fire.hissed++; fire.hissAt = { x: f.x, z: f.z }; if (total !== null) { fire.puffs.push({ x: f.x, z: f.z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift(); } fire.version++; continue; }   // the rain put it out
+      if (f.fuel > 0) { const was = f.fuel; f.fuel = Math.max(0, f.fuel - days * k); if (was > 0 && f.fuel === 0) fire.version++; }
+      else { f.embers -= days * k; if (f.embers <= 0) { fire.fires.splice(i, 1); leaveBurnt(f); fire.version++; } }
     }
-    if (fire.torch) { fire.torch.left -= days; if (fire.torch.left <= 0) { fire.torch = null; fire.version++; } }
-    for (let i = fire.torches.length - 1; i >= 0; i--) { const t = fire.torches[i]; t.left -= days; if (t.left <= 0) { fire.torches.splice(i, 1); fire.version++; } }
+    if (fire.torch) { fire.torch.left -= days * (rain && at && rain(at.x, at.z) ? TORCH_RAIN : 1); if (fire.torch.left <= 0) { fire.torch = null; fire.version++; } }
+    for (let i = fire.torches.length - 1; i >= 0; i--) { const t = fire.torches[i]; t.left -= days * (rain && rain(t.x, t.z) ? TORCH_RAIN : 1); if (t.left <= 0) { fire.torches.splice(i, 1); fire.version++; } }
   }
-  function leaveBurnt(f) {
-    fire.burnt.push({ id: f.id, x: f.x, z: f.z, left: BURNT_DAYS, n: Math.max(3, Math.min(6, f.fed)) });
+  function leaveBurnt(f, wet = false) {
+    fire.burnt.push({ id: f.id, x: f.x, z: f.z, left: BURNT_DAYS, n: Math.max(3, Math.min(6, f.fed)), ...(wet ? { wet: true } : {}) });
     if (fire.burnt.length > BURNT_MAX) fire.burnt.shift();
   }
   function flood(sea) {

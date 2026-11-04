@@ -19,8 +19,12 @@
  * These are DOM layers stacked over the canvas (pointer-events: none);
  * they are part of the picture, not an interface.
  *
- * createMood({ stage, canvas, container }) -> { update(tier, dt, sky) }
- *   sky: skyAt(time) from render/sky
+ * Rain (0.21): update takes the intensity of the rain (0..1). It turns the light greyer and softer: the sun weaker
+ * and colder (softer shadows), the sky fill flatter, greyer and a little stronger, the colours less saturated, and
+ * the grading layer a grey blue. It blends with the intensity, so it comes and goes slowly with the shower.
+ *
+ * createMood({ stage, canvas, container }) -> { update(tier, dt, sky, rain?) }
+ *   sky: skyAt(time) from render/sky; rain: 0..1 (default 0)
  *
  * Depends on: three, core/math
  */
@@ -39,10 +43,10 @@ export function createMood({ stage, canvas, container }) {
   layer('background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(20,15,10,0.3) 100%);');
 
   const fog = new THREE.Fog(0xe4ebe2, 4000, 5000); stage.scene.fog = fog;
-  const hemiC = new THREE.Color(0xdfe8f0), sunC = new THREE.Color(0xfff0dc);
+  const hemiC = new THREE.Color(0xdfe8f0), sunC = new THREE.Color(0xfff0dc), greyC = new THREE.Color(0xaab4bd), RAIN_GRADE = [0.8, 0.85, 0.92];
   let tier = -1, fogAmt = 0, cool = 0, beach = 0, summit = 0, grade = '', warmth = '', filter = '';
 
-  function update(k, dt, sky) {
+  function update(k, dt, sky, rain = 0) {
     if (k !== tier) {
       tier = k;
       tint.style.backgroundColor = TINT[k];
@@ -52,15 +56,15 @@ export function createMood({ stage, canvas, container }) {
     cool += ((k >= 3 ? 1 : 0) - cool) * Math.min(1, dt * 1.5);
     beach += ((k === 0 ? 1 : 0) - beach) * Math.min(1, dt * 1.5);
     summit += ((k === 4 ? 1 : 0) - summit) * Math.min(1, dt * 1.5);
-    const f = 'saturate(' + (sky.saturation * lerp(1, 0.72, summit)).toFixed(2) + ') contrast(' + lerp(1, 1.04, summit).toFixed(3) + ')';
+    const f = 'saturate(' + (sky.saturation * lerp(1, 0.72, summit) * lerp(1, 0.6, rain)).toFixed(2) + ') contrast(' + lerp(1, 1.04, summit).toFixed(3) + ')';
     if (f !== filter) { canvas.style.filter = f; filter = f; }
     const warm = 0.3 + 0.7 * sky.day, w = (beach * warm).toFixed(2) + ',' + warm.toFixed(2);
     if (w !== warmth) { mult.style.opacity = (beach * warm).toFixed(2); tint.style.opacity = warm.toFixed(2); warmth = w; }
     fog.near = lerp(4000, 405, fogAmt); fog.far = lerp(5000, 480, fogAmt);
     const { light, fill } = sky;
-    stage.sun.color.setRGB(...light.color).lerp(sunC, cool * sky.day); stage.sun.intensity = light.intensity;
-    stage.hemi.color.setRGB(...fill.color).lerp(hemiC, cool * sky.day); stage.hemi.intensity = fill.intensity;
-    const g = 'rgb(' + sky.grade.map(v => Math.round(v * 255)).join(',') + ')';
+    stage.sun.color.setRGB(...light.color).lerp(sunC, cool * sky.day).lerp(greyC, 0.6 * rain); stage.sun.intensity = light.intensity * lerp(1, 0.5, rain);
+    stage.hemi.color.setRGB(...fill.color).lerp(hemiC, cool * sky.day).lerp(greyC, 0.55 * rain); stage.hemi.intensity = fill.intensity * lerp(1, 1.12, rain);
+    const g = 'rgb(' + sky.grade.map((v, i) => Math.round(v * lerp(1, RAIN_GRADE[i], rain) * 255)).join(',') + ')';
     if (g !== grade) { daylight.style.backgroundColor = g; grade = g; }
   }
   return { update };

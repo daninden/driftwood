@@ -38,6 +38,8 @@
  *   game.hunger                 days since he ate (game/hunger)
  *   game.wildlife               crabs, fish and birds within 30 m of him: atmosphere only, not saved (game/wildlife)
  *   game.fireflies              the fireflies within 30 m of him, from dusk to an hour before sunrise: atmosphere only, not saved (game/fireflies)
+ *   game.weather                the schedule of showers (game/weather); game.rain: the intensity of the rain now, 0..1 (0.21:
+ *                               wet wood in the open, fires and torches burning down faster, see game/wood rain and game/fire update)
  *   game.sea                    the current sea level (game/tide)
  *   game.update(input, dt) -> { distance, terrain, time, sea, rest }
  *     dt is real time. Moves the player from the input (game/input; Shift
@@ -104,7 +106,7 @@
  *   for 'husk' (he eats it); the tuft comes only when there is room for it (game/fibre husk).
  *
  * Depends on: game/movement, game/clock, game/wood, game/branches, game/leanto, game/tide, game/sleep,
- *   game/fibre, game/fire, game/thirst, game/hunger, game/water, game/wildlife, game/fireflies
+ *   game/fibre, game/fire, game/thirst, game/hunger, game/water, game/wildlife, game/fireflies, game/weather
  */
 import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable, weariStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
@@ -120,11 +122,13 @@ import { createHunger } from './hunger.js';
 import { findWater } from './water.js';
 import { createWildlife } from './wildlife.js';
 import { createFireflies } from './fireflies.js';
+import { createWeather, FALLING, WOOD_SHELTER, FIRE_SHELTER } from './weather.js';
 import { createFire, full, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH, TORCH_DRY, TORCH_COST, BRANCH_BURN } from './fire.js';
 
 export const STOOP = 0.55;         // seconds to bend down and up again
 export const REACH = 0.55;         // a piece of wood, a coconut or a torch in the ground within this distance of the feet can be reached
 export const BESIDE = 1.2;         // a pile or a fire within this distance (from its edge) is beside him: F and the hold of the action button reach it
+const RAIN_EVERY = 0.4 / DAY_SECONDS;   // the rain wets wood about every 0.4 s of game time
 export const AIM = { mouse: 0.4, touch: 0.8 };   // how close to a piece a click or tap has to be to walk to it
 export const HUSK_TIME = 4;        // seconds of kneeling to tear the husk off a coconut and eat it
 export const NUT_DRINK = 0.25;     // days of thirst the milk of a coconut takes away
@@ -143,7 +147,8 @@ export function createGame(world, spawn, opts = {}) {
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), game = { player, clock, wood, sleep, fibre, branches, leantos, fire, thirst, hunger, wildlife, fireflies, sea: seaLevel(clock.total), update, state, action };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, leantos, fire, thirst, hunger, wildlife, fireflies, weather, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action };
+  let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
   wood.tideUpdate(game.sea, clock.total);
@@ -367,7 +372,10 @@ export function createGame(world, spawn, opts = {}) {
     wood.tideUpdate(game.sea, clock.total);   // wood under the sea cannot be picked up and starts drying again
     thirst.update(gameDt / DAY_SECONDS);
     hunger.update(gameDt / DAY_SECONDS);
-    fire.update(gameDt / DAY_SECONDS);
+    game.rain = weather.intensity(clock.total);
+    const falling = game.rain >= FALLING;
+    if (!(Math.abs(clock.total - rainAt) < RAIN_EVERY)) { rainAt = clock.total; wood.rain(clock.total, falling, (x, z) => leantos.covers(x, z, WOOD_SHELTER), player); }   // wood in the open gets wet
+    fire.update(gameDt / DAY_SECONDS, falling ? (x, z) => !leantos.covers(x, z, FIRE_SHELTER) : null, player, clock.total);   // fires and torches in the open burn down faster
     fire.flood(game.sea);
     leantos.flood(game.sea);
     fibre.update(clock.total);

@@ -30,6 +30,8 @@
  *     roots standing up, with a finger a little wider) a point on that piece,
  *     rather than the ground behind it
  *   view.setQuality(settings)   changes the quality live (render/stage applyQuality; render/fire gives out fewer lights)
+ *   (0.21) the rain of game.rain is drawn: the greyer light (render/mood), the streaks (render/rain), the rings on the water
+ *     (render/water) and the sheen on the ground (render/materials setGroundWet)
  *   view.waterTime   the water's clock in seconds (render/water `clock`; audio/mix breathes the surf with it)
  *   view.setWindTime(t) / view.windTime   the wind's clock in seconds (it runs with the drawn frames' dt; the smoke test sets it so shots repeat)
  *   view.canvas
@@ -70,6 +72,8 @@ import { createFireflyView } from './fireflies.js';
 import { dryness } from '../game/wood.js';
 import { windState } from './wind.js';
 import { setWind } from './windShader.js';
+import { createRainView } from './rain.js';
+import { setGroundWet } from './materials.js';
 
 const BUILD_MS = 9, FAR_MS = 3;
 
@@ -97,6 +101,7 @@ export async function createIslandView(world, container, progress, start, opts =
   let windSeconds = 0;   // the wind's own clock: the drawn time, so gusts do not race while he sleeps
   const hero = createHero(scene), steps = createFootprints(scene, world.H), cam = createCamera();
   const mood = createMood({ stage, canvas: renderer.domElement, container });
+  const rainView = createRainView(container, { max: opts.settings ? opts.settings.rainStreaks : undefined });
   window.addEventListener('resize', stage.resize);
 
 
@@ -115,14 +120,15 @@ export async function createIslandView(world, container, progress, start, opts =
     pumpFarTiles(far, tile => tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch), FAR_MS);
     updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
     const sky = skyAt(info.time);
-    water.tick(dt, sky.day);
+    const rain = game ? game.rain : 0;
+    water.tick(dt, sky.day, rain); setGroundWet(rain); rainView.update(dt, rain, sky.day);
     windSeconds += dt; setWind(windState(world.seed, windSeconds, total, sky.day), windSeconds);
     if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H, heroFlame: hero.flame });
     if (tallyView) tallyView.update(dt, { game, camera: cam.camera, H: world.H, player });
     if (wildView) wildView.update(dt);
     if (flyView) flyView.update(dt, cam.camera);
     stage.followSun({ target: cam.target, yaw, pitch, zoom: cam.zoom, aspect }, sky.light.dir);
-    mood.update(world.tierAt(t.L), dt, sky);
+    mood.update(world.tierAt(t.L), dt, sky, rain);
     renderer.render(scene, cam.camera);
   }
 
@@ -177,5 +183,5 @@ export async function createIslandView(world, container, progress, start, opts =
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: next => { stage.applyQuality(next); if (next && next.fireLights !== undefined) { fireLights = next.fireLights; if (fireView) fireView.setActive(fireLights); } }, canvas: renderer.domElement, scene, stats, setWindTime: t => { windSeconds = t; }, get windTime() { return windSeconds; }, get waterTime() { return water.clock; }, settle, prepare };
+  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: next => { stage.applyQuality(next); if (next && next.fireLights !== undefined) { fireLights = next.fireLights; if (fireView) fireView.setActive(fireLights); } if (next && next.rainStreaks !== undefined) rainView.setMax(next.rainStreaks); }, canvas: renderer.domElement, scene, stats, setWindTime: t => { windSeconds = t; }, get windTime() { return windSeconds; }, get waterTime() { return water.clock; }, settle, prepare };
 }

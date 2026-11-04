@@ -204,7 +204,7 @@ describe('work sounds and the rest of the mix', () => {
     const a = s().levels.surf.gain; p.x += 0.5; expect(s().levels.surf.gain).toBeCloseTo(a, 9);   // same look, same coast distance
     p.x = inland.x; p.z = inland.z; expect(s().levels.surf.gain).toBeLessThan(a * 0.2);
   });
-  it('keeps an empty rain layer for 0.21', () => { expect(mixOf(base(spawn)).rain).toEqual({ gain: 0 }); expect(LEVELS.rain).toBe(0); });
+  // the rain layer is tested in tests/rain.test.js
   it('stays quiet: every layer is soft, and the sum of the peaks leaves headroom', () => {
     for (const k of Object.keys(LEVELS)) expect(LEVELS[k]).toBeLessThanOrEqual(0.35);
     const sum = Object.values(LEVELS).reduce((s, v) => s + v, 0);

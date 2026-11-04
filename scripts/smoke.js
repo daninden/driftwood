@@ -23,6 +23,7 @@
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
 // smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
 // smoke-28 fish by day on the start beach at the default zoom (0.17.3, also in the quick run).
+// smoke-32 rain by day on the start beach, smoke-33 rain at dusk by a lean-to with a fire put out in the open (0.21, both also in the quick run).
 // smoke-29 fireflies at night among a group by a lowland river (0.17.4, also in the quick run).
 // Sound (0.20): after the first key the audio context exists and M turns sound off and on again (checked right after loading; no picture, nothing audible is judged).
 //
@@ -31,7 +32,7 @@
 // full Chromium not installed) it falls back to the headless shell with software drawing (SwiftShader),
 // which costs time in proportion to pixels. The renderer in use is logged once at the start.
 // Two sizes are used to keep that fallback bearable. The quick run
-// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to), 26 (the flock), 27 (many lights), 29 (fireflies) and 19 (on a phone) at 640x400 (the phone at scale 1).
+// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to), 26 (the flock), 27 (many lights), 29 (fireflies), 32 and 33 (rain) and 19 (on a phone) at 640x400 (the phone at scale 1).
 // The full run (--full) takes every shot; those a person looks at are 1280x800 (the phone at
 // scale 2), the ones that only check something (smoke-0, 2, 3, 4, 7, 18) stay at 640x400.
 // All the checks on the game state run in both. Pixels are checked without a PNG: right
@@ -509,6 +510,53 @@ const lightsShot = await page.evaluate(start => {
 console.log('lights on at night', JSON.stringify(lightsShot));
 if (lightsShot.on < 3) errors.push('a fire and two torches should give three point lights, got ' + lightsShot.on);
 await shot('smoke-27.png', { quick: true });
+
+// Rain (0.21): the real schedule reaches the game (the clock set into the island's first shower), then a shower is forced
+// (game.weather.intensity) so the shots do not depend on when it is due: by day on the start beach (smoke-32, rings on the
+// sea, streaks, grey light) and at dusk with a lean-to, a fire by it and a fire in the open, which the rain puts out
+// (smoke-33, also in the quick run). Frame times with and without rain are printed.
+const rainClock = await page.evaluate(() => {
+  const { game, step } = window.__driftwood, c = game.clock, first = game.weather.next(0), t = first.start + 0.25 / 24;
+  const keep = [c.day, c.time]; c.day = Math.floor(t); c.time = t - c.day; step(0.2);
+  const out = { first: +first.start.toFixed(2), rain: +game.rain.toFixed(2), len: +((first.end - first.start) * 24).toFixed(2) };
+  c.day = keep[0]; c.time = keep[1]; step(0.1); out.after = game.rain; return out;
+});
+console.log('first shower', JSON.stringify(rainClock));
+if (rainClock.first < 5 || rainClock.first > 9 || rainClock.rain < 0.5 || rainClock.after !== 0) errors.push('the schedule does not reach the game: ' + JSON.stringify(rainClock));
+const rainSet = await page.evaluate(start => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, c = game.clock, wx = game.weather;
+  window.__realRain = wx.intensity; wx.intensity = () => 0.9;
+  c.time = 0.5; game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0; game.fire.torch = null; game.fire.fires.length = 0; game.fire.torches.length = 0; game.wood.carried.length = 0;
+  game.wood.piles.length = 0; game.leantos.list.length = 0; game.leantos.version++;
+  p.x = start.x; p.z = start.z - 1; p.y = world.H(p.x, p.z); p.heading = 0; step(1.5);
+  const time = ms => { const keep = performance.now(); return ms(), performance.now() - keep; };
+  const drawN = n => { const d = window.__driftwood; const cv = document.createElement('canvas'); cv.width = 16; cv.height = 10; const g = cv.getContext('2d', { willReadFrequently: true }); const t0 = performance.now(); for (let i = 0; i < n; i++) { d.draw(); g.drawImage(d.view.canvas, 0, 0, 16, 10); g.getImageData(0, 0, 1, 1); } return (performance.now() - t0) / n / 4; };
+  drawN(3); const rainMs = drawN(12); wx.intensity = () => 0; step(0.2); drawN(3); const dryMs = drawN(12); wx.intensity = () => 0.9; step(0.2);
+  return { rain: +game.rain.toFixed(2), rainMs: +rainMs.toFixed(1), dryMs: +dryMs.toFixed(1), streaks: document.querySelectorAll('canvas').length };
+}, start);
+console.log('rain by day', JSON.stringify(rainSet));
+await shot('smoke-32.png', { quick: true });
+const rainShelter = await page.evaluate(start => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, c = game.clock, f = game.fire;
+  const clear = (x, z) => { const h = world.H(x, z); if (!(h > 0.7 && h < 3) || world.riverAt(x, z)) return false; for (const t of world.tiles) { if (Math.hypot(t.x0 + 20 - x, t.z0 + 20 - z) > 40) continue; for (const [k, r] of [['palms', 5], ['trees', 4], ['pines', 4], ['rocks', 2], ['crags', 4], ['bushes', 2]]) for (const o of t[k]) if (Math.hypot(o.x - x, o.z - z) < r) return false; } return true; };
+  let site = { x: start.x + 3.5, z: start.z + 0.5 };   // a spot on the beach with nothing standing close, so the lean-to is not hidden by a palm (else the start spot)
+  for (let r = 0; r <= 70; r += 2) { let hit = null; for (let k = 0; k < 16 && !hit; k++) { const x = start.x + Math.cos(k / 16 * 6.283) * r, z = start.z + Math.sin(k / 16 * 6.283) * r; if (clear(x, z)) hit = { x, z }; } if (hit) { site = hit; break; } }
+  const lx = site.x, lz = site.z, put = (x, z, kind, n, id) => game.wood.piles.push({ x, z, kind, logs: Array.from({ length: n }, (_, i) => ({ id: id + i, x, y: 0, z, len: 1.2, a: 0.4 + i, rad: 0.1 })) });
+  c.time = 0.78; game.leantos.list.push({ id: 77, x: lx, z: lz, heading: Math.PI, progress: 1 }); game.leantos.version++;
+  const under = { id: 910, x: lx + 1.3, z: lz + 0.6, fuel: 0.14, embers: 0.06, lit: c.total, fed: 5 }, open = { id: 911, x: lx - 5.5, z: lz - 0.5, fuel: 0.14, embers: 0.06, lit: c.total, fed: 5 };
+  f.fires.push(under, open); f.version++;
+  put(lx + 0.2, lz - 0.6, 'driftwood', 4, 91000); put(lx - 3.2, lz + 1.5, 'driftwood', 4, 91100);   // one pile under the roof, one in the open
+  game.wood.version++;
+  p.x = lx + 1.2; p.z = lz - 1.6; p.y = world.H(p.x, p.z); p.heading = 0; step(0.3); view.zoomBy(-3);
+  const w0 = game.wood.piles.map(q => q.logs.length); step(14.5);   // fourteen and a half seconds of play: the open fire has had its fifteen game minutes of rain
+  window.__driftwood.draw();
+  return { site: [lx, lz].map(v => +v.toFixed(1)), ground: [world.H(under.x, under.z), world.H(open.x, open.z)].map(v => +v.toFixed(2)), fires: f.fires.map(x => x.id), burnt: f.burnt.map(b => ({ id: b.id, wet: !!b.wet })), hissed: f.hissed, pileDryness: game.wood.piles.map(q => +q.logs[0].t === q.logs[0].t ? +((c.total - q.logs[0].t)).toFixed(3) : 'dry'), piles: w0 };
+}, start);
+console.log('rain and the lean-to', JSON.stringify(rainShelter));
+if (rainShelter.fires.join() !== '910' || !rainShelter.burnt.some(b => b.id === 911 && b.wet) || rainShelter.hissed !== 1) errors.push('in the rain the open fire should go out and the one by the lean-to burn on: ' + JSON.stringify(rainShelter));
+if (rainShelter.pileDryness[0] !== 'dry' || rainShelter.pileDryness[1] === 'dry') errors.push('the pile under the roof should be dry and the one outside wet: ' + JSON.stringify(rainShelter.pileDryness));
+await shot('smoke-33.png', { quick: true });
+await page.evaluate(() => { window.__driftwood.game.weather.intensity = window.__realRain; });
 
 // The same on a phone: a touch-only screen with the thumb stick, the button just above it (day and night).
 const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: full ? 2 : 1, hasTouch: true, isMobile: true });
