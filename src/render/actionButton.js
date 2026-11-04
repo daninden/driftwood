@@ -25,7 +25,7 @@
  * torch with a stroke of ground (plant), the drop (drink), a flame (light, hold)
  * a small lean-to (build, hold), the crescent moon (sleep, hold) and, since 0.22, a hand with claws over a
  * hole (dig) and a crab over a flame (roast), and since 0.25 a whole coconut with an arrow up (take), a half shell with a drop over it
- * (fill) and a tilted half shell with water in it (sip). Eating a carried nut uses the half coconut (husk). Since 0.26 (game/forage) a cluster of berries with an arrow up (berries: picks them, or eats them on the spot when he is hungry), a bunch with an arrow up (bananas), and the plain cluster or bunch for eating a carried one (eatBerries, eatBanana).
+ * (fill) and a tilted half shell with water in it (sip). Eating a carried nut uses the half coconut (husk). Since 0.26 (game/forage) a cluster of berries with an arrow up (berries: picks them, or eats them on the spot when he is hungry), a bunch with an arrow up (bananas), and the plain cluster or bunch for eating a carried one (eatBerries, eatBanana). Since 0.27 "Home" (game/leanto): the hold of an upgrade (kind 'upgrade', `what`) shows what will be built: a roof with fronds hanging down its side (walls), a low frame with a frond laid on it (bed) or a ring of stones round a small flame (ring).
  *
  * The pointer handling is the button's own: a finger or the mouse on it goes
  * to input.actionStart/actionEnd and never reaches the world (no walk tap, no
@@ -79,12 +79,17 @@ export const ICONS = {
   bananas: `<g transform="translate(-7.2 -5.5) scale(0.72)">${DRAWINGS.banana}</g><path d="M0 -3V-11M-3.5 -7.5L0 -11L3.5 -7.5"/>`,
   eatBerries: `<g transform="translate(-10 -13)">${DRAWINGS.berries}</g>`,
   eatBanana: `<g transform="translate(-10 -13)">${DRAWINGS.banana}</g>`,
+  walls: '<path d="M-11 11H11"/><path d="M-10 -9L10 3"/><path d="M-7 -7.5C-8.5 -2 -8 4 -6 10.5M-2 -5C-3.5 0 -3 6 -1 10.5M3 -2.5C1.5 2.5 2 7 4 10.5M8 0C7 3.5 7.5 7 9 10.5"/>',
+  bed: '<path d="M-11 3H11"/><path d="M-9 3V11M9 3V11M0 3V11"/><path d="M-10 -1C-5 -6.5 5 -6.5 10 -1"/><path d="M-6 -4.2L-7 -0.8M-2 -5.6L-2.4 -1.6M2 -5.6L2.4 -1.6M6 -4.2L7 -0.8"/>',
+  ring: '<g transform="translate(0 -3.5) scale(0.62)">' + FLAME + '</g><circle cx="-8.4" cy="6" r="2.5"/><circle cx="-4.4" cy="9.4" r="2.5"/><circle cx="2.4" cy="9.8" r="2.5"/><circle cx="8.2" cy="6.6" r="2.5"/><circle cx="7" cy="1" r="2.2"/><circle cx="-7.6" cy="0.6" r="2.2"/>',
   moon: '<path d="M3 -10.5A10 10 0 1 0 10.5 3A7.5 7.5 0 0 1 3 -10.5Z"/>',
 };
 export const ICON_OF = { pickup: 'pickup', lay: 'lay', take: 'nut', fill: 'fill', sip: 'sip', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon', dig: 'dig', roast: 'roast', berries: 'berries', bananas: 'bananas', eatBerries: 'eatBerries', eatBanana: 'eatBanana' };
 
+const iconKey = a => a ? (a.kind === 'upgrade' ? a.what : ICON_OF[a.kind]) || null : null;   // an upgrade shows what it builds
+
 export function buttonIcons(action) {
-  const tap = action && action.tap ? ICON_OF[action.tap.kind] || null : null, hold = action && action.hold ? ICON_OF[action.hold.kind] || null : null;
+  const tap = action ? iconKey(action.tap) : null, hold = action ? iconKey(action.hold) : null;
   return tap ? { main: tap, side: hold } : { main: hold, side: null };
 }
 

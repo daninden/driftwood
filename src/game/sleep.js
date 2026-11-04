@@ -25,6 +25,9 @@
  *     quarters rested) instead of COLD_SLEEP; by a fire it still lasts the whole night, but
  *     he rests SHELTER_REST (1.25) times as fast as by a fire alone.
  *
+ *   - 0.27 "Home": a lean-to with side walls lasts WALLS_SLEEP (seven hours, 87.5 % rested) when it is cold, instead of
+ *     SHELTER_SLEEP; one with a bed rests him BED_REST (1.25) times as fast, warm or cold.
+ *
  * createSleep(saved?) -> sleep
  *   sleep.awake          days since rested (0 = fully rested)
  *   sleep.asleep         true while sleeping
@@ -42,7 +45,7 @@
  *     sleep down, rests or tires the castaway, and falls asleep at the
  *     limit, but only on dry ground (dry false: he wades on, tired, until he
  *     is out); warm false (no fire close by): the sleep ends after COLD_SLEEP
- *     shelter true: he sleeps under a lean-to (see above)
+ *     shelter true: he sleeps under a lean-to (see above); or { walls, bed }: under one with those upgrades (0.27)
  *     thirst: { drain, faint } from game/thirst: drain (default 1) is how many
  *     times as fast the rest runs out while awake; faint true collapses him
  *     into sleep like exhaustion (on dry ground only), at any tiredness
@@ -63,6 +66,8 @@ export const COLD_REST = 0.8 / (COLD_SLEEP * REST_RATE);   // 40 % rested after 
 export const SLEEP_AFTER = 0.5;   // he can only choose to sleep after half a day awake
 export const SHELTER_SLEEP = 6 / 24;   // under a lean-to, after six hours
 export const SHELTER_REST = 1.25;   // by a fire under a lean-to he rests this much faster
+export const WALLS_SLEEP = 7 / 24;   // under a lean-to with side walls, a cold sleep lasts seven hours
+export const BED_REST = 1.25;   // on the bed of a lean-to he rests this much faster
 
 export function createSleep(saved) {
   let warp = 0, left = 0;   // warp 0..1 eases the time speed; left: days of sleep to go
@@ -85,8 +90,8 @@ export function createSleep(saved) {
     warp = Math.min(1, Math.max(0, warp + (lying ? 1 : -1) * dt / EASE));
     const e = warp * warp * (3 - 2 * warp), gameDt = dt * (1 + (SPEED - 1) * e), days = gameDt / DAY_SECONDS;
     if (sleep.asleep) {
-      sleep.awake = Math.max(0, sleep.awake - days * REST_RATE * (warm ? (shelter ? SHELTER_REST : 1) : (shelter ? 1 : COLD_REST)));
-      if (lying) { left -= days; sleep.slept += days; if (left <= 0 || (!warm && sleep.slept >= (shelter ? SHELTER_SLEEP : COLD_SLEEP))) sleep.wake(); }
+      sleep.awake = Math.max(0, sleep.awake - days * REST_RATE * (warm ? (shelter ? SHELTER_REST : 1) : (shelter ? 1 : COLD_REST)) * (shelter && shelter.bed ? BED_REST : 1));
+      if (lying) { left -= days; sleep.slept += days; if (left <= 0 || (!warm && sleep.slept >= (shelter ? (shelter.walls ? WALLS_SLEEP : SHELTER_SLEEP) : COLD_SLEEP))) sleep.wake(); }
     } else {
       sleep.awake += days * (thirst.drain || 1);
       if (sleep.awake >= AWAKE_MAX) sleep.awake = AWAKE_MAX;

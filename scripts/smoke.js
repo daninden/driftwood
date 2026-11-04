@@ -19,6 +19,7 @@
 // smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night),
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
 // smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
+// smoke-39 an upgraded lean-to (side walls, bed, stone fire ring) from the default view (also in the quick run), smoke-40 from the side, smoke-41 a dead frond and stones on the ground (also in the quick run), smoke-42 a frond and two stones carried, in the row (0.27 "Home").
 // smoke-30 wood out at low water on the wet strip, smoke-31 the same spot at high water (0.18).
 // smoke-37 beside the berry bush nearest the start, ripe berries on it and the berries icon on the button; after a press (not hungry) the handful in the row and the bush bare (0.26 "Inland", also in the quick run).
 // smoke-36 the row with a nut, an empty and a full half shell beside the fibre tuft (0.25, also in the quick run).
@@ -221,7 +222,8 @@ await shot('smoke-7.png', { look: false });
 // Fibre: click the coconut nearest the castaway, then press the button; he kneels to husk it.
 const husk = await page.evaluate(() => {
   const { world, game, input, step } = window.__driftwood, p = game.player;
-  const c = world.tiles.flatMap(t => game.fibre.groundCocos(t)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+  const clear = c => !game.wood.find(c.x, c.z, 2.2, 'log') && !game.wood.find(c.x + 1, c.z + 0.3, 1.2, 'log');   // since 0.27 a fallen frond or a stone may lie beside the nut and would be picked up first
+  const c = world.tiles.flatMap(t => game.fibre.groundCocos(t)).filter(clear).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
   p.x = c.x + 1; p.z = c.z + 0.3; p.y = world.H(p.x, p.z); game.hunger.days = 3;   // hungry, to see the nut eaten
   input.target = { x: c.x, z: c.z, tap: true }; step(10, () => !input.target); window.__press(); step(10, () => p.work && p.work.f > 0.5);
   return { work: p.work && p.work.kind, x: p.x, z: p.z };
@@ -386,7 +388,7 @@ const carriedB = await page.evaluate(() => {
   return { n: game.wood.carried.length, branches: game.wood.carried.filter(l => l.branch).length, row: document.querySelectorAll('#carry svg').length - game.fibre.carried };
 });
 console.log('carrying branches', JSON.stringify(carriedB));
-if (carriedB.branches < 2 || carriedB.row !== carriedB.branches) errors.push('branches picked up: ' + JSON.stringify(carriedB));
+if (carriedB.branches < 2 || carriedB.row !== carriedB.n) errors.push('branches picked up: ' + JSON.stringify(carriedB));
 const piled = await page.evaluate(start => {
   const { world, game, step } = window.__driftwood, p = game.player, w = game.wood, tot = game.clock.total;
   p.x = start.x + 2.5; p.z = start.z + 1.5; p.y = world.H(p.x, p.z);   // the two piles go in the open, on the start beach, where nothing hides the lean-to
@@ -427,6 +429,77 @@ console.log('sleeping under the lean-to', JSON.stringify({ ...under, ...slept })
 if (!under.sheltered) errors.push('not sheltered at the centre of the lean-to');
 if (slept.slept < 0.24 || slept.slept > 0.27) errors.push('a cold sleep under the lean-to lasted ' + (slept.slept * 24).toFixed(1) + ' h instead of 6');
 if (slept.rest < 0.7) errors.push('not three quarters rested under the lean-to: ' + slept.rest);
+
+// Shelter upgrades (0.27 "Home"): piles of fronds, branches and stones beside the finished lean-to, the action button's
+// icon for the first upgrade, F builds the side walls, the bed and the stone ring one after the other (30 s of work each), then
+// the upgraded lean-to from the default view (smoke-39, also in the quick run) and from the side (smoke-40); a frond and stones
+// on the ground (smoke-41, also in the quick run) and the same carried, in the row (smoke-42).
+const homeSet = await page.evaluate(() => {
+  const { world, game, step } = window.__driftwood, p = game.player, w = game.wood, l = game.leantos.list[0];
+  const S = Math.sin(l.heading), C = Math.cos(l.heading), R = { x: C, z: -S }, F = { x: S, z: C };
+  const nearest = (list, n) => list.sort((a, b) => Math.hypot(a.x - l.x, a.z - l.z) - Math.hypot(b.x - l.x, b.z - l.z)).slice(0, n);
+  const fr = nearest(world.tiles.flatMap(t => game.fronds.groundFronds(t)), 12), st = nearest(world.tiles.flatMap(t => game.stones.groundStones(t)), 9), br = nearest(world.tiles.flatMap(t => game.branches.groundBranches(t)), 4);
+  game.clock.time = 0.5; game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0; game.fire.torch = null;
+  w.carried.length = 0; w.stones.length = 0; w.piles.length = 0;
+  const at = (kind, logs, r, f) => w.piles.push({ x: l.x + R.x * r + F.x * f, z: l.z + R.z * r + F.z * f, kind, logs });
+  at('frond', fr, -1.9, 0.1); at('branch', br, -1.7, 1.0); at('stone', st, 1.9, 0.5); w.version++;
+  p.x = l.x + F.x * 1.5; p.z = l.z + F.z * 1.5; p.y = world.H(p.x, p.z); step(0.1); window.__driftwood.draw();
+  const a = game.action();
+  return { frondsFound: fr.length, stonesFound: st.length, branchesFound: br.length, hold: a.hold && a.hold.kind + ':' + a.hold.what, tap: a.tap && a.tap.kind };
+});
+console.log('upgrade site', JSON.stringify(homeSet));
+if (homeSet.frondsFound < 12 || homeSet.stonesFound < 9 || homeSet.branchesFound < 4) errors.push('not enough fronds, stones or branches for the upgrades: ' + JSON.stringify(homeSet));
+if (homeSet.hold !== 'upgrade:walls') errors.push('beside the lean-to and the piles the hold should build the side walls: ' + homeSet.hold);
+const upIcon = await iconOf();
+if (!upIcon.on || !upIcon.main) errors.push('the action button shows no icon for the upgrade');
+for (const what of ['walls', 'bed', 'ring']) {
+  await pressF();
+  await page.evaluate(() => window.__driftwood.step(3));
+  const done = await page.evaluate(what => { const { game, step } = window.__driftwood, l = game.leantos.list[0]; step(60, () => !game.player.work); return { what, built: l.up && l.up[what], work: game.player.work && game.player.work.kind, piles: game.wood.piles.map(q => q.kind + ':' + q.logs.length).join(',') }; }, what);
+  console.log('built', JSON.stringify(done));
+  if (done.built !== 1) errors.push('the ' + what + ' did not get finished: ' + JSON.stringify(done));
+  await page.evaluate(() => { const { step } = window.__driftwood; step(1); });
+}
+const upLeft = await page.evaluate(() => window.__driftwood.game.wood.piles.map(q => q.kind + ':' + q.logs.length).join(','));
+if (upLeft !== 'frond:2,stone:1') errors.push('after the three upgrades the piles should hold the rest: ' + upLeft);
+await page.evaluate(() => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, l = game.leantos.list[0], w = game.wood;
+  w.piles.length = 0; w.version++;
+  p.x = l.x + Math.sin(l.heading) * 4.6; p.z = l.z + Math.cos(l.heading) * 4.6; p.y = world.H(p.x, p.z); p.heading = l.heading + Math.PI;
+  const pose = view.pose; view.setPose({ yaw: pose.yaw, tilt: pose.tilt, zoom: 6 }); step(1);
+});
+await shot('smoke-39.png', { quick: true, settle: 200 });
+await page.evaluate(() => { const { step, view } = window.__driftwood, pose = view.pose; view.setPose({ yaw: pose.yaw + 1.2, tilt: pose.tilt, zoom: 6 }); step(1); });
+await shot('smoke-40.png', { settle: 200 });
+await page.evaluate(() => { const { step, view } = window.__driftwood, pose = view.pose; view.setPose({ yaw: pose.yaw - 1.2, tilt: pose.tilt, zoom: 7 }); step(0.2); });
+const ground = await page.evaluate(() => {
+  const { world, game, step, view } = window.__driftwood, p = game.player, w = game.wood;
+  const fr = world.tiles.flatMap(t => game.fronds.groundFronds(t)), st = world.tiles.flatMap(t => game.stones.groundStones(t));
+  const here = { x: p.x, z: p.z }, dh = o => Math.hypot(o.x - here.x, o.z - here.z);
+  const best = fr.filter(f => dh(f) < 130).map(f => ({ f, n: st.filter(s => Math.hypot(s.x - f.x, s.z - f.z) < 4.5).length })).sort((a, b) => b.n - a.n || dh(a.f) - dh(b.f))[0];
+  window.__ground = best ? { frond: { x: best.f.x, z: best.f.z }, stones: best.n } : null;
+  if (!best) return null;
+  game.clock.time = 0.5; w.carried.length = 0; w.stones.length = 0;
+  p.x = best.f.x + 0.9; p.z = best.f.z + 1.4; p.y = world.H(p.x, p.z); p.heading = 3.5;
+  const pose = view.pose; view.setPose({ yaw: pose.yaw, tilt: pose.tilt, zoom: 5 }); step(1.5);
+  return { stonesNear: best.n, d: dh(best.f) };
+});
+console.log('frond and stones on the ground', JSON.stringify(ground));
+if (!ground) errors.push('no frond to look at');
+await shot('smoke-41.png', { quick: true, settle: 200 });
+const carryRow = await page.evaluate(() => {
+  const { game, step, world } = window.__driftwood, w = game.wood, g = window.__ground;
+  const dg = o => Math.hypot(o.x - g.frond.x, o.z - g.frond.z);
+  const f = world.tiles.flatMap(t => game.fronds.groundFronds(t)).sort((a, b) => dg(a) - dg(b))[0];
+  const ss = world.tiles.flatMap(t => game.stones.groundStones(t)).sort((a, b) => dg(a) - dg(b)).slice(0, 3);
+  w.take({ kind: 'log', log: f }, game.clock.total); for (const s of ss) w.take({ kind: 'log', log: s });
+  step(0.1); window.__driftwood.draw();
+  return { frond: w.carried.filter(l => l.frond).length, stones: w.stones.length, row: document.querySelectorAll('#carry svg').length - game.fibre.carried };
+});
+console.log('carrying a frond and stones', JSON.stringify(carryRow));
+if (carryRow.frond !== 1 || carryRow.stones !== 2 || carryRow.row !== 3) errors.push('a frond and two stones should show three drawings in the row: ' + JSON.stringify(carryRow));
+await shot('smoke-42.png', { settle: 400 });
+await page.evaluate(() => { const { game, view } = window.__driftwood, w = game.wood, pose = view.pose; w.carried.length = 0; w.stones.length = 0; w.piles.length = 0; w.version++; view.setPose({ yaw: pose.yaw, tilt: pose.tilt, zoom: 7 }); });
 
 // Wildlife (0.17): crabs out on the wet sand at low water, near their holes (smoke-25), and a
 // flock of seabirds landed on the beach (smoke-26, also in the quick run). The state is set up

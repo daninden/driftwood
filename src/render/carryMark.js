@@ -3,7 +3,7 @@
  * mark that shows what the castaway carries loose. For now only the tufts
  * of coconut fibre (game/fibre `carried`, 0..3) and, since 0.16, one twig with a
  * leaf for each branch carried (`branch`) and, since 0.22, one small crab for each crab carried (`crab`, at most two, game/crabs); since 0.26 (game/forage) a little cluster of berries for each handful carried (`berries`, at most two) and a bunch of bananas (`banana`, at most one); since 0.25 (game/shells) one whole coconut for each nut carried (`nut`, at most two), an empty half shell (`shell`) and a half shell with water in it (`water`), both at most two together; one weathered
- * log for each piece of driftwood carried (`driftwood`, wood that is not a branch; wet or dry it looks the same), drawn before the branches. The torch
+ * log for each piece of driftwood carried (`driftwood`, wood that is not a branch; wet or dry it looks the same), drawn before the branches. Since 0.27 "Home" a dead palm frond for each frond carried (`frond`) and a small stone for each stone carried (`stone`, at most two) follow the branches. The torch
  * is in his hand and never in the row. Later items (nails, a
  * knife, ...) add a key to ITEMS and a drawing to DRAWINGS.
  *
@@ -26,7 +26,7 @@
  */
 import { ss } from '../core/math.js';
 
-export const ITEMS = ['fibre', 'driftwood', 'branch', 'crab', 'berries', 'banana', 'nut', 'shell', 'water'];
+export const ITEMS = ['fibre', 'driftwood', 'branch', 'frond', 'stone', 'crab', 'berries', 'banana', 'nut', 'shell', 'water'];
 export const REST_OPACITY = 0.5, PEAK_OPACITY = 0.95;
 export const HOLD = 3, EASE = 2;   // seconds held clear, then easing back
 
@@ -57,6 +57,9 @@ const SHELL_FULL = SHELL_EMPTY + '<path d="M5.4 14.4C7.4 13 9 15.4 10 14.4C11 13
 // strokes tied together at one end (round caps, no fill)
 export const DRAWINGS = {
   branch: '<path d="M4 23C7 17 11 11 16 3"/><path d="M8.6 17C11 16.5 13.5 17.5 15 19.5"/><path d="M12 10.8C10.5 8.6 8 8 5.5 8.8"/><path d="M13.6 7C15.5 6 17.5 6.5 18.5 8"/>',
+  // 0.27: a dead palm frond (a rib with leaflets down both sides) and a small rounded stone
+  frond: '<path d="M3 23C5 14 10 8 17 4"/><path d="M5 18L3 14M7.2 14.4L6 10M10 11.4L10.5 7M13.4 8.6L15.5 6.6"/><path d="M5 18L9 19.2M7.2 14.4L11.5 15.8M10 11.4L14.5 12.4M13.4 8.6L17.5 9.2"/>',
+  stone: '<path d="M3.5 18C3.5 11.5 8 8 12 8.4C16.4 8.8 18 13 17.6 17.6C17.3 21 14 22.6 10 22.6C6 22.6 3.5 21.2 3.5 18Z"/><path d="M7 13.4C8 11.8 9.6 11.2 11.2 11.4"/><path d="M12.6 19.4C14.2 19.4 15.6 18.4 16 17"/>',
   driftwood: '<path d="M5.4 21C7.2 15 10.6 9 14.2 4.8C15.6 3.4 17.6 4.4 17 6.2C14.8 11.4 11.2 17.6 8.4 22.6C7.4 24.4 4.6 23.4 4.8 21.8C4.8 21.5 5.2 21 5.4 21Z"/><path d="M8.2 18.4C10 14.8 12 11.6 14 8.6"/><path d="M10.6 19.2C11.6 17.4 12.6 15.8 13.4 14.4"/>',
   crab: `<g transform="translate(10 13.5) scale(0.95)">${CRAB_PATHS}</g>`,
   // 0.25: a whole coconut with its three eyes, a half shell seen from the side (bowl and oval rim), and the same with water in it (a wavy water line and a ripple stroke)

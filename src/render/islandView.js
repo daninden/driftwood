@@ -24,7 +24,7 @@
  *     (game/fibre, render/coconuts), the berries on the lowland bushes (game/forage, render/berries), the wild banana plants
  *     of the rain forest (game/forage, render/bananas), and the fires
  *     (game/fire, render/fire), the branches under the trees (game/branches,
- *     render/branches), the lean-tos (game/leanto, render/leanto), with the tally marks of piles and fires while
+ *     render/branches), the fallen palm fronds and the stones on the ground (game/fronds, game/stones, render/finds), the lean-tos with their upgrades (game/leanto, render/leanto), with the tally marks of piles and fires while
  *     he stands beside them (render/tallyMarks), and the crabs, fish and birds near him (game/wildlife, render/wildlife), and the fireflies at night (game/fireflies, render/fireflies)
  *   view.pickGround(clientX, clientY, touch?) -> { x, z } | null
  *     the ground under the screen point; on a piece of beach driftwood as drawn (its trunk, a branch or the
@@ -65,6 +65,7 @@ import { skyAt } from './sky.js';
 import { createWoodView, driftColor, woodLook, logParts } from './driftwood.js';
 import { createCocoView } from './coconuts.js';
 import { createBranchView } from './branches.js';
+import { createFindsView } from './finds.js';
 import { createBerryView } from './berries.js';
 import { createBananaView } from './bananas.js';
 import { createLeantoView } from './leanto.js';
@@ -94,12 +95,12 @@ export async function createIslandView(world, container, progress, start, opts =
   const slicer = createSlicer();
   const near = new Map();   // tile -> { group }
   const startLights = opts.settings ? opts.settings.fireLights : undefined; let fireLights = startLights;   // the pool of fire lights is sized once, by the quality at the start
-  let woodView = null, cocoView = null, branchView = null, leantoView = null, berryView = null, bananaView = null, fireView = null, tallyView = null, wildView = null, flyView = null, game = null;
+  let woodView = null, cocoView = null, branchView = null, findsView = null, leantoView = null, berryView = null, bananaView = null, fireView = null, tallyView = null, wildView = null, flyView = null, game = null;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso),
-    onReady: (tile, v) => { stage.tagTerrain(v.group); scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); } },
-    onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); berryView.dropTile(tile); bananaView.dropTile(tile); } },
+    onReady: (tile, v) => { stage.tagTerrain(v.group); scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); } },
+    onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); findsView.dropTile(tile); berryView.dropTile(tile); bananaView.dropTile(tile); } },
   });
   let windSeconds = 0;   // the wind's own clock: the drawn time, so gusts do not race while he sleeps
   const hero = createHero(scene), steps = createFootprints(scene, world.H), cam = createCamera();
@@ -113,8 +114,8 @@ export async function createIslandView(world, container, progress, start, opts =
     cam.follow(player, dt, t.L > 4.25);
     water.setSea(sea);
     const total = game ? game.clock.total : 0;
-    if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); berryView.update(); bananaView.update(); leantoView.update(); }
-    hero.update(player, t.depth, game ? game.wood.carried.map(l => { const d = dryness(l, total); return { len: l.len, rad: l.rad, col: driftColor(l, d), wet: woodLook(d).sheen }; }) : []);
+    if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); findsView.update(); berryView.update(); bananaView.update(); leantoView.update(); }
+    hero.update(player, t.depth, game ? [...game.wood.carried, ...game.wood.stones].map(l => { const d = dryness(l, total); return { len: l.len, rad: l.rad, col: driftColor(l, d), wet: woodLook(d).sheen }; }) : []);
     steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver);
     steps.wash(sea);
     const { yaw, pitch } = cam;
@@ -138,8 +139,8 @@ export async function createIslandView(world, container, progress, start, opts =
   function setGame(g) {
     game = g;
     woodView = createWoodView(scene, world, kit, g.wood); cocoView = createCocoView(scene, world, kit, g.fibre);
-    branchView = createBranchView(scene, world, kit, g.branches); berryView = createBerryView(scene, world, kit, g.berries); bananaView = createBananaView(scene, world, kit, g.bananas); leantoView = createLeantoView(scene, world, kit, g.leantos);
-    near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); });
+    branchView = createBranchView(scene, world, kit, g.branches); findsView = createFindsView(scene, world, kit, g.fronds, g.stones); berryView = createBerryView(scene, world, kit, g.berries); bananaView = createBananaView(scene, world, kit, g.bananas); leantoView = createLeantoView(scene, world, kit, g.leantos);
+    near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); });
     fireView = createFireView(scene, container, g.fire, { pool: startLights, active: fireLights });
     tallyView = createTallyView(container);
     wildView = createWildlifeView(scene, g.wildlife);

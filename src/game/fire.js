@@ -37,6 +37,8 @@
  *     goes out after RAIN_OUT (fifteen game minutes) of rain: it leaves a burnt place with `wet: true`
  *     (wet ash) and counts a hiss (`hissed`, `hissAt`). A torch, carried or in the ground, burns TORCH_RAIN (2)
  *     times as fast in the rain. Under a roof (game/game decides, `rain(x, z)` is false there) nothing changes.
+ *   - A stone ring (0.27 "Home", game/leanto): a fire inside one (`ring(x, z)` is true there) burns RING_BURN (1.5) times as
+ *     long, and the rain neither burns it faster nor puts it out. Torches are not helped.
  *   - A full fire (FUEL_MAX) takes no more wood: `full(f)`.
  *   - A fire, or its embers, within WARM_R warms a sleeper (game/sleep).
  *   - Whether a fire catches is fixed by the seed and how many attempts
@@ -46,7 +48,7 @@
  *
  * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, TIRED_CATCH, BURN, FUEL_MAX, EMBERS,
  * BRANCH_BURN, fuelOf(logs) -> the fuel in days of a list of pieces (a branch counts BRANCH_BURN of a piece)
- * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS, RAIN_BURN, RAIN_OUT, TORCH_RAIN
+ * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS, RAIN_BURN, RAIN_OUT, TORCH_RAIN, RING_BURN
  * full(f) -> true when fire f holds as much as it can (FUEL_MAX)
  * catchChance(dry, tired) -> 0..CATCH   dry: mean dryness 0..1, tired 0..1 (game/sleep)
  * createFire(world, saved?) -> fire
@@ -74,7 +76,8 @@
  *     or null (no torch, or the wood too wet: a puff of smoke)
  *   fire.feed(f, dry, burn?) -> true when a piece of dryness dry went on fire f (false: not a fire of ours, or it is full);
  *     burn: 1 for driftwood, BRANCH_BURN for a branch
- *   fire.update(days, rain?, at?, total?)  burns down by days of game time; embers and torches go out.
+ *   fire.update(days, rain?, at?, total?, ring?)  burns down by days of game time; embers and torches go out.
+ *     ring: null, or ring(x, z) -> true where a stone ring holds the fire (game/leanto `ring`): it burns RING_BURN times as long, rain or not;
  *     rain: null, or rain(x, z) -> true where the rain reaches (not under a lean-to); at { x, z }: where the carried torch is;
  *     total: the days on the clock, to stamp the puff of steam a fire put out by the rain leaves
  *   fire.flood(sea) -> number of fires (and torches in the sand) the sea put out
@@ -103,6 +106,7 @@ export const BURNT_DAYS = 2;                  // a burnt place stays this long
 export const WARM_R = 3;                      // a fire this close warms a sleeper
 export const RAIN_BURN = 3;                   // in the rain a fire in the open burns down this many times as fast
 export const RAIN_OUT = 15 / 1440;            // and goes out after this much rain (fifteen game minutes)
+export const RING_BURN = 1.5;                 // in a stone ring a fire lasts this many times as long
 export const TORCH_RAIN = 2;                  // a torch burns this many times as fast in the rain
 const FIRE_R = 0.5;                           // how far a fire reaches round its centre
 const TORCH_R = 0.2;
@@ -173,11 +177,11 @@ export function createFire(w, saved) {
     f.fuel = Math.min(FUEL_MAX, f.fuel + BURN * burn * (0.5 + 0.5 * dry)); f.embers = EMBERS; f.fed++;
     fire.version++; return true;
   }
-  function update(days, rain = null, at = null, total = null) {
+  function update(days, rain = null, at = null, total = null, ring = null) {
     if (!(days > 0)) return;
     for (let i = fire.burnt.length - 1; i >= 0; i--) { const b = fire.burnt[i]; b.left -= days; if (b.left <= 0) { fire.burnt.splice(i, 1); fire.version++; } }
     for (let i = fire.fires.length - 1; i >= 0; i--) {
-      const f = fire.fires[i], wet = !!rain && rain(f.x, f.z), k = wet ? RAIN_BURN : 1;
+      const f = fire.fires[i], held = !!ring && ring(f.x, f.z), wet = !held && !!rain && rain(f.x, f.z), k = (wet ? RAIN_BURN : 1) / (held ? RING_BURN : 1);
       if (wet) f.rained = (f.rained || 0) + days; else if (f.rained) delete f.rained;
       if (f.rained >= RAIN_OUT) { fire.fires.splice(i, 1); leaveBurnt(f, true); fire.hissed++; fire.hissAt = { x: f.x, z: f.z }; if (total !== null) { fire.puffs.push({ x: f.x, z: f.z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift(); } fire.version++; continue; }   // the rain put it out
       if (f.fuel > 0) { const was = f.fuel; f.fuel = Math.max(0, f.fuel - days * k); if (was > 0 && f.fuel === 0) fire.version++; }

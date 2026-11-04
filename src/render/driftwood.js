@@ -32,6 +32,7 @@
  * dampPatch(log, dry) -> { opacity, scale } | null   pure; the damp patch under a
  *   beach log at dryness dry: null once it is dry enough to burn
  * dryStep(dry) -> dry rounded down to DRY_STEPS steps a day
+ * Piles of fronds and of stones (game/wood kinds 'frond' and 'stone', 0.27) are drawn by render/finds; driftColor gives a carried frond or stone its colour.
  * A branch (game/branches, `log.branch`) is dark bark whatever its dryness (driftColor) and
  * is drawn thin in piles; on the ground and under the arm see render/branches and render/hero.
  * driftLook(log) -> { col, branch, roots }   pure; branch and roots are
@@ -48,7 +49,7 @@
  *     (wood.version, or a step of drying) and fades in freshly washed-up
  *     wood (dt in real seconds, total the days on the clock)
  *
- * Depends on: three, core/noise, render/geometry, render/nearTile (disposeGroup),
+ * Depends on: three, core/noise, render/geometry, render/finds, render/nearTile (disposeGroup),
  *   render/palette, render/materials (wetToon), game/wood (dryness, read only),
  *   game/fire (TORCH_DRY), game/tide (to see whether any wood is still wet)
  */
@@ -60,6 +61,7 @@ import { outlineMat, toon } from './materials.js';
 import { disposeGroup } from './nearTile.js';
 import { DRIFT, BRANCH } from './palette.js';
 import { dryness, DRY_DAYS } from '../game/wood.js';
+import { frondColor, stoneColor, addFrondPile, addStonePile } from './finds.js';
 import { TORCH_DRY } from '../game/fire.js';
 import { ss } from '../core/math.js';
 import { wetToon } from './materials.js';
@@ -87,6 +89,8 @@ export function dampPatch(log, dry) {
 
 /** The colour of a log at a dryness 0..1: dark and wet until it will burn, then bleaching. */
 export function driftColor(log, dry = 1) {
+  if (log.frond) return frondColor(log);   // 0.27: a dead frond, a stone (render/finds)
+  if (log.stone) return stoneColor(log);
   if (log.branch) return BRANCH.bark[hashInt(log.id, 5, 83) % BRANCH.bark.length];   // a branch is dark bark, always dry
   const col = driftLook(log).col; if (dry >= 1) return col;
   return new THREE.Color(col).lerp(WET, woodLook(dryStep(dry)).wet * WET_MIX).getHex();
@@ -131,6 +135,8 @@ export function addBeachLog(B, kit, H, log, dry = 1) {
 }
 
 export function addPile(B, kit, H, pile, total = 0) {
+  if (pile.kind === 'frond') return addFrondPile(B, kit, H, pile);
+  if (pile.kind === 'stone') return addStonePile(B, kit, H, pile);
   const a0 = (hashInt(Math.round(pile.x * 64), Math.round(pile.z * 64), 59) / 4294967296) * Math.PI;
   const g = H(pile.x, pile.z);
   pile.logs.forEach((log, i) => {

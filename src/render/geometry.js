@@ -13,7 +13,8 @@
  * Wind (0.19): canopyMat, pineMat, bushMat, palmTrunkMat, frondMat, dryFrondMat, grassMat and fernMat sway
  *   (render/windShader), with the shadow depth material (frondDepth, dryFrondDepth, or userData.depthMat) and the
  *   outline hull (userData.outline) that sway the same way. They are for the detailed tiles only: farCanopyMat is
- *   the still crown material of the far tiles, frondStillMat and frondStillDepth the still fronds of the lean-to.
+ *   the still crown material of the far tiles, frondStillMat and frondStillDepth the still fronds of the lean-to, dryFrondStillMat
+ *   and dryFrondStillDepth the still dead fronds lying on the ground (0.27).
  * mat4(x, y, z, sx, sy, sz, ry, rx, rz)   compose position, scale, rotation
  * opaqueCutout(material)   alpha-tested leaves write full alpha, so the page
  *   behind the canvas never shows through their edges
@@ -97,6 +98,8 @@ export function createKit(noise) {
     dryFrondMat: swaying(opaqueCutout(toon(0xffffff, { map: dryTex, alphaTest: 0.4, side: THREE.DoubleSide })), 'frond', { outline: false, depthParams: { map: dryTex, alphaTest: 0.4 } }),
     frondStillMat: opaqueCutout(toon(0xffffff, { map: frondTex, alphaTest: 0.4, side: THREE.DoubleSide })),
     frondStillDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: frondTex, alphaTest: 0.4 }),
+    dryFrondStillMat: opaqueCutout(toon(0xffffff, { map: dryTex, alphaTest: 0.4, side: THREE.DoubleSide })),
+    dryFrondStillDepth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: dryTex, alphaTest: 0.4 }),
     grassMat: swaying(toon(0xffffff, { side: THREE.DoubleSide }), 'grass', { depth: false, outline: false }), fernMat: swaying(toon(0xffffff, { side: THREE.DoubleSide }), 'leaf', { outline: false }), smallMat: toon(),
   };
   kit.frondDepth = kit.frondMat.userData.depthMat; kit.dryFrondDepth = kit.dryFrondMat.userData.depthMat;   // the fronds' shadow, swaying with them

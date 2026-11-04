@@ -16,6 +16,8 @@
  *        of wet wood just washed up (mixed in until it is dry enough to
  *        burn), and the damp sand under it (a dark, low-opacity patch)
  * BRANCH branches under the trees: dark bark colours and dry leaf colours
+ * FROND  fallen palm fronds on the ground (0.27): dead, partly brown (tints of the dry and the green frond texture)
+ * STONE  stones along the rivers and at the foot of rocks (0.27): small, rounded, grey
  * COCO   coconuts under the palms
  * BERRY  berries on the lowland bushes (0.26): red and dark purple
  * BANANA wild banana plants (0.26): green-brown false trunk, green and older brownish leaves, green-yellow fruit, dark purple bud, brown stalk
@@ -57,6 +59,8 @@ export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8
 
 export const DRIFT = Object.freeze({ dry: [0xa8987c, 0x9a8a70, 0xb4a68c, 0x8e8068], wet: 0x40393a, damp: 0x8c6a30 });
 export const BRANCH = Object.freeze({ bark: [0x5a4631, 0x4f3d2b, 0x654f38], leaf: [0xb08a45, 0x9c7a3a, 0xc19a52] });
+export const FROND = Object.freeze({ dry: [0xd6d2c2, 0xc2bba2, 0xaaa38a], green: [0xb8a868, 0xa09058] });
+export const STONE = Object.freeze([0x9a9a92, 0x8a8a84, 0xaaa89e, 0x7f7f7a]);
 export const COCO = Object.freeze([0x7a5a36, 0x6a4c2e, 0x8a6a3e]);
 export const BERRY = Object.freeze({ fruit: [0xc2243a, 0xa51d34, 0x6a2a6a, 0x4a2258, 0xd0364a] });
 export const BANANA = Object.freeze({ stem: 0x8f9a58, base: 0x7d7a48, stalk: 0x6e5a36, bud: 0x5a2848, leaf: [0x4a8a32, 0x55953a, 0x3f7a2c, 0x5c9a3e], old: [0x8a8c3a, 0x7a7a34], fruit: [0xbfd048, 0xa9c443, 0xd0d856] });

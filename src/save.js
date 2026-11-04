@@ -37,6 +37,10 @@
  * whole coconuts he carries, 0 to 2); optional, older saves have none (no shells, no nuts).
  * Since 0.26 a save may also carry `berries` and `bananas`, each `{ carried: [total], picked: [[plantId, total]] }` (the handfuls / the bunch he carries with the moment
  * each was picked, and the plants picked with the day, for their regrowing, game/forage); optional, older saves have none (nothing carried, nothing picked).
+ * Since 0.27 a save may also carry `fronds: { taken: [[id, day]] }` (the fallen palm fronds taken, for their regrowing, game/fronds),
+ * `stones: { taken: [id] }` (the stones taken, game/stones), `wood.stones: [id]` (the stones he carries, at most 2), piles of kind 'frond' or 'stone'
+ * (ids from game/fronds FROND_ID0 and game/stones STONE_ID0), and for each lean-to an optional `up: { walls, bed, ring }` (progress 0..1 of the
+ * upgrades, game/leanto); all optional, older saves have none.
  * saveKey(seed) -> 'driftwood-save-<seed>'
  * serialise(state) -> string          state: game.state() (plus name, startDay); adds the format number `v`
  * parseSave(text, seed) -> state | null
@@ -93,7 +97,10 @@ function valid(s, seed) {
   if (s.thirst !== undefined && !(obj(s.thirst) && num(s.thirst.days))) return false;
   if (s.hunger !== undefined && !(obj(s.hunger) && num(s.hunger.days))) return false;
   if (s.branches !== undefined && !(obj(s.branches) && optArr(s.branches, 'taken') && (!s.branches.taken || s.branches.taken.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1]))))) return false;
-  if (s.leantos !== undefined && !(obj(s.leantos) && arr(s.leantos.list) && s.leantos.list.length <= 64 && s.leantos.list.every(l => obj(l) && [l.id, l.x, l.z, l.heading, l.progress].every(num)) && (s.leantos.nextId === undefined || num(s.leantos.nextId)))) return false;
+  if (s.fronds !== undefined && !(obj(s.fronds) && optArr(s.fronds, 'taken') && (!s.fronds.taken || (s.fronds.taken.length <= 8192 && s.fronds.taken.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1])))))) return false;
+  if (s.stones !== undefined && !(obj(s.stones) && optArr(s.stones, 'taken') && (!s.stones.taken || (s.stones.taken.length <= 16384 && s.stones.taken.every(Number.isInteger))))) return false;
+  if (w.stones !== undefined && !(arr(w.stones) && w.stones.length <= 2 && w.stones.every(Number.isInteger))) return false;
+  if (s.leantos !== undefined && !(obj(s.leantos) && arr(s.leantos.list) && s.leantos.list.length <= 64 && s.leantos.list.every(l => obj(l) && [l.id, l.x, l.z, l.heading, l.progress].every(num) && (l.up === undefined || (obj(l.up) && Object.values(l.up).every(num)))) && (s.leantos.nextId === undefined || num(s.leantos.nextId)))) return false;
   if (s.crabs !== undefined && !(obj(s.crabs) && arr(s.crabs.carried) && s.crabs.carried.length <= 2 && s.crabs.carried.every(num) && arr(s.crabs.gone) && s.crabs.gone.length <= 4096 && s.crabs.gone.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1])) && num(s.crabs.digs))) return false;
   if (s.shells !== undefined && !(obj(s.shells) && arr(s.shells.full) && s.shells.full.length <= 2 && s.shells.full.every(f => typeof f === 'boolean') && Number.isInteger(s.shells.nuts) && s.shells.nuts >= 0 && s.shells.nuts <= 2)) return false;
   for (const [key, max] of [['berries', 2], ['bananas', 1]]) {
@@ -132,7 +139,7 @@ export function createViewSaver(settle = VIEW_SETTLE) {
 
 export function momentKey(game) {
   const f = game.fire;
-  return [game.wood.piles.length, game.wood.piles.reduce((n, p) => n + p.logs.length, 0), f.fires.length, f.torches.length, game.sleep.asleep ? 1 : 0, game.leantos.list.length, game.leantos.list.filter(l => l.progress >= 1).length, game.crabs.carried.length, game.crabs.gone.size, game.shells.list.map(f => (f ? 1 : 0)).join(''), game.shells.nuts, game.berries.carried.length, game.berries.picked.size, game.bananas.carried.length, game.bananas.picked.size].join(',');
+  return [game.wood.piles.length, game.wood.piles.reduce((n, p) => n + p.logs.length, 0), f.fires.length, f.torches.length, game.sleep.asleep ? 1 : 0, game.leantos.list.length, game.leantos.list.filter(l => l.progress >= 1).length, game.leantos.list.map(l => Object.keys(l.up || {}).filter(k => l.up[k] >= 1).length).join(''), game.crabs.carried.length, game.crabs.gone.size, game.shells.list.map(f => (f ? 1 : 0)).join(''), game.shells.nuts, game.berries.carried.length, game.berries.picked.size, game.bananas.carried.length, game.bananas.picked.size].join(',');
 }
 
 export function parseHash(hash) {

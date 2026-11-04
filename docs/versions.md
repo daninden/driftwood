@@ -2,6 +2,18 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.27 "Home" — 2026-11-04
+
+- New materials: fallen palm fronds under about 1 palm in 3 (seed 1337: 561, 66 within 100 m of the start; back 4 to 6 days after taken; carried like wood, at most 3 together with wood and branches, always dry, not fuel; `game/fronds`) and stones at the foot of boulders and crags and along river banks (2522, 309 within 100 m; at most 2 carried apart from the wood, each slows like a piece of wood; no regrowing; `game/stones`). Both have their own piles (at most 12, tally marks), row drawings and a look on the ground (`render/finds`).
+- Shelter upgrades, each once per finished lean-to, by a hold or F within 2.2 m of it with the materials in piles within 3 m; 30 s of work in steps, half the lean-to's rest cost, progress kept when he walks off (`up` per lean-to). The first affordable one is built, in the order walls, bed, ring; a new lean-to comes before an upgrade, an upgrade before lighting a pile.
+  - Side walls (6 fronds): wood stays dry within 2.5 m (was 1.5) and a fire within 3 m (was 2); the cold sleep under it is 7 hours and leaves him 87.5 % rested (`WALLS_SLEEP`; a bare lean-to gives 6 hours and 75 %).
+  - Bed (4 branches and 4 fronds): rest comes 1.25 times as fast when he sleeps under that lean-to.
+  - Stone fire ring (8 stones), 2.2 m in front of the open side: a fire within 1 m of its middle burns 1.5 times as long, and rain neither speeds it up nor puts it out.
+- Save: optional `fronds`, `stones`, `wood.stones`, the new pile kinds and `up`; older saves load; `momentKey` follows finished upgrades.
+- Smoke: a new section builds the three upgrades (smoke-39, smoke-40) and shows a frond and stones on the ground and carried (smoke-41, smoke-42). Fixed: the check on carried branches had failed since 0.22.2 (it did not count the driftwood that joined the row then) without being noticed.
+- Tests: `tests/upgrades.test.js` (new, 30). 809 tests in all.
+- Known: at game zoom the walls read as a fringe and are hard to see from the front; fallen fronds look like tan triangles (see *Bugs, later* in the handover).
+
 ## 0.26 "Inland" — 2026-11-04
 
 - New: food away from the coast (`game/forage`, pure; derived from the bushes of the world like branches from the trees, so the generated world is unchanged).

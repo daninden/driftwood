@@ -43,7 +43,10 @@ const at = (x, z) => ({ x, z, y: w.H(x, z) });
 const kind = g => { const a = g.action(); return a.tap && a.tap.kind; };
 const besideBush = o => createGame(w, at(B0.x - B0.r - 0.2, B0.z), { sleep: { awake: 0.1 }, ...o });
 const besideBanana = o => createGame(w, at(N0.x - N0.r - 0.2, N0.z), { sleep: { awake: 0.1 }, ...o });
-const away = o => createGame(w, at(B0.x - B0.r - 25, B0.z), { sleep: { awake: 0.1 }, ...o });   // empty hands, nothing near (checked below)
+// empty hands, nothing near (checked below; since 0.27 a frond or stone may lie there, so look for a clear spot)
+let awayCache = null;
+const awayX = () => awayCache ?? (awayCache = (() => { for (let d = 25; d < 80; d += 3) if (!kind(createGame(w, at(B0.x - B0.r - d, B0.z), { sleep: { awake: 0.1 } }))) return B0.x - B0.r - d; return B0.x - B0.r - 25; })());
+const away = o => createGame(w, at(awayX(), B0.z), { sleep: { awake: 0.1 }, ...o });
 
 describe('which bushes bear', () => {
   it('is derived from the world, the same every time, and leaves the world alone', () => {
