@@ -50,14 +50,23 @@ export function createPath(world, opts = {}) {
   // The speed factor of walking the straight line a -> b in the short steps stepPlayer takes (a probe 0.25 m ahead): 0 when any step of it is
   // a wall, else the pace over the whole line (the harmonic mean of the steps). The ground between two cells can be a good deal steeper than at
   // the cells themselves (a climbing route is a narrow band), so a line judged only at its ends could not always be walked.
+  const hitsObstacle = (a, b) => {
+    const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1e-9;
+    for (const at of [a, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, b]) for (const o of obstaclesNear(world, at.x, at.z)) {
+      const u = Math.min(1, Math.max(0, ((o.x - a.x) * dx + (o.z - a.z) * dz) / l2));
+      if (Math.hypot(a.x + dx * u - o.x, a.z + dz * u - o.z) < o.r) return true;
+    }
+    return false;
+  };
   const walkFactor = (a, b) => {
     const len = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(len / STEP)), sea = 0;
     let prev = { x: a.x, z: a.z, y: world.H(a.x, a.z) }, inv = 0;
     for (let i = 1; i <= n; i++) {
-      const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n, f = stepFactor(world, prev, x, z, sea);
-      if (f <= 0 || (world.tiles && obstaclesNear(world, x, z).some(o => Math.hypot(x - o.x, z - o.z) < o.r))) return 0;   // a wall, or a trunk or boulder in the way
+      const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n, f = stepFactor(world, prev, x, z, sea, i === n);   // the bushes only where the line ends (they are dear to look up)
+      if (f <= 0) return 0;
       inv += 1 / f; prev = { x, z, y: world.H(x, z) };
     }
+    if (world.tiles && hitsObstacle(a, b)) return 0;   // a trunk, boulder or crag on the line (stepPlayer would slide round it and off the line, or stick between two)
     return n / inv;
   };
   const edgeF = (ix, iz, d) => {
@@ -94,13 +103,17 @@ export function createPath(world, opts = {}) {
   function find(from, to, maxExp = 90000, retry = true) {
     const s = startCell(from), g = nearestCell(to.x, to.z, 4, ok);
     if (!s || !g) { if (retry && banned.size) { banned.clear(); return find(from, to, maxExp, false); } return null; }
-    const gk = g[1] * N + g[0], sk = s[1] * N + s[0];
+    let gk = g[1] * N + g[0]; const sk = s[1] * N + s[0], goals = new Set([gk]);
+    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {   // any cell by the goal will do: the nearest one may be shut in by trunks
+      const ix = g[0] + a, iz = g[1] + b;
+      if (isStand(ix, iz) && ok(ix, iz) && Math.hypot(centre(ix) - to.x, centre(iz) - to.z) < 2.6) goals.add(iz * N + ix);
+    }
     const gs = new Map([[sk, 0]]), came = new Map(), h = new Heap(), closed = new Set();
     const hf = (ix, iz) => { const dx = Math.abs(ix - g[0]), dz = Math.abs(iz - g[1]); return (Math.max(dx, dz) + 0.414 * Math.min(dx, dz)) * C * 1.1; };
     h.push(hf(s[0], s[1]), sk); let exp = 0, found = false;
     while (h.size) {
       const [, k] = h.pop(); if (closed.has(k)) continue; closed.add(k);
-      if (k === gk) { found = true; break; }
+      if (goals.has(k)) { found = true; gk = k; break; }
       if (++exp > maxExp) break;
       const ix = k % N, iz = (k - ix) / N, g0 = gs.get(k);
       for (let d = 0; d < 8; d++) {
