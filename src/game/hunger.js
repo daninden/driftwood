@@ -41,7 +41,7 @@ export const HUNGRY_AT = 2, STARVING_AT = 4;
 export const HUNGER_SLOW = 0.75;    // walking speed when starving
 export const DRILL_COST = 1.5;      // drilling a fire costs half as much rest again when hungry
 export const STARVE_DRAIN = 1.5;    // rest runs out one and a half times as fast when starving
-export const NUT_FOOD = 4 / 3;      // days of hunger one coconut takes away
+export const NUT_FOOD = 1;          // days of hunger one coconut takes away
 
 export function createHunger(saved) {
   const hunger = {

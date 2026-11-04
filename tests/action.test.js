@@ -99,7 +99,7 @@ describe('what a short press does', () => {
     const full = createGame(w, at(c.x + 0.3, c.z), { fibre: { carried: 3 }, hunger: { days: 3 }, thirst: { days: 1 } });
     expect(full.action().tap).toMatchObject({ kind: 'husk' });   // husking is eating too
     press(full, 'tap', 0.3); run(full, makeInput(), HUSK_TIME + 0.2);
-    expect(full.fibre.carried).toBe(3); expect(full.hunger.days).toBeLessThan(2); expect(full.thirst.days).toBeLessThan(1); expect(full.fibre.onGround(c)).toBe(false);
+    expect(full.fibre.carried).toBe(3); expect(full.hunger.days).toBeLessThan(2.1); expect(full.thirst.days).toBeLessThan(1); expect(full.fibre.onGround(c)).toBe(false);
   });
   it('lays one dry piece on a fire, the top dry one; wet wood stays with him', () => {
     const g = scene({ carried: 1, fire: fireAt(E.x + 0.8, E.z, 2 * BURN) }), f = g.fire.fires[0];

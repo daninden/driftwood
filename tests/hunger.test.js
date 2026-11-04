@@ -47,14 +47,14 @@ describe('hunger over time', () => {
   });
   it('has the agreed numbers', () => {
     expect([HUNGRY_AT, STARVING_AT, HUNGER_SLOW, HUNGRY_DRILL, STARVE_DRAIN]).toEqual([2, 4, 0.75, 1.5, 1.5]);
-    expect(NUT_FOOD).toBeCloseTo(4 / 3, 10); expect(NUT_DRINK).toBe(0.25); expect(HUSK_TIME).toBe(4);
+    expect(NUT_FOOD).toBe(1); expect(NUT_DRINK).toBe(0.25); expect(HUSK_TIME).toBe(4);
   });
   it('slows from 1 at hungry down to 0.75 at starving', () => {
     expect(createHunger({ days: HUNGRY_AT }).speed()).toBe(1);
     expect(createHunger({ days: 3 }).speed()).toBeCloseTo(0.875, 10);
     expect(createHunger({ days: STARVING_AT }).speed()).toBeCloseTo(HUNGER_SLOW, 10);
   });
-  it('eating takes 4/3 of a day off, never below 0', () => {
+  it('eating takes a day off, never below 0', () => {
     const h = createHunger({ days: 3 }); h.eat(); expect(h.days).toBeCloseTo(3 - NUT_FOOD, 10);
     h.eat(); h.eat(); expect(h.days).toBe(0);
   });
@@ -73,7 +73,7 @@ describe('thirst sip', () => {
 });
 
 describe('eating when husking', () => {
-  it('gives the tuft, 4/3 day less hunger and a quarter day less thirst when the work is done', () => {
+  it('gives the tuft, a day less hunger and a quarter day less thirst when the work is done', () => {
     const { g, input } = husking({ hunger: { days: 3 }, thirst: { days: 1 } });
     expect(g.player.work.kind).toBe('husk');
     run(g, input, HUSK_TIME - 0.5);

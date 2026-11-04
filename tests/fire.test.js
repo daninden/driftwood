@@ -45,7 +45,7 @@ describe('coconuts and fibre', () => {
   it('lie under the palms, each with its own id, the same for the same seed', async () => {
     expect(cocos.length).toBeGreaterThan(100);
     const palms = w.tiles.reduce((n, t) => n + t.palms.length, 0), all = w.tiles.reduce((n, t) => n + t.cocos.length, 0);
-    expect(cocos.length / palms).toBeGreaterThan(0.15); expect(cocos.length / palms).toBeLessThan(0.25);   // about 1 palm in 5
+    expect(cocos.length / palms).toBeGreaterThan(0.07); expect(cocos.length / palms).toBeLessThan(0.14);   // about 1 palm in 10
     expect(cocos.length).toBeLessThan(all / 3);
     for (const t of w.tiles) { const ps = nutsOfTile(w, t).map(c => c.palm); expect(new Set(ps).size).toBe(ps.length); }   // at most one per palm
     expect(new Set(cocos.map(c => c.id)).size).toBe(cocos.length);
@@ -75,7 +75,7 @@ describe('coconuts and fibre', () => {
     const f = createFibre(w);
     for (const c of cocos.slice(0, FIBRE_MAX + 2)) f.take(c, 0);
     expect(f.carried).toBe(FIBRE_MAX); expect(f.onGround(cocos[FIBRE_MAX])).toBe(true);
-    f.update(REGROW * 0.99); expect(f.onGround(cocos[0])).toBe(false); expect(REGROW).toBe(6); expect(REGROW + REGROW_SPREAD).toBe(10);
+    f.update(REGROW * 0.99); expect(f.onGround(cocos[0])).toBe(false); expect(REGROW).toBe(10); expect(REGROW + REGROW_SPREAD).toBe(14);
     expect(f.groundCocos(w.tiles.find(t => t.cocos.some(c => c.id === cocos[0].id)))).not.toContain(cocos[0]);
     f.update(REGROW + REGROW_SPREAD + 0.01); expect(f.onGround(cocos[0])).toBe(true);
   });

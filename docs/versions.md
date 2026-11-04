@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.27.5 "Leaner" — 2026-11-04
+
+- Balance from the playtest (no real hunger in 10 to 40 days on any seed): coconuts under about 1 palm in 10 (`NUT_SHARE` 1/6 of the palms with nuts, was 1/3), back in 10 to 14 days (was 6 to 10); a nut takes away 1 day of hunger (`NUT_FOOD`, was 4/3); berries on 1 lowland bush in 8 (`BERRY_SHARE`, was 1 in 4). A crab stays 2/3 day. Seed 1337: 173 nuts (22 within 100 m of the start) and 227 berry bushes (38 within 100 m).
+- Playtest, 20 days on seeds 1337, 2024 and 11: highest hunger 1.50, 1.56 and 1.69 days (was about 1 to 1.5), never 2, as the bot eats as soon as it may and keeps 2 nuts. On seed 11 (base far from palms) it searched 24 times for food (mean 45 s, max 134 s): coconuts, berries and bananas.
+- Tools: the smoke check after eating a nut and the playtest bot follow the new food value; the bot searches up to 140 m for food.
+- Tests: share 7 to 14 %, regrow 10 to 14 days, `NUT_FOOD` 1.
+
 ## 0.27.4 "Choices" — 2026-11-04
 
 - When more than one thing can be done, up to 3 smaller ink icons appear in an arc above the action ring (no frames or text, 44 px hit area, faint until under the pointer); a click or tap on one, or the keys 1 to 3 (left to right), does it at once. Order: the other small actions nearest first, then the big ones. On a desktop the arc leans left of the ring; on touch it sits centred above the ring, clear of the thumb stick.

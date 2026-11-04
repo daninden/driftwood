@@ -104,7 +104,7 @@ describe('the crab state', () => {
     expect(c.carried).toEqual([1, 2]); expect([...c.gone]).toEqual([[1, 2]]); expect(c.digs).toBe(0);
     expect(createCrabs(1, null).carried).toEqual([]);
   });
-  it('gives hunger 2/3 day for a crab and 4/3 for a nut', () => {
+  it('gives hunger 2/3 day for a crab and 1 day for a nut', () => {
     expect(CRAB_FOOD).toBeCloseTo(2 / 3); const h = createHunger({ days: 3 });
     h.eat(CRAB_FOOD); expect(h.days).toBeCloseTo(3 - 2 / 3); h.eat(); expect(h.days).toBeCloseTo(3 - 2 / 3 - NUT_FOOD); h.eat(9); expect(h.days).toBe(0);
   });

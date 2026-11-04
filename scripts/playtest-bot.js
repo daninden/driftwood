@@ -32,7 +32,7 @@
       wrap(game.hunger, 'eat', (o, food) => {
         const before = game.hunger.days, kind = ({ husk: 'coconut', berries: 'berries', eatBerries: 'berries', bananas: 'banana', eatBanana: 'banana', roast: 'crab', 'use:berries': 'berries', 'use:banana': 'banana', 'use:nut': 'coconut', 'use:crab': 'crab' })[lastKind] || ('?' + lastKind);
         const r = o(food); inc(R().eaten, kind); R().eatenDays++;
-        ev('eat', { kind, food: +(food === undefined ? 1.33 : food).toFixed(2), before: +before.toFixed(2), after: +game.hunger.days.toFixed(2) });
+        ev('eat', { kind, food: +(food === undefined ? 1 : food).toFixed(2), before: +before.toFixed(2), after: +game.hunger.days.toFixed(2) });
         if (search) { const dur = gt() - search.t0; M.searches.push({ day: clock.day, kind, secs: +dur.toFixed(1), from: search.from, hungerAtStart: search.h, target: search.kind }); R().searches++; R().searchSecs += dur; search = null; }
         return r;
       });
@@ -291,7 +291,7 @@
       if (game.crabs.carried.length && game.fire.fires.some(f => game.fire.strength(f) > 0)) { /* roast when passing a fire: handled in nightGoal */ }
       // search
       const cs = [];
-      const c = nearestBy('coco', 70), b = nearestBy('berry', 70), bn = nearestBy('banana', 120, 2);
+      const c = nearestBy('coco', 140), b = nearestBy('berry', 140), bn = nearestBy('banana', 120, 2);
       if (c) cs.push({ kind: 'coco', t: c, w: c.cost }); if (b) cs.push({ kind: 'berry', t: b, w: b.cost * 3 }); if (bn) cs.push({ kind: 'banana', t: bn, w: bn.cost * 0.8 });
       if (!cs.length) { ev('no-food-found'); return; }
       cs.sort((a, b) => a.w - b.w); const pick = cs[0];
@@ -305,7 +305,7 @@
     }
 
     function* huskGoal() {   // a nut for fibre (and to carry)
-      const c = nearestBy('coco', 70); if (!c) return;
+      const c = nearestBy('coco', 140); if (!c) return;
       const near = () => { const a = game.action().tap; return !!a && a.kind === 'husk' && !a.carried; };
       yield* goTo(c.x, c.z, { tap: true, stop: 0.4, until: near });
       let k = yield* act(['husk']);

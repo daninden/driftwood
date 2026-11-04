@@ -195,7 +195,7 @@ describe('carrying a coconut', () => {
   it('a carried nut grows back like a husked one', () => {
     const g = atNut({ hunger: { days: 0 } }); press(g, 0.3); run(g, makeInput(), HUSK_TIME + 0.3);
     expect(g.fibre.onGround(cocos[0])).toBe(false);
-    g.fibre.update(g.clock.total + 11); expect(g.fibre.onGround(cocos[0])).toBe(true);
+    g.fibre.update(g.clock.total + 15); expect(g.fibre.onGround(cocos[0])).toBe(true);
   });
   it('eats a carried nut anywhere when hungry: EAT_TIME, food, a quarter day of drink, no tuft, and the shell', () => {
     const g = atE({ shells: { full: [], nuts: 2 }, hunger: { days: 2 }, thirst: { days: 1 } });

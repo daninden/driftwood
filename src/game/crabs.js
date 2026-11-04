@@ -35,7 +35,7 @@ import { mulberry32, hashInt } from '../core/noise.js';
 export const DIG_TIME = 5, ROAST_TIME = 8;
 export const DIG_CHANCE = 0.5;
 export const CARRY_CRABS = 2;
-export const CRAB_FOOD = 2 / 3;   // days of hunger one roasted crab takes away (half a coconut)
+export const CRAB_FOOD = 2 / 3;   // days of hunger one roasted crab takes away (two thirds of a coconut)
 export const SPOIL_AFTER = 1;     // a raw crab goes bad after this many game days
 export const REGROW = [5, 8];     // a caught crab is back in its colony after this many days
 

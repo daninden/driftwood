@@ -4,7 +4,7 @@
  *
  * Rules
  *   - Fallen coconuts lie under the palms (world/vegetation `tile.cocos`), thinned here (0.24 "Lean times"):
- *     of the palms that have nuts only about a third (so about 1 in 5 of all palms) keep one nut,
+ *     of the palms that have nuts only about a sixth (so about 1 in 10 of all palms) keep one nut,
  *     the first of the palm; chosen by a hash of the seed, tile and palm. The world itself is unchanged.
  *   - Picking one up, the castaway kneels and tears off the husk (game/game):
  *     that gives one tuft of fibre when there is room, hungry or not (0.27.1). The nut itself is eaten or carried (game/game, game/shells).
@@ -13,7 +13,7 @@
  *   - A tuft is used up by every attempt to light a fire, whether it
  *     catches or not (game/fire).
  *   - A palm drops a new nut where an old one lay, REGROW to REGROW + REGROW_SPREAD
- *     (6 to 10) days after it was taken (fixed per nut and per time it was taken).
+ *     (10 to 14) days after it was taken (fixed per nut and per time it was taken).
  *
  * Pure data on a world; no DOM, no Three.js.
  *
@@ -41,8 +41,8 @@ import { hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 
 export const FIBRE_MAX = 3;
-export const REGROW = 6, REGROW_SPREAD = 4;   // days before a palm drops a new nut
-export const NUT_SHARE = 1 / 3;               // share of the palms with nuts that keep their (one) nut
+export const REGROW = 10, REGROW_SPREAD = 4;   // days before a palm drops a new nut
+export const NUT_SHARE = 1 / 6;               // share of the palms with nuts that keep their (one) nut
 
 const nutCache = new WeakMap();
 export function nutsOfTile(w, tile) {

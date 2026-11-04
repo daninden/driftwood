@@ -107,7 +107,7 @@ You can also click or tap the small drawing of a carried coconut, a full shell, 
 
 After about two days without eating you are hungry: slower, and drilling a fire costs more of your rest. After four days you are starving and your rest runs out faster, so you fall asleep exhausted sooner (and if you are thirsty as well, faster still). You never die of it, and it never gets worse than that.
 
-The food is the coconut. Husking one now takes a little longer, about four seconds: first the husk comes off (you get your tuft of fibre if you have room), then you eat the nut. One nut takes away a third of the way to starving and a bit of thirst too (and when you are not hungry you carry the husked nut with you instead, see above). Walk off before you are done and nothing happens; the nut stays. A small half coconut next to the drop shows your hunger: full after a meal, emptying as you get hungry. Coconuts are few, about one palm in five has one, and a nut grows back after six to ten days, so you search along the palms every day.
+The food is the coconut. Husking one now takes a little longer, about four seconds: first the husk comes off (you get your tuft of fibre if you have room), then you eat the nut. One nut takes away a quarter of the way to starving and a bit of thirst too (and when you are not hungry you carry the husked nut with you instead, see above). Walk off before you are done and nothing happens; the nut stays. A small half coconut next to the drop shows your hunger: full after a meal, emptying as you get hungry. Coconuts are few, about one palm in ten has one, and a nut grows back after ten to fourteen days, so you search along the palms every day.
 
 ### Berries and bananas
 

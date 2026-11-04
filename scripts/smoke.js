@@ -234,7 +234,7 @@ await shot('smoke-8.png');
 const fibre = await page.evaluate(() => { const { game, step } = window.__driftwood; step(5, () => !game.player.work); return game.fibre.carried; });
 console.log('fibre', fibre);
 const hunger = await page.evaluate(() => window.__driftwood.game.hunger.days);
-if (hunger > 1.9) errors.push('hunger ' + hunger.toFixed(2) + ' after eating the nut, expected about 1.67');
+if (hunger > 2.1) errors.push('hunger ' + hunger.toFixed(2) + ' after eating the nut, expected about 2');
 if (fibre !== 1) errors.push('carries ' + fibre + ' tufts of fibre instead of 1');
 // Shells (0.25): after eating the nut he keeps its empty half shell; with a filled shell and a carried nut added the row
 // shows them next to the fibre tuft (smoke-36, also in the quick run); the stores are emptied again afterwards.
