@@ -239,23 +239,27 @@ const DEFLECT = [0, 0.5, -0.5, 1.0, -1.0, 1.35, -1.35];
 export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0, stride = 1) {
   if (!dir) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: false }; }
   const base = (run ? RUN_SPEED : WALK_SPEED) * load * dt, here = { x: p.x, z: p.z, y: p.y };
-  let best = null;
+  let best = null, fallback = null;
   for (const da of DEFLECT) {
     const c = Math.cos(da), s = Math.sin(da), dx = dir.x * c - dir.z * s, dz = dir.x * s + dir.z * c;
     const probe = stepFactor(w, here, here.x + dx * 0.25, here.z + dz * 0.25, sea); if (!probe) continue;
     const f = stepFactor(w, here, here.x + dx * base, here.z + dz * base, sea); if (!f) continue;
-    best = { dx, dz, f: Math.min(f, probe) * (da === 0 ? 1 : Math.cos(da) * 0.9) }; break;
-  }
-  if (!best) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
-  let step = base * best.f, nx = p.x + best.dx * step, nz = p.z + best.dz * step;
-  if (w.tiles) {
-    const q = pushOut(w, here, nx, nz);
-    if (q.x !== nx || q.z !== nz) {
-      step = Math.hypot(q.x - p.x, q.z - p.z); nx = q.x; nz = q.z;
-      if (step < 1e-4 || !stepFactor(w, here, nx, nz, sea)) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
-      best.dx = (nx - p.x) / step; best.dz = (nz - p.z) / step;
+    const g = Math.min(f, probe) * (da === 0 ? 1 : Math.cos(da) * 0.9), want = base * g;
+    let step = want, nx = p.x + dx * step, nz = p.z + dz * step, ddx = dx, ddz = dz;
+    if (w.tiles) {   // a trunk or boulder in the way: slide round it (pushed onto its rim); where that gets nowhere (the cusp between two trunks) try the next direction
+      const q = pushOut(w, here, nx, nz);
+      if (q.x !== nx || q.z !== nz) {
+        step = Math.hypot(q.x - p.x, q.z - p.z); nx = q.x; nz = q.z;
+        if (step < 1e-4 || !stepFactor(w, here, nx, nz, sea)) continue;
+        ddx = (nx - p.x) / step; ddz = (nz - p.z) / step;
+        if (step < want * 0.3) { if (!fallback || step > fallback.step) fallback = { step, nx, nz, dx: ddx, dz: ddz }; continue; }
+      }
     }
+    best = { step, nx, nz, dx: ddx, dz: ddz }; break;
   }
+  if (!best) best = fallback;
+  if (!best) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
+  const step = best.step, nx = best.nx, nz = best.nz;
   p.x = nx; p.z = nz; p.y = w.H(p.x, p.z);
   p.moving = true; p.speed = dt > 0 ? step / dt : 0;
   const ta = Math.atan2(best.dx, best.dz); let d = ta - p.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); p.heading += d * Math.min(1, dt * 12);
