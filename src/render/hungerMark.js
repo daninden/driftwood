@@ -31,7 +31,7 @@ import { carryOpacity, REST_OPACITY, PEAK_OPACITY } from './carryMark.js';
 import { STARVING_AT } from '../game/hunger.js';
 
 export const FILL_STEPS = 48;
-export const CLEAR_FROM = 1, CLEAR_TO = STARVING_AT;   // days of hunger: starts getting clearer, fully clear (half of each, as for the drop)
+export const CLEAR_FROM = 0.25, CLEAR_TO = STARVING_AT;   // days of hunger: starts getting clearer (half of the way to hungry, as for the drop), fully clear
 const TOP = 8, BOTTOM = 22;                            // the rim line and the bottom of the shell in the 0 0 24 24 box
 export const SHELL_PATH = 'M2 8C2 16.5 6.5 22 12 22C17.5 22 22 16.5 22 8Z';
 export const RIM_PATH = 'M2 8A10 3 0 1 1 22 8A10 3 0 1 1 2 8Z';

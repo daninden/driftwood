@@ -3,9 +3,9 @@
  * long the castaway can still go without sleep.
  *
  * Full when he is rested, it wanes like the moon to a thin sickle and then
- * to nothing as the two days run out (game/sleep `rest`), and waxes again
+ * to nothing as the day and a half runs out (game/sleep `rest`), and waxes again
  * while he sleeps. It is quiet (faint) most of the time and grows clearer
- * in the last half day (CLEAR_BELOW); resting opacity 0.5, up to 0.95. Thicker rim (1.8) and a glow behind it (`--halo`, index.html) so it reads on any ground (0.13.3). Ink (`--ink`, dark brown by day, pale at
+ * in the last half day of it (CLEAR_BELOW); resting opacity 0.5, up to 0.95. Thicker rim (1.8) and a glow behind it (`--halo`, index.html) so it reads on any ground (0.13.3). Ink (`--ink`, dark brown by day, pale at
  * night, see render/ink); no numbers.
  *
  * moonPath(f, r) -> SVG path of the lit part of a moon of radius r centred
@@ -18,7 +18,7 @@
  */
 import { ss } from '../core/math.js';
 
-export const CLEAR_BELOW = 0.25;   // rest left in the last half day of two
+export const CLEAR_BELOW = 1 / 3;   // rest left in the last half day of a day and a half
 const R = 12;
 
 export function moonPath(f, r = R) {

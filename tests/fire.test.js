@@ -8,7 +8,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, HUSK_TIME } from '../src/game/game.js';
 import { createWood, dryness, DRY_DAYS } from '../src/game/wood.js';
-import { createFibre, FIBRE_MAX, REGROW, REGROW_SPREAD, nutsOfTile } from '../src/game/fibre.js';
+import { createFibre, FIBRE_MAX, REGROW, REGROW_SPREAD, NUT_SHARE, nutsOfTile } from '../src/game/fibre.js';
 import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, BURN, EMBERS, FUEL_MAX, TORCH_DAYS, TORCH_COST, WARM_R } from '../src/game/fire.js';
 import { COLD_SLEEP, SLEEP_DAYS } from '../src/game/sleep.js';
 import { createInput } from '../src/game/input.js';
@@ -45,7 +45,8 @@ describe('coconuts and fibre', () => {
   it('lie under the palms, each with its own id, the same for the same seed', async () => {
     expect(cocos.length).toBeGreaterThan(100);
     const palms = w.tiles.reduce((n, t) => n + t.palms.length, 0), all = w.tiles.reduce((n, t) => n + t.cocos.length, 0);
-    expect(cocos.length / palms).toBeGreaterThan(0.07); expect(cocos.length / palms).toBeLessThan(0.14);   // about 1 palm in 10
+    expect(cocos.length / palms).toBeGreaterThan(0.1); expect(cocos.length / palms).toBeLessThan(0.14);   // about 1 palm in 8 (0.29: a fifth of the palms that have nuts keep one)
+    expect(NUT_SHARE).toBe(1 / 5); expect(cocos.length).toBe(204); expect(palms).toBe(1680);   // seed 1337 (was 1/6 of the palms with nuts before 0.29)
     expect(cocos.length).toBeLessThan(all / 3);
     for (const t of w.tiles) { const ps = nutsOfTile(w, t).map(c => c.palm); expect(new Set(ps).size).toBe(ps.length); }   // at most one per palm
     expect(new Set(cocos.map(c => c.id)).size).toBe(cocos.length);
@@ -75,7 +76,7 @@ describe('coconuts and fibre', () => {
     const f = createFibre(w);
     for (const c of cocos.slice(0, FIBRE_MAX + 2)) f.take(c, 0);
     expect(f.carried).toBe(FIBRE_MAX); expect(f.onGround(cocos[FIBRE_MAX])).toBe(true);
-    f.update(REGROW * 0.99); expect(f.onGround(cocos[0])).toBe(false); expect(REGROW).toBe(10); expect(REGROW + REGROW_SPREAD).toBe(14);
+    f.update(REGROW * 0.99); expect(f.onGround(cocos[0])).toBe(false); expect(REGROW).toBe(8); expect(REGROW + REGROW_SPREAD).toBe(12);
     expect(f.groundCocos(w.tiles.find(t => t.cocos.some(c => c.id === cocos[0].id)))).not.toContain(cocos[0]);
     f.update(REGROW + REGROW_SPREAD + 0.01); expect(f.onGround(cocos[0])).toBe(true);
   });
@@ -231,21 +232,21 @@ describe('fire input', () => {
 
 describe('sleeping by the fire', () => {
   const sleepFor = (g, s) => { g.sleep.start(); run(g, makeInput(), s); };
-  it('is short and cold without a fire: he wakes after four hours, half rested', () => {
-    const g = createGame(w, spawn, { sleep: { awake: 1.9 } });
+  it('is short and cold without a fire: he wakes after three hours, a third rested', () => {
+    const g = createGame(w, spawn, { sleep: { awake: 1.45 } });
     sleepFor(g, 40);
     expect(g.sleep.asleep).toBe(false);
     expect(g.sleep.slept).toBeGreaterThan(COLD_SLEEP * 0.95); expect(g.sleep.slept).toBeLessThan(COLD_SLEEP * 1.2);
-    expect(g.sleep.rest()).toBeGreaterThan(0.4); expect(g.sleep.rest()).toBeLessThan(0.65);
+    expect(g.sleep.rest()).toBeGreaterThan(0.31); expect(g.sleep.rest()).toBeLessThan(0.36);
   });
   it('lasts the whole night by a fire, and rests him completely', () => {
-    const g = createGame(w, spawn, { sleep: { awake: 1.9 }, fire: { fires: [{ id: 0, x: spawn.x + 1.5, z: spawn.z, fuel: FUEL_MAX, embers: EMBERS, lit: 0, fed: 8 }], attempts: 0, nextId: 1 } });
+    const g = createGame(w, spawn, { sleep: { awake: 1.45 }, fire: { fires: [{ id: 0, x: spawn.x + 1.5, z: spawn.z, fuel: FUEL_MAX, embers: EMBERS, lit: 0, fed: 8 }], attempts: 0, nextId: 1 } });
     sleepFor(g, 40);
     expect(g.sleep.slept).toBeGreaterThan(SLEEP_DAYS * 0.95);
     expect(g.sleep.rest()).toBeGreaterThan(0.95);
   });
   it('wakes him in the cold when the fire goes out in the night', () => {
-    const g = createGame(w, spawn, { sleep: { awake: 1.9 }, fire: { fires: [{ id: 0, x: spawn.x + 1.5, z: spawn.z, fuel: BURN, embers: EMBERS, lit: 0, fed: 1 }], attempts: 0, nextId: 1 } });
+    const g = createGame(w, spawn, { sleep: { awake: 1.45 }, fire: { fires: [{ id: 0, x: spawn.x + 1.5, z: spawn.z, fuel: BURN, embers: EMBERS, lit: 0, fed: 1 }], attempts: 0, nextId: 1 } });
     sleepFor(g, 40);
     expect(g.sleep.slept).toBeGreaterThan(COLD_SLEEP); expect(g.sleep.slept).toBeLessThan(SLEEP_DAYS * 0.8);
   });

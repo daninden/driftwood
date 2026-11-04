@@ -235,7 +235,7 @@ describe('building', () => {
 });
 
 describe('sleeping under a lean-to', () => {
-  const shelterGame = (o = {}) => createGame(w, spawn, { sleep: { awake: 2 }, leantos: { list: [{ id: 0, x: spawn.x + 0.5, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 }, ...o });
+  const shelterGame = (o = {}) => createGame(w, spawn, { sleep: { awake: 1.5 }, leantos: { list: [{ id: 0, x: spawn.x + 0.5, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 }, ...o });
   const sleepOut = g => { const i = makeInput(); let n = 0; run(g, i, 3); while ((g.sleep.asleep || g.sleep.lie > 0) && n++ < 6000) g.update(i, 1 / 30); return g; };
   it('counts only within a metre of the centre of a finished one', () => {
     const l = createLeantos(w, { list: [{ id: 0, x: 0, z: 0, heading: 0, progress: 1 }, { id: 1, x: 10, z: 0, heading: 0, progress: 0.5 }] });
@@ -245,16 +245,16 @@ describe('sleeping under a lean-to', () => {
     const g = sleepOut(shelterGame());
     expect(g.sleep.slept * 24).toBeCloseTo(6, 0); expect(g.sleep.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.72); expect(g.sleep.rest()).toBeLessThan(0.8);
   });
-  it('outside it the cold sleep is three hours, about 40 % rested', () => {
-    const g = sleepOut(createGame(w, spawn, { sleep: { awake: 2 }, leantos: { list: [{ id: 0, x: spawn.x + 3, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } }));
-    expect(g.sleep.slept).toBeCloseTo(COLD_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.38); expect(g.sleep.rest()).toBeLessThan(0.42);
+  it('outside it the cold sleep is three hours, about 33 % rested from empty (it takes off half a day)', () => {
+    const g = sleepOut(createGame(w, spawn, { sleep: { awake: 1.5 }, leantos: { list: [{ id: 0, x: spawn.x + 3, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } }));
+    expect(g.sleep.slept).toBeCloseTo(COLD_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.32); expect(g.sleep.rest()).toBeLessThan(0.35);
   });
   it('a half-built one gives nothing', () => {
     const g = sleepOut(shelterGame({ leantos: { list: [{ id: 0, x: spawn.x + 0.5, z: spawn.z, heading: 0, progress: 0.9 }], nextId: 1 } }));
     expect(g.sleep.slept).toBeCloseTo(COLD_SLEEP, 1);
   });
   it('by a fire he sleeps the whole night and rests 1.25 times as fast as by a fire alone', () => {
-    const rested = shelter => { const s = createSleep({ awake: 2 }); s.start(); let days = 0; while (days < 3 / 24) days += s.update(1 / 30, true, true, {}, shelter) / DAY_SECONDS; return 2 - s.awake; };
+    const rested = shelter => { const s = createSleep({ awake: 1.5 }); s.start(); let days = 0; while (days < 3 / 24) days += s.update(1 / 30, true, true, {}, shelter) / DAY_SECONDS; return 1.5 - s.awake; };
     expect(rested(true) / rested(false)).toBeCloseTo(SHELTER_REST, 2);
     const f = { id: 0, x: spawn.x + 1.5, z: spawn.z, fuel: 3, embers: 0.06, lit: 0, fed: 8 };
     const g = sleepOut(shelterGame({ fire: { fires: [f], attempts: 0, nextId: 1 } }));

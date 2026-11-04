@@ -7,7 +7,7 @@
  *     most SHELL_MAX (2); with two he keeps none (the new one is dropped).
  *   - An empty shell can be filled at fresh river water (FILL_TIME of
  *     kneeling, game/game). A full one is drunk anywhere: it takes SIP_DRINK
- *     (half a day) off the thirst, never below 0, and the shell is empty
+ *     (a third of a day, 0.29) off the thirst, never below 0, and the shell is empty
  *     again. Water in a shell does not spoil.
  *   - A coconut on the ground is always husked first (HUSK_TIME, game/game).
  *     When he is not hungry he carries the husked nut instead of eating it, at
@@ -17,11 +17,11 @@
  *     they are simply treated as husked.) Shells and nuts weigh nothing: they never slow him and are
  *     not wood (they show only in the row, render/carryMark).
  *   - Thresholds for the action button (game/game `action`): at river water a
- *     press drinks when thirst is more than DRINK_AT (a tenth of a day) or he has no
+ *     press drinks when thirst is more than DRINK_AT (a twentieth of a day) or he has no
  *     empty shell, else it fills an empty one; away from the water a full
- *     shell is drunk when thirst is more than SIP_AT (a quarter day); a
+ *     shell is drunk when thirst is more than SIP_AT (0.15 day); a
  *     husked coconut is eaten, and a carried one eaten, when hunger is more
- *     than EAT_AT (half a day), else the husked one is carried.
+ *     than EAT_AT (a third of a day: a meal is coming up), else the husked one is carried.
  *
  * Pure data; no DOM, no Three.js.
  *
@@ -41,13 +41,13 @@
  * Depends on: nothing
  */
 export const SHELL_MAX = 2, NUT_MAX = 2;
-export const SIP_DRINK = 0.5;      // days of thirst a full shell takes away
+export const SIP_DRINK = 1 / 3;    // days of thirst a full shell takes away (8 hours: two thirds of the way to thirsty)
 export const FILL_TIME = 2;        // seconds of kneeling to fill a shell
 export const EAT_TIME = 2;         // seconds of kneeling to eat a carried (already husked) nut
 export const SIP_TIME = 1.5;       // seconds to drink a shell
-export const DRINK_AT = 0.1;       // at the water: drink when thirst is above this, else fill a shell
-export const SIP_AT = 0.25;        // away from the water: drink a full shell when thirst is above this
-export const EAT_AT = 0.5;         // eat a husked coconut (on the spot or carried) when hunger is above this, else carry it
+export const DRINK_AT = 0.05;      // at the water: drink when thirst is above this, else fill a shell
+export const SIP_AT = 0.15;        // away from the water: drink a full shell when thirst is above this
+export const EAT_AT = 1 / 3;       // eat a husked coconut (on the spot or carried) when hunger is above this, else carry it
 
 export function createShells(saved) {
   const shells = {

@@ -1,5 +1,5 @@
 /**
- * game/mind — Dave's head (0.28 "Habit", 0.28.2 "Pastime"): what the castaway does by himself when the player leaves him alone.
+ * game/mind — Dave's head (0.28 "Habit", 0.28.2 "Pastime", the rhythm of 0.29 "Daily bread"): what the castaway does by himself when the player leaves him alone.
  *
  * After QUIET (30 s, game/input `createTakeover`) without any input main hands the game this mind's input instead of the player's;
  * any input of the player takes it back at once (`release`). The mind adds NO game rule: it fills an input object like the player's
@@ -9,11 +9,11 @@
  * and never starts a sleep before he could choose to.
  *
  * What he does, in this order of priority (`chooseGoal`, pure, on a plain snapshot of the needs and the time of day):
- *   1 drink   thirst >= THIRST_GO (0.8 days): a full shell is drunk, else he walks to the nearest known fresh river water and kneels (knowing none, he searches, below);
- *             when empty shells are with him and the river is near (NEAR_WATER 40 m) and thirst >= THIRST_TOPUP (0.4), he goes to fill them too
- *   2 eat     hunger >= HUNGER_GO (1 day; knowing no food and carrying none, he searches, below): berries, a banana bunch, a carried nut (the row), else the nearest known food by the way
+ *   1 drink   thirst >= THIRST_GO (0.35 days; BED_THIRST 0.25 from SUPPER_FROM 0.64 to LIGHT_FROM 0.74): a full shell is drunk, else he walks to the nearest known fresh river water and kneels (knowing none, he searches, below);
+ *             when empty shells are with him and the river is near (NEAR_WATER 40 m) and thirst >= THIRST_TOPUP (0.2), he goes to fill them too
+ *   2 eat     hunger >= HUNGER_GO (0.4 days; BED_HUNGER 0.3 in the supper window; knowing no food and carrying none, he searches, below): berries, a banana bunch, a carried nut (the row), else the nearest known food by the way
  *             there (nut on the ground, bearing berry bush, banana plant), a carried crab roasted beside a fire, a crab dug for when he happens to stand at a hole it fled into
- *   3 sleep   once he may lie down (half a day awake) and it is night (from BED_FROM 0.87 to DAWN 0.17) or he is tired (awake >= TIRED_GO 1.5 days):
+ *   3 sleep   every night: once he may lie down (game/sleep canLie(time)) and it is night (from BED_FROM 0.87, an hour after dusk and with the fire lit, to DAWN 0.17) or he has been awake TIRED_GO (a whole day: a nap by day):
  *             he walks home (his lean-to; else his fire; else where he last slept; else where he was when the mind took over) and lies down
  *   4 fire    in the evening (EVENING 0.6 to BED_FROM): dry driftwood (else branches) to a pile at the fire spot at home, enough for WOOD_WANT (6) pieces of
  *             burning (a branch counts half), the pile lit from LIGHT_FROM (0.74) when it holds at least FIRE_MIN pieces and LIGHT_MIN_FUEL (3) pieces' worth and he has
@@ -24,17 +24,17 @@
  *   6 idle    (0.28.2) by day (STROLL_FROM to STROLL_TO, `strollNow`, 9 times in 10) a STROLL on known ground instead of standing about: `strollKind` picks one of shore (the waterline:
  *             one to three stretches along it; dry washed-up driftwood within 8 m is picked up when an arm is free and the pile has room), river (to the water, fills empty shells,
  *             a drink if thirsty), palms (a round past a palm or two; husks a nut on the ground if the stores want one) or forest (a berry bush or two; a handful from one that bears
- *             when hunger is 0.6 or more), never the same kind twice in a row; places drawn from the PRNG among the known ones (`strollCands`: inside the known ground, standable,
+ *             when hunger is EAT_AT, a third of a day, or more), never the same kind twice in a row; places drawn from the PRNG among the known ones (`strollCands`: inside the known ground, standable,
  *             within STROLL_RANGE 80 m of home, a way of at most STROLL_MAX_COST), pauses of 2 to 6 s on the way (PAUSE_CHANCE), wood carried is laid on the pile at home (`deliver`).
  *             Otherwise (night, nothing to walk to) he walks back to within IDLE_NEAR (8 m) of home and lingers 5 to 12 s. Once a day around sunset (GAZE_FROM 0.76 to 0.83) he walks
  *             to the shore (or the fire) and stands a while looking out. No pose, no line of text. After each task he stands 3 to 8 s, now and then (1 in 5) 15 to 30 s (`restSeconds`, from the seed)
  * The one exception to staying on known ground (0.28, decided later the same day): SEARCH. Thirsty with no fresh water known, or hungry with no food known and none
  * carried, he walks out from home into the unknown, ring after ring, to the nearest unknown spot that borders what he knows (downhill for water, the low coast for
- * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water or food is known; then he is back on known ground only.
+ * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water he can walk to over known ground, or food, is known; then he is back on known ground only (0.29: water that is known but out of reach does not end a search).
  * A higher need breaks into a lower goal (checked every CHECK seconds); a goal keeps going otherwise and a failing one is left alone for a while (`cool`; 0.28.2: 10 to 40 s, a failed
  * light 100 s, or 300 s when one tuft of fibre is left; a failed try keeps the last tuft).
  * Walking a path: he heads for the next waypoint and moves on at 0.45 m; he cuts a corner (moves on at up to 1.1 m) only when path.clear says the line to the one after is open
- * (0.28.1: a climbing route is a narrow band). He walks; only very thirsty (thirst >= 1.3) and far (20 m or more) does he run.
+ * (0.28.1: a climbing route is a narrow band). He walks; only very thirsty (thirst >= 0.95) and far (20 m or more) does he run.
  *
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
@@ -57,7 +57,7 @@
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
  *
- * Depends on: game/path, game/movement, game/water, game/wood, game/fire, game/leanto, game/shells, game/known (through game.known), world/constants, core/noise
+ * Depends on: game/path, game/movement, game/water, game/wood, game/fire, game/leanto, game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -67,10 +67,13 @@ import { freshWater } from './water.js';
 import { dryness, logTop } from './wood.js';
 import { FIRE_MIN, FUEL_MAX } from './fire.js';
 import { ringCentre } from './leanto.js';
+import { DAWN as SLEEP_DAWN } from './sleep.js';
+import { EAT_AT } from './shells.js';
 
-export const THIRST_GO = 0.8, THIRST_TOPUP = 0.4, THIRST_SIP = 0.3, NEAR_WATER = 40;
-export const HUNGER_GO = 1, TIRED_GO = 1.5;
-export const EVENING = 0.6, LIGHT_FROM = 0.74, BED_FROM = 0.87, DAWN = 0.17, DAY_FROM = 0.2, GAZE_FROM = 0.76, GAZE_TO = 0.83;
+export const THIRST_GO = 0.35, THIRST_TOPUP = 0.2, THIRST_SIP = 0.15, NEAR_WATER = 40;   // 0.29 "Daily bread": a drink every 8 hours or so (thirsty is 12), three or four times a day with the shells and the evening's
+export const HUNGER_GO = 0.4, TIRED_GO = 1;   // a meal at hunger 0.4 (a coconut takes 0.5 off); a nap by day only when he has been awake a whole day
+export const BED_THIRST = 0.25, BED_HUNGER = 0.3, SUPPER_FROM = 0.64;   // from SUPPER_FROM to LIGHT_FROM (supper, a drink before the night) he goes for a need a little earlier, so that he does not wake parched or hungry and is free to light the fire
+export const EVENING = 0.6, LIGHT_FROM = 0.74, BED_FROM = 0.87, DAWN = SLEEP_DAWN, DAY_FROM = 0.2, GAZE_FROM = 0.76, GAZE_TO = 0.83;
 export const WOOD_WANT = 6, NUT_WANT = 2, FIBRE_WANT = 3, PILE_FULL = 12, FEED_BELOW = 0.6, LIGHT_MIN_FUEL = 3, IDLE_NEAR = 8;   // 0.28.2: stores up to a full pile (PILE_MAX of game/wood) and 3 tufts (FIBRE_MAX of game/fibre)
 export const SEARCH_LIMIT = 900;   // seconds a goal may take while it is searching for water or food
 export const REST_MIN = 3, REST_MAX = 8, REST_LONG_MIN = 15, REST_LONG_MAX = 30, REST_LONG_CHANCE = 0.2, CHECK = 1.5;   // 0.28.2: mostly a short rest, now and then a long one
@@ -78,7 +81,7 @@ export const STROLL_FROM = 0.19, STROLL_TO = 0.8, STROLL_CHANCE = 0.9, STROLL_LI
 export const LINGER_MIN = 5, LINGER_MAX = 12, PAUSE_CHANCE = 0.45, PAUSE_MIN = 2, PAUSE_MAX = 6;
 export const STROLL_KINDS = ['shore', 'river', 'palms', 'forest'], STROLL_WEIGHT = { shore: 3, river: 2, palms: 2, forest: 2 };
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
-const LIMIT = { drink: 160, eat: 220, sleep: 220, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
+const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
 const COOL = { drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
 const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light'];   // the kinds of the arc / ring he ever chooses (never build, upgrade, torch)
 
@@ -95,7 +98,7 @@ export function fireStep(s) {
 }
 
 // a nut to husk: for the fibre of the first tuft always; to carry up to NUT_WANT; for fibre up to FIBRE_WANT only when he is hungry enough to eat the nut that the husking gives him (with two carried he eats it)
-export function huskWanted(s) { return s.nuts < NUT_WANT || s.fibre < 1 || (s.fibre < FIBRE_WANT && s.hunger >= 0.5); }
+export function huskWanted(s) { return s.nuts < NUT_WANT || s.fibre < 1 || (s.fibre < FIBRE_WANT && s.hunger >= EAT_AT); }
 
 export function storesStep(s) {
   const t = s.time;
@@ -124,8 +127,9 @@ export function strollNow(s, r) { return s.time >= STROLL_FROM && s.time < STROL
 export function chooseGoal(s) {
   if (s.asleep) return 'none';
   const t = s.time, cool = s.cool || {};
-  if (!cool.drink && (s.thirst >= THIRST_GO || (s.shellsEmpty > 0 && s.waterNear && s.thirst >= THIRST_TOPUP))) return 'drink';
-  if (!cool.eat && s.hunger >= HUNGER_GO) return 'eat';
+  const late = t >= SUPPER_FROM && t < LIGHT_FROM;   // supper and a drink before the night
+  if (!cool.drink && (s.thirst >= (late ? BED_THIRST : THIRST_GO) || (s.shellsEmpty > 0 && s.waterNear && s.thirst >= THIRST_TOPUP))) return 'drink';
+  if (!cool.eat && s.hunger >= (late ? BED_HUNGER : HUNGER_GO)) return 'eat';
   if (!cool.sleep && s.canLie && (t >= BED_FROM || t < DAWN || s.awake >= TIRED_GO)) return 'sleep';
   if (!cool.fire && fireStep({ ...s, cool })) return 'fire';
   if (!cool.stores && storesStep({ ...s, cool })) return 'stores';
@@ -226,7 +230,7 @@ export function createMind(world, game, opts = {}) {
     let near = false; for (const q of wp) if (Math.hypot(q.x - p.x, q.z - p.z) < NEAR_WATER) { near = true; break; }
     const cool = {}; for (const k of Object.keys(COOL)) cool[k] = isCool(k);
     return {
-      asleep: game.sleep.asleep || p.lie > 0, time: clock.time, thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake, canLie: game.sleep.canLie(),
+      asleep: game.sleep.asleep || p.lie > 0, time: clock.time, thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake, canLie: game.sleep.canLie(clock.time),
       water: wp.length > 0, waterNear: near, shellsEmpty: game.shells.empty(), shellsFull: game.shells.full(), nuts: game.shells.nuts, fibre: game.fibre.carried, torch: !!game.fire.torch,
       fireLit: !!f, fireFuel: f ? f.fuel / FUEL_MAX : 0, stock: st, pileLogs: best ? best.logs.length : 0, spare: piles.reduce((n, q) => n + fuelOfPile(q), 0) - st,
       canLight: !!best && best.logs.length >= FIRE_MIN && fuelOfPile(best) >= LIGHT_MIN_FUEL && (game.fibre.carried > 0 || !!game.fire.torch), cool,
@@ -294,7 +298,7 @@ export function createMind(world, game, opts = {}) {
   }
   function* waitIdle() { while (busy()) yield; yield; }
   function* waitActs(max = 25) { const t0 = now; yield; while (inp.target && inp.target.act && now - t0 < max) yield; yield; }
-  const hurry = () => game.thirst.days >= 1.3;
+  const hurry = () => game.thirst.days >= 0.95;
 
   // ---------- searching (the one exception to staying on known ground) ----------
   // Thirsty with no fresh water known, or hungry with no food known and none carried: he walks out from home over the unknown, ring by ring (rings of 12 m,
@@ -317,9 +321,17 @@ export function createMind(world, game, opts = {}) {
     for (const c of cands.slice(0, 5)) { const r = pathFree.find(p, c, 30000, false); if (!r) { tried.push(c); continue; } const sc = r.cost * 2.9 + c.bias; if (!best || sc < best.sc) best = { ...c, sc }; }
     return best;
   }
+  let waterOkAt = -1, waterOkT = -9, waterOk = false;   // fresh water he knows AND can reach over known ground (0.29: seed 7 showed water in view above a wall: known, but no way to it); looked at again when he knows more, at most every 2 s
+  const waterReachable = () => {
+    if (waterOkAt !== known.count && now - waterOkT >= 2) {
+      waterOkAt = known.count; waterOkT = now;
+      waterOk = waterPts().map(q => ({ ...q, d: Math.hypot(q.x - p.x, q.z - p.z) })).sort((a, b) => a.d - b.d).slice(0, 4).some(c => path.cost(p, c) < Infinity);
+    }
+    return waterOk;
+  };
   function* searchFor(kind) {
-    foodAt = -1; foodT = -9;
-    const found = () => kind === 'water' ? waterPts().length > 0 : foodKnown();
+    foodAt = -1; foodT = -9; waterOkAt = -1; waterOkT = -9;
+    const found = () => kind === 'water' ? waterReachable() : foodKnown();
     if (found()) return true;
     stats.searches++; ev('search', { kind, thirst: +game.thirst.days.toFixed(2), hunger: +game.hunger.days.toFixed(2) });
     if (cur) cur.limit = SEARCH_LIMIT;
@@ -338,7 +350,7 @@ export function createMind(world, game, opts = {}) {
 
   // ---------- goals ----------
   function* drinkGoal() {
-    if (game.shells.full() > 0 && game.thirst.days > THIRST_SIP && !game.fire.torch && game.thirst.days >= THIRST_GO) { if (useRow('water')) { yield* waitIdle(); return true; } }
+    if (game.shells.full() > 0 && game.thirst.days > THIRST_SIP && !game.fire.torch && game.thirst.days >= BED_THIRST) { if (useRow('water')) { yield* waitIdle(); return true; } }
     if (!waterPts().length) { if (!(yield* searchFor('water'))) { ev('no-water'); return false; } }   // thirsty and knows no fresh water: he goes looking
     const badWater = [];
     for (let tries = 0; tries < 4; tries++) {
@@ -360,9 +372,9 @@ export function createMind(world, game, opts = {}) {
 
   function* eatGoal() {
     if (pressKind(['dig'])) { yield* waitIdle(); }   // standing at a hole a crab fled into: dig
-    if (game.hunger.days < HUNGER_GO) return true;
-    if (game.berries.carried.length && game.hunger.days > 0.5 && useRow('berries')) { yield* waitIdle(); return true; }
-    if (game.bananas.carried.length && game.hunger.days > 0.5 && useRow('banana')) { yield* waitIdle(); return true; }
+    if (game.hunger.days < (clock.time >= SUPPER_FROM && clock.time < LIGHT_FROM ? BED_HUNGER : HUNGER_GO)) return true;
+    if (game.berries.carried.length && game.hunger.days > EAT_AT && useRow('berries')) { yield* waitIdle(); return true; }
+    if (game.bananas.carried.length && game.hunger.days > EAT_AT && useRow('banana')) { yield* waitIdle(); return true; }
     if (game.shells.nuts > 0 && useRow('nut')) { yield* waitIdle(); return true; }
     if (game.crabs.carried.length) { const f = game.fire.fires.find(q => game.fire.strength(q) > 0 && inside(q.x, q.z)); if (f) { yield* walk(f.x + 0.8, f.z + 0.4, { stop: 0.7 }); if (useRow('crab')) { yield* waitIdle(); return true; } } }
     const foods = () => {
@@ -472,7 +484,7 @@ export function createMind(world, game, opts = {}) {
     const ok = yield* walk(s.x, s.z, { stop: 0.5 });
     if (!ok && dist(p, s) > 6) return false;
     for (let i = 0; i < 3; i++) {
-      if (!game.sleep.canLie()) return false;
+      if (!game.sleep.canLie(clock.time)) return false;
       chose = true; sleepKey = true; yield; yield;
       if (game.sleep.asleep || p.lie > 0) return true;
       chose = false; const ang = i * 2.1 + 0.5, s2 = standNear(s.x + Math.sin(ang) * (1 + i), s.z + Math.cos(ang) * (1 + i)); if (s2) yield* walk(s2.x, s2.z, { stop: 0.3 });
@@ -555,7 +567,7 @@ export function createMind(world, game, opts = {}) {
     }
     if (kind === 'forest') {
       yield* pauseHere(0.7);
-      const t = game.hunger.days >= 0.6 ? scan('berry', p.x, p.z, 6)[0] : null;   // a handful from a bush that bears, when he is a little hungry
+      const t = game.hunger.days >= EAT_AT ? scan('berry', p.x, p.z, 6)[0] : null;   // a handful from a bush that bears, when he is a little hungry
       if (t) {
         const near = () => { const a = game.action().tap; return !!a && a.kind === 'berries'; };
         yield* walk(t.x, t.z, { stop: 0.4, until: near });
@@ -650,7 +662,7 @@ export function createMind(world, game, opts = {}) {
       else if (now - cur.t0 > (cur.limit || LIMIT[cur.name])) endGoal('timeout', true);
     }
     if (!cur) {
-      const crit = game.thirst.days >= 1.5 || game.hunger.days >= 3;
+      const crit = game.thirst.days >= 1 || game.hunger.days >= 2;
       if (now < restUntil && !crit) { mind.resting = true; if (!p.moving) stats.idleSecs += dt; return; }
       mind.resting = false;
       const name = chooseGoal(senses());

@@ -4,7 +4,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted } from '../src/game/mind.js';
+import { createMind, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted } from '../src/game/mind.js';
 import { createTakeover, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { canStand } from '../src/game/movement.js';
@@ -34,7 +34,7 @@ describe('the takeover timer', () => {
 describe('choosing a goal', () => {
   it('thirst first, then hunger, then bed, then the fire, then the stores, else nothing in particular', () => {
     expect(chooseGoal(calm({ thirst: THIRST_GO, hunger: HUNGER_GO, canLie: true, time: BED_FROM + 0.01 }))).toBe('drink');
-    expect(chooseGoal(calm({ thirst: 0.5, hunger: HUNGER_GO, canLie: true, time: BED_FROM + 0.01 }))).toBe('eat');
+    expect(chooseGoal(calm({ thirst: 0.3, hunger: HUNGER_GO, canLie: true, time: BED_FROM + 0.01 }))).toBe('eat');
     expect(chooseGoal(calm({ canLie: true, time: BED_FROM + 0.01 }))).toBe('sleep');
     expect(chooseGoal(calm({ time: EVENING + 0.02, stock: 1 }))).toBe('fire');
     expect(chooseGoal(calm({ time: 0.4, stock: 1 }))).toBe('stores');
@@ -42,24 +42,37 @@ describe('choosing a goal', () => {
     expect(Object.keys(RANK)).toEqual(['drink', 'eat', 'sleep', 'fire', 'stores', 'idle']);
   });
   it('drinks when thirsty (goes searching when he knows no water), and leaves a goal that just failed alone for a while', () => {
-    expect(chooseGoal(calm({ thirst: 0.79 }))).toBe('idle'); expect(chooseGoal(calm({ thirst: 0.8 }))).toBe('drink');
-    expect(chooseGoal(calm({ thirst: 1.2, water: false }))).toBe('drink');   // knowing none, he goes looking
-    expect(chooseGoal(calm({ thirst: 1.2, water: false, shellsFull: 1 }))).toBe('drink');
-    expect(chooseGoal(calm({ thirst: 1.2, cool: { drink: true } }))).toBe('idle');   // it just failed: left alone for a while
+    expect(THIRST_GO).toBe(0.35);   // 0.29: a drink every 8 hours or so, three or four times a day with the supper one
+    expect(chooseGoal(calm({ thirst: THIRST_GO - 0.01 }))).toBe('idle'); expect(chooseGoal(calm({ thirst: THIRST_GO }))).toBe('drink');
+    expect(chooseGoal(calm({ thirst: 0.9, water: false }))).toBe('drink');   // knowing none, he goes looking
+    expect(chooseGoal(calm({ thirst: 0.9, water: false, shellsFull: 1 }))).toBe('drink');
+    expect(chooseGoal(calm({ thirst: 0.9, cool: { drink: true } }))).toBe('idle');   // it just failed: left alone for a while
   });
   it('fills empty shells when the river is near and he is a little thirsty', () => {
-    expect(chooseGoal(calm({ thirst: 0.45, shellsEmpty: 1, waterNear: true }))).toBe('drink');
-    expect(chooseGoal(calm({ thirst: 0.45, shellsEmpty: 1, waterNear: false }))).toBe('idle');
-    expect(chooseGoal(calm({ thirst: 0.2, shellsEmpty: 1, waterNear: true }))).toBe('idle');
+    expect(THIRST_TOPUP).toBe(0.2);
+    expect(chooseGoal(calm({ thirst: 0.25, shellsEmpty: 1, waterNear: true }))).toBe('drink');
+    expect(chooseGoal(calm({ thirst: 0.25, shellsEmpty: 1, waterNear: false }))).toBe('idle');
+    expect(chooseGoal(calm({ thirst: 0.1, shellsEmpty: 1, waterNear: true }))).toBe('idle');
   });
-  it('eats at a day of hunger', () => {
+  it('eats at 0.4 of a day of hunger: two meals a day', () => {
+    expect(HUNGER_GO).toBe(0.4);
     expect(chooseGoal(calm({ hunger: HUNGER_GO - 0.01, fibre: 3 }))).toBe('idle'); expect(chooseGoal(calm({ hunger: HUNGER_GO }))).toBe('eat');
   });
-  it('sleeps at night or when tired, but only once he may lie down (half a day awake), and never when asleep', () => {
+  it('sleeps at night or when tired, but only once he may lie down (game/sleep canLie), and never when asleep', () => {
     expect(chooseGoal(calm({ canLie: false, time: 0.95, awake: 0.3 }))).not.toBe('sleep');
     expect(chooseGoal(calm({ canLie: true, time: 0.95 }))).toBe('sleep'); expect(chooseGoal(calm({ canLie: true, time: 0.05 }))).toBe('sleep');
-    expect(chooseGoal(calm({ canLie: true, time: 0.4, awake: 1.4 }))).not.toBe('sleep'); expect(chooseGoal(calm({ canLie: true, time: 0.4, awake: 1.5 }))).toBe('sleep');
-    expect(chooseGoal(calm({ asleep: true, canLie: true, time: 0.95, thirst: 1.9 }))).toBe('none');
+    expect(TIRED_GO).toBe(1); expect(BED_FROM).toBe(0.87);   // by day only a whole day awake sends him to a nap; the night from just after dusk, once the fire is going
+    expect(chooseGoal(calm({ canLie: true, time: 0.4, awake: TIRED_GO - 0.05 }))).not.toBe('sleep'); expect(chooseGoal(calm({ canLie: true, time: 0.4, awake: TIRED_GO }))).toBe('sleep');
+    expect(chooseGoal(calm({ canLie: true, time: 0.8 }))).not.toBe('sleep'); expect(chooseGoal(calm({ canLie: true, time: BED_FROM }))).toBe('sleep');   // a rested man does not lie down again at dawn: canLie says so
+    expect(chooseGoal(calm({ asleep: true, canLie: true, time: 0.95, thirst: 1.4 }))).toBe('none');
+  });
+  it('goes for a drink and a bite a little early between SUPPER_FROM and LIGHT_FROM, so that he does not wake parched and the fire is lit in time', () => {
+    expect([SUPPER_FROM, BED_THIRST, BED_HUNGER]).toEqual([0.64, 0.25, 0.3]);
+    const sup = (o = {}) => calm({ time: SUPPER_FROM + 0.02, ...o });
+    expect(chooseGoal(sup({ thirst: BED_THIRST }))).toBe('drink'); expect(chooseGoal(sup({ thirst: BED_THIRST - 0.02 }))).not.toBe('drink');
+    expect(chooseGoal(sup({ hunger: BED_HUNGER }))).toBe('eat'); expect(chooseGoal(sup({ hunger: BED_HUNGER - 0.02 }))).not.toBe('eat');
+    expect(chooseGoal(calm({ time: 0.5, thirst: BED_THIRST, hunger: BED_HUNGER }))).not.toBe('drink');   // by day the usual thresholds
+    expect(chooseGoal(calm({ time: LIGHT_FROM + 0.02, thirst: BED_THIRST, hunger: BED_HUNGER }))).not.toBe('drink'); expect(chooseGoal(calm({ time: LIGHT_FROM + 0.02, hunger: BED_HUNGER }))).not.toBe('eat');   // then the fire comes first
   });
   it('knows what to do for the fire: gather, light, feed, nothing', () => {
     const eve = (o = {}) => calm({ time: EVENING + 0.02, ...o });
@@ -112,7 +125,7 @@ describe('pastimes (0.28.2 "Pastime")', () => {
     expect(storesStep(calm({ pileLogs: 8 }))).toBe('wood');   // the evening's 6 are there, the pile is filled up
     expect(storesStep(calm({ pileLogs: 12 }))).toBeNull(); expect(storesStep(calm({ pileLogs: 8, fireLit: true }))).toBeNull();   // full / a burning fire is not fed by day
     expect(storesStep(calm({ pileLogs: 8, cool: { gather: true } }))).toBeNull();
-    expect(storesStep(calm({ fibre: 1, hunger: 0.6 }))).toBe('husk');   // a tuft more, when he is hungry enough to eat the nut that comes with it
+    expect(storesStep(calm({ fibre: 1, hunger: 0.4 }))).toBe('husk');   // a tuft more, when he is hungry enough to eat the nut that comes with it
     expect(storesStep(calm({ fibre: 1, hunger: 0.2 }))).toBeNull();   // not so hungry: the nut would be wasted
     expect(huskWanted(calm({ fibre: 0, hunger: 0 }))).toBe(true); expect(huskWanted(calm({ nuts: 1 }))).toBe(true); expect(huskWanted(calm({ fibre: 3, hunger: 0.9 }))).toBe(false);
   });
@@ -185,7 +198,7 @@ describe('the mind with a game', () => {
     expect(a.goals).toEqual(b.goals); expect(a.final).toEqual(b.final); expect(a.events.length).toBe(b.events.length);
   });
   it('never wakes him in his sleep and does not act while he lies down', () => {
-    const g = createGame(w, spawn, { sleep: { awake: 1.9 } }), m = createMind(w, g); m.engage();
+    const g = createGame(w, spawn, { sleep: { awake: 1.5 } }), m = createMind(w, g); m.engage();
     for (let t = 0; t < 3 && !g.sleep.asleep; t += 0.1) { m.step(0.1); g.update(m.input, 0.1); }
     let asleep = g.sleep.asleep; expect(asleep).toBe(true);
     let woke = false, acted = false;

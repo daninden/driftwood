@@ -56,7 +56,8 @@ describe('which bushes bear', () => {
     const n = w.tiles.reduce((s, t) => s + t.bushes.length, 0);
     expect(n).toBe(6059);   // the number of bushes in the world is untouched (tests/world.test.js guards the rest)
   });
-  it('is about a quarter of the lowland bushes, never the dune scrub, and some lie inland of the start', () => {
+  it('is about a fifth of the lowland bushes, never the dune scrub, and some lie inland of the start', () => {
+    expect(BERRY_SHARE).toBe(1 / 5); expect(berries.length).toBe(375);   // seed 1337 (0.29: was 1 in 8)
     const low = w.tiles.flatMap(t => t.bushes).filter(b => b.k === 1).length;
     expect(berries.length / low).toBeGreaterThan(BERRY_SHARE * 0.8); expect(berries.length / low).toBeLessThan(BERRY_SHARE * 1.2);
     expect(berries.every(p => p.k === 1 && p.bush.k === 1 && p.y > 1)).toBe(true);
@@ -73,7 +74,8 @@ describe('which bushes bear', () => {
 });
 
 describe('picking berries', () => {
-  it('hungry: eats them on the spot, 1/3 day of hunger less, and the bush is bare', () => {
+  it('hungry: eats them on the spot, 1/6 day of hunger less (a snack), and the bush is bare', () => {
+    expect(BERRY_FOOD).toBeCloseTo(1 / 6, 10); expect(BANANA_FOOD).toBe(1);
     const g = besideBush({ hunger: { days: 1.5 } });
     expect(g.berries.find(g.player.x, g.player.z, REACH)).toBeTruthy();
     expect(kind(g)).toBe('berries'); expect(g.action().tap.eat).toBe(true);

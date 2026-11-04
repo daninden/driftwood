@@ -72,7 +72,7 @@
  *   thirst not above DRINK_AT, an empty shell: kneels FILL_TIME and fills it; otherwise the water offers 'drink') and 'sip' (a full shell drunk
  *   anywhere: SIP_DRINK off the thirst). The order of priority is written out in `action` and in docs/design.md, "The action button".
  *   0.26 "Inland": tap kinds 'berries' and 'bananas' (a bearing bush or banana plant within REACH of its edge, game/forage: hungry, hunger above EAT_AT, he picks and eats at once
- *   (`eat: true`; BERRY_FOOD 1/3 day, BANANA_FOOD a whole day); otherwise the pick is carried, if there is room: 2 handfuls, 1 bunch; with no room nothing is offered) compete by distance with
+ *   (`eat: true`; BERRY_FOOD 1/6 day, BANANA_FOOD a whole day); otherwise the pick is carried, if there is room: 2 handfuls, 1 bunch; with no room nothing is offered) compete by distance with
  *   the nut, wood and the rest. With empty hands and nothing near, after the full-shell sip: 'eatBerries' (a carried handful, when hunger is above EAT_AT), then 'eatBanana', then the carried nut:
  *   what spoils first is eaten first. Carried berries spoil after a day, a bunch after 3 days (game/forage).
  *   Finishing a husk (on the ground or carried) also keeps the empty half shell (game/shells keep, at most 2).
@@ -100,7 +100,7 @@
  *     pile of at least FIRE_MIN beside him, on dry ground, with a torch in
  *     his hand or fibre carried: he walks to its side and kneels to drill fire,
  *     costing rest and the fibre, or pushes the torch in, game/fire kindle) and
- *     'sleep' (on dry, walkable ground, and only once he has been awake half a day, sleep.canLie()). F lights the pile beside
+ *     'sleep' (on dry, walkable ground, and only once he may: from dusk on after about 3½ hours awake, by day after half a day awake, sleep.canLie(time)). F lights the pile beside
  *     him the same way (or builds), Z lies down to sleep (same rule).
  *   game.action() -> { tap, options }   pure: the main small action (or null: the ring and Space do it) and up to OPTIONS (3) others for the arc above the ring and the keys 1 to 3: the
  *     other small actions nearest first, then the big ones (a big one is never dropped for a small one). Nothing at all while he sleeps, lies down or kneels.
@@ -108,7 +108,7 @@
  *     a click on an icon of the arc) picks options[i] the same way. The big actions are never done by the ring or Space.
  *     Thirst makes him a
  *     little slower, very thirsty makes rest run out twice as fast, and after
- *     two days he collapses and sleeps like exhaustion (game/thirst). Hunger
+ *     a day and a half he collapses and sleeps like exhaustion (game/thirst). Hunger
  *     (game/hunger) slows him a little, makes drilling cost more rest and,
  *     starving, makes rest run out faster (multiplied with thirst's drain).
  *     Walking off or a click elsewhere stops kneeling work early (the fibre
@@ -149,7 +149,7 @@ import { createClock, DAY_SECONDS } from './clock.js';
 import { createKnown } from './known.js';
 import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, dryness } from './wood.js';
 import { seaLevel, highWaters } from './tide.js';
-import { createSleep } from './sleep.js';
+import { createSleep, isNight } from './sleep.js';
 import { createFibre } from './fibre.js';
 import { createShells, FILL_TIME, SIP_TIME, EAT_TIME, SIP_DRINK, DRINK_AT, SIP_AT, EAT_AT, NUT_MAX } from './shells.js';
 import { createBranches } from './branches.js';
@@ -174,7 +174,7 @@ export const BESIDE = 1.2;         // a pile or a fire within this distance (fro
 const RAIN_EVERY = 0.4 / DAY_SECONDS;   // the rain wets wood about every 0.4 s of game time
 export const AIM = { mouse: 0.4, touch: 0.8 };   // how close to a piece a click or tap has to be to walk to it
 export const HUSK_TIME = 4;        // seconds of kneeling to tear the husk off a coconut and eat it
-export const NUT_DRINK = 0.25;     // days of thirst the milk of a coconut takes away
+export const NUT_DRINK = 0.15;     // days of thirst the milk of a coconut takes away
 export const DRINK_TIME = 4;       // seconds of kneeling to drink
 const DIG_REACH = 0.8;             // a crab hole this close to the feet can be dug at
 const DRINK_REACH = 0.8;           // fresh water this close to the feet can be drunk (the bank of a brook counts)
@@ -301,7 +301,7 @@ export function createGame(world, spawn, opts = {}) {
     }
     const b = buildable(), u = b ? null : upgradable(), l = b || u ? null : lightable(), big = b || u || l;
     if (big) small.push({ ...big, big: true });
-    if (sleepable() && sleep.canLie()) small.push({ kind: 'sleep', big: true });
+    if (sleepable() && sleep.canLie(clock.time)) small.push({ kind: 'sleep', big: true });
     return small;
   }
 
@@ -439,7 +439,7 @@ export function createGame(world, spawn, opts = {}) {
     else if (slept) { slept = false; thirst.revive(); }
   }
 
-  function canSleep() { return sleepable() && !player.stoop && sleep.canLie(); }   // collapsing (sleep.update) needs neither
+  function canSleep() { return sleepable() && !player.stoop && sleep.canLie(clock.time); }   // collapsing (sleep.update) needs neither
 
   function update(input, dt) {
     const wantWake = input.takeWake ? input.takeWake() : false, light = input.takeLight ? input.takeLight() : false;
@@ -453,7 +453,7 @@ export function createGame(world, spawn, opts = {}) {
     let wantSleep = input.takeSleep ? input.takeSleep() : false;
     if (pick && pick.kind === 'sleep') wantSleep = true;
     if (sleep.asleep) { if (wantWake && sleep.lie > 0.5) { sleep.wake(); if (input.cancelAction) input.cancelAction(); } }   // the press that woke him does nothing more
-    else if (wantSleep && canSleep()) { work = null; queued = null; sleep.start(); }
+    else if (wantSleep && canSleep()) { work = null; queued = null; sleep.start(isNight(clock.time)); }   // by day only a nap
     if (sleep.asleep && fire.torch && !plantTorch()) fire.douse();   // he sticks the torch in the ground before he lies down
     settle();
     const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z), { drain: thirst.drain() * hunger.drain(), faint: thirst.faint() }, (lt => lt ? { walls: leantos.has(lt, 'walls'), bed: leantos.has(lt, 'bed') } : false)(leantos.home(player.x, player.z)));

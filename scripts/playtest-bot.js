@@ -34,7 +34,7 @@
       wrap(game.hunger, 'eat', (o, food) => {
         const lastKind = mind ? mind.lastKind() : lastKind0, before = game.hunger.days, kind = ({ husk: 'coconut', berries: 'berries', eatBerries: 'berries', bananas: 'banana', eatBanana: 'banana', roast: 'crab', 'use:berries': 'berries', 'use:banana': 'banana', 'use:nut': 'coconut', 'use:crab': 'crab' })[lastKind] || ('?' + lastKind);
         const r = o(food); inc(R().eaten, kind); R().eatenDays++;
-        ev('eat', { kind, food: +(food === undefined ? 1 : food).toFixed(2), before: +before.toFixed(2), after: +game.hunger.days.toFixed(2) });
+        ev('eat', { kind, food: +(food === undefined ? 0.5 : food).toFixed(2), before: +before.toFixed(2), after: +game.hunger.days.toFixed(2) });
         if (search) { const dur = gt() - search.t0; M.searches.push({ day: clock.day, kind, secs: +dur.toFixed(1), from: search.from, hungerAtStart: search.h, target: search.kind }); R().searches++; R().searchSecs += dur; search = null; }
         return r;
       });
@@ -46,7 +46,7 @@
       wrap(game.leantos, 'upgraded', (o, l, what, pr) => { const was = l.up && l.up[what]; const r = o(l, what, pr); if (pr >= 1 && was !== 1) { R().upgrades++; ev('upgrade', { what }); shot('upgraded-leanto', 'upgrade ' + what + ' finished'); } return r; });
       wrap(game.sleep, 'start', (o, ...a) => {
         const t = game.thirst.days, hh = game.hunger.days, aw = game.sleep.awake, chosenNow = botSleep || !!(mind && mind.chose());
-        const r = o(...a); const s = { day: clock.day, t0: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), chosen: chosenNow, reason: chosenNow ? 'chosen' : (t >= 1.99 ? 'thirst collapse' : aw >= 1.99 ? 'exhaustion' : 'other'), totalStart: clock.total, awake: +aw.toFixed(2), restBefore: +game.sleep.rest().toFixed(2), thirst: +t.toFixed(2), hunger: +hh.toFixed(2), leanto: game.leantos.shelter(p.x, p.z), fire: game.fire.warm(p.x, p.z), cur: null };
+        const r = o(...a); const s = { day: clock.day, t0: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), chosen: chosenNow, reason: chosenNow ? 'chosen' : (t >= 1.49 ? 'thirst collapse' : aw >= 1.49 ? 'exhaustion' : 'other'), totalStart: clock.total, awake: +aw.toFixed(2), restBefore: +game.sleep.rest().toFixed(2), thirst: +t.toFixed(2), hunger: +hh.toFixed(2), leanto: game.leantos.shelter(p.x, p.z), fire: game.fire.warm(p.x, p.z), cur: null };
         if (!chosenNow) { R().collapses++; ev('collapse', { reason: s.reason }); }
         s.upgrades = (() => { const l = game.leantos.home(p.x, p.z); return l ? Object.keys(l.up || {}).filter(k => l.up[k] === 1) : []; })();
         M.sleeps.push(s); R().sleeps++; wokeCheck = s; M.lastSleepStart = clock.total; botSleep = false; return r;
@@ -204,12 +204,12 @@
 
     // ---------- goals ----------
     let cur = null;
-    const urgentThirst = () => game.thirst.days > 0.9;
-    const wantsFood = () => game.hunger.days >= 1.3;
+    const urgentThirst = () => game.thirst.days > 0.6;   // 0.29: thirsty at half a day, collapse at a day and a half
+    const wantsFood = () => game.hunger.days >= 0.45;   // a meal every half day or so
 
     const badWater = [];
     function* drinkGoal() {
-      if (game.shells.full() > 0 && game.thirst.days > 0.3 && !game.fire.torch) { const ok = yield* useRow('water'); if (ok) { while (busy()) yield; return; } }
+      if (game.shells.full() > 0 && game.thirst.days > 0.2 && !game.fire.torch) { const ok = yield* useRow('water'); if (ok) { while (busy()) yield; return; } }
       for (let tries = 0; tries < 4; tries++) {
         // water spots at least 1.6 m from any pile (beside a pile the button picks the pile up instead of drinking)
         const free = q => !W.piles.some(pl => Math.hypot(pl.x - q.x, pl.z - q.z) < 1.6) && !badWater.some(w => Math.hypot(w.x - q.x, w.z - q.z) < 2);
@@ -232,8 +232,8 @@
 
     function* eatGoal() {
       // carried food first
-      if (game.berries.carried.length && game.hunger.days > 0.5) { if (yield* useRow('berries')) return; }
-      if (game.bananas.carried.length && game.hunger.days > 0.5) { if (yield* useRow('banana')) return; }
+      if (game.berries.carried.length && game.hunger.days > 0.33) { if (yield* useRow('berries')) return; }
+      if (game.bananas.carried.length && game.hunger.days > 0.33) { if (yield* useRow('banana')) return; }
       if (game.shells.nuts > 0) { if (yield* useRow('nut')) return; }
       if (game.crabs.carried.length && game.fire.fires.some(f => game.fire.strength(f) > 0)) { /* roast when passing a fire: handled in nightGoal */ }
       // search
@@ -353,7 +353,7 @@
       const s = sleepSpot();
       yield* goTo(s.x, s.z, { stop: 0.5, run: false });
       for (let i = 0; i < 3; i++) {
-        if (!game.sleep.canLie()) { ev('cannot-lie', { awake: +game.sleep.awake.toFixed(2) }); return; }
+        if (!game.sleep.canLie(clock.time)) { ev('cannot-lie', { awake: +game.sleep.awake.toFixed(2) }); return; }
         botSleep = true; choose(['sleep']); yield; yield;
         if (game.sleep.asleep || p.lie > 0) return;
         botSleep = false; const ang = i * 2.1 + 0.5; yield* goTo(s.x + Math.sin(ang) * (1 + i), s.z + Math.cos(ang) * (1 + i), { stop: 0.3, run: false });
@@ -368,7 +368,7 @@
       // 1. a fire for the night, if wood and fibre are ready
       yield* lightFire();
       // 2. sleep when it is time
-      if ((sleepWindow() && game.sleep.canLie()) || game.sleep.awake > 1.7) yield* sleepGoal();
+      if ((sleepWindow() && game.sleep.canLie(clock.time)) || game.sleep.awake > 1.3) yield* sleepGoal();
 
     }
 
@@ -399,8 +399,8 @@
       if (haveSt < needSt) return yield* gatherGoal('stone', destHome('stone'), needSt - haveSt);
       if (!done('walls') || !done('bed') || !done('ring')) return yield* upgradeGoal();
       // everything built: keep a stock
-      if (game.shells.nuts < 2 && game.hunger.days < 1.0 && game.shells.nuts + 0 < 2) return yield* huskGoal();
-      if (game.shells.empty() > 0 && game.thirst.days < 0.9) return yield* drinkGoal();
+      if (game.shells.nuts < 2 && game.hunger.days < 0.4 && game.shells.nuts + 0 < 2) return yield* huskGoal();
+      if (game.shells.empty() > 0 && game.thirst.days < 0.6) return yield* drinkGoal();
       if (!fireReady() && firePile() < 6) return yield* gatherGoal('drift', destFire, 6 - firePile());
       const t0 = gt(); const s = sleepSpot(); yield* goTo(s.x, s.z + 1.5, { stop: 1.5, run: false }); while (gt() - t0 < 30) yield;
     }
@@ -412,9 +412,9 @@
       const t = clock.time;
       if (urgentThirst()) return { name: 'drink', gen: drinkGoal, limit: 220, hi: true };
       if (wantsFood()) return { name: 'eat', gen: eatGoal, limit: 300, hi: true };
-      if (game.sleep.awake > 1.75 || (sleepWindow() && game.sleep.canLie() && gt() > noSleepUntil)) return { name: 'night', gen: nightGoal, limit: 500 };
+      if (game.sleep.awake > 1.35 || (sleepWindow() && game.sleep.canLie(clock.time) && gt() > noSleepUntil)) return { name: 'night', gen: nightGoal, limit: 500 };
       if (nightWindow() && !fireLit() && firePileReady()) return { name: 'night', gen: nightGoal, limit: 300 };
-      if (game.thirst.days > 0.45 && game.shells.empty() > 0 && waterPts.length && Math.min(...waterPts.map(q => Math.hypot(q.x - p.x, q.z - p.z))) < 40) return { name: 'drink', gen: drinkGoal, limit: 220 };
+      if (game.thirst.days > 0.25 && game.shells.empty() > 0 && waterPts.length && Math.min(...waterPts.map(q => Math.hypot(q.x - p.x, q.z - p.z))) < 40) return { name: 'drink', gen: drinkGoal, limit: 220 };
       return { name: 'chore', gen: choreGoal, limit: 420 };
     }
     const startGoal = g => {
@@ -433,8 +433,8 @@
       }
       if (dtg > 0 && dtg < 5) {
         const dd = Math.hypot(p.x - prev.x, p.z - prev.z); if (dd < 2) { r.dist += dd; if (p.running) r.runSecs += dtg; else if (dd > 0.001) r.walkSecs += dtg; } else if (dd >= 2) ev('jump', { d: +dd.toFixed(1) });
-        if (game.thirst.days >= 1) r.tThirsty += dtg; if (game.thirst.days >= 1.5) r.tVery += dtg;
-        if (game.hunger.days >= 2) r.tHungry += dtg; if (game.hunger.days >= 4) r.tStarving += dtg;
+        if (game.thirst.days >= 0.5) r.tThirsty += dtg; if (game.thirst.days >= 1) r.tVery += dtg;
+        if (game.hunger.days >= 0.5) r.tHungry += dtg; if (game.hunger.days >= 3) r.tStarving += dtg;
       }
       if (game.sleep.asleep && dtg > 0) r.tAsleep += dtg;
       r.maxHunger = Math.max(r.maxHunger, game.hunger.days); r.maxThirst = Math.max(r.maxThirst, game.thirst.days); r.minRest = Math.min(r.minRest, game.sleep.rest());
@@ -468,7 +468,7 @@
       sinceCheck += TICK;
       if (cur && sinceCheck >= 1.5) {   // let hunger or thirst interrupt a chore
         sinceCheck = 0;
-        if (!cur.hi && (urgentThirst() || (wantsFood() && game.hunger.days > 1.6)) && cur.name !== 'drink' && cur.name !== 'eat') endGoal('preempted by need');
+        if (!cur.hi && (urgentThirst() || (wantsFood() && game.hunger.days > 0.7)) && cur.name !== 'drink' && cur.name !== 'eat') endGoal('preempted by need');
         else if (gt() - cur.t0 > cur.limit) endGoal('timeout');
       }
       if (cur) {

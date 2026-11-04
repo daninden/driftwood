@@ -35,7 +35,7 @@ const at = (x, z) => ({ x, z, y: w.H(x, z) });
 const husking = o => { const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z), { hunger: { days: 1 }, ...o }), input = makeInput({ action: 'tap' }); run(g, input, 0.2); return { g, input, c }; };
 
 describe('hunger over time', () => {
-  it('starts not hungry, hungry after two days, starving after four, and stops there', () => {
+  it('starts not hungry, hungry after half a day, starving after three, and stops there', () => {
     const h = createHunger();
     expect(h.days).toBe(0); expect(h.hungry()).toBe(false); expect(h.fill()).toBe(1); expect(h.level()).toBe(0);
     expect(h.speed()).toBe(1); expect(h.drain()).toBe(1); expect(h.drillCost()).toBe(1);
@@ -46,16 +46,16 @@ describe('hunger over time', () => {
     h.update(-1); h.update(NaN); expect(h.days).toBe(STARVING_AT);
   });
   it('has the agreed numbers', () => {
-    expect([HUNGRY_AT, STARVING_AT, HUNGER_SLOW, HUNGRY_DRILL, STARVE_DRAIN]).toEqual([2, 4, 0.75, 1.5, 1.5]);
-    expect(NUT_FOOD).toBe(1); expect(NUT_DRINK).toBe(0.25); expect(HUSK_TIME).toBe(4);
+    expect([HUNGRY_AT, STARVING_AT, HUNGER_SLOW, HUNGRY_DRILL, STARVE_DRAIN]).toEqual([0.5, 3, 0.75, 1.5, 1.5]);
+    expect(NUT_FOOD).toBe(0.5); expect(NUT_DRINK).toBe(0.15); expect(HUSK_TIME).toBe(4);
   });
   it('slows from 1 at hungry down to 0.75 at starving', () => {
     expect(createHunger({ days: HUNGRY_AT }).speed()).toBe(1);
-    expect(createHunger({ days: 3 }).speed()).toBeCloseTo(0.875, 10);
+    expect(createHunger({ days: (HUNGRY_AT + STARVING_AT) / 2 }).speed()).toBeCloseTo(0.875, 10);
     expect(createHunger({ days: STARVING_AT }).speed()).toBeCloseTo(HUNGER_SLOW, 10);
   });
-  it('eating takes a day off, never below 0', () => {
-    const h = createHunger({ days: 3 }); h.eat(); expect(h.days).toBeCloseTo(3 - NUT_FOOD, 10);
+  it('eating a coconut takes half a day off (a meal), never below 0', () => {
+    const h = createHunger({ days: 0.8 }); h.eat(); expect(h.days).toBeCloseTo(0.8 - NUT_FOOD, 10);
     h.eat(); h.eat(); expect(h.days).toBe(0);
   });
   it('saves and restores, and reads garbage as not hungry', () => {
@@ -83,7 +83,7 @@ describe('eating when husking', () => {
     expect(g.hunger.days).toBeCloseTo(3 - NUT_FOOD, 2); expect(g.thirst.days).toBeCloseTo(1 - NUT_DRINK, 2);
   });
   it('also when hardly hungry or thirsty: nothing goes below 0', () => {
-    const { g, input } = husking({ hunger: { days: 0.6 } }); run(g, input, HUSK_TIME + 0.5);
+    const { g, input } = husking({ hunger: { days: 0.4 } }); run(g, input, HUSK_TIME + 0.5);
     expect(g.fibre.carried).toBe(1); expect(g.hunger.days).toBeLessThan(0.01); expect(g.thirst.days).toBeLessThan(0.01);
   });
   it('does nothing when stopped early, and the nut stays', () => {
@@ -103,15 +103,15 @@ describe('what hunger does', () => {
     const base = rate(0, 0);
     expect(rate(HUNGRY_AT + 0.5, 0) / base).toBeCloseTo(1, 1);                      // hungry only: no change
     expect(rate(STARVING_AT, 0) / base).toBeCloseTo(STARVE_DRAIN, 1);
-    expect(rate(0, 1.6) / base).toBeCloseTo(DRAIN, 1);
-    expect(rate(STARVING_AT, 1.6) / base).toBeCloseTo(DRAIN * STARVE_DRAIN, 1);   // 3 times
+    expect(rate(0, 1.1) / base).toBeCloseTo(DRAIN, 1);
+    expect(rate(STARVING_AT, 1.1) / base).toBeCloseTo(DRAIN * STARVE_DRAIN, 1);   // 3 times
     const a = createSleep(), b = createSleep(); a.update(DAY_SECONDS * 0.2); b.update(DAY_SECONDS * 0.2, true, true, { drain: DRAIN * STARVE_DRAIN });
     expect(b.awake).toBeCloseTo(a.awake * 3, 6);
   });
   it('walks slower when hungry, combined with thirst', () => {
     const walk = o => { const g = createGame(w, spawn, o), x0 = g.player.x, z0 = g.player.z, i = makeInput({ right: true }); i.yaw = 0; run(g, i, 2); return Math.hypot(g.player.x - x0, g.player.z - z0); };
-    const fresh = walk({}), hungry = walk({ hunger: { days: STARVING_AT } }), both = walk({ hunger: { days: STARVING_AT }, thirst: { days: 1.9 } });
-    expect(walk({ hunger: { days: 1.9 } })).toBeCloseTo(fresh, 6);
+    const fresh = walk({}), hungry = walk({ hunger: { days: STARVING_AT } }), both = walk({ hunger: { days: STARVING_AT }, thirst: { days: 1.4 } });
+    expect(walk({ hunger: { days: HUNGRY_AT - 0.01 } })).toBeCloseTo(fresh, 6);
     expect(hungry / fresh).toBeGreaterThan(0.72); expect(hungry / fresh).toBeLessThan(0.78);
     expect(both).toBeLessThan(hungry);
   });
@@ -126,8 +126,8 @@ describe('what hunger does', () => {
   });
   it('shows on the player and in the saved state, and old saves load as not hungry', () => {
     expect(createGame(w, spawn).player.hungry).toBe(0);
-    const g = createGame(w, spawn, { hunger: { days: 3 } }); g.update(makeInput(), 1 / 30);
-    expect(g.player.hungry).toBeCloseTo(0.5, 1); expect(g.state().hunger.days).toBeGreaterThan(2.99);
+    const g = createGame(w, spawn, { hunger: { days: 1.75 } }); g.update(makeInput(), 1 / 30);
+    expect(g.player.hungry).toBeCloseTo(0.5, 1); expect(g.state().hunger.days).toBeGreaterThan(1.74);
     const text = serialise(g.state()), s = parseSave(text, w.seed);
     expect(createGame(w, spawn, s).hunger.days).toBeCloseTo(g.hunger.days, 6);
     const old = JSON.parse(text); delete old.hunger;
@@ -135,7 +135,7 @@ describe('what hunger does', () => {
     old.hunger = { days: 'x' }; expect(parseSave(JSON.stringify(old), w.seed)).toBeNull();
   });
   it('keeps running while he sleeps', () => {
-    const g = createGame(w, spawn, { sleep: { awake: 1.6 } }), i = makeInput(); i.takeSleep = () => true;
+    const g = createGame(w, spawn, { sleep: { awake: 1.0 } }), i = makeInput(); i.takeSleep = () => true;
     run(g, i, 60); expect(g.hunger.days).toBeGreaterThan(0.05);
   });
 });

@@ -96,10 +96,10 @@ describe('what a short press does', () => {
     const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z), { hunger: { days: 1 } });   // hungry enough to eat it on the spot
     expect(g.action().tap).toMatchObject({ kind: 'husk' });
     press(g, 'tap', 0.3); expect(g.player.work.kind).toBe('husk'); run(g, makeInput(), HUSK_TIME + 0.2); expect(g.fibre.carried).toBe(1);
-    const full = createGame(w, at(c.x + 0.3, c.z), { fibre: { carried: 3 }, hunger: { days: 3 }, thirst: { days: 1 } });
+    const full = createGame(w, at(c.x + 0.3, c.z), { fibre: { carried: 3 }, hunger: { days: 2 }, thirst: { days: 1 } });
     expect(full.action().tap).toMatchObject({ kind: 'husk' });   // husking is eating too
     press(full, 'tap', 0.3); run(full, makeInput(), HUSK_TIME + 0.2);
-    expect(full.fibre.carried).toBe(3); expect(full.hunger.days).toBeLessThan(2.1); expect(full.thirst.days).toBeLessThan(1); expect(full.fibre.onGround(c)).toBe(false);
+    expect(full.fibre.carried).toBe(3); expect(full.hunger.days).toBeLessThan(1.6); expect(full.thirst.days).toBeLessThan(1); expect(full.fibre.onGround(c)).toBe(false);
   });
   it('lays one dry piece on a fire, the top dry one; wet wood stays with him', () => {
     const g = scene({ carried: 1, fire: fireAt(E.x + 0.8, E.z, 2 * BURN) }), f = g.fire.fires[0];
@@ -274,9 +274,9 @@ describe('clicking only walks', () => {
     expect(g.player.work).toBeNull(); expect(g.fibre.carried).toBe(0);
   });
   it('wades through a river, and a tap on the castaway or in the water does nothing else', () => {
-    const g = createGame(w, at(BANK.x + 3, BANK.z), { thirst: { days: 1.5 } });
+    const g = createGame(w, at(BANK.x + 3, BANK.z), { thirst: { days: 1.2 } });
     click(g, WATER.x - 0.3, WATER.z); expect(g.player.x).toBeLessThan(WATER.x + 0.5);   // into the brook
-    expect(g.player.work).toBeNull(); expect(g.thirst.days).toBeGreaterThan(1.5);
+    expect(g.player.work).toBeNull(); expect(g.thirst.days).toBeGreaterThan(1.2);
     const h = scene({ carried: 2 }); click(h, h.player.x, h.player.z); expect(h.wood.piles.length).toBe(0); expect(h.wood.carried.length).toBe(2);
   });
 });

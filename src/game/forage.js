@@ -12,7 +12,7 @@
  *     the forest edges and clearings; never the dune scrub of the beach) bear
  *     berries. A short press beside a bearing bush picks a handful (game/game).
  *     The bush bears again BERRIES.regrow days later (2 to 4, fixed per bush and
- *     per time it was picked). A handful takes BERRY_FOOD (1/3 day) off the hunger;
+ *     per time it was picked). A handful takes BERRY_FOOD (1/6 day: a snack) off the hunger;
  *     carried, it spoils after BERRIES.keep (one day) and is gone. At most 2 handfuls.
  *   - Bananas: rare. About 1 in 180 of the rain forest bushes (tier 2) has a wild
  *     banana plant growing beside it (BANANA_SHARE; on seed 1337 about a dozen on
@@ -51,8 +51,8 @@ import { hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 import { bushSize } from '../world/vegetation.js';
 
-export const BERRY_FOOD = 1 / 3, BANANA_FOOD = 1;
-export const BERRY_SHARE = 1 / 8, BANANA_SHARE = 1 / 180;
+export const BERRY_FOOD = 1 / 6, BANANA_FOOD = 1;
+export const BERRY_SHARE = 1 / 5, BANANA_SHARE = 1 / 180;
 export const BERRIES = Object.freeze({ name: 'berries', tier: 1, share: BERRY_SHARE, max: 2, food: BERRY_FOOD, regrow: 2, spread: 2, keep: 1, salt: 101 });
 export const BANANAS = Object.freeze({ name: 'bananas', tier: 2, share: BANANA_SHARE, max: 1, food: BANANA_FOOD, regrow: 7, spread: 1, keep: 3, salt: 103 });
 const TILE_SPAN = 4096;   // ids per tile (a tile has far fewer bushes)

@@ -1,5 +1,5 @@
 // Crab catch (0.22): digging for a crab that fled into a hole, the chance (fixed by the seed and the
-// number of digs), carrying at most two, roasting by a fire (2/3 day of hunger), spoiling after a day,
+// number of digs), carrying at most two, roasting by a fire (half a day of hunger, a meal), spoiling after a day,
 // a colony growing back, kneeling work stopped by walking, saving, the action priority at a fire and
 // the new icons.
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -52,7 +52,7 @@ function crabScene(opts = {}) {
   return { g, hole: h };
 }
 const fireAt = (x, z, fuel = 4 * BURN) => ({ id: 0, x, z, fuel, embers: EMBERS, lit: 0, fed: 4 });
-function fireScene({ crabs = 1, fuel = 4 * BURN, fire = true, carried = [], hunger = 3 } = {}) {
+function fireScene({ crabs = 1, fuel = 4 * BURN, fire = true, carried = [], hunger = 2 } = {}) {
   return createGame(w, { x: E.x, z: E.z, y: w.H(E.x, E.z) }, {
     sleep: { awake: 1 }, hunger: { days: hunger }, crabs: { carried: Array.from({ length: crabs }, () => 0.3), gone: [], digs: 0 },
     wood: { carried, piles: [] }, fire: { fires: fire ? [fireAt(E.x + 1, E.z, fuel)] : [], torch: null, torches: [], attempts: 0, nextId: 5 },
@@ -104,9 +104,9 @@ describe('the crab state', () => {
     expect(c.carried).toEqual([1, 2]); expect([...c.gone]).toEqual([[1, 2]]); expect(c.digs).toBe(0);
     expect(createCrabs(1, null).carried).toEqual([]);
   });
-  it('gives hunger 2/3 day for a crab and 1 day for a nut', () => {
-    expect(CRAB_FOOD).toBeCloseTo(2 / 3); const h = createHunger({ days: 3 });
-    h.eat(CRAB_FOOD); expect(h.days).toBeCloseTo(3 - 2 / 3); h.eat(); expect(h.days).toBeCloseTo(3 - 2 / 3 - NUT_FOOD); h.eat(9); expect(h.days).toBe(0);
+  it('gives hunger half a day (a meal) for a crab and for a nut', () => {
+    expect(CRAB_FOOD).toBe(0.5); expect(NUT_FOOD).toBe(0.5); const h = createHunger({ days: 3 });
+    h.eat(CRAB_FOOD); expect(h.days).toBeCloseTo(3 - 0.5); h.eat(); expect(h.days).toBeCloseTo(3 - 0.5 - NUT_FOOD); h.eat(9); expect(h.days).toBe(0);
   });
 });
 
@@ -186,19 +186,19 @@ describe('roasting', () => {
     const none = fireScene({ crabs: 0 }).action().tap; expect(none && none.kind).not.toBe('roast');
     const far = fireScene(); put(far, E.x - 4, E.z); expect(far.action().tap).toBeNull();
   });
-  it('kneels 8 seconds and then has eaten the crab: 2/3 day of hunger less', () => {
+  it('kneels 8 seconds and then has eaten the crab: half a day of hunger less', () => {
     expect(ROAST_TIME).toBe(8);
     const g = fireScene({ crabs: 2 });
     press(g, 0.1); expect(g.player.work && g.player.work.kind).toBe('roast');
-    run(g, makeInput(), 7.5); expect(g.player.work && g.player.work.kind).toBe('roast'); expect(g.hunger.days).toBeGreaterThan(2.9);
+    run(g, makeInput(), 7.5); expect(g.player.work && g.player.work.kind).toBe('roast'); expect(g.hunger.days).toBeGreaterThan(1.9);
     run(g, makeInput(), 0.7); expect(g.player.work).toBeNull();
-    expect(g.crabs.carried.length).toBe(1); expect(g.hunger.days).toBeCloseTo(3 - 2 / 3 + 8.3 / 1200, 2);
+    expect(g.crabs.carried.length).toBe(1); expect(g.hunger.days).toBeCloseTo(2 - CRAB_FOOD + 8.3 / 1200, 2);
   });
   it('is stopped by walking, and the crab is kept', () => {
     const g = fireScene();
     press(g, 0.1); expect(g.player.work).toBeTruthy();
     run(g, makeInput({ right: true }), 0.1); expect(g.player.work).toBeNull();
-    run(g, makeInput(), 9); expect(g.crabs.carried.length).toBe(1); expect(g.hunger.days).toBeGreaterThan(2.99);
+    run(g, makeInput(), 9); expect(g.crabs.carried.length).toBe(1); expect(g.hunger.days).toBeGreaterThan(1.99);
   });
   it('comes after feeding with dry wood and before taking a torch', () => {
     const dry = w.tiles.flatMap(t => t.drift)[0];

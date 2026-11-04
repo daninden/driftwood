@@ -166,7 +166,7 @@ describe('laying down', () => {
 
 it('needs slow him by the combined factor, and shorten his steps with it', () => {
   const rested = createGame(w, spawn);
-  const weary = createGame(w, spawn, { sleep: { awake: 1.999, asleep: false, left: 0 }, thirst: { days: 1.99 }, hunger: { days: 4 } });
+  const weary = createGame(w, spawn, { sleep: { awake: 1.499, asleep: false, left: 0 }, thirst: { days: 1.49 }, hunger: { days: 3 } });
   const a = makeInput({ up: true }), b = makeInput({ up: true }), x0 = { x: rested.player.x, z: rested.player.z };
   for (let i = 0; i < 20; i++) { rested.update(a, 1 / 60); weary.update(b, 1 / 60); }
   const factor = 0.6 * 0.65 * 0.75;
