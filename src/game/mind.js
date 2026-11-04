@@ -225,13 +225,16 @@ export function createMind(world, game, opts = {}) {
         if (d < 3.5 && plan.pts.length <= 3) plan.direct = true;
       }
       { let bj = pi, bd = 1e9; for (let j = pi; j < Math.min(plan.pts.length, pi + 8); j++) { const dd = Math.hypot(plan.pts[j].x - p.x, plan.pts[j].z - p.z); if (dd < bd) { bd = dd; bj = j; } } pi = bj; if (bd > 5) { plan = null; finalSet = false; if (++replans > 6) { idleInput(); return false; } yield; continue; } }
-      while (pi < plan.pts.length - 1 && Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 1.1) pi++;
+      while (pi < plan.pts.length - 1 && Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 0.45) pi++;   // reached: on to the next (tight, a climbing route can be a narrow band)
       const last = pi >= plan.pts.length - 1 || plan.direct || Math.hypot(plan.pts.at(-1).x - p.x, plan.pts.at(-1).z - p.z) < 2.2;
       let remaining = d;
       if (last) {
         if (tap) { if (!finalSet) { inp.target = { x, z, tap: true }; finalSet = true; } else if (!inp.target) return true; }
         else inp.target = { x, z };
-      } else { const w = plan.pts[Math.min(pi + 1, plan.pts.length - 1)]; inp.target = { x: w.x, z: w.z }; remaining = (plan.pts.length - pi) * 1.5; }
+      } else {   // he heads for the waypoint ahead, and cuts the corner to the one after it only on a line that is clear (open ground)
+        const w0 = plan.pts[pi], w1 = plan.pts[Math.min(pi + 1, plan.pts.length - 1)], cut = Math.hypot(w0.x - p.x, w0.z - p.z) < 1.1 && fd.clear(p, w1), w = cut ? w1 : w0;
+        inp.target = { x: w.x, z: w.z }; remaining = (plan.pts.length - pi) * 1.5;
+      }
       inp.run = !!o.hurry && remaining > 20 && !p.winded;
       if (now - seen > 0.5) chk = { x: p.x, z: p.z, t: now };   // he was busy (kneeling, sleeping): count again
       seen = now;
