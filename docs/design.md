@@ -8,7 +8,7 @@ A stylised, diorama-like survival game. You are completely alone on a large, wil
 
 - **Feeling:** abandonment and loneliness. A small figure in a big landscape of beach, forest and mountain.
 - **Tone:** realistic in what you do (no dungeons or fantasy), stylised in how it looks.
-- **Core:** gathering, digging and building with driftwood and branches, and getting to know the island terrace by terrace.
+- **Core:** gathering, digging and building with driftwood and branches, and getting to know the island terrace by terrace. Since 0.28 you can also leave Dave alone: he looks after the ordinary things himself (water, food, a fire, sleep, a pile of wood) and you step in for the special ones. The direction (agreed 2026-11-04): lonely but not hostile, an honest hard life, he is not unhappy, cozy; the player watches Dave live and steps in for the special things (building, exploring).
 - **Tension:** now and then strangers arrive by canoe. You do not know what they want. The threat works through hiding and avoiding, not fighting.
 - **Scope:** small and lonely. The atmosphere matters most. New game elements are only added after discussion.
 
@@ -297,12 +297,56 @@ Atmosphere only (0.17): the animals move and react to the castaway (flee, hide, 
 - **Fireflies (0.17.4 "Fireflies", built):** small warm yellow lights that drift in the dark, atmosphere only (no interaction beyond keeping out of his way, nothing to catch, no sound, not saved). Where: groups of 10 to 30 at forest edges (where the forest thins out, with trees close by) and along the banks of rivers, in the lowland and the rain forest only (tiers 1 and 2; never on the open beach, never on the plateau or summit), fixed per island by the seed (`game/habitats`, derived from existing world data, so the island and its fixture do not change). When: from dusk to an hour before sunrise (they fade in over about 40 s of play after sunset and out in the last stretch before that hour), none by day. Behaviour: each drifts slowly in its own loop (0.3 to 2 m above the ground, up to about 1 m sideways), blinks slowly in its own rhythm (about a second of light every 3 to 6 s, a faint glow in between), and now and then a few of a group flash together. When he comes within 3 m they drift aside and drift back once he has gone. Alive only within 30 m of him, like the animals. Look: a tiny warm yellow centre with a soft halo, over the picture like the night glow round fires and torches (a layer above the night grading; no real light on the ground, the light count stays constant), invisible by day. They do not count as "something happening" for the 15 fps idle rate. Cost: one small 2D layer, at most 300 sprites per frame.
 - **Cost:** a pool of instanced meshes refilled every frame, at most 96 crabs, 40 birds and 128 fish shadows, each with its outline mesh; the animals do not follow the quality levels of 0.16.2 (they are cheap).
 
+## Habit (0.28, built)
+
+Agreed on 2026-11-04 (option B: he does the ordinary, the player the special). When the player leaves him alone the castaway ("Dave") takes care of ordinary life by himself, and the player can take over at any moment. Nothing new is shown in the game: no message, no icon, no sound. The developer panel adds the word `habit` while the habit is in charge. Built in `game/mind` (his head), `game/known` (what he knows of the island), `game/path` (finding a way) and `game/input` `createTakeover` (the timer); the habit adds no game rule, it only does what the player could do (it fills an input object like the player's).
+
+**Takeover**
+- After **30 s** (`QUIET`) without any input at all (a key, a click or tap, the thumb stick, the action button, an icon of the arc, a drawing of the row, and the camera: turn, tilt, zoom, pinch, twist; a held key and a walk target he is still following count; a mouse that only moves does not) he starts by himself. Any input gives him back to the player at once: the habit drops its goal, a kneeling job already begun is left to finish (the player's own walking key or click stops it as usual), and after 30 s of quiet it takes over again. A tab that comes back to the front starts the 30 s over.
+- Not while the name question is open (the game does not run then), and never while he sleeps or lies down: the habit never wakes him and never starts a sleep before he may choose to (half a day awake). The test parameters (`?spawn`, `?time`) do not switch it off.
+
+**What he does, in this order** (numbers are `game/mind` constants)
+1. **Drink** at thirst 0.8 days: a full shell is drunk, else he walks to the nearest river water he knows (knowing none, he goes searching), kneels, and fills any empty shells while he is there; with empty shells and the river within 40 m he also goes at thirst 0.4.
+2. **Eat** at hunger 1 day: what he carries first (berries, a banana bunch, a nut), a carried crab roasted at a fire, a crab dug for when he stands at a hole; else the nearest food he knows by walking cost: a nut on the ground (husked, eaten), a bearing berry bush (3 times dearer) or a banana plant.
+3. **Sleep** once he may lie down and it is night (from 0.87 to 0.17 of the day) or he is tired (1.5 days awake): he walks home and lies down (Z). He collapses as usual when he must.
+4. **Fire**, in the evening (0.6 to 0.87): dry driftwood (else branches) to one pile at the fire spot at home, enough for 6 pieces of burning (a branch counts half), the pile lit from 0.74 when it holds at least 4 pieces and 3 pieces' worth and he carries fibre (or has a torch in his hand), and the fire fed from the piles when it holds less than 0.6 of the most it can. By day a fire that still burns is not fed; the wood waits for the evening.
+5. **Stores**, by day (0.2 to 0.6): a nut husked for fibre and to carry (two nuts, one tuft: the game's limits), and wood for the evening as above.
+6. **Doing nothing:** after each task he stands still for 5 to 20 s (drawn from a PRNG seeded by the island, so a run can be repeated), walks back to within 8 m of home, and once a day around sunset (0.76 to 0.83) walks to the shore (or the fire) and stands a while looking out. No new pose or animation.
+A higher need breaks into a lower goal (checked every 1.5 s); a goal that fails is left alone for a while (60 to 300 s). He walks; only very thirsty (1.3 days) and 20 m or more from the water does he run.
+
+**What he does not do (stays the player's):** he never builds (no lean-to, no upgrade: those kinds are never chosen, and the fire and branch piles are kept so that the arc offers to light and not to build), never gathers fronds or stones, never takes a torch himself, never explores (but for the search, below), writes no lines and sits in no new pose. **Home:** his nearest finished lean-to; else his last fire (burning, or the last lit); else the place where he last slept; else the place where he was when the habit took over.
+
+**Only known ground, and what he sees.** The game remembers which part of the island he knows: a coarse grid of cells of 10 m, a cell becoming known when its middle lies within **40 m** of a spot he walked past (`game/known`; decided later on 2026-11-04, it was 20 m: he remembers what he sees). Only a frame in which he really moves teaches him ground: standing still or reloading a save teaches nothing, and when the habit walks him only his own cell is marked (it is known already), so the habit cannot creep out into unknown land by walking at the edge of what he knows. His targets and paths lie in known cells and 1.5 m inside their edge (so sliding past a tree cannot carry him into a cell he has not been to). The memory is saved (optional field `known`; older saves have none and the ground round him counts as known).
+
+**The one exception: searching (decided 2026-11-04).** When he is thirsty (0.8 days) and knows no fresh water, or is hungry (1 day) and knows no food (nothing carried, no nut on the ground, bearing berry bush or banana plant he can walk to over known ground), the habit goes looking, walking and never running. From home he goes ring after ring (rings 12 m apart, 24 points each, out to 250 m) to the nearest unknown spot that borders what he knows, picking among the five nearest by walking cost; for water the spots lower down win (rivers run downhill to the sea: 2 s of walking per metre of height), for food the low coast before the high inland (palms on the coast, berries inland). Everything he walks past while searching becomes known as usual (he sees 40 m round him); the moment water or food is known he uses it and is back on known ground only. A search may last 900 s before it is dropped. He still never builds.
+
+**Fire by day (decided 2026-11-04):** a fire that still burns by day is not fed; wood for the evening waits in the pile. A fire lit at 0.74 with 6 pieces' worth burns about 15 hours, into the next morning.
+
+**Measured** (headless, `tests/mindLife*.test.js`, `scripts/playtest.js --mind`; ten game days, from a new game, no player input; "walked" = the ground a first day would have shown him: the start, the nearest water, 4 nuts, 4 pieces of driftwood, 4 branches and a berry bush, walked by the shortest way; "fresh" = a new game, only the start known):
+
+| seed | start | highest thirst (days) | highest hunger (of 4) | collapses | nights lain down by himself | by a fire | searches (steps) | stuck detections |
+|---|---|---|---|---|---|---|---|---|
+| 1337 | walked | 1.00 | 1.04 | 0 | 10 of 10 | 6 | 0 | 0 |
+| 1337 | fresh | 0.92 | 1.05 | 0 | 11 of 11 | 1 | 5 (305) | 4 |
+| 2024 | walked | 0.94 | 1.04 | 0 | 10 of 10 | 7 | 0 | 0 |
+| 2024 | fresh | 0.89 | 1.04 | 0 | 10 of 10 | 6 | 0 (the 40 m show the water) | 0 |
+| 7 | walked | 2.0 | 3.67 | 7 | 6 of 13 sleeps | 3 | 1 (20) | 313 |
+| 7 | fresh | 0.89 | 1.05 | 0 | 11 of 11 | 1 | 1 (789) | 12 |
+| 11 | walked | 1.15 | 1.20 | 0 | 11 of 11 | 3 | 0 | 338 |
+| 11 | fresh | 1.06 | 1.09 | 1 (tired) | 8 of 9 | 2 | 1 (780) | 297 |
+
+So a fresh game no longer ends in thirst collapse or starving on any of the four islands. Seed 7 "walked" is a known bug, not of the habit: the water known there lies up a steep scramble where he stalls for 4 s again and again (the playtest bot gets stuck at the same kind of passage); it is worse than with 20 m because the nearer water is now the one behind the scramble. He never built, never stood on an unknown cell outside a search, never woke himself. He stands still for a third to most of the time (86 % on seed 1337 walked, where there is little to do). Many nights are cold because dry driftwood and nuts are few and a fire costs a tuft of fibre whether it catches or not.
+
+**Left out for now:** a torch left in his hand is not planted, no trips for crabs (he digs only if he happens to stand at a hole, and roasts a carried crab), no fronds or stones, and a stray frond he picks up with the wood ends up in his piles.
+
 ## Game ideas (not built, not decided)
 
 An early atmosphere prototype tried most of these. They are ideas until we decide otherwise.
 
 | Part | Idea |
 |---|---|
+| Inner life (AI) | A language model a few times per game day (on waking, at sunset) gets a short summary of Dave's life and returns what he wants that day and one journal line in English; the rules still do the walking. Options noted: the player brings their own key (e.g. OpenRouter free models, Gemini or Groq free tiers), stored in localStorage and called straight from the browser; or a small Vercel function with our key (costs, limits); or a model in the browser (WebLLM), free but a large download. Everything must work without it. Not decided. |
+| The show | One shared island lives on a server (game and world are pure and run in Node); everyone watching the website sees the same Dave live and can only turn and zoom the view. Needs him to explore and build by himself, a watchdog against getting stuck, a choice about the 20x sleep time for all viewers, and an always-on server (Vercel alone does not run one). Not decided. |
 | Gathering, later | A barrel of nails at the wreck |
 | Digging | The ground really sinks; salt water on the beach, nails at the wreck |
 | Building | Lean-to (built in 0.16, see *Basic needs*); fire is built (of driftwood or branches, see *Fire*) |

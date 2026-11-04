@@ -1,6 +1,6 @@
 // Playtest bot, the part that runs inside the page (injected by scripts/playtest.js after the game is ready and
-// after scripts/playtest-lib.js, which provides window.DWLib: the game's own movement rules for path finding).
-// Tooling only; no game code is changed. It plays through the real inputs: input.target (a click on the ground or on a
+// after scripts/playtest-lib.js, which provides window.DWLib: the game's own movement rules and path finding, src/game/path).
+// Tooling only; no game code is changed (opts: window.__mindMode = true, set by `npm run playtest -- --mind`, lets the bot do nothing and Dave's own habit, src/game/mind, live). It plays through the real inputs: input.target (a click on the ground or on a
 // thing), input.run (Shift), the action button (input.actionStart/actionEnd, the same calls the button makes), a click on an icon of
 // the arc above it (input.choose(i), what the click calls; for light, build, upgrade and sleep) and game.use(kind) for the drawings in the row (what a click on the row calls).
 // Only a few game methods are wrapped, to log events exactly (hunger.eat, thirst.drink, ...); they still call the original.
@@ -10,10 +10,12 @@
 //   bot.metrics   the log (plain JSON; pass it back as `imported` after a page reload)
 //   bot.summary() -> small status object for the console
 (function () {
-  const HALF = 360, C = 1.5, N = 480, TICK = 1 / 60, DAYS = 1200;
+  const HALF = 360, C = 1.5, TICK = 1 / 60, DAYS = 1200;
   window.makeBot = function makeBot(opts, imported) {
     const D = window.__driftwood, { world, game, input } = D, L = window.DWLib;
     const p = game.player, clock = game.clock, W = game.wood;
+    const mind = window.__mindMode ? L.createMind(world, game) : null;   // --mind: the bot does nothing, Dave's own habit (src/game/mind) lives (0.28)
+    if (mind) mind.engage();
     const fresh = !imported; const M = imported || { seed: world.seed, days: {}, events: [], stucks: [], errors: [], botErrors: [], searches: [], sleeps: [], roundtrips: [], shots: [], goals: {}, totals: {}, nextRt: 0, base: null };
     const gt = () => clock.total * DAYS;
     const dayRec = d => M.days[d] || (M.days[d] = { day: d, maxHunger: 0, maxThirst: 0, minRest: 1, eaten: {}, eatenDays: 0, drinks: 0, sips: 0, fills: 0, searches: 0, searchSecs: 0, tThirsty: 0, tVery: 0, tHungry: 0, tStarving: 0, tAsleep: 0, collapses: 0, sleeps: 0, fires: 0, fireFails: 0, firesLost: 0, firesLostRain: 0, leantos: 0, upgrades: 0, showers: 0, dist: 0, runSecs: 0, walkSecs: 0, winded: 0, stuck: 0, goalsAbandoned: 0, wood: 0, branches: 0, fronds: 0, stones: 0, husks: 0, berries: 0, bananas: 0, crabsCaught: 0, crabsEaten: 0, crabDigs: 0 });
@@ -23,14 +25,14 @@
     const botErr = (what, e) => { M.botErrors.push({ day: clock.day, time: +clock.time.toFixed(3), what, msg: String(e && e.stack || e).slice(0, 400) }); };
     const shot = (name, why) => { if (M.shots.some(s => s.name === name)) return; M.shots.push({ name, why, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1) }); wantShot = name; };
     if (fresh) M.nextRt = gt() + 300;
-    let wantShot = null, lastKind = null, search = null, botSleep = false;
+    let wantShot = null, lastKind0 = null, search = null, botSleep = false;
 
     // ---------- wrapped game methods: exact event log ----------
     if (!game.__wrapped) {
       game.__wrapped = true;
       const wrap = (obj, name, fn) => { const o = obj[name].bind(obj); obj[name] = (...a) => fn(o, ...a); };
       wrap(game.hunger, 'eat', (o, food) => {
-        const before = game.hunger.days, kind = ({ husk: 'coconut', berries: 'berries', eatBerries: 'berries', bananas: 'banana', eatBanana: 'banana', roast: 'crab', 'use:berries': 'berries', 'use:banana': 'banana', 'use:nut': 'coconut', 'use:crab': 'crab' })[lastKind] || ('?' + lastKind);
+        const lastKind = mind ? mind.lastKind() : lastKind0, before = game.hunger.days, kind = ({ husk: 'coconut', berries: 'berries', eatBerries: 'berries', bananas: 'banana', eatBanana: 'banana', roast: 'crab', 'use:berries': 'berries', 'use:banana': 'banana', 'use:nut': 'coconut', 'use:crab': 'crab' })[lastKind] || ('?' + lastKind);
         const r = o(food); inc(R().eaten, kind); R().eatenDays++;
         ev('eat', { kind, food: +(food === undefined ? 1 : food).toFixed(2), before: +before.toFixed(2), after: +game.hunger.days.toFixed(2) });
         if (search) { const dur = gt() - search.t0; M.searches.push({ day: clock.day, kind, secs: +dur.toFixed(1), from: search.from, hungerAtStart: search.h, target: search.kind }); R().searches++; R().searchSecs += dur; search = null; }
@@ -43,74 +45,19 @@
       wrap(game.leantos, 'start', (o, ...a) => { const r = o(...a); R().leantos++; ev('leanto-start'); return r; });
       wrap(game.leantos, 'upgraded', (o, l, what, pr) => { const was = l.up && l.up[what]; const r = o(l, what, pr); if (pr >= 1 && was !== 1) { R().upgrades++; ev('upgrade', { what }); shot('upgraded-leanto', 'upgrade ' + what + ' finished'); } return r; });
       wrap(game.sleep, 'start', (o, ...a) => {
-        const t = game.thirst.days, hh = game.hunger.days, aw = game.sleep.awake;
-        const r = o(...a); const s = { day: clock.day, t0: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), chosen: botSleep, reason: botSleep ? 'chosen' : (t >= 1.99 ? 'thirst collapse' : aw >= 1.99 ? 'exhaustion' : 'other'), totalStart: clock.total, awake: +aw.toFixed(2), restBefore: +game.sleep.rest().toFixed(2), thirst: +t.toFixed(2), hunger: +hh.toFixed(2), leanto: game.leantos.shelter(p.x, p.z), fire: game.fire.warm(p.x, p.z), cur: null };
-        if (!botSleep) { R().collapses++; ev('collapse', { reason: s.reason }); }
+        const t = game.thirst.days, hh = game.hunger.days, aw = game.sleep.awake, chosenNow = botSleep || !!(mind && mind.chose());
+        const r = o(...a); const s = { day: clock.day, t0: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), chosen: chosenNow, reason: chosenNow ? 'chosen' : (t >= 1.99 ? 'thirst collapse' : aw >= 1.99 ? 'exhaustion' : 'other'), totalStart: clock.total, awake: +aw.toFixed(2), restBefore: +game.sleep.rest().toFixed(2), thirst: +t.toFixed(2), hunger: +hh.toFixed(2), leanto: game.leantos.shelter(p.x, p.z), fire: game.fire.warm(p.x, p.z), cur: null };
+        if (!chosenNow) { R().collapses++; ev('collapse', { reason: s.reason }); }
         s.upgrades = (() => { const l = game.leantos.home(p.x, p.z); return l ? Object.keys(l.up || {}).filter(k => l.up[k] === 1) : []; })();
         M.sleeps.push(s); R().sleeps++; wokeCheck = s; M.lastSleepStart = clock.total; botSleep = false; return r;
       });
     }
     let wokeCheck = null, wasAsleep = game.sleep.asleep;
 
-    // ---------- path finding on a grid of 1.5 m cells, with the game's own movement rules ----------
-    const stand = new Map(), banned = new Set(), efs = new Map();
-    const cx = ix => (ix + 0.5) * C - HALF, ci = x => Math.floor((x + HALF) / C);
-    const isStand = (ix, iz) => {
-      if (ix < 0 || iz < 0 || ix >= N || iz >= N) return false;
-      const k = iz * N + ix; if (banned.has(k)) return false;
-      let v = stand.get(k); if (v === undefined) { v = L.canStand(world, cx(ix), cx(iz), 0) ? 1 : 0; stand.set(k, v); }
-      return v === 1;
-    };
-    const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-    const edgeF = (ix, iz, d) => {
-      const k = (iz * N + ix) * 8 + d; let f = efs.get(k);
-      if (f === undefined) {
-        const [dx, dz] = DIRS[d], ax = cx(ix), az = cx(iz);
-        if (!isStand(ix + dx, iz + dz) || (dx && dz && (!isStand(ix + dx, iz) || !isStand(ix, iz + dz)))) f = 0;
-        else f = L.stepFactor(world, { x: ax, z: az, y: world.H(ax, az) }, cx(ix + dx), cx(iz + dz), 0);
-        efs.set(k, f);
-      }
-      return f;
-    };
-    const nearestCell = (x, z, rings = 4) => {
-      const ix = ci(x), iz = ci(z);
-      for (let r = 0; r <= rings; r++) {
-        let best = null, bd = 1e9;
-        for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) {
-          if (Math.max(Math.abs(a), Math.abs(b)) !== r) continue;
-          if (isStand(ix + a, iz + b)) { const d = Math.hypot(cx(ix + a) - x, cx(iz + b) - z); if (d < bd) { bd = d; best = [ix + a, iz + b]; } }
-        }
-        if (best) return best;
-      }
-      return null;
-    };
-    class Heap { constructor() { this.a = []; } get size() { return this.a.length; }
-      push(k, v) { const a = this.a; a.push([k, v]); let i = a.length - 1; while (i > 0) { const q = (i - 1) >> 1; if (a[q][0] <= a[i][0]) break; [a[q], a[i]] = [a[i], a[q]]; i = q; } }
-      pop() { const a = this.a, top = a[0], last = a.pop(); if (a.length) { a[0] = last; let i = 0; for (;;) { let l = 2 * i + 1, r = l + 1, m = i; if (l < a.length && a[l][0] < a[m][0]) m = l; if (r < a.length && a[r][0] < a[m][0]) m = r; if (m === i) break; [a[m], a[i]] = [a[i], a[m]]; i = m; } } return top; } }
-    // findPath(from, to) -> { pts: [{x,z}], cost } | null; cost in seconds-ish (distance / speed factor)
-    const findPath = (from, to, maxExp = 90000, retry = true) => {
-      const s = nearestCell(from.x, from.z, 6), g = nearestCell(to.x, to.z, 4);
-      if (!s || !g) { if (retry && banned.size) { banned.clear(); return findPath(from, to, maxExp, false); } return null; }
-      const gk = g[1] * N + g[0], sk = s[1] * N + s[0];
-      const gs = new Map([[sk, 0]]), came = new Map(), h = new Heap(), closed = new Set();
-      const hf = (ix, iz) => { const dx = Math.abs(ix - g[0]), dz = Math.abs(iz - g[1]); return (Math.max(dx, dz) + 0.414 * Math.min(dx, dz)) * C * 1.1; };
-      h.push(hf(s[0], s[1]), sk); let exp = 0, found = false;
-      while (h.size) {
-        const [, k] = h.pop(); if (closed.has(k)) continue; closed.add(k);
-        if (k === gk) { found = true; break; }
-        if (++exp > maxExp) break;
-        const ix = k % N, iz = (k - ix) / N, g0 = gs.get(k);
-        for (let d = 0; d < 8; d++) {
-          const f = edgeF(ix, iz, d); if (f <= 0.05) continue;
-          const nx = ix + DIRS[d][0], nz = iz + DIRS[d][1], nk = nz * N + nx; if (closed.has(nk) || banned.has(nk)) continue;
-          const ng = g0 + (d < 4 ? C : C * 1.414) / f;
-          if (ng < (gs.get(nk) ?? 1e18)) { gs.set(nk, ng); came.set(nk, k); h.push(ng + hf(nx, nz), nk); }
-        }
-      }
-      if (!found) { if (retry && banned.size) { banned.clear(); return findPath(from, to, maxExp, false); } return null; }
-      const pts = []; for (let k = gk; k !== undefined; k = came.get(k)) { const ix = k % N, iz = (k - ix) / N; pts.push({ x: cx(ix), z: cx(iz) }); }
-      pts.reverse(); return { pts, cost: gs.get(gk) };
-    };
+    // ---------- path finding on a grid of 1.5 m cells, with the game's own movement rules (src/game/path, moved there from this file in 0.28) ----------
+    const pth = L.createPath(world), banned = pth.banned;
+    const isStand = (ix, iz) => pth.isStand(ix, iz), nearestCell = (x, z, rings = 4) => pth.nearestCell(x, z, rings);
+    const findPath = (from, to, maxExp = 90000, retry = true) => pth.find(from, to, maxExp, retry);
     const pathCost = (x, z) => { const r = findPath(p, { x, z }); return r ? r.cost : Infinity; };
 
     // ---------- looking at the island (a player sees it; the bot reads the lists) ----------
@@ -218,7 +165,7 @@
             const e = { day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), y: +p.y.toFixed(2), goal: cur && cur.name, target: [+x.toFixed(1), +z.toFixed(1)], dist: +d.toFixed(1), n: stuckN, slope: +t.s.toFixed(2), river: t.inRiver, depth: +t.depth.toFixed(2), sea: +game.sea.toFixed(2), climb: +t.climb.toFixed(2), load: W.load() };
             M.stucks.push(e); if (M.stucks.length <= 3) shot('stuck-' + M.stucks.length, 'stuck at ' + e.x + ',' + e.z);
             // ban the cell ahead and plan again
-            const ahead = plan.pts[Math.min(pi + 1, plan.pts.length - 1)]; if (ahead) banned.add(ci(ahead.z) * N + ci(ahead.x));
+            const ahead = plan.pts[Math.min(pi + 1, plan.pts.length - 1)]; if (ahead) pth.ban(ahead.x, ahead.z);
             if (banned.size > 40) banned.clear();
             // steer by hand for a moment, like a player on a steep scramble: the free direction closest to the goal
             for (let i = 0; i < 20; i++) {
@@ -246,9 +193,9 @@
     const arcKinds = () => game.action().options.map(o => o.kind).join();
     function* act(kinds) {   // a short press of the action button if it would do one of kinds; returns the kind or null
       const a = game.action().tap; if (!a || (kinds && !kinds.includes(a.kind))) return null;
-      lastKind = a.kind; press(); yield; return a.kind;
+      lastKind0 = a.kind; press(); yield; return a.kind;
     }
-    function* useRow(kind) { lastKind = 'use:' + kind; const ok = game.use(kind, input); yield; return ok; }
+    function* useRow(kind) { lastKind0 = 'use:' + kind; const ok = game.use(kind, input); yield; return ok; }
 
     // ---------- counting piles ----------
     const pilesNear = (kind, x, z, r) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - x, q.z - z) <= r);
@@ -515,6 +462,7 @@
       sense();
       if (M.nextRt <= gt() && !busy() && !game.sleep.asleep) { rtPending = true; M.rtKind = 'awake'; }
       else if (!M.midSleepDone && game.sleep.asleep && game.sleep.lie >= 1 && (clock.total - (M.lastSleepStart || 0)) > 0.1) { rtPending = true; M.rtKind = 'asleep'; M.midSleepDone = true; }
+      if (mind) { mind.step(TICK); game.update(mind.input, TICK); return; }   // --mind: Dave looks after himself, the bot does nothing
       if (busy()) { game.update(input, TICK); return; }
       if (!cur) startGoal(pick());
       sinceCheck += TICK;
@@ -542,9 +490,10 @@
           if (wantShot) return 'shot';
           if (rtPending) return 'roundtrip';
         }
+        if (mind) M.mind = { goals: mind.stats.goals, stuck: mind.stats.stuck, nopath: mind.stats.nopath, idleSecs: +mind.stats.idleSecs.toFixed(0), lightRefused: mind.stats.lightRefused, gazes: mind.stats.gazes };
         return 'time';
       },
-      settle() { idleInput(); cur = null; if (!game.sleep.asleep) for (let i = 0; i < 20; i++) { game.update(input, TICK); } },
+      settle() { idleInput(); cur = null; if (!game.sleep.asleep) for (let i = 0; i < 20; i++) { game.update(mind ? mind.input : input, TICK); } },
       summary() {
         return { at: cur && cur.at, dbg: cur && cur.dbg, day: clock.day, time: +clock.time.toFixed(2), x: +p.x.toFixed(0), z: +p.z.toFixed(0), thirst: +game.thirst.days.toFixed(2), hunger: +game.hunger.days.toFixed(2), rest: +game.sleep.rest().toFixed(2), goal: cur && cur.name, carried: W.carried.length, nuts: game.shells.nuts, fibre: game.fibre.carried, fires: game.fire.fires.length, leantos: game.leantos.list.map(l => +l.progress.toFixed(2)), stucks: M.stucks.length, botErrors: M.botErrors.length, asleep: game.sleep.asleep };
       },

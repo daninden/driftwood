@@ -41,6 +41,15 @@
  *   direction on the island, relative to the view like the walking keys; null
  *   inside the dead zone; run past the run rim
  *
+ * QUIET (30): seconds without any input of the player before his habit takes over (0.28 "Habit", game/mind)
+ * createTakeover(after?) -> takeover   pure: the timer that hands the game to game/mind and back. main calls poke(t) for every input of the player (a key, a
+ *   click, a tap, the stick, the action button, an icon, a drawing of the row, and the camera: turn, tilt, zoom, pinch, twist; also a held key or a walk
+ *   target he is still following) and update(t, blocked?) once per frame; t is in seconds (any clock that only goes forward)
+ *   takeover.poke(t)           the player did something at t: the mind lets go at once
+ *   takeover.update(t, blocked?) -> true while the mind is in charge: no poke for `after` seconds and not `blocked` (the name question is open)
+ *   takeover.active()          the last answer of update
+ *   takeover.quietFor(t)       seconds since the last poke
+ *
  * createInput(element, pickGround, now?) -> input
  *   input: { up, down, left, right, run, stick, target, yaw }  read by game/game
  *     stick: { x, z } unit direction while the thumb stick is held (follows
@@ -97,6 +106,18 @@ export function stickIntent(dx, dy, radius, yaw = YAW) {
   if (!(f >= STICK_DEAD)) return null;
   const { cam, right } = basis(yaw), u = -dy / l, r = dx / l;   // up on the screen is away from the camera
   return { x: -cam.x * u + right.x * r, z: -cam.z * u + right.z * r, run: f > STICK_RUN };
+}
+
+export const QUIET = 30;
+
+export function createTakeover(after = QUIET, start = 0) {
+  let last = start, on = false;
+  return {
+    poke(t) { if (t > last) last = t; on = false; },
+    update(t, blocked = false) { on = !blocked && t - last >= after; return on; },
+    active: () => on,
+    quietFor: t => Math.max(0, t - last),
+  };
 }
 
 export function createInput(element, pickGround, now = () => performance.now()) {

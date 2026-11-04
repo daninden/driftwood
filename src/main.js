@@ -53,6 +53,13 @@
  * While it is visible the furthest zoom is 25 (core/view zoomMax), else 10; the
  * panel then shows `zoom N` when the zoom is beyond 10.
  *
+ * Habit (0.28, game/mind): after QUIET (30) seconds without any input (a key, a click or tap, the stick, the action button, an icon, the row, the camera: turn,
+ * tilt, zoom, pinch, twist; a held key or a walk target still being followed counts, a plain mouse move does not) the castaway looks after himself: each frame
+ * main hands game.update the mind's input object instead of the player's, and the mind steps first (`mind.step(dt)`). The game and the screen do not show it;
+ * the developer panel adds `habit`. Any input of the player takes the game back at once (`mind.release()`), the quiet time starts over, and a tab that comes
+ * back to the front starts it over too. The pacer counts his walking and working as something happening like the player's (isBusy gets the input in use).
+ * Test parameters do not switch it off. The headless hooks step/draw use the player's input only.
+ *
  * Frame pacing (render/framePacer): the loop runs at the screen's rate but
  * only updates and draws a frame when it is due: at most 30 a second on
  * touch-only devices (same test as the thumb stick), and at most 15 a second
@@ -72,7 +79,7 @@
  * While loading, the bar in #loader (index.html) shows how far it is
  * (core/loading); it fades out with the class `ready` on <body>.
  *
- * window.__driftwood exposes { world, game, view, input, ready, quality, sound, soundSwitch } for the smoke
+ * window.__driftwood exposes { world, game, view, input, mind, takeover, ready, quality, sound, soundSwitch } for the smoke
  * test (and `frames`, a read-only count of drawn frames, for checking the pacing), plus three hooks so it does not have to play in real time (a
  * headless browser without a GPU draws only a few frames per second):
  *   pause(on)              stop or restart drawing in the frame loop
@@ -85,8 +92,9 @@
 import { generateWorld } from './world/world.js';
 import { startSpot } from './world/spots.js';
 import { createIslandView } from './render/islandView.js';
-import { createGame } from './game/game.js';
-import { createInput } from './game/input.js';
+import { createGame, wantsToMove } from './game/game.js';
+import { createInput, createTakeover, QUIET } from './game/input.js';
+import { createMind } from './game/mind.js';
 import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
 import { createHungerMark } from './render/hungerMark.js';
@@ -178,6 +186,10 @@ async function boot() {
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
   input.yaw = view.yaw;
+  const mind = createMind(world, game), takeover = createTakeover(QUIET, performance.now() / 1000);   // 0.28 "Habit"
+  const poke = () => takeover.poke(performance.now() / 1000);   // the player did something
+  for (const type of ['pointerdown', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove', 'visibilitychange', 'focus']) window.addEventListener(type, poke, { capture: true, passive: true });
+  window.addEventListener('pointermove', e => { if (e.buttons > 0 || e.pointerType === 'touch') poke(); }, { capture: true, passive: true });   // a drag or a finger, not a mouse that only moves
 
   createThumbStick(document.getElementById('stick'), input);
   button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
@@ -207,7 +219,7 @@ async function boot() {
   }
   document.body.classList.add('ready');
   const governor = createGovernor({ level: start.level, adapt: start.adapt, touch, dpr });   // starts measuring now, the island has faded in
-  window.__driftwood = { world, game, view, input, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
+  window.__driftwood = { world, game, view, input, mind, takeover, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     requestAnimationFrame(frame);
     if (paused) { last = now; return; }
@@ -217,15 +229,21 @@ async function boot() {
     const real = (now - last) / 1000, dt = Math.max(0, Math.min(maxDt(idle), real)); last = now;
     const t0 = performance.now();
     view.setZoomMax(zoomMax(dev.visible()));
-    view.zoomBy(input.takeZoom());
-    view.turn(input.takeTurn(dt));
+    const zoomed = input.takeZoom(), turned = input.takeTurn(dt), nowS = now / 1000;
+    view.zoomBy(zoomed);
+    view.turn(turned);
     input.yaw = view.yaw;
-    const info = show(game.update(input, dt));
+    if (zoomed || turned.yaw || turned.pitch || wantsToMove(input) || input.pressing()) takeover.poke(nowS);   // camera input, a held key or a walk still going
+    const driving = takeover.update(nowS);
+    if (driving !== mind.active) { if (driving) mind.engage(); else mind.release(); dev.setHabit(driving); }
+    if (driving) { mind.input.yaw = view.yaw; mind.step(dt); }
+    const use = driving ? mind.input : input;   // whose hands the castaway has this frame
+    const info = show(game.update(use, dt));
     view.render(game.player, info, dt);
     if (sound.active) hear(info, dt);
     autosave(dt);
     frames++;
-    if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input })) quiet.poke(now);
+    if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input: use })) quiet.poke(now);
     dev.frame(real, performance.now() - t0, idle, view.zoom);
     const lower = governor.frame(real, idle, view.building);
     if (lower !== null) { view.setQuality(settingsFor(lower, { touch })); dev.setQuality(lower); if (!testing) saveLevel(lower); }

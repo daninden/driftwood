@@ -1,5 +1,6 @@
 // Playtest bot: plays the built game (dist/driftwood.html) in a real browser like a sensible player and logs how it went.
-// Run `npm run build` first. Usage: npm run playtest [-- --seed N] [--days D] [--out DIR] [--shots=0]
+// Run `npm run build` first. Usage: npm run playtest [-- --seed N] [--days D] [--out DIR] [--shots=0] [--mind]
+//   --mind: the bot does nothing; Dave's own habit (src/game/mind, 0.28) lives, with the same numbers reported (its own stuck and goal counts under Mind)
 //   no --seed: seeds 1337, 2024 and 7 one after the other; --days: game days per seed (default 10; a day is 20 minutes of play)
 // Tooling only (feature freeze): it changes no game code. The bot (scripts/playtest-bot.js, runs inside the page) walks with
 // input.target and Shift, presses the action button with input.actionStart/actionEnd, clicks the icons of the arc with input.choose, and uses the row
@@ -25,6 +26,7 @@ const seeds = opt('seed', '') ? String(opt('seed')).split(',').map(Number) : [13
 const DAYS = Number(opt('days', 10));
 const OUT = path.resolve(opt('out', 'playtest-out'));
 const SHOTS = opt('shots', '1') !== '0';
+const MIND = args.includes('--mind');
 const WALL_LIMIT = Number(opt('wall', 25)) * 60 * 1000;   // minutes of real time per seed
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -57,6 +59,7 @@ async function runSeed(seed) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   // pause drawing the moment the game object exists, so real time never moves the game
   await context.addInitScript(() => { let v; Object.defineProperty(window, '__driftwood', { configurable: true, get() { return v; }, set(x) { v = x; try { x.pause(true); } catch (e) { /* none */ } } }); });
+  if (MIND) await context.addInitScript(() => { window.__mindMode = true; });
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push('pageerror: ' + e.message));
@@ -151,6 +154,7 @@ function seedReport(r) {
   for (const s of m.sleeps) o.push(`| ${s.day} | ${s.t0} | ${s.x}, ${s.z} | ${s.reason} | ${s.hours ?? '?'} | ${s.restBefore} -> ${s.restAfter ?? '?'} | ${s.leanto} | ${s.fire} | ${(s.upgrades || []).join(',') || '-'} |`);
   o.push('', '## Save and load round trips', '', `${m.roundtrips.filter(x => x.ok).length} of ${m.roundtrips.length} matched.`);
   for (const rt of m.roundtrips.filter(x => !x.ok)) o.push(`- (${rt.kind}) day ${rt.day} t ${rt.time} at ${rt.x}, ${rt.z}: ${rt.diffs.join(' | ')}`);
+  if (m.mind) o.push('', '## Mind (--mind: the bot did nothing, Dave looked after himself)', '', `Goals started: ${JSON.stringify(m.mind.goals)}; stuck detections ${m.mind.stuck}; no path ${m.mind.nopath}; standing still ${m.mind.idleSecs} s; fire not offered to light ${m.mind.lightRefused}; evenings spent looking out ${m.mind.gazes}.`);
   o.push('', '## Stuck', '', m.stucks.length ? '' : 'none');
   for (const s of m.stucks.slice(0, 30)) o.push(`- day ${s.day} t ${s.time} at (${s.x}, ${s.z}, y ${s.y}) goal ${s.goal} -> ${s.target} (${s.dist} m away) n ${s.n}, slope ${s.slope}, river ${s.river} depth ${s.depth}, sea ${s.sea}, load ${s.load}`);
   o.push('', '## Errors', '', `Page errors and warnings: ${r.pageErrors.length}`); for (const e of [...new Set(r.pageErrors)].slice(0, 15)) o.push('- ' + e);
