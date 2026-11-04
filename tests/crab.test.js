@@ -169,6 +169,15 @@ describe('digging', () => {
 });
 
 describe('roasting', () => {
+  it('can be started from the row (game.use crab) only beside a fire with flames, also when not hungry', () => {
+    const g = fireScene({ crabs: 2, hunger: 0.1 });
+    expect(g.use('crab')).toBe(true); run(g, makeInput(), 0.1); expect(g.player.work && g.player.work.kind).toBe('roast');
+    run(g, makeInput(), ROAST_TIME + 0.3); expect(g.crabs.carried.length).toBe(1); expect(g.hunger.days).toBeLessThan(0.05); expect(g.hunger.days).toBeGreaterThanOrEqual(0);
+    expect(fireScene({ fuel: 0 }).use('crab')).toBe(false);
+    expect(fireScene({ fire: false }).use('crab')).toBe(false);
+    expect(fireScene({ crabs: 0 }).use('crab')).toBe(false);
+    const far = fireScene(); put(far, E.x - 4, E.z); expect(far.use('crab')).toBe(false); expect(far.player.work).toBeNull();
+  });
   it('is offered only beside a fire with flames, with a crab carried', () => {
     expect(E).toBeTruthy();
     expect(fireScene().action().tap).toMatchObject({ kind: 'roast' });

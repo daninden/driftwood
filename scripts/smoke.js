@@ -22,7 +22,7 @@
 // smoke-39 an upgraded lean-to (side walls, bed, stone fire ring) from the default view (also in the quick run), smoke-40 from the side, smoke-41 a dead frond and stones on the ground (also in the quick run), smoke-42 a frond and two stones carried, in the row (0.27 "Home").
 // smoke-30 wood out at low water on the wet strip, smoke-31 the same spot at high water (0.18).
 // smoke-37 beside the berry bush nearest the start, ripe berries on it and the berries icon on the button; after a press (not hungry) the handful in the row and the bush bare (0.26 "Inland", also in the quick run).
-// smoke-36 the row with a nut, an empty and a full half shell beside the fibre tuft (0.25, also in the quick run).
+// smoke-36 the row with a nut, an empty and a full half shell beside the fibre tuft (0.25, also in the quick run), smoke-36b the same with the pointer on the nut (0.27.2).
 // smoke-34 the dig icon beside a hole a crab fled into, smoke-35 the crab in the row and the roast icon beside a fire (0.22, both also in the quick run).
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
 // smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
@@ -248,6 +248,15 @@ console.log('shells', JSON.stringify(shells));
 if (shells.kept.length !== 1 || shells.kept[0] !== false) errors.push('did not keep the empty half shell after eating: ' + JSON.stringify(shells.kept));
 if (shells.row !== 3) errors.push('the row shows ' + shells.row + ' drawings for two shells and a nut, expected 3');
 await shot('smoke-36.png', { quick: true, settle: 400 });
+// Row (0.27.2): a real click on the full shell drawing drinks it (thirst down, shell empty) and does not walk him; hover shot of the row.
+await page.evaluate(() => { const { game, step } = window.__driftwood; game.thirst.days = 0.8; game.fire.torch = null; step(0.3); window.__driftwood.draw(); window.__rowAt = { x: game.player.x, z: game.player.z, full: game.shells.full(), nuts: game.shells.nuts }; });
+await page.hover('#carry svg[data-kind="nut"]');
+await shot('smoke-36b.png', { quick: true, settle: 400 });
+await page.click('#carry svg[data-kind="water"]');
+const row = await page.evaluate(() => { const { game, step } = window.__driftwood; step(0.2); const mid = game.player.work && game.player.work.kind; step(2.5); return { mid, full: game.shells.full(), thirst: game.thirst.days, moved: Math.hypot(game.player.x - window.__rowAt.x, game.player.z - window.__rowAt.z), target: !!window.__driftwood.input.target, before: window.__rowAt.full }; });
+console.log('row click', JSON.stringify(row));
+if (row.before !== 1 || row.mid !== 'sip' || row.full !== 0 || row.thirst > 0.4) errors.push('a click on the full shell in the row did not drink it: ' + JSON.stringify(row));
+if (row.moved > 0.05 || row.target) errors.push('a click on the row moved him or set a target: ' + JSON.stringify(row));
 await page.evaluate(() => { const s = window.__driftwood.game.shells; s.list.length = 0; s.nuts = 0; });
 
 // Inland (0.26): walk (teleport) to the berry bush nearest the start, see the berries icon, press the button (not hungry: the handful is carried, the bush is bare),

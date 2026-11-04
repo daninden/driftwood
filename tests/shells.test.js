@@ -261,3 +261,59 @@ describe('drawings', () => {
     for (const k of ['fill', 'sip']) expect(ICONS[ICON_OF[k]]).toBeTruthy();
   });
 });
+
+describe('using a drawing of the row (0.27.2 "Row": game.use)', () => {
+  const full = { full: [true], nuts: 0 };
+  it('eats a carried nut also when not hungry (EAT_TIME kneeling), never below zero hunger', () => {
+    const g = atE({ hunger: { days: 0.1 }, shells: { full: [], nuts: 2 } });
+    expect(g.use('nut')).toBe(true); run(g, makeInput(), 0.1); expect(g.player.work && g.player.work.kind).toBe('husk');
+    run(g, makeInput(), EAT_TIME - 0.6); expect(g.shells.nuts).toBe(2);
+    run(g, makeInput(), 0.8);
+    expect(g.shells.nuts).toBe(1); expect(g.hunger.days).toBeGreaterThanOrEqual(0); expect(g.hunger.days).toBeLessThan(0.05);
+    expect(g.shells.list).toEqual([false]);   // the half shell is kept
+  });
+  it('drinks a full shell also when not thirsty (SIP_TIME), thirst never below zero', () => {
+    const g = atE({ thirst: { days: 0.05 }, shells: full });
+    expect(g.use('water')).toBe(true); run(g, makeInput(), 0.1); expect(g.player.work && g.player.work.kind).toBe('sip');
+    run(g, makeInput(), SIP_TIME + 0.3);
+    expect(g.shells.list).toEqual([false]); expect(g.thirst.days).toBeGreaterThanOrEqual(0); expect(g.thirst.days).toBeLessThan(0.01);
+  });
+  it('drinks a full shell while thirsty: half a day less', () => {
+    const g = atE({ thirst: { days: 0.9 }, shells: full });
+    g.use('water'); run(g, makeInput(), SIP_TIME + 0.3);
+    expect(g.thirst.days).toBeCloseTo(0.9 - SIP_DRINK + 0, 1);
+  });
+  it('eats the oldest berries and a banana bunch at once, also when not hungry', () => {
+    const g = atE({ hunger: { days: 0.1 }, berries: { carried: [0.1, 0.2], picked: [] }, bananas: { carried: [0.1], picked: [] } });
+    const t0 = g.berries.carried[0], t1 = g.berries.carried[1];
+    expect(g.use('berries')).toBe(true); expect(g.berries.carried).toEqual([t1]); expect(g.hunger.days).toBe(0);
+    expect(g.use('banana')).toBe(false);   // still stooping from the first
+    run(g, makeInput(), 1);
+    expect(g.use('banana')).toBe(true); expect(g.bananas.carried.length).toBe(0); expect(t0).toBeLessThan(t1);
+  });
+  it('refuses what is not carried and unknown kinds', () => {
+    const g = atE({ hunger: { days: 2 } });
+    for (const k of ['nut', 'water', 'berries', 'banana', 'crab', 'branch', 'fibre', 'shell', 'stone']) expect(g.use(k)).toBe(false);
+    expect(g.player.work).toBeNull(); expect(g.hunger.days).toBeCloseTo(2, 1);
+    const h = atE({ shells: { full: [false], nuts: 0 } }); expect(h.use('shell')).toBe(false); expect(h.use('water')).toBe(false);
+  });
+  it('is refused with a torch in hand, in water, while kneeling and while asleep', () => {
+    const food = { shells: { full: [true], nuts: 1 }, hunger: { days: 1 } };
+    expect(atE({ ...food, fire: { torch: { left: TORCH_DAYS } } }).use('nut')).toBe(false);
+    const inWater = createGame(w, at(BANK.x, BANK.z), food);
+    if (terrainAt(w, BANK.x, BANK.z, inWater.sea).inRiver || terrainAt(w, BANK.x, BANK.z, inWater.sea).y < inWater.sea + 0.05) expect(inWater.use('nut')).toBe(false);
+    const g = atE(food); expect(g.use('nut')).toBe(true); expect(g.use('water')).toBe(false); expect(g.use('nut')).toBe(false);
+    const s = atE({ ...food, sleep: { awake: 0.1, asleep: true } }); if (s.sleep.asleep) expect(s.use('nut')).toBe(false);
+  });
+  it('works with wood under his arm, which stays there', () => {
+    const logs2 = logs.slice(0, 2).map(l => l.id);
+    const g = atE({ shells: { full: [true], nuts: 0 }, thirst: { days: 0.8 }, wood: { carried: logs2, piles: [] } });
+    expect(g.wood.carried.length).toBe(2);
+    expect(g.use('water')).toBe(true); run(g, makeInput(), SIP_TIME + 0.3);
+    expect(g.shells.list).toEqual([false]); expect(g.wood.carried.length).toBe(2);
+  });
+  it('is stopped by walking, and the nut is kept', () => {
+    const g = atE({ shells: { full: [], nuts: 1 } });
+    g.use('nut'); run(g, makeInput({ up: true }), 0.1); expect(g.player.work).toBeNull(); run(g, makeInput(), 3); expect(g.shells.nuts).toBe(1);
+  });
+});

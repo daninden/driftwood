@@ -30,7 +30,7 @@
  *
  * The moon mark #rest (render/restMark) shows how rested the castaway is;
  * next to it the drop #thirst (render/thirstMark, in #needs) shows how thirsty
- * he is and the half coconut #hunger (render/hungerMark) how hungry, and the row #carry (render/carryMark) what he carries loose.
+ * he is and the half coconut #hunger (render/hungerMark) how hungry, and the row #carry (render/carryMark) what he carries loose (its nut, full shell, berries, banana and crab drawings can be clicked to use them, game.use, 0.27.2).
  * All ink marks take their colour from `--ink` on <html>, which render/ink
  * turns pale at night (from sky.day).
  *
@@ -142,7 +142,7 @@ async function boot() {
   const mark = createRestMark(document.getElementById('rest'));
   const drop = createThirstMark(document.getElementById('thirst'));
   const half = createHungerMark(document.getElementById('hunger'));
-  const carry = createCarryMark(document.getElementById('carry'));
+  const carry = createCarryMark(document.getElementById('carry'), kind => game.use(kind, input));   // a click on a drawing uses it (0.27.2)
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
   dev.setQuality(start.level);
   const who = createDayLine(document.getElementById('who')), wakes = createWakeLine(document.getElementById('wake'));

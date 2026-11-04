@@ -15,6 +15,8 @@
  * ITEMS                       the item keys in the order they are drawn
  * DRAWINGS                    the inner SVG of each item, in a 0 0 20 26 box (the action button reuses the fibre)
  * REST_OPACITY, PEAK_OPACITY, HOLD, EASE   the opacity curve (seconds)
+ * USABLE                     the kinds that can be clicked or tapped to use them (0.27.2 "Row"): nut, water, berries, banana, crab
+ * isUsable(kind) -> bool      pure. Wood, branches, fronds, stones, fibre and empty shells are not usable
  * carryItems(state) -> [key]  one key per thing carried, e.g. { fibre: 2 } -> ['fibre', 'fibre']. Pure.
  * carryChanged(a, b) -> bool  true when the counts differ. Pure.
  * carryOpacity(since) -> 0..1 opacity `since` seconds after the last change. Pure.
@@ -71,10 +73,12 @@ export const DRAWINGS = {
   water: SHELL_FULL,
   fibre: '<path d="M10 20C8 14 4.5 10 3 5.5"/><path d="M10 20C9.5 14 8 9 7.5 3.5"/><path d="M10 20C10.5 13 11.5 9 12.5 3"/><path d="M10 20C12 14 15 10 17 6"/><path d="M10 20C11 16 14 14 16 12.5"/><path d="M8.2 19.6L11.8 21.4M8.4 21.6L11.6 23.4"/>',
 };
-const svg = key => `<svg viewBox="0 0 20 26" aria-hidden="true">${DRAWINGS[key]}</svg>`;
+export const USABLE = Object.freeze(['nut', 'water', 'berries', 'banana', 'crab']);
+export const isUsable = key => USABLE.includes(key);
+const svg = key => `<svg viewBox="0 0 20 26" aria-hidden="true" data-kind="${key}"${isUsable(key) ? ' class="use"' : ''}>${DRAWINGS[key]}</svg>`;
 
-export function createCarryMark(el) {
-  let prev = null, changedAt = -Infinity, html = null, shown = '';
+export function createCarryMark(el, onUse) {
+  let prev = null, changedAt = -Infinity, html = null, shown = '', lastNow = 0;
   function update(state, now) {
     if (!el) return;
     if (prev && carryChanged(prev, state)) changedAt = now;
@@ -83,6 +87,17 @@ export function createCarryMark(el) {
     if (h !== html) { html = h; el.innerHTML = h; }
     const o = carryOpacity(now - changedAt).toFixed(2);
     if (o !== shown) { shown = o; el.style.opacity = o; }
+  }
+  if (el && onUse && el.addEventListener) {
+    const stop = e => e.stopPropagation();
+    for (const type of ['pointerdown', 'pointermove', 'mousedown', 'touchstart']) el.addEventListener(type, stop);
+    el.addEventListener('pointerup', e => {
+      e.stopPropagation(); e.preventDefault();
+      const s = e.target && e.target.closest ? e.target.closest('svg[data-kind]') : null;
+      if (!s || !isUsable(s.dataset.kind)) return;
+      changedAt = lastNow;
+      if (!onUse(s.dataset.kind)) { s.classList.remove('no'); void s.getBoundingClientRect(); s.classList.add('no'); }
+    });
   }
   return { update };
 }

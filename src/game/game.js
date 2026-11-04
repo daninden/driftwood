@@ -72,6 +72,10 @@
  *   the nut, wood and the rest. With empty hands and nothing near, after the full-shell sip: 'eatBerries' (a carried handful, when hunger is above EAT_AT), then 'eatBanana', then the carried nut:
  *   what spoils first is eaten first. Carried berries spoil after a day, a bunch after 3 days (game/forage).
  *   Finishing a husk (on the ground or carried) also keeps the empty half shell (game/shells keep, at most 2).
+ *   game.use(kind, input?) -> bool   0.27.2 "Row": a click on a drawing in the inventory row (render/carryMark) uses it at once. kind 'nut' (eaten, EAT_TIME kneeling),
+ *     'water' (a full shell drunk, SIP_TIME), 'berries' / 'banana' (the oldest eaten at once) and 'crab' (roasted and eaten, only beside a fire with flames): all also
+ *     when not hungry or thirsty (never below 0). false and nothing changes when asleep or lying down, already kneeling or stooping, with a torch in hand, in water, with
+ *     nothing of that kind, or a crab without a fire. Wood under his arm stays where it is (eating and drinking need no free hands, unlike the action button's sip).
  *   game.action() -> { tap, hold }   pure: what a short press and what a hold
  *     of the button would do for what he stands beside (the renderer draws the
  *     icon from it). Each is null or { kind, ... }. tap kinds, in the order of
@@ -180,7 +184,7 @@ export function createGame(world, spawn, opts = {}) {
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, shells, berries, bananas, wildlife, fireflies, weather, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, shells, berries, bananas, wildlife, fireflies, weather, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, use };
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
@@ -308,6 +312,26 @@ export function createGame(world, spawn, opts = {}) {
       for (const [kind, n] of Object.entries(per)) { let need = n; for (const q of pilesOf(kind)) { if (need <= 0) break; need -= wood.consume(q, Math.min(need, q.logs.length)).length; } }
       wk.paid++;
     }
+    return true;
+  }
+
+  /** 0.27.2 'Row': use a drawing of the inventory row at once. kind: 'nut' | 'water' | 'berries' | 'banana' | 'crab'. Returns true when it was started
+   *  (a nut, water and a crab kneel; berries and a banana are eaten at once), false when nothing happened. Hunger and thirst never go below 0,
+   *  and it works when not hungry or thirsty (the player chooses). Refused asleep or lying down, kneeling already, stooping, with a torch in hand and in water.
+   *  Wood under his arm stays there (eating needs no free hands). A crab needs a fire with flames beside him (BESIDE). */
+  function use(kind, input) {
+    if (sleep.asleep || sleep.lie > 0 || work || queued || player.stoop > 0 || fire.torch || wet(here())) return false;
+    if (kind === 'nut') { if (!shells.nuts) return false; work = { kind: 'husk', t: 0, dur: EAT_TIME, thing: null }; }
+    else if (kind === 'water') { if (!shells.full()) return false; work = { kind: 'sip', t: 0, dur: SIP_TIME, thing: null }; }
+    else if (kind === 'berries' || kind === 'banana') {
+      if (!(kind === 'berries' ? berries : bananas).eat()) return false;
+      hunger.eat(kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); stoop();
+    } else if (kind === 'crab') {
+      const f = crabs.carried.length ? fire.find(player.x, player.z, BESIDE, 'fire') : null;
+      if (!f || !(fire.strength(f.fire) > 0)) return false;
+      work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: f.fire }; face(f);
+    } else return false;
+    if (input && input.clearTarget) input.clearTarget();
     return true;
   }
 

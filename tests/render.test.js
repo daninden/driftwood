@@ -6,7 +6,7 @@ import { flameWorld, FLAME_LOCAL } from '../src/render/fire.js';
 import { SIL_OPACITY, LEAN, HANG } from '../src/render/hero.js';
 import { printAlpha, MAX, FADE } from '../src/render/footprints.js';
 import { moonPath, markOpacity, CLEAR_BELOW } from '../src/render/restMark.js';
-import { carryItems, carryChanged, carryOpacity, createCarryMark, DRAWINGS, ITEMS, REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
+import { carryItems, carryChanged, carryOpacity, createCarryMark, isUsable, USABLE, DRAWINGS, ITEMS, REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 import { foamWeights, FOAM_LEVELS } from '../src/render/water.js';
 
 describe('silhouette', () => {
@@ -63,6 +63,15 @@ describe('rest mark', () => {
 });
 
 describe('carry mark', () => {
+  it('gives every drawing its item kind and makes only nut, water, berries, banana and crab usable (0.27.2)', () => {
+    const el = { style: {}, innerHTML: '' };
+    createCarryMark(el).update({ fibre: 1, driftwood: 1, nut: 2, water: 1, shell: 1, berries: 1, banana: 1, crab: 1, stone: 1 }, 0);
+    expect([...el.innerHTML.matchAll(/data-kind="([a-z]+)"/g)].map(m => m[1])).toEqual(['fibre', 'driftwood', 'stone', 'crab', 'berries', 'banana', 'nut', 'nut', 'shell', 'water']);
+    expect((el.innerHTML.match(/class="use"/g) || []).length).toBe(6);
+    for (const k of ['nut', 'water', 'berries', 'banana', 'crab']) expect(isUsable(k)).toBe(true);
+    for (const k of ['fibre', 'driftwood', 'branch', 'frond', 'stone', 'shell']) expect(isUsable(k)).toBe(false);
+    expect(USABLE.every(k => ITEMS.includes(k))).toBe(true);
+  });
   it('draws one tuft per tuft carried, and nothing when nothing is carried', () => {
     for (let n = 0; n <= 3; n++) expect(carryItems({ fibre: n })).toEqual(Array(n).fill('fibre'));
     expect(carryItems({})).toEqual([]);

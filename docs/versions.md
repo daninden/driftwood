@@ -2,6 +2,12 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.27.2 "Row" — 2026-11-04
+
+- The drawings in the inventory row can be clicked or tapped to use them at once (`game.use(kind)`, pure; `isUsable` and `data-kind` in `render/carryMark`): a coconut is eaten (2 s), a full shell drunk (1.5 s, half a day of thirst less), berries or a banana bunch eaten (the oldest first), each also when he is not hungry or thirsty; a crab is roasted and eaten beside a fire with flames. Wood under the arm may stay there. Refused (the drawing gives a small shake) when asleep, kneeling or busy, with a torch in hand, in water, or for a crab without a fire. Wood, branches, fronds, stones, fibre and empty shells are not clickable.
+- Feel: on a mouse a usable drawing turns clear on hover and the pointer becomes a hand; on touch its tap area is larger than the drawing. A click on the row never reaches the world or the action button. The row drawings now rest at opacity 0.85.
+- Tests: `tests/shells.test.js`, `tests/crab.test.js`, `tests/render.test.js`; the smoke test clicks a full shell in the row (it is drunk and he does not move; smoke-36b). 821 tests in all.
+
 ## 0.27.1 "Husk" — 2026-11-04
 
 - Fix: fibre no longer depends on hunger. At a coconut on the ground a short press always husks it (4 s) and gives a tuft when there is room; then he eats the nut when hunger is above half a day, or else carries the husked nut (at most 2; with 2 carried he eats it). In 0.25 a player who was not hungry and had a tuft picked nuts up whole and could not gather more fibre.
