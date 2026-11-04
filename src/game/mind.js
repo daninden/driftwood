@@ -12,7 +12,7 @@
  *   1 drink   thirst >= THIRST_GO (0.8 days): a full shell is drunk, else he walks to the nearest known fresh river water and kneels;
  *             when empty shells are with him and the river is near (NEAR_WATER 40 m) and thirst >= THIRST_TOPUP (0.4), he goes to fill them too
  *   2 eat     hunger >= HUNGER_GO (1 day): berries, a banana bunch, a carried nut (the row), else the nearest known food by the way
- *             there (nut on the ground, bearing berry bush, banana plant), a carried crab roasted beside a fire, a crab he stands at a hole of dug for
+ *             there (nut on the ground, bearing berry bush, banana plant), a carried crab roasted beside a fire, a crab dug for when he happens to stand at a hole it fled into
  *   3 sleep   once he may lie down (half a day awake) and it is night (from BED_FROM 0.87 to DAWN 0.17) or he is tired (awake >= TIRED_GO 1.5 days):
  *             he walks home (his lean-to; else his fire; else where he last slept; else where he was when the mind took over) and lies down
  *   4 fire    in the evening (EVENING 0.6 to BED_FROM): dry driftwood (else branches) to a pile at the fire spot at home, enough for WOOD_WANT (6) pieces of
@@ -37,7 +37,9 @@
  *                     A kneeling job already begun is left to finish (the player's own input stops it as usual)
  *   mind.step(dt)     once per game.update while in charge, before it: decides and fills mind.input
  *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set)
- *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, gazes, events: [..] } for tests and the developer panel
+ *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, gazes, events: [..] } for tests and the playtest bot
+ *   mind.chose()      true while a sleep he chose himself is being started (the tests tell it from a collapse); mind.lastKind() the kind of the last button he used; mind.path the path finder
+ *   opts.stream       a number to vary the chance (default 0)
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
@@ -236,7 +238,7 @@ export function createMind(world, game, opts = {}) {
           stuckN++; stats.stuck++; ev('stuck', { goal: cur && cur.name, to: [+x.toFixed(1), +z.toFixed(1)], dist: +d.toFixed(1), n: stuckN });
           const ahead = plan.pts[Math.min(pi + 1, plan.pts.length - 1)]; if (ahead) path.ban(ahead.x, ahead.z);
           if (path.banned.size > 40) path.banned.clear();
-          for (let i = 0; i < 20; i++) {   // steer by hand for a moment: the free direction closest to the goal, over known ground
+          for (const t0 = now; now - t0 < 1.5;) {   // steer by hand for a moment: the free direction closest to the goal, over known ground
             const gx = x - p.x, gz = z - p.z, gl = Math.hypot(gx, gz) || 1; let bu = null, bs = -2;
             for (let a = 0; a < 24; a++) {
               const ang = a * Math.PI / 12, ux = Math.sin(ang), uz = Math.cos(ang);

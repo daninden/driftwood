@@ -46,7 +46,7 @@
  *   game.berries                the berry bushes picked and the handfuls he carries (game/forage, 0.26)
  *   game.bananas                the banana plants picked and the bunch he carries (game/forage, 0.26)
  *   game.known                  the part of the island he has been to: cells of 10 m marked within 20 m of where he walked (game/known, 0.28 "Habit"). update() marks
- *                               the cells round him as he walks, unless the input says `learns: false` (game/mind walks him only over ground he knows; then only his own cell). A game
+ *                               the cells round him in every frame in which he moves, unless the input says `learns: false` (game/mind walks him only over ground he knows; then only his own cell). A game
  *                               without a saved memory starts with the area round where he stands known
  *   game.wildlife               crabs, fish and birds within 30 m of him: atmosphere only, not saved (game/wildlife)
  *   game.fireflies              the fireflies within 30 m of him, from dusk to an hour before sunrise: atmosphere only, not saved (game/fireflies)
@@ -515,7 +515,7 @@ export function createGame(world, spawn, opts = {}) {
         if (res.blocked && input.target) { blockedFor += dt; if (blockedFor > 0.5) input.clearTarget(); } else blockedFor = 0;
       }
     }
-    known.visit(player.x, player.z, input.learns === false ? 0 : undefined);   // what he walks past he knows (the mind learns nothing new)
+    if (res.moved) known.visit(player.x, player.z, input.learns === false ? 0 : undefined);   // what he walks past he knows (only when he moved: a frame of standing, or a reload, teaches nothing; the mind learns no new ground)
     breath.update(dt, ran, res.moved, strain); player.running = ran; player.winded = breath.winded;
     player.work = work ? { kind: work.kind, f: Math.min(1, work.t / work.dur) } : null;
     if (fire.torch && here().depth > DOUSE_DEPTH) fire.douse();   // wading too deep puts the torch out

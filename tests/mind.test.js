@@ -137,3 +137,16 @@ describe('the mind with a game', () => {
     expect(acted).toBe(false); expect(woke).toBe(false);
   });
 });
+
+describe('what teaches him ground', () => {
+  it('only a frame in which he moves does: standing still, or a reload, learns nothing', () => {
+    const g = createGame(w, spawn), n0 = g.known.count, still = { up: false, down: false, left: false, right: false, run: false, target: null, clearTarget() { this.target = null; } };
+    for (let t = 0; t < 5; t += 0.1) g.update(still, 0.1);
+    expect(g.known.count).toBe(n0);
+    // he is put at the edge of what he knows (a save made by the habit), and the player's first frames, standing, learn nothing
+    const edge = { x: spawn.x + 14, z: spawn.z }, saved = { ...g.state(), player: { x: edge.x, z: edge.z, heading: 0 } };
+    const back = createGame(w, spawn, saved), n1 = back.known.count;
+    back.update(still, 0); back.update(still, 0.1);
+    expect(back.known.count).toBe(n1);
+  });
+});

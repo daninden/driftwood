@@ -2,6 +2,18 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.28 "Habit" — 2026-11-04
+
+Dave looks after himself when he is left alone (agreed the same day, option B: he does the ordinary, the player the special).
+
+- After 30 s without any input (keys, clicks, taps, stick, action button, icons, the row, and camera turn, tilt, zoom, pinch, twist) the castaway takes care of ordinary life: he drinks at the river when thirsty (0.8 days) and fills his shells, eats when hungry (1 day) what he carries and then the nearest food he knows, goes home and sleeps at night or when tired, brings dry wood to a pile in the evening, lights it from 0.74 with fibre and feeds the fire, keeps nuts and fibre by day, stands still 5 to 20 s after each task and looks out over the shore at sunset. Any input of the player takes him back at once; 30 quiet seconds later he takes over again. Nothing shows in the game (no message, no icon); the developer panel adds `habit`.
+- It adds no game rule: `game/mind` fills an input-like object (a walk target, the action button, the icons of the arc by kind, Z, the row) that `main` hands `game.update` while the player is quiet. He never builds or upgrades, never explores, never wakes himself from sleep, writes no lines and has no new pose.
+- Only known ground: `game/known` remembers the island in cells of 10 m, known within 20 m of where the player walked him (the habit's own steps teach nothing, so it cannot creep outwards); saved as the optional field `known` (older saves load without it and count the ground round him as known). His targets and paths stay in known cells, 1.5 m inside their edge.
+- `game/path` (new): the bot's path finding (A* over 1.5 m cells with `canStand` and `stepFactor`) moved into the game; the playtest bot uses it too, and starts a path at a cell he can step to. `game/input` `createTakeover` is the pure 30 s timer.
+- Playtest: `npm run playtest -- --mind` lets Dave live through the days while the bot does nothing, with the same numbers.
+- Measured, ten days alone from a new game (`tests/mindLife*.test.js`): with the ground a first day would have shown him, seed 1337: thirst at most 0.89 days, hunger 2.79, every night lain down by himself, 2 by a fire; seed 2024: 0.96 and 1.07, 7 nights by a fire; seed 7: 1.54 and 1.73, no collapse (the water lies up a steep scramble where he often stands still on the way); seed 11: 1.35 and 1.17, 1 collapse. With only the 20 m round the start known he finds no water on most islands and collapses of thirst again and again (a design question, see `docs/design.md`).
+- Tests: `tests/known.test.js`, `tests/path.test.js`, `tests/mind.test.js` (new), `tests/mindLife1337.test.js`, `mindLife2024.test.js`, `mindLife7.test.js` (new, Dave alone for ten days), save tests for `known`, dev panel `habit`.
+
 ## 0.27.8 "Bundle" — 2026-11-04
 
 Fewer draw calls, preventively for weaker laptops; the look is unchanged (the 44 smoke screenshots match the old build pixel for pixel apart from fire and water flicker).

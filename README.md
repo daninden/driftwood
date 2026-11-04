@@ -47,6 +47,12 @@ Clicking or tapping only walks. Click the ground and he walks there; click a pie
 
 A press does the obvious small thing for what you stand beside: what is in your hands decides first, then what is nearest, and laying down comes last. When more than one thing can be done, up to three smaller drawings appear in an arc above the ring (a drink at the water next to a pile, say): click or tap one, or press **1**, **2** or **3** (left to right), to do that instead. The big things are only ever in the arc, so a press never starts them by accident: a flame to light a pile of wood, a small lean-to to build one, the drawing of an upgrade, and a crescent moon to lie down and sleep. Nothing appears when there is only one thing to do. There is no long press. Pressing the button also wakes you.
 
+### Leaving Dave alone
+
+Do nothing for half a minute (no key, click or tap, and no turning, tilting or zooming of the view) and Dave looks after himself, the way he would on any ordinary day. He walks to the river and drinks when he is thirsty and fills his shells, eats a coconut, berries or a banana when he is hungry, brings driftwood to a pile at home in the afternoon, lights it in the evening if he has a tuft of fibre and keeps the fire going, goes home to his lean-to or his fire and lies down to sleep at night, and in between he just stands still for a while, and now and then at sunset he walks to the shore and looks out. Nothing on the screen tells you; you just see him go about his day.
+
+The moment you touch anything he is yours again, and half a minute of quiet later he takes over once more. He only goes to places where he has been (the island is remembered in coarse squares round everywhere you walked him), so he never wanders off into the unknown, and he never builds anything: the lean-to, its upgrades, finding new water and food, and exploring are still yours. He does what he can: with no water or food he knows, he simply waits.
+
 ### The island
 
 You are alone. The island rises in terraces, divided by rock walls. A wall stops you, but nature leaves passages: a scree slope, a ravine, rock benches, roots and lianas in the rain forest, or a mossy route beside a waterfall. Nothing marks them; look for loose stones, bare ground and moss. Tree trunks, big boulders and the open sea stop you too. Bushes only slow you down.
@@ -162,6 +168,7 @@ On a slow computer the game lowers the quality of its shadows (and, as a last st
 ## Controls
 
 - **W A S D** or arrow keys: walk; **Shift**: run, but only for a short while: after about twelve seconds he is out of breath and walks until he has recovered (sooner when he is tired, thirsty, hungry or loaded)
+- **Leave it alone** for half a minute and Dave looks after himself (see *Leaving Dave alone*); any key, click, tap or camera move gives him back to you at once
 - **Click or tap** the ground to walk there; double tap to run (he gets out of breath like this too). Clicking or tapping a thing (driftwood, a branch, a pile, a coconut, a fire, a torch in the ground) walks to beside it and does nothing else
 - **Click or tap a drawing in the row** next to the moon to use it at once: a coconut is eaten (about two seconds), a full shell is drunk, berries and a banana bunch are eaten, and a crab is roasted and eaten beside a fire with flames. You choose, so you can eat or drink even when you are not hungry or thirsty. Wood, branches, fronds, stones, fibre and empty shells cannot be used this way. If it cannot be done now (no fire for the crab, you are in the water, holding a torch, busy or asleep), nothing happens and the drawing gives a small shake. Clicking the row never makes him walk.
 - **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A press picks up, lays down, husks a coconut (and eats it when you are hungry), eats a carried one, digs for a crab, roasts and eats one, picks up a branch, a frond or a stone, feeds a fire, takes or sticks a torch, or drinks, fills a shell or drinks from one, picks berries or bananas or eats them, whatever the drawing in the ring shows
