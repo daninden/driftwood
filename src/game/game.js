@@ -24,6 +24,7 @@
  *     lie: 0..1 lying down to sleep (game/sleep); tired: 0..1;
      thirsty: 0..1 how thirsty (game/thirst level)
  *     hungry: 0..1 how hungry (game/hunger level)
+ *     running: true while he runs this frame; winded: true while he is out of breath (game/breath; for the footsteps and the panting)
  *     work: null, or { kind: 'husk' | 'drill', f: 0..1 } while kneeling to
  *     husk a coconut (HUSK_TIME) or to drill fire (game/fire DRILL_TIME); 0.22: 'dig' (DIG_TIME) and 'roast' (ROAST_TIME) too
  *     torch: true while he carries a burning torch (game/fire)
@@ -36,6 +37,7 @@
  *   game.fire                   fires, burnt places and failed attempts (game/fire)
  *   game.thirst                 days since he drank (game/thirst)
  *   game.hunger                 days since he ate (game/hunger)
+ *   game.breath                 how long he can still run (game/breath); out of breath he walks even when run is asked
  *   game.crabs                  the crabs he carries and the caught ones missing from their colonies (game/crabs, 0.22)
  *   game.wildlife               crabs, fish and birds within 30 m of him: atmosphere only, not saved (game/wildlife)
  *   game.fireflies              the fireflies within 30 m of him, from dusk to an hour before sunrise: atmosphere only, not saved (game/fireflies)
@@ -109,7 +111,7 @@
  *   for 'husk' (he eats it); the tuft comes only when there is room for it (game/fibre husk).
  *
  * Depends on: game/movement, game/clock, game/wood, game/branches, game/leanto, game/tide, game/sleep,
- *   game/fibre, game/fire, game/thirst, game/hunger, game/crabs, game/water, game/wildlife, game/fireflies, game/weather
+ *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/water, game/wildlife, game/fireflies, game/weather
  */
 import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable, weariStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
@@ -122,6 +124,7 @@ import { createLeantos, siteFor, NEED, BUILD_TIME, BUILD_COST, REACH as LEANTO_R
 import { YAW } from '../core/view.js';
 import { createThirst } from './thirst.js';
 import { createHunger } from './hunger.js';
+import { createBreath } from './breath.js';
 import { createCrabs, DIG_TIME, ROAST_TIME, CRAB_FOOD } from './crabs.js';
 import { findWater } from './water.js';
 import { createWildlife } from './wildlife.js';
@@ -148,11 +151,11 @@ export function createGame(world, spawn, opts = {}) {
   const clock = createClock(opts.time, opts.day);
   const saved = opts.player && nearestStandable(world, opts.player.x, opts.player.z, seaLevel(clock.total));
   const player = createPlayer(saved ? { x: saved.x, z: saved.z, y: world.H(saved.x, saved.z) } : spawn), branches = createBranches(world, opts.branches), wood = createWood(world, opts.wood, branches), leantos = createLeantos(world, opts.leantos), sleep = createSleep(opts.sleep);
-  const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger), crabs = createCrabs(world.seed, opts.crabs);
+  const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger), breath = createBreath(), crabs = createCrabs(world.seed, opts.crabs);
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, leantos, fire, thirst, hunger, crabs, wildlife, fireflies, weather, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, leantos, fire, thirst, hunger, breath, crabs, wildlife, fireflies, weather, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action };
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
@@ -331,7 +334,7 @@ export function createGame(world, spawn, opts = {}) {
     if (work && (sleep.asleep || wantsToMove(input))) work = null;   // stopped early
     if (queued && (sleep.asleep || wantsToMove(input))) queued = null;
 
-    let res;
+    let res, ran = false, strain = 1;   // ran: he ran this frame (game/breath)
     if (sleep.asleep || sleep.lie > 0) {
       queued = null;
       if (input.target) input.clearTarget();
@@ -371,10 +374,13 @@ export function createGame(world, spawn, opts = {}) {
         if (!dir && input.target) input.clearTarget();
         const needs = sleep.speed() * thirst.speed() * hunger.speed();
         const load = (1 - CARRY_SLOW * wood.carried.length) * needs;
-        res = stepPlayer(world, player, dir, dt, input.run || !!(input.target && input.target.run), load, game.sea, (1 - CARRY_STRIDE * wood.carried.length) * weariStride(needs));
+        const wantRun = !!dir && (input.run || !!(input.target && input.target.run)), run = wantRun && breath.canRun();   // out of breath he walks
+        res = stepPlayer(world, player, dir, dt, run, load, game.sea, (1 - CARRY_STRIDE * wood.carried.length) * weariStride(needs) * (run ? breath.stride() : 1));
+        ran = run && res.moved; strain = load;
         if (res.blocked && input.target) { blockedFor += dt; if (blockedFor > 0.5) input.clearTarget(); } else blockedFor = 0;
       }
     }
+    breath.update(dt, ran, res.moved, strain); player.running = ran; player.winded = breath.winded;
     player.work = work ? { kind: work.kind, f: Math.min(1, work.t / work.dur) } : null;
     if (fire.torch && here().depth > DOUSE_DEPTH) fire.douse();   // wading too deep puts the torch out
     player.torch = !!fire.torch;

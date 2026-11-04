@@ -84,10 +84,10 @@ describe('moveIntent', () => {
 });
 
 describe('speed', () => {
-  it('keeps walking unhurried and running a calm trot', () => {
+  it('keeps walking unhurried and running faster (short, see game/breath)', () => {
     expect(WALK_SPEED).toBeLessThanOrEqual(3);
     expect(RUN_SPEED).toBeGreaterThan(WALK_SPEED);
-    expect(RUN_SPEED).toBeLessThanOrEqual(WALK_SPEED * 1.4);
+    expect(RUN_SPEED).toBe(5.5);
   });
   it('covers the walk speed on open beach', () => {
     const s = startSpot(w);

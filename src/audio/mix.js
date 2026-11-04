@@ -30,9 +30,10 @@
  * hissLevel(d) -> 0..1 how loud a fire put out by the rain d metres away is heard (0 beyond HISS_REACH)
  * mixOf(s) -> { surf, river, wind, rustle, howl, fire, crickets, gulls, rain }   the targets, each { gain, ... }
  *   (s.rain: the intensity 0..1, s.covered: standing under a lean-to; both optional)
- * createMixer(world) -> { update(s, dt) -> { levels, steps, work, hisses }, reset() }   remembers the walk phase and
+ * createMixer(world) -> { update(s, dt) -> { levels, steps, work, hisses, pant }, reset() }   remembers the walk phase and
  *   looks round him only about four times a second (or when he has gone a few metres); hisses: [gain] for each fire the
- *   rain put out since the last call (s.fire.hissed counted up, heard from s.fire.hissAt; none on the first call)
+ *   rain put out since the last call (s.fire.hissed counted up, heard from s.fire.hissAt; none on the first call);
+ *   pant: LEVELS.pant while he is out of breath (player.winded, game/breath), else 0; a run (player.running) is a louder step
  *
  * Depends on: core/math, render/wind, render/water (breath), world/constants
  */
@@ -42,7 +43,7 @@ import { breath } from '../render/water.js';
 import { HALF, T, NT } from '../world/constants.js';
 
 export const MASTER = 0.5;
-export const LEVELS = { surf: 0.34, river: 0.17, wind: 0.14, rustle: 0.07, howl: 0.05, fire: 0.15, crickets: 0.06, gulls: 0.08, steps: 0.2, work: 0.22, rain: 0.16, hiss: 0.3 };
+export const LEVELS = { surf: 0.34, river: 0.17, wind: 0.14, rustle: 0.07, howl: 0.05, fire: 0.15, crickets: 0.06, gulls: 0.08, steps: 0.2, work: 0.22, rain: 0.16, hiss: 0.3, pant: 0.05 };
 
 export const COAST_REACH = 100, RIVER_REACH = 12, FIRE_REACH = 15, GULL_REACH = 30, HISS_REACH = 30;
 export const ROOF_MUFFLE = 0.45;   // under a lean-to the rain is this much of its loudness, and darker
@@ -114,7 +115,7 @@ export const stepsCrossed = (prev, phase) => prev === null ? 0 : Math.min(2, Mat
 
 /** One footstep: heavier (lower, longer, louder) with weariness, thirst, hunger and a load; a run is louder. */
 export function stepOf(ground, p, carried = 0) {
-  const heavy = clamp(Math.max(p.tired || 0, p.thirsty || 0, p.hungry || 0) * 0.8 + 0.07 * carried, 0, 1), run = (p.speed || 0) > 3.3;
+  const heavy = clamp(Math.max(p.tired || 0, p.thirsty || 0, p.hungry || 0) * 0.8 + 0.07 * carried, 0, 1), run = !!p.running || (p.speed || 0) > 3.3;
   return { ground, gain: LEVELS.steps * (run ? 1.3 : 1) * (1 + 0.5 * heavy), heavy, run };
 }
 
@@ -163,7 +164,7 @@ export function createMixer(world) {
     const steps = [], n = p.moving ? stepsCrossed(prevPhase, p.phase) : 0;
     for (let i = 0; i < n; i++) steps.push(stepOf(groundOf(s.terrain, s.sea), p, s.carried || 0));
     prevPhase = p.phase;
-    return { levels, steps, work: p.work ? { kind: p.work.kind, f: p.work.f } : null, hisses };
+    return { levels, steps, work: p.work ? { kind: p.work.kind, f: p.work.f } : null, hisses, pant: p.winded ? LEVELS.pant : 0 };
   }
   return { update, reset() { prevPhase = null; sense = null; hissedBefore = null; } };
 }

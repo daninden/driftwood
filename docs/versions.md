@@ -2,6 +2,12 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.23 "Breath" — 2026-11-04
+
+- Running: 5.5 m/s (was 3.9, almost twice walking at 2.9), but no longer without end. New pure module `game/breath`: about 12 s of running from full (`RUN_TIME`); needs and load make it run out faster (the drain is divided by the walking factor of load × tiredness × thirst × hunger, not below `MIN_STRAIN` 0.4, so at the worst about 5 s). Out of breath he walks by himself, whatever is asked (Shift, double tap, the thumb stick's rim), until breath is back at 40 % (`RESUME`). Breath comes back in 8 s walking and 5 s standing, kneeling or asleep. Not saved: he starts with full breath.
+- No meter: below 30 % breath his running stride shortens, down to 75 % at empty; out of breath you hear him pant softly (`pant` in `audio/mix`, a filtered-noise breath in `audio/sound` about every 0.8 s).
+- Tests: `tests/breath.test.js` (new), `tests/movement.test.js` and `tests/sound.test.js` follow.
+
 ## 0.22.4 "Above water" — 2026-11-04
 
 - Wood: a piece that still sticks out of the water can be found and picked up; only wood the sea covers wholly is out of reach. The top of a log is `logTop(log) = log.y + TOP_K * log.rad` (`TOP_K` 1.7, as the renderer lifts it), and `wood.find` skips a log only when the sea is at or above that top. The action button, tap-to-walk and `take` all follow. A log that shows lies at most 0.22 m deep, below `WADE_MAX`, so he can always stand beside it.

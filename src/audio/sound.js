@@ -5,7 +5,7 @@
  * offsets), filters, simple oscillators and envelopes. audio/mix decides what should be heard; this module
  * builds the graph once and, every frame, moves each layer's gain and tone to the targets it is given,
  * smoothly (setTargetAtTime), and plays the single events: footsteps, work sounds, crackles, gull cries,
- * cricket chirps.
+ * cricket chirps, and (0.23) a soft panting when he is out of breath (heard.pant, from game/breath via audio/mix).
  *
  *   Layers (each a gain node into the master): surf (low-passed noise whose cutoff and gain follow the swell,
  *   plus a faint hiss on the crest), river (band-passed noise with a babbling second voice), wind (band-passed
@@ -37,7 +37,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 export function createSound({ enabled = true } = {}) {
   let ctx = null, g = null, on = enabled, hidden = false, suspendTimer = null;
   const last = new Map();   // param -> last target, so unchanged ones are not set again
-  const clocks = { work: 0, crickets: [0, 0, 0, 0] };
+  const clocks = { work: 0, pant: 0, crickets: [0, 0, 0, 0] };
   let workLast = '';
 
   const audible = () => !!ctx && on && !hidden;
@@ -120,6 +120,17 @@ export function createSound({ enabled = true } = {}) {
     const k = rand(0.88, 1.12) * (1 - 0.3 * s.heavy), v = (1 + 0.5 * s.heavy) * (s.run ? 0.85 : 1);
     const bus = g.c.createGain(); bus.gain.value = s.gain; bus.connect(g.L.steps);   // this step's own loudness (mix: stepOf)
     (STEPS[s.ground] || STEPS.grass)(bus, k, v);
+  }
+
+  // out of breath (game/breath): a soft in and out through the mouth, about every 0.8 s, for as long as he is winded
+  function pant(level, dt) {
+    if (level <= 0) { clocks.pant = 0; return; }
+    clocks.pant -= dt;
+    if (clocks.pant > 0) return;
+    clocks.pant = rand(0.7, 0.9);
+    const bus = g.c.createGain(); bus.gain.value = level; bus.connect(g.L.fx);
+    grain(bus, { freq: 1500, to: 2300, q: 0.7, dur: 0.3, gain: 0.5, attack: 0.1 });            // in
+    grain(bus, { at: 0.36, freq: 2200, to: 1300, q: 0.7, dur: 0.34, gain: 0.4, attack: 0.08 }); // out
   }
 
   function work(w, dt) {
@@ -225,6 +236,7 @@ export function createSound({ enabled = true } = {}) {
     for (const s of heard.steps) step(s);
     for (const h of heard.hisses || []) hiss(h);
     work(heard.work, dt);
+    pant(heard.pant || 0, dt);
   }
 
   return {

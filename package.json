@@ -1,7 +1,7 @@
 {
   "name": "driftwood",
   "private": true,
-  "version": "0.22.4",
+  "version": "0.23",
   "description": "A stylised, diorama-like game on an uninhabited island.",
   "type": "module",
   "scripts": {

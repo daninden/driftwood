@@ -128,12 +128,12 @@ On a slow computer the game lowers the quality of its shadows (and, as a last st
 
 ## Controls
 
-- **W A S D** or arrow keys: walk; **Shift**: run
-- **Click or tap** the ground to walk there; double tap to run. Clicking or tapping a thing (driftwood, a branch, a pile, a coconut, a fire, a torch in the ground) walks to beside it and does nothing else
+- **W A S D** or arrow keys: walk; **Shift**: run, but only for a short while: after about twelve seconds he is out of breath and walks until he has recovered (sooner when he is tired, thirsty, hungry or loaded)
+- **Click or tap** the ground to walk there; double tap to run (he gets out of breath like this too). Clicking or tapping a thing (driftwood, a branch, a pile, a coconut, a fire, a torch in the ground) walks to beside it and does nothing else
 - **Space** or the ring in the bottom right corner (on a phone above the thumb stick): the action button. A short press picks up, lays down, husks (and eats) a coconut, digs for a crab, roasts and eats one, picks up a branch, feeds a fire, takes or sticks a torch, or drinks, whatever the drawing in the ring shows
 - **Hold** the action button (about half a second) to light a pile beside you (or press **F** there), to build a lean-to beside a pile of driftwood and a pile of branches that are close together (or press **F** there), or to sleep (or press **Z**; only after about half a day awake)
 - A left click, a tap, the action button or a walking key wakes him; the view controls do not
-- **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, digging, roasting, drinking, drilling a fire), like walking off
+- **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run (for a short while); let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, digging, roasting, drinking, drilling a fire), like walking off
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)
 - **M**, or a click or tap on the small speaker above the moon: turn sound on or off
 - **Enter** (or the arrow): confirm your name at the start of an island

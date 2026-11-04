@@ -48,7 +48,7 @@
  *   keys walk relative to the screen, so they use input.yaw (the current
  *   view angle, see core/view; the starting view when missing)
  * stepPlayer(world, player, dir, dt, run, load?, sea?, stride?) -> { moved, distance, blocked }
- *   Mutates player. load (default 1) scales the speed, for carrying
+ *   Mutates player. run: the run speed (RUN_SPEED), asked for by game/game only while he has breath (game/breath). load (default 1) scales the speed, for carrying
  *   (game/wood) and tiredness (game/sleep); sea is the sea level. `phase` advances with distance (for the walk cycle);
  *   stride (default 1) is the length of his step: a load makes it shorter
  *   (game/wood CARRY_STRIDE) and so does weariness (weariStride(needsSpeed) =
@@ -62,7 +62,7 @@ import { HALF, T, NT } from '../world/constants.js';
 import { bushSize, treeScale } from '../world/vegetation.js';
 
 export const WALK_SPEED = 2.9;
-export const RUN_SPEED = 3.9;
+export const RUN_SPEED = 5.5;   // a run is short: game/breath limits it
 export const BODY = 0.2;        // the castaway's radius
 export const STONE_MIN = 0.35;  // smaller stones are stepped over
 export const WADE_MAX = 0.35;   // rivers deeper than this (waist deep) cannot be waded

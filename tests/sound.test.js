@@ -174,10 +174,15 @@ describe('footsteps', () => {
     let total = 0, prev = 0; for (let ph = 0; ph < 20 * Math.PI + 0.1; ph += 0.07) { total += stepsCrossed(prev, ph); prev = ph; } expect(total).toBe(20);
   });
   it('are heavier when tired, thirsty, hungry or loaded, and louder when running', () => {
-    const fresh = stepOf('dry', { speed: 2.9 }), worn = stepOf('dry', { speed: 2.9, tired: 1 }), loaded = stepOf('dry', { speed: 2.9 }, 4), run = stepOf('dry', { speed: 3.9 });
+    const fresh = stepOf('dry', { speed: 2.9 }), worn = stepOf('dry', { speed: 2.9, tired: 1 }), loaded = stepOf('dry', { speed: 2.9 }, 4), run = stepOf('dry', { speed: 5.5, running: true });
     expect(worn.heavy).toBeGreaterThan(fresh.heavy); expect(worn.gain).toBeGreaterThan(fresh.gain); expect(loaded.heavy).toBeGreaterThan(0);
     expect(stepOf('dry', { speed: 2.9, thirsty: 0.9 }).heavy).toBeGreaterThan(0.5); expect(stepOf('dry', { speed: 2.9, hungry: 0.9 }).heavy).toBeGreaterThan(0.5);
     expect(run.run).toBe(true); expect(run.gain).toBeGreaterThan(fresh.gain); expect(fresh.run).toBe(false);
+  });
+  it('pants softly only while he is out of breath', () => {
+    const m = createMixer(w), p = { x: spawn.x, y: w.H(spawn.x, spawn.z), z: spawn.z, moving: true, speed: 2.9, phase: 0, work: null };
+    const frame = () => m.update({ player: p, terrain: ter({ y: 1 }), sea: 0, day: 1, wind: calm(), waterTime: 0, fire: fireNone, birds: [], carried: 0 }, 0.016);
+    expect(frame().pant).toBe(0); p.winded = true; expect(frame().pant).toBe(LEVELS.pant); expect(LEVELS.pant).toBeLessThan(LEVELS.steps);
   });
   it('come out of the mixer by phase, on the ground he stands on, and not while he stands still', () => {
     const m = createMixer(w), p = { x: spawn.x, y: w.H(spawn.x, spawn.z), z: spawn.z, moving: true, speed: 2.9, phase: 0, tired: 0, thirsty: 0, hungry: 0, work: null };
