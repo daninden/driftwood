@@ -2,7 +2,8 @@
  * render/devPanel — the small developer panel, top right, one line such as
  * `v0.7 · Quiet frames · 30 fps · 9 ms · q1 · idle`: version and name (src/version),
  * the frames per second drawn, the work time per frame in ms (update + render,
- * not the interval), the quality level `qN` (render/quality; only when it is known) and `idle` while the frame pacer idles (render/framePacer). Same ink as the moon mark (`--ink`, pale at night, render/ink), faint, with a quiet backing (`--ink-back`) that turns dark at night. It is a
+ * not the interval), the quality level `qN` (render/quality; only when it is known), `idle` while the frame pacer idles (render/framePacer) and, last,
+ * `habit` while the castaway's own habit is in charge (0.28, game/mind; a developer aid only: the game itself shows nothing). Same ink as the moon mark (`--ink`, pale at night, render/ink), faint, with a quiet backing (`--ink-back`) that turns dark at night. It is a
  * developer aid, not part of the game: visible for now, to be hidden later
  * by flipping DEV_PANEL_VISIBLE to false. The backtick key toggles it at any
  * time; the choice is not remembered between sessions. While it is visible the
@@ -18,12 +19,12 @@
  *   first), ms() the latest average work time rounded to a whole ms (null
  *   without any). Frames longer than a second (a hidden tab, a pause) are
  *   not counted.
- * devLabel(version, name, fps, ms?, idle?, zoom?, quality?) -> string   e.g.
+ * devLabel(version, name, fps, ms?, idle?, zoom?, quality?, habit?) -> string   e.g.
  *   'v0.7 · Quiet frames · 30 fps · 9 ms · idle' ('– fps' while there is no
- *   value yet; ' · N ms' only with ms, ' · zoom 18' only when zoom is beyond 10, the normal limit; ' · q1' only with a quality level, after zoom; ' · idle' only when idle). Pure.
+ *   value yet; ' · N ms' only with ms, ' · zoom 18' only when zoom is beyond 10, the normal limit; ' · q1' only with a quality level, after zoom; ' · idle' only when idle; ' · habit' last, only when habit). Pure.
  * isToggleKey(e) -> bool       true for the backtick key (code 'Backquote',
  *   not repeating, no Shift/Ctrl/Cmd/Alt: Shift+backtick starts the game over, see src/save). Pure.
- * createDevPanel(el, version, name, visible?) -> { frame(dt, workMs?, idle?, zoom?), setQuality(level), toggle(), visible() }
+ * createDevPanel(el, version, name, visible?) -> { frame(dt, workMs?, idle?, zoom?), setQuality(level), setHabit(on), toggle(), visible() }
  *   el: the #dev element (index.html); frame is called for every drawn frame
  *   with the real time since the previous drawn frame, the ms its update and
  *   render took, and whether the pacer is idling; it touches the DOM only when the text changed;
@@ -52,15 +53,15 @@ export function createFpsMeter(window = FPS_WINDOW) {
   };
 }
 
-export const devLabel = (version, name, fps, ms = null, idle = false, zoom = 0, quality = null) =>
-  `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (zoom > 10.5 ? ` \u00b7 zoom ${Math.round(zoom)}` : '') + (quality === null || quality === undefined ? '' : ` \u00b7 q${quality}`) + (idle ? ' \u00b7 idle' : '');
+export const devLabel = (version, name, fps, ms = null, idle = false, zoom = 0, quality = null, habit = false) =>
+  `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (zoom > 10.5 ? ` \u00b7 zoom ${Math.round(zoom)}` : '') + (quality === null || quality === undefined ? '' : ` \u00b7 q${quality}`) + (idle ? ' \u00b7 idle' : '') + (habit ? ' \u00b7 habit' : '');
 
 export const isToggleKey = e => e.code === 'Backquote' && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
 
 export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
   const meter = createFpsMeter();
-  let shown = visible, text = null, idling = false, zoomed = 0, quality = null;
-  const refresh = () => set(devLabel(version, name, meter.fps(), meter.ms(), idling, zoomed, quality));
+  let shown = visible, text = null, idling = false, zoomed = 0, quality = null, habit = false;
+  const refresh = () => set(devLabel(version, name, meter.fps(), meter.ms(), idling, zoomed, quality, habit));
   const set = t => { if (t !== text) { text = t; el.textContent = t; } };
   const apply = () => { if (el.hidden === shown) el.hidden = !shown; };
   set(devLabel(version, name, null)); apply();
@@ -73,6 +74,7 @@ export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
       if (f !== null || idle !== idling || z !== zoomed) { idling = idle; zoomed = z; refresh(); }
     },
     setQuality(q) { if (q !== quality) { quality = q; refresh(); } },
+    setHabit(on) { on = !!on; if (on !== habit) { habit = on; refresh(); } },
     toggle,
     visible: () => shown,
   };

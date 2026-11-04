@@ -43,6 +43,9 @@
  * `stones: { taken: [id] }` (the stones taken, game/stones), `wood.stones: [id]` (the stones he carries, at most 2), piles of kind 'frond' or 'stone'
  * (ids from game/fronds FROND_ID0 and game/stones STONE_ID0), and for each lean-to an optional `up: { walls, bed, ring }` (progress 0..1 of the
  * upgrades, game/leanto); all optional, older saves have none.
+ * Since 0.28 a save may also carry `known: { cell: 10, cells: [index] }`, the part of the island he has been to (game/known: cells of 10 m, index = row * 72 + column).
+ * It is checked on reading (`cleanKnown`): the right cell size and a list of whole numbers within the island; anything else is dropped (the rest of the save
+ * still loads) and the game then treats the ground round him as known. Older saves have none.
  * saveKey(seed) -> 'driftwood-save-<seed>'
  * serialise(state) -> string          state: game.state() (plus name, startDay); adds the format number `v`
  * parseSave(text, seed) -> state | null
@@ -65,9 +68,10 @@
  *   getStorage returns a Storage (default: window.localStorage). load gives
  *   the parsed state or null; save and clear return true when they worked.
  *
- * Depends on: core/view (clampView)
+ * Depends on: core/view (clampView), game/known (CELL, MAX_CELLS)
  */
 import { clampView, ZOOM_DEV_MAX } from './core/view.js';
+import { CELL, MAX_CELLS } from './game/known.js';
 
 export const SAVE_VERSION = 1;
 export const SAVE_EVERY = 10;
@@ -114,11 +118,19 @@ function valid(s, seed) {
   return !fi.torches || fi.torches.every(t => obj(t) && [t.id, t.x, t.z, t.left].every(num));
 }
 
+/** The saved memory of known ground made safe: { cell, cells } with whole, distinct cell numbers within the island, or null (dropped) for anything else. */
+export function cleanKnown(k) {
+  if (!obj(k) || k.cell !== CELL || !arr(k.cells) || k.cells.length > MAX_CELLS) return null;
+  if (!k.cells.every(i => Number.isInteger(i) && i >= 0 && i < MAX_CELLS)) return null;
+  return { cell: CELL, cells: [...new Set(k.cells)].sort((a, b) => a - b) };
+}
+
 export function parseSave(text, seed) {
   try {
     const s = JSON.parse(text);
     if (!valid(s, seed)) return null;
     // the camera clamps the zoom again to what the dev panel allows
+    if (s.known !== undefined) { const k = cleanKnown(s.known); if (k) s.known = k; else delete s.known; }
     if (s.view !== undefined) { const v = clampView(s.view, ZOOM_DEV_MAX); if (v) s.view = v; else delete s.view; }
     return s;
   } catch (e) { return null; }
