@@ -5,7 +5,7 @@
  * any input of the player takes it back at once (`release`). The mind adds NO game rule: it fills an input object like the player's
  * (a walk target, a press of the action button, a click on an icon of the arc, Z, a click on the row) and so can do only what a
  * player could do. It looks at the island only where the castaway has been (game/known): its targets and its paths stay inside the
- * known cells, so he never explores. It never builds and never upgrades (those kinds are never chosen), never wakes him from sleep
+ * known cells and 1.5 m away from their edge (`inside`), so he never explores. It never builds and never upgrades (those kinds are never chosen), never wakes him from sleep
  * and never starts a sleep before he could choose to.
  *
  * What he does, in this order of priority (`chooseGoal`, pure, on a plain snapshot of the needs and the time of day):
@@ -26,7 +26,7 @@
  * He walks; only very thirsty (thirst >= 1.3) and far (20 m or more) does he run.
  *
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
- *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the piles at the fire spot), cool: {name: true}, canLight }
+ *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
  * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now
  * RANK   the priority of each goal (lower wins)
  * createMind(world, game, opts?) -> mind
@@ -37,7 +37,7 @@
  *                     A kneeling job already begun is left to finish (the player's own input stops it as usual)
  *   mind.step(dt)     once per game.update while in charge, before it: decides and fills mind.input
  *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set)
- *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, events: [..] } for tests and the developer panel
+ *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, gazes, events: [..] } for tests and the developer panel
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
@@ -71,7 +71,7 @@ export function fireStep(s) {
     if (s.stock < WOOD_WANT && !s.cool.gather) return 'gather';
     return null;
   }
-  if (s.fireFuel < FEED_BELOW) { if (s.stock > 0) return 'feed'; if (!s.cool.gather) return 'gather'; }
+  if (s.fireFuel < FEED_BELOW) { if (s.spare > 0 || s.stock > 0) return 'feed'; if (!s.cool.gather) return 'gather'; }
   return null;
 }
 
@@ -97,8 +97,12 @@ export function chooseGoal(s) {
 export function createMind(world, game, opts = {}) {
   const p = game.player, clock = game.clock, W = game.wood, known = game.known;
   const rng = mulberry32(hashInt(world.seed + 28, opts.stream || 0, 1));
-  const path = createPath(world, { allow: (x, z) => known.has(x, z) });
-  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, events: [] };
+  // ground he may be taken over: known all round, MARGIN (1.5 m) inside the edge of what he knows, so that sliding past a trunk or a bush never carries him into a cell he has not been to
+  const MARGIN = 1.5, DIAG = MARGIN * 0.75;
+  const inside = (x, z) => known.has(x, z) && known.has(x + MARGIN, z) && known.has(x - MARGIN, z) && known.has(x, z + MARGIN) && known.has(x, z - MARGIN)
+    && known.has(x + DIAG, z + DIAG) && known.has(x - DIAG, z - DIAG) && known.has(x + DIAG, z - DIAG) && known.has(x - DIAG, z + DIAG);
+  const path = createPath(world, { allow: inside });
+  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, events: [] };
   const mind = { input: null, active: false, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let now = 0, cur = null, restUntil = 0, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
   let pressed = null, choice = null, sleepKey = false, sinceCheck = 0;
@@ -133,7 +137,7 @@ export function createMind(world, game, opts = {}) {
   };
   const scan = (kind, x, z, r) => {
     const out = [];
-    for (const t of tilesNear(x, z, r)) for (const o of SRC[kind](t)) { const d = Math.hypot(o.x - x, o.z - z); if (d <= r && known.has(o.x, o.z) && !isBad(kind, o)) out.push({ o, d, x: o.x, z: o.z, id: o.id }); }
+    for (const t of tilesNear(x, z, r)) for (const o of SRC[kind](t)) { const d = Math.hypot(o.x - x, o.z - z); if (d <= r && inside(o.x, o.z) && !isBad(kind, o)) out.push({ o, d, x: o.x, z: o.z, id: o.id }); }
     return out.sort((a, b) => a.d - b.d);
   };
   const nearestBy = (kind, r = 45, k = 4) => {   // the nearest by walking cost among the closest few, widening the circle until something is found
@@ -150,9 +154,9 @@ export function createMind(world, game, opts = {}) {
     return out;
   })();
   let waterKnown = [], waterAt = -1;
-  const waterPts = () => { if (waterAt !== known.count) { waterAt = known.count; waterKnown = waterAll.filter(q => known.has(q.x, q.z)); } return waterKnown; };
+  const waterPts = () => { if (waterAt !== known.count) { waterAt = known.count; waterKnown = waterAll.filter(q => inside(q.x, q.z)); } return waterKnown; };
   const standNear = (x, z, r = 1.2) => {   // a spot he can stand on, known and dry, at the point itself or on rings of 0.5 m round it
-    const ok = (a, b) => known.has(a, b) && canStand(world, a, b, 0) && world.H(a, b) > 0.4;
+    const ok = (a, b) => inside(a, b) && canStand(world, a, b, 0) && world.H(a, b) > 0.4;
     if (ok(x, z)) return { x, z };
     for (let rr = 0.5; rr <= Math.max(r, 3); rr += 0.5) for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6, px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr; if (ok(px, pz)) return { x: px, z: pz }; }
     return null;
@@ -161,13 +165,13 @@ export function createMind(world, game, opts = {}) {
   // ---------- home ----------
   function homeSpot() {
     let lt = null, bd = Infinity;
-    for (const l of game.leantos.list) if (l.progress >= 1 && known.has(l.x, l.z)) { const d = dist(l, p); if (d < bd) { bd = d; lt = l; } }
+    for (const l of game.leantos.list) if (l.progress >= 1 && inside(l.x, l.z)) { const d = dist(l, p); if (d < bd) { bd = d; lt = l; } }
     if (lt) return { kind: 'leanto', x: lt.x, z: lt.z, lt };
-    const fires = game.fire.fires.filter(f => known.has(f.x, f.z));
+    const fires = game.fire.fires.filter(f => inside(f.x, f.z));
     if (fires.length) { const f = fires.reduce((a, b) => (b.lit > a.lit ? b : a)); return { kind: 'fire', x: f.x, z: f.z }; }
-    const burnt = game.fire.burnt.filter(b => known.has(b.x, b.z));
+    const burnt = game.fire.burnt.filter(b => inside(b.x, b.z));
     if (burnt.length) { const b = burnt.reduce((a, c) => (c.id > a.id ? c : a)); return { kind: 'fire', x: b.x, z: b.z }; }
-    if (slept && known.has(slept.x, slept.z)) return { kind: 'bed', x: slept.x, z: slept.z };
+    if (slept && inside(slept.x, slept.z)) return { kind: 'bed', x: slept.x, z: slept.z };
     return { kind: 'here', x: anchor.x, z: anchor.z };
   }
   const fireSpot = h => { h = h || homeSpot(); const q = h.kind === 'leanto' ? ringCentre(h.lt) : h.kind === 'fire' ? h : { x: h.x + 1.8, z: h.z }; return standNear(q.x, q.z) || standNear(h.x, h.z) || { x: p.x, z: p.z }; };
@@ -175,18 +179,18 @@ export function createMind(world, game, opts = {}) {
   const pilesNear = (kind, x, z, r) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - x, q.z - z) <= r);
   const fuelOfPile = q => q.logs.reduce((n, l) => n + (l.branch ? 0.5 : 1), 0);   // in pieces of driftwood (a branch burns half as long)
   const firePiles = fs => W.piles.filter(q => (q.kind === 'driftwood' || q.kind === 'branch') && Math.hypot(q.x - fs.x, q.z - fs.z) <= 2.4);
-  const stockAt = fs => firePiles(fs).reduce((n, q) => n + fuelOfPile(q), 0);
+  const bestPile = fs => firePiles(fs).sort((a, b) => fuelOfPile(b) - fuelOfPile(a))[0] || null;
   const fireAt = fs => game.fire.fires.find(f => dist(f, fs) < 3.5 && (f.fuel > 0.005 || f.embers > 0.005)) || null;
 
   // ---------- what he senses, for chooseGoal ----------
   function senses() {
-    const h = homeSpot(), fs = fireSpot(h), f = fireAt(fs), piles = firePiles(fs), st = stockAt(fs), best = piles.sort((a, b) => fuelOfPile(b) - fuelOfPile(a))[0], wp = waterPts();
+    const h = homeSpot(), fs = fireSpot(h), f = fireAt(fs), piles = firePiles(fs), best = bestPile(fs), st = best ? fuelOfPile(best) : 0, wp = waterPts();
     let near = false; for (const q of wp) if (Math.hypot(q.x - p.x, q.z - p.z) < NEAR_WATER) { near = true; break; }
     const cool = {}; for (const k of Object.keys(COOL)) cool[k] = isCool(k);
     return {
       asleep: game.sleep.asleep || p.lie > 0, time: clock.time, thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake, canLie: game.sleep.canLie(),
       water: wp.length > 0, waterNear: near, shellsEmpty: game.shells.empty(), shellsFull: game.shells.full(), nuts: game.shells.nuts, fibre: game.fibre.carried, torch: !!game.fire.torch,
-      fireLit: !!f, fireFuel: f ? f.fuel / FUEL_MAX : 0, stock: st,
+      fireLit: !!f, fireFuel: f ? f.fuel / FUEL_MAX : 0, stock: st, spare: piles.reduce((n, q) => n + fuelOfPile(q), 0) - st,
       canLight: !!best && best.logs.length >= FIRE_MIN && fuelOfPile(best) >= LIGHT_MIN_FUEL && (game.fibre.carried > 0 || !!game.fire.torch), cool,
     };
   }
@@ -236,7 +240,7 @@ export function createMind(world, game, opts = {}) {
             const gx = x - p.x, gz = z - p.z, gl = Math.hypot(gx, gz) || 1; let bu = null, bs = -2;
             for (let a = 0; a < 24; a++) {
               const ang = a * Math.PI / 12, ux = Math.sin(ang), uz = Math.cos(ang);
-              if (!known.has(p.x + ux * 1.5, p.z + uz * 1.5) || !canStand(world, p.x + ux * 0.6, p.z + uz * 0.6, game.sea)) continue;
+              if (!inside(p.x + ux * 1.5, p.z + uz * 1.5) || !canStand(world, p.x + ux * 0.6, p.z + uz * 0.6, game.sea)) continue;
               const sc = (ux * gx + uz * gz) / gl; if (sc > bs) { bs = sc; bu = { ux, uz }; }
             }
             inp.target = bu ? { x: p.x + bu.ux * 2.5, z: p.z + bu.uz * 2.5 } : null; yield;
@@ -280,7 +284,7 @@ export function createMind(world, game, opts = {}) {
     if (game.berries.carried.length && game.hunger.days > 0.5 && useRow('berries')) { yield* waitIdle(); return true; }
     if (game.bananas.carried.length && game.hunger.days > 0.5 && useRow('banana')) { yield* waitIdle(); return true; }
     if (game.shells.nuts > 0 && useRow('nut')) { yield* waitIdle(); return true; }
-    if (game.crabs.carried.length) { const f = game.fire.fires.find(q => game.fire.strength(q) > 0 && known.has(q.x, q.z)); if (f) { yield* walk(f.x + 0.8, f.z + 0.4, { stop: 0.7 }); if (useRow('crab')) { yield* waitIdle(); return true; } } }
+    if (game.crabs.carried.length) { const f = game.fire.fires.find(q => game.fire.strength(q) > 0 && inside(q.x, q.z)); if (f) { yield* walk(f.x + 0.8, f.z + 0.4, { stop: 0.7 }); if (useRow('crab')) { yield* waitIdle(); return true; } } }
     const cs = [], c = nearestBy('coco', 60), b = nearestBy('berry', 60), bn = nearestBy('banana', 60, 2);
     if (c) cs.push({ kind: 'coco', t: c, w: c.cost }); if (b) cs.push({ kind: 'berry', t: b, w: b.cost * 3 }); if (bn) cs.push({ kind: 'banana', t: bn, w: bn.cost * 0.8 });
     if (!cs.length) { ev('no-food'); return false; }
@@ -325,11 +329,16 @@ export function createMind(world, game, opts = {}) {
     yield* layDown();
     return true;
   }
-  const fireDest = () => fireSpot();
-  function* gatherWood() {   // driftwood to the pile at the fire spot, else branches; never both kinds in piles of 6 or more there (the arc would offer to build, not to light)
-    const fs = fireSpot(), st = stockAt(fs), drift = firePiles(fs).filter(q => q.kind === 'driftwood').reduce((n, q) => n + q.logs.length, 0), br = firePiles(fs).filter(q => q.kind === 'branch').reduce((n, q) => n + q.logs.length, 0);
-    const order = br >= 6 ? ['branch'] : drift >= 6 ? ['drift'] : ['drift', 'branch'];
-    for (const kind of order) { if (!nearestBy(kind, 45, 4)) continue; return yield* gather(kind, fireDest, Math.max(1, Math.ceil((WOOD_WANT - st) / (kind === 'branch' ? 0.5 : 1)))); }
+  // wood for the fire: onto the biggest pile of the same kind at the fire spot (laying down within a metre joins a pile), else a new pile there. The kind of the biggest pile
+  // goes first, so a pile of branches and a pile of driftwood do not both grow to 6 (the arc would then offer to build, not to light)
+  function* gatherWood() {
+    const fs = fireSpot(), best = bestPile(fs), st = best ? fuelOfPile(best) : 0;
+    const order = best && best.kind === 'branch' ? ['branch', 'drift'] : ['drift', 'branch'];
+    for (const kind of order) {
+      if (!nearestBy(kind, 45, 4)) continue;
+      const dest = () => { const q = firePiles(fs).filter(x => x.kind === (kind === 'branch' ? 'branch' : 'driftwood') && x.logs.length < 12).sort((a, b) => b.logs.length - a.logs.length)[0]; return q ? standNear(q.x, q.z, 1) || fs : fs; };
+      return yield* gather(kind, dest, Math.max(1, Math.ceil((WOOD_WANT - st) / (kind === 'branch' ? 0.5 : 1))));
+    }
     return false;
   }
 
@@ -388,11 +397,12 @@ export function createMind(world, game, opts = {}) {
     let spot = null;
     for (let r = 6; r <= 60 && !spot; r += 6) for (let i = 0; i < 24 && !spot; i++) {
       const a = i * Math.PI / 12, x = h.x + Math.sin(a) * r, z = h.z + Math.cos(a) * r, y = world.H(x, z);
-      if (y > 0.3 && y < 1.2 && world.H(x + Math.sin(a) * 3, z + Math.cos(a) * 3) < y - 0.15 && known.has(x, z) && canStand(world, x, z, 0) && path.cost(p, { x, z }) < 90) spot = { x, z };
+      if (y > 0.3 && y < 1.2 && world.H(x + Math.sin(a) * 3, z + Math.cos(a) * 3) < y - 0.15 && inside(x, z) && canStand(world, x, z, 0) && path.cost(p, { x, z }) < 90) spot = { x, z };
     }
     if (f && !spot) spot = { x: f.x + (p.x - f.x) * 0.4 / Math.max(0.4, dist(p, f)) * 3, z: f.z + (p.z - f.z) * 0.4 / Math.max(0.4, dist(p, f)) * 3 };
     if (!spot) return true;
     yield* walk(spot.x, spot.z, { stop: 0.6 });
+    stats.gazes++;
     const until = now + 18 + 12 * rand(); while (now < until && clock.time < GAZE_TO + 0.03) yield;
     return true;
   }

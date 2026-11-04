@@ -9,7 +9,7 @@
  *
  * C, N
  * createPath(world, { allow? }) -> path
- *   path.find(from, to, maxExp?, retry?) -> { pts: [{ x, z }], cost } | null   from and to are { x, z }; pts are the middles of the cells
+ *   path.find(from, to, maxExp?, retry?) -> { pts: [{ x, z }], cost } | null   from and to are { x, z } (a from with y: the first cell is one he can step to from there, not one above a wall); pts are the middles of the cells
  *     from the start to the goal; cost is in seconds of walking at full pace. With `allow`, every cell after the first has to be allowed,
  *     and so has the goal's (the start may be anywhere). null when there is no way (or more than maxExp, 90000, cells were looked at); a
  *     first failure with banned cells clears the bans and tries once more (retry)
@@ -70,8 +70,15 @@ export function createPath(world, opts = {}) {
     }
     return null;
   }
+  function startCell(from) {   // the nearest cell he can step to from where he stands (he may stand on a slope that is no cell of its own, below a wall): else the nearest
+    const ix = cell(from.x), iz = cell(from.z), y = Number.isFinite(from.y) ? from.y : world.H(from.x, from.z), list = [];
+    for (let a = -6; a <= 6; a++) for (let b = -6; b <= 6; b++) if (isStand(ix + a, iz + b)) list.push([ix + a, iz + b, Math.hypot(centre(ix + a) - from.x, centre(iz + b) - from.z)]);
+    list.sort((p, q) => p[2] - q[2]);
+    for (const c of list.slice(0, 12)) if (c[2] < 0.3 || stepFactor(world, { x: from.x, z: from.z, y }, centre(c[0]), centre(c[1]), 0) > 0.05) return [c[0], c[1]];
+    return list.length ? [list[0][0], list[0][1]] : null;
+  }
   function find(from, to, maxExp = 90000, retry = true) {
-    const s = nearestCell(from.x, from.z, 6), g = nearestCell(to.x, to.z, 4, ok);
+    const s = startCell(from), g = nearestCell(to.x, to.z, 4, ok);
     if (!s || !g) { if (retry && banned.size) { banned.clear(); return find(from, to, maxExp, false); } return null; }
     const gk = g[1] * N + g[0], sk = s[1] * N + s[0];
     const gs = new Map([[sk, 0]]), came = new Map(), h = new Heap(), closed = new Set();

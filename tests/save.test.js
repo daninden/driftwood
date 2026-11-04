@@ -10,7 +10,7 @@ import { canStand, nearestStandable } from '../src/game/movement.js';
 import { createClock, DAY_SECONDS } from '../src/game/clock.js';
 import { createFire, FIRE_MIN } from '../src/game/fire.js';
 import { PERIOD } from '../src/game/tide.js';
-import { serialise, parseSave, momentKey, parseHash, withoutNew, isResetKey, createSaveStore, saveKey, SAVE_VERSION, SAVE_EVERY } from '../src/save.js';
+import { serialise, parseSave, cleanKnown, momentKey, parseHash, withoutNew, isResetKey, createSaveStore, saveKey, SAVE_VERSION, SAVE_EVERY } from '../src/save.js';
 
 let w, spawn, logs, cocos;
 beforeAll(async () => {
@@ -196,5 +196,32 @@ describe('the address and the reset key', () => {
     expect(isResetKey({ code: 'Backquote', shiftKey: true, repeat: true })).toBe(false);
     expect(isResetKey({ code: 'Backquote', shiftKey: true, ctrlKey: true })).toBe(false);
     expect(isResetKey({ code: 'KeyW', shiftKey: true })).toBe(false);
+  });
+});
+
+describe('the known ground (0.28 "Habit")', () => {
+  const good = () => JSON.parse(serialise(createGame(w, spawn).state()));
+  it('is saved with the game and comes back as it was', () => {
+    const g = createGame(w, spawn), input = makeInput({ target: { x: spawn.x + 30, z: spawn.z } });
+    run(g, input, 20);
+    const s = through(g); expect(s.known.cell).toBe(10); expect(s.known.cells.length).toBe(g.known.count); expect(s.known.cells.length).toBeGreaterThan(14);
+    const back = createGame(w, spawn, s); expect(back.known.state()).toEqual(g.known.state());
+    expect(back.known.has(g.player.x, g.player.z)).toBe(true);
+  });
+  it('is optional: an older save loads, and the ground round him is known', () => {
+    const s = good(); delete s.known;
+    const p = parseSave(JSON.stringify(s), 1337); expect(p).not.toBeNull(); expect(p.known).toBeUndefined();
+    const g = createGame(w, spawn, p); expect(g.known.count).toBeGreaterThan(8); expect(g.known.has(g.player.x, g.player.z)).toBe(true);
+  });
+  it('drops garbage (and only that) and still loads the rest', () => {
+    for (const bad of [{ cell: 5, cells: [1, 2] }, { cell: 10, cells: 'x' }, { cell: 10, cells: [1, 2.5] }, { cell: 10, cells: [-1] }, { cell: 10, cells: [72 * 72] }, { cell: 10 }, 5, 'x', [1, 2], null, { cell: 10, cells: new Array(72 * 72 + 1).fill(1) }]) {
+      const p = parseSave(JSON.stringify({ ...good(), known: bad }), 1337);
+      expect(p).not.toBeNull(); expect(p.known).toBeUndefined(); expect(p.player).toBeDefined();
+    }
+    const dup = parseSave(JSON.stringify({ ...good(), known: { cell: 10, cells: [9, 3, 3, 7] } }), 1337);
+    expect(dup.known).toEqual({ cell: 10, cells: [3, 7, 9] });
+  });
+  it('cleanKnown keeps a good memory as it is', () => {
+    expect(cleanKnown({ cell: 10, cells: [] })).toEqual({ cell: 10, cells: [] }); expect(cleanKnown(undefined)).toBeNull(); expect(cleanKnown({ cell: 10, cells: [0, 5183] })).toEqual({ cell: 10, cells: [0, 5183] });
   });
 });
