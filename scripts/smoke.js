@@ -219,7 +219,7 @@ await shot('smoke-7.png', { look: false });
 // Fibre: click the coconut nearest the castaway, then press the button; he kneels to husk it.
 const husk = await page.evaluate(() => {
   const { world, game, input, step } = window.__driftwood, p = game.player;
-  const c = world.tiles.flatMap(t => t.cocos).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+  const c = world.tiles.flatMap(t => game.fibre.groundCocos(t)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
   p.x = c.x + 1; p.z = c.z + 0.3; p.y = world.H(p.x, p.z); game.hunger.days = 3;   // hungry, to see the nut eaten
   input.target = { x: c.x, z: c.z, tap: true }; step(10, () => !input.target); window.__press(); step(10, () => p.work && p.work.f > 0.5);
   return { work: p.work && p.work.kind, x: p.x, z: p.z };
@@ -416,7 +416,7 @@ const crab = await page.evaluate(() => {
   const put = (x, z) => { p.x = x; p.z = z; p.y = world.H(x, z); };
   let k = 0; for (; k < 60; k++) { cr.digs = k; const r = cr.dig(-1, 0); cr.carried.length = 0; cr.gone.delete(-1); if (r) break; }
   cr.digs = k; out.digs = k;
-  const col = wl.coloniesNear(p.x, p.z, 30).filter(q => q.crabs.length >= 3 && q.holes.some(h => h.y > game.sea + 0.2)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+  const col = wl.coloniesNear(p.x, p.z, 30).filter(q => q.crabs.length >= 2 && q.holes.some(h => h.y > game.sea + 0.2)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
   put(col.x + 6, col.z); step(0.5); put(col.x + 0.6, col.z + 0.3); step(4);   // within 3 m: the crabs scuttle into holes
   let h = null;
   for (const q of col.holes) { if (h) break; put(q.x + 0.4, q.z); step(0.1); h = wl.hiding(p.x, p.z, 0.8); }

@@ -10,7 +10,7 @@
  *   - A crab is eaten roasted, never raw: beside a fire with flames a short press kneels
  *     ROAST_TIME (8 s) and eats the crab carried longest (hunger.eat(CRAB_FOOD), 2/3 day).
  *   - A raw crab carried SPOIL_AFTER (one game day) goes bad and is gone.
- *   - A crab that was caught is gone from its colony and comes back REGROW (3 to 5) days
+ *   - A crab that was caught is gone from its colony and comes back REGROW (5 to 8) days
  *     later, so a colony caught empty grows back, one crab at a time.
  *
  * DIG_TIME, ROAST_TIME, DIG_CHANCE, CARRY_CRABS, CRAB_FOOD, SPOIL_AFTER, REGROW
@@ -37,7 +37,7 @@ export const DIG_CHANCE = 0.5;
 export const CARRY_CRABS = 2;
 export const CRAB_FOOD = 2 / 3;   // days of hunger one roasted crab takes away (half a coconut)
 export const SPOIL_AFTER = 1;     // a raw crab goes bad after this many game days
-export const REGROW = [3, 5];     // a caught crab is back in its colony after this many days
+export const REGROW = [5, 8];     // a caught crab is back in its colony after this many days
 
 export function createCrabs(seed, saved) {
   const crabs = {

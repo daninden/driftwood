@@ -2,8 +2,8 @@
  * render/coconuts — the fallen coconuts under the palms that can be husked
  * for fibre (game/fibre), drawn with the detailed tiles.
  *
- * Where they lie comes from world/vegetation (`tile.cocos`); which ones are
- * still there comes from game/fibre. Each nut's colour is fixed by its id.
+ * Where they lie comes from world/vegetation (`tile.cocos`); which of those exist
+ * (thinned) and which are still there comes from game/fibre (`groundCocos`). Each nut's colour is fixed by its id.
  *
  * addCoconut(B, kit, H, coco)   one nut, a little flattened, outlined
  * createCocoView(scene, world, kit, fibre) -> cocoView

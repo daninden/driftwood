@@ -8,7 +8,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, HUSK_TIME } from '../src/game/game.js';
 import { createWood, dryness, DRY_DAYS } from '../src/game/wood.js';
-import { createFibre, FIBRE_MAX, REGROW, REGROW_SPREAD } from '../src/game/fibre.js';
+import { createFibre, FIBRE_MAX, REGROW, REGROW_SPREAD, nutsOfTile } from '../src/game/fibre.js';
 import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, BURN, EMBERS, FUEL_MAX, TORCH_DAYS, TORCH_COST, WARM_R } from '../src/game/fire.js';
 import { COLD_SLEEP, SLEEP_DAYS } from '../src/game/sleep.js';
 import { createInput } from '../src/game/input.js';
@@ -19,7 +19,7 @@ let w, spawn, logs, cocos;
 beforeAll(async () => {
   w = await generateWorld(1337); spawn = startSpot(w);
   const by = list => list.sort((a, b) => Math.hypot(a.x - spawn.x, a.z - spawn.z) - Math.hypot(b.x - spawn.x, b.z - spawn.z));
-  logs = by(w.tiles.flatMap(t => t.drift)); cocos = by(w.tiles.flatMap(t => t.cocos));
+  logs = by(w.tiles.flatMap(t => t.drift)); cocos = by(w.tiles.flatMap(t => nutsOfTile(w, t)));
 }, 120000);
 
 const makeInput = (o = {}) => {
@@ -43,10 +43,15 @@ const attemptsFor = catches => { for (let k = 0; k < 50; k++) if (!!createFire(w
 describe('coconuts and fibre', () => {
   it('lie under the palms, each with its own id, the same for the same seed', async () => {
     expect(cocos.length).toBeGreaterThan(100);
+    const palms = w.tiles.reduce((n, t) => n + t.palms.length, 0), all = w.tiles.reduce((n, t) => n + t.cocos.length, 0);
+    expect(cocos.length / palms).toBeGreaterThan(0.15); expect(cocos.length / palms).toBeLessThan(0.25);   // about 1 palm in 5
+    expect(cocos.length).toBeLessThan(all / 3);
+    for (const t of w.tiles) { const ps = nutsOfTile(w, t).map(c => c.palm); expect(new Set(ps).size).toBe(ps.length); }   // at most one per palm
     expect(new Set(cocos.map(c => c.id)).size).toBe(cocos.length);
     for (const t of w.tiles) for (const c of t.cocos) { const p = t.palms[c.palm]; expect(Math.hypot(c.x - p.x, c.z - p.z)).toBeLessThan(1.25); }
     const again = await generateWorld(1337);
-    expect(again.tiles.flatMap(t => t.cocos)).toEqual(w.tiles.flatMap(t => t.cocos).sort((a, b) => a.id - b.id));
+    expect(again.tiles.flatMap(t => nutsOfTile(again, t)).sort((a, b) => a.id - b.id)).toEqual([...cocos].sort((a, b) => a.id - b.id));
+    expect(again.tiles.flatMap(t => t.cocos)).toEqual(w.tiles.flatMap(t => t.cocos));   // the world itself keeps all its nuts
   }, 120000);
   it('are husked for fibre: walk there, press the button, kneel a while, and carry a tuft', () => {
     const c = cocos[0], g = createGame(w, at(c.x + 1, c.z)), input = makeInput({ target: { x: c.x, z: c.z, tap: true } });
@@ -69,8 +74,9 @@ describe('coconuts and fibre', () => {
     const f = createFibre(w);
     for (const c of cocos.slice(0, FIBRE_MAX + 2)) f.take(c, 0);
     expect(f.carried).toBe(FIBRE_MAX); expect(f.onGround(cocos[FIBRE_MAX])).toBe(true);
-    f.update(REGROW * 0.99); expect(f.onGround(cocos[0])).toBe(false);
-    f.update(REGROW + REGROW_SPREAD); expect(f.onGround(cocos[0])).toBe(true);
+    f.update(REGROW * 0.99); expect(f.onGround(cocos[0])).toBe(false); expect(REGROW).toBe(6); expect(REGROW + REGROW_SPREAD).toBe(10);
+    expect(f.groundCocos(w.tiles.find(t => t.cocos.some(c => c.id === cocos[0].id)))).not.toContain(cocos[0]);
+    f.update(REGROW + REGROW_SPREAD + 0.01); expect(f.onGround(cocos[0])).toBe(true);
   });
 });
 

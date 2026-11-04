@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.24 "Lean times" — 2026-11-04
+
+- Food is scarcer, so finding it takes a little searching every day. Coconuts: only the first nut of a palm is kept, and only for a third of the palms that have nuts (`nutsOfTile` and `NUT_SHARE` in `game/fibre`, by a hash of the seed, the tile and the palm), so about 1 palm in 5 has one nut (seed 1337: 339 nuts on 1680 palms, was 1961). A nut grows back after 6 to 10 days (was 3 to 6). Thinned in the game layer: the generated world and its fixture are unchanged; taken ids of nuts that no longer exist are dropped when an old save loads.
+- Crabs: at most 2 colonies per beach tile (`COLONY_MAX`, was 6) with 2 or 3 crabs each (was 3 to 5); seed 1337 has 123 colonies and 311 crabs (was 242 and 1063). A caught crab comes back after 5 to 8 days (was 3 to 5).
+- Near the start of seed 1337: 4 nuts and 7 colonies (18 crabs) within 50 m, 27 nuts and 17 colonies within 100 m.
+- Tests and the smoke script read nuts through `nutsOfTile` / `fibre.groundCocos`; new tests for the share, one nut per palm, determinism, regrow times and colony sizes.
+- Docs: design.md gets an "Agreed, not built yet" section (0.25 "Shell", 0.26 "Inland", the shelter upgrades).
+
 ## 0.23 "Breath" — 2026-11-04
 
 - Running: 5.5 m/s (was 3.9, almost twice walking at 2.9), but no longer without end. New pure module `game/breath`: about 12 s of running from full (`RUN_TIME`); needs and load make it run out faster (the drain is divided by the walking factor of load × tiredness × thirst × hunger, not below `MIN_STRAIN` 0.4, so at the worst about 5 s). Out of breath he walks by himself, whatever is asked (Shift, double tap, the thumb stick's rim), until breath is back at 40 % (`RESUME`). Breath comes back in 8 s walking and 5 s standing, kneeling or asleep. Not saved: he starts with full breath.

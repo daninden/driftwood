@@ -2,6 +2,7 @@
 // beside (game.action, pure), the presses themselves, the input (Space and
 // the button's pointer), a full fire, and the button's icons and DOM.
 import { describe, it, expect, beforeAll } from 'vitest';
+import { nutsOfTile } from '../src/game/fibre.js';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, wantsToMove, HUSK_TIME, DRINK_TIME, REACH, BESIDE, STOOP } from '../src/game/game.js';
@@ -18,7 +19,7 @@ const WATER = { x: -77, z: 180 }, BANK = { x: -75.8, z: 180 };   // seed 1337: a
 beforeAll(async () => {
   w = await generateWorld(1337); spawn = startSpot(w);
   const by = list => list.sort((a, b) => Math.hypot(a.x - spawn.x, a.z - spawn.z) - Math.hypot(b.x - spawn.x, b.z - spawn.z));
-  logs = by(w.tiles.flatMap(t => t.drift)); cocos = by(w.tiles.flatMap(t => t.cocos));
+  logs = by(w.tiles.flatMap(t => t.drift)); cocos = by(w.tiles.flatMap(t => nutsOfTile(w, t)));
   const lonely = (x, z) => [...logs, ...cocos].every(o => Math.hypot(o.x - x, o.z - z) > 6)
     && [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]].every(([dx, dz]) => { const t = terrainAt(w, x + dx, z + dz); return !t.inRiver && t.y > 0.4 && t.climb <= 0.1 && w.slope(x + dx, z + dz) < 0.3; });
   for (let r = 0; r < 160 && !E; r += 2) for (let a = 0; a < 6.28 && !E; a += 0.2) { const x = spawn.x + Math.cos(a) * r, z = spawn.z + Math.sin(a) * r; if (lonely(x, z)) E = { x, z }; }

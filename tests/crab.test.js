@@ -3,12 +3,13 @@
 // a colony growing back, kneeling work stopped by walking, saving, the action priority at a fire and
 // the new icons.
 import { describe, it, expect, beforeAll } from 'vitest';
+import { nutsOfTile } from '../src/game/fibre.js';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, wantsToMove } from '../src/game/game.js';
 import { createCrabs, DIG_TIME, ROAST_TIME, DIG_CHANCE, CARRY_CRABS, CRAB_FOOD, SPOIL_AFTER, REGROW } from '../src/game/crabs.js';
 import { createHunger, NUT_FOOD } from '../src/game/hunger.js';
-import { coloniesOfTile } from '../src/game/habitats.js';
+import { coloniesOfTile, COLONY_MAX } from '../src/game/habitats.js';
 import { SAFE, ESC_RUN, HIDE } from '../src/game/wildlife.js';
 import { BURN, EMBERS } from '../src/game/fire.js';
 import { terrainAt } from '../src/game/movement.js';
@@ -19,8 +20,8 @@ import { buttonIcons, ICONS, ICON_OF } from '../src/render/actionButton.js';
 let w, spawn, col, E;
 beforeAll(async () => {
   w = await generateWorld(1337); spawn = startSpot(w);
-  col = w.tiles.flatMap(t => coloniesOfTile(w, t)).find(c => c.crabs.length >= 3 && c.holes.every(h => h.y > 0.7));
-  const logs = w.tiles.flatMap(t => [...t.drift, ...t.cocos]);
+  col = w.tiles.flatMap(t => coloniesOfTile(w, t)).find(c => c.crabs.length >= 2 && c.holes.every(h => h.y > 0.7));
+  const logs = w.tiles.flatMap(t => [...t.drift, ...nutsOfTile(w, t)]);
   const lonely = (x, z) => logs.every(o => Math.hypot(o.x - x, o.z - z) > 6) && [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]].every(([dx, dz]) => { const t = terrainAt(w, x + dx, z + dz); return !t.inRiver && t.y > 0.4 && t.climb <= 0.1 && w.slope(x + dx, z + dz) < 0.3; });
   for (let r = 0; r < 160 && !E; r += 2) for (let a = 0; a < 6.28 && !E; a += 0.2) { const x = spawn.x + Math.cos(a) * r, z = spawn.z + Math.sin(a) * r; if (lonely(x, z)) E = { x, z }; }
 }, 120000);
@@ -84,12 +85,19 @@ describe('the crab state', () => {
     c.update(0.2 + SPOIL_AFTER + 0.01); expect(c.carried).toEqual([0.5]);
     expect(c.eat()).toBe(true); expect(c.carried).toEqual([]); expect(c.eat()).toBe(false);
   });
-  it('lets a caught crab come back 3 to 5 days later', () => {
+  it('lets a caught crab come back 5 to 8 days later', () => {
     const c = createCrabs(1337); let id = 10; while (!c.dig(id, 2)) id++;
     expect(c.isGone(id)).toBe(true);
-    const back = c.gone.get(id) - 2; expect(back).toBeGreaterThanOrEqual(REGROW[0]); expect(back).toBeLessThanOrEqual(REGROW[1]);
+    const back = c.gone.get(id) - 2; expect(REGROW).toEqual([5, 8]); expect(back).toBeGreaterThanOrEqual(REGROW[0]); expect(back).toBeLessThanOrEqual(REGROW[1]);
     c.update(2 + REGROW[0] - 0.01); expect(c.isGone(id)).toBe(true);
     c.update(2 + REGROW[1] + 0.01); expect(c.isGone(id)).toBe(false);
+  });
+  it('has at most 2 colonies per beach tile, each with 2 or 3 crabs', () => {
+    expect(COLONY_MAX).toBe(2);
+    const cols = w.tiles.map(t => coloniesOfTile(w, t));
+    expect(cols.flat().length).toBeGreaterThan(5);
+    for (const l of cols) expect(l.length).toBeLessThanOrEqual(2);
+    for (const c of cols.flat()) { expect(c.crabs.length).toBeGreaterThanOrEqual(2); expect(c.crabs.length).toBeLessThanOrEqual(3); }
   });
   it('makes bad saved data harmless', () => {
     const c = createCrabs(1, { carried: ['x', 1, 2, 3], gone: [[1, 2], 'x', [3]], digs: -4 });

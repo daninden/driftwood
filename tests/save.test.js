@@ -2,6 +2,7 @@
 // formats are ignored, an unwalkable saved position is moved, the storage
 // never throws, the address hash and the reset key.
 import { describe, it, expect, beforeAll } from 'vitest';
+import { nutsOfTile } from '../src/game/fibre.js';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
@@ -15,7 +16,7 @@ let w, spawn, logs, cocos;
 beforeAll(async () => {
   w = await generateWorld(1337); spawn = startSpot(w);
   const by = list => list.sort((a, b) => Math.hypot(a.x - spawn.x, a.z - spawn.z) - Math.hypot(b.x - spawn.x, b.z - spawn.z));
-  logs = by(w.tiles.flatMap(t => t.drift)); cocos = by(w.tiles.flatMap(t => t.cocos));
+  logs = by(w.tiles.flatMap(t => t.drift)); cocos = by(w.tiles.flatMap(t => nutsOfTile(w, t)));
 }, 120000);
 
 const makeInput = (o = {}) => {

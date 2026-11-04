@@ -1,6 +1,7 @@
 // Hunger (0.15): hunger over time and its rules, eating the nut when husking,
 // how its effects combine with thirst, the save, and the half coconut mark.
 import { describe, it, expect, beforeAll } from 'vitest';
+import { nutsOfTile } from '../src/game/fibre.js';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createHunger, HUNGRY_AT, STARVING_AT, HUNGER_SLOW, DRILL_COST as HUNGRY_DRILL, STARVE_DRAIN, NUT_FOOD } from '../src/game/hunger.js';
@@ -17,7 +18,7 @@ let w, spawn, logs, cocos;
 beforeAll(async () => {
   w = await generateWorld(1337); spawn = startSpot(w);
   const by = list => list.sort((a, b) => Math.hypot(a.x - spawn.x, a.z - spawn.z) - Math.hypot(b.x - spawn.x, b.z - spawn.z));
-  logs = by(w.tiles.flatMap(t => t.drift)); cocos = by(w.tiles.flatMap(t => t.cocos));
+  logs = by(w.tiles.flatMap(t => t.drift)); cocos = by(w.tiles.flatMap(t => nutsOfTile(w, t)));
 }, 120000);
 
 const makeInput = (o = {}) => {

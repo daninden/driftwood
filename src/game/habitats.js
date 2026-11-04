@@ -8,7 +8,7 @@
  *
  * Crab colonies: on the beach (the coast tier, gentle ground between 0.4 m
  * below high water and 1 m above it, dry of the rivers): a few holes in the sand
- * and 3 to 5 crabs that belong to them. Colonies on the wet strip are only
+ * and 2 or 3 crabs that belong (0.24: at most 2 colonies per tile, were 6 with 3 to 5 crabs) to them. Colonies on the wet strip are only
  * out of their holes when the sea has gone down (low water).
  * Fish (0.17.3: more of them; 0.17.6: 0.35 to 0.5 m): groups of 2 to 4 in shallow river water
  * (not at falls, a group about every 9 river points, also in the wide, slow stretch up to the mouth) and in the shallow lagoons inside the
@@ -51,7 +51,7 @@
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 
-export const COLONY_MAX = 6;
+export const COLONY_MAX = 2;
 export const CELL = 64;
 export const FLY_SPACING = 14, EDGE_F = [0.2, 0.78], FLY_GROUP = [10, 30];
 export const FISH_LEN = [0.35, 0.15], SEA_LEN = [0.4, 0.2];   // length of a river or lagoon fish and of a sea fish: [least, spread] in m (0.17.6: 0.35 to 0.5 and 0.4 to 0.6, were 0.45 to 0.65 and 0.5 to 0.75 in 0.17.3, which were too big)
@@ -81,7 +81,7 @@ export function coloniesOfTile(w, tile) {
       holes.push({ x: hx, y, z: hz, wet: y < 0.05 });
     }
     if (holes.length < 2) continue;
-    const id = base + list.length, nc = Math.min(5, holes.length + (r() < 0.5 ? 1 : 0)), crabs = [];
+    const id = base + list.length, nc = 2 + (r() < 0.5 ? 1 : 0), crabs = [];
     for (let i = 0; i < nc; i++) {
       const h = holes[i % holes.length], a = r() * Math.PI * 2;
       crabs.push({ id: id * 8 + i, hole: i % holes.length, x: h.x + Math.cos(a) * 0.1, z: h.z + Math.sin(a) * 0.1, u: (i + r()) / nc });
