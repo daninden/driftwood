@@ -1,9 +1,9 @@
 /**
- * render/soundMark — the sound mark: a small speaker in ink above the moon, on touch-only devices (0.20 "Sound").
+ * render/soundMark — the sound mark: a small speaker in ink above the moon (0.20 "Sound"; since 0.22.3 on every device, not only touch-only ones).
  *
  * Drawn like the other marks (rim in `--ink`, the glow `--halo`, faint most of the time). Sound on: a
- * speaker with two waves; off: the speaker crossed out. A tap turns sound on or off (the same as M on a
- * keyboard, audio/pref). Where a keyboard is the way to play (not touch-only) the mark stays hidden.
+ * speaker with two waves; off: the speaker crossed out. A tap or click turns sound on or off (the same as M on a
+ * keyboard, audio/pref).
  *
  * markState(on) -> { waves: bool, cross: bool, opacity }   what the mark shows. Pure.
  * createSoundMark(el, onTap) -> { update(on) }   el: the #sound svg (index.html) with .waves and .cross groups;

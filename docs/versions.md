@@ -2,6 +2,10 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.22.3 "Speaker" — 2026-11-04
+
+- Sound: the small ink speaker above the moon now shows on every device, not only on touch-only ones; a click on it turns sound on or off like **M** (`src/main.js`, `render/soundMark`).
+
 ## 0.22.2 "Clearer finds" — 2026-11-04
 
 - Crab catch: a failed dig is now visible. The crab pops out of the sand 0.5 to 1 m from the hole on the far side from him, scuttles away from him (3.4 m/s) and dives into another hole of its colony 2 to 4.5 m on, or digs in on the sand. It then stays hidden three times as long (30 to 60 s) and cannot be dug for (`wildlife.escape`, `ESC_POP`, `ESC_RUN`, `ESC_SPEED` in `game/wildlife`). A crab away from its home hole drifts back toward it. The chance is unchanged (0.5).

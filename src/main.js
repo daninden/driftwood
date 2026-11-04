@@ -42,7 +42,7 @@
  *
  * Sound (0.20, audio/): audio/mix (pure) decides what should be heard from the world and the game state,
  * audio/sound builds the Web Audio graph and follows it. Sound starts with the first key or tap (the browser rule;
- * answering the name counts); M turns it on or off, and on touch-only devices the speaker mark #sound
+ * answering the name counts); M turns it on or off, and the speaker mark #sound
  * (render/soundMark) above the moon does the same; the choice is kept in localStorage (audio/pref). The fade-out
  * when the tab is hidden is in audio/sound.
  *
@@ -152,7 +152,7 @@ async function boot() {
   const soundSwitch = createSoundSwitch(store0), sound = createSound({ enabled: soundSwitch.on }), mixer = createMixer(world);
   const soundEl = document.getElementById('sound'), toggleSound = () => { sound.gesture(); sound.setEnabled(soundSwitch.toggle()); mixer.reset(); soundMark.update(soundSwitch.on); };
   const soundMark = createSoundMark(soundEl, toggleSound);
-  if (touch && soundEl) soundEl.hidden = false;   // touch-only devices have no M key
+  if (soundEl) soundEl.hidden = false;   // 0.22.3: shown everywhere, also next to the M key
   soundMark.update(soundSwitch.on);
   for (const type of ['keydown', 'pointerup', 'touchend', 'click']) window.addEventListener(type, () => { sound.gesture(); }, { capture: true, passive: true });   // the first key or tap starts sound
   window.addEventListener('keydown', e => { if (isSoundKey(e)) toggleSound(); }, true);

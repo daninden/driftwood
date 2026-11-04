@@ -116,7 +116,7 @@ Now and then, about once a week of the island's days (never in the first two day
 
 The island has a quiet sound of its own (in the rain you hear the rain, a little softer under a lean-to), made in your browser (there are no sound files), and it depends on where you are. The surf swells and falls back in the rhythm of the water's edge, loud on the beach and faint inland. Near a river you hear it murmur, more at a ford and a rush at a waterfall. A soft wind follows the gusts you see in the trees, with a rustle of leaves near palms and trees and a thin howl on the summit. A fire or torch near you crackles. Your steps sound different on dry sand, wet sand, in the water and on grass, and heavier when you are tired, thirsty, hungry or carrying wood. Husking, drilling a fire and building make their own sounds. Seabirds call when they are near, and at night crickets sing in the forest. It is all quiet on purpose.
 
-Sound begins with your first key press or tap, because browsers do not allow it earlier. Press **M** to turn it off and on; on a phone or tablet a small speaker mark above the moon does the same when you tap it. The island remembers your choice on that device.
+Sound begins with your first key press or tap, because browsers do not allow it earlier. Press **M** to turn it off and on, or click or tap the small speaker mark above the moon. The island remembers your choice on that device.
 
 ### Day and night
 
@@ -135,7 +135,7 @@ On a slow computer the game lowers the quality of its shadows (and, as a last st
 - A left click, a tap, the action button or a walking key wakes him; the view controls do not
 - **Thumb stick** (phones and tablets only, bottom right): drag from its centre to walk that way, to the rim to run; let go to stop. Pushing the stick also stops whatever he is kneeling at (husking, digging, roasting, drinking, drilling a fire), like walking off
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)
-- **M**: turn sound on or off (on a phone: tap the small speaker above the moon)
+- **M**, or a click or tap on the small speaker above the moon: turn sound on or off
 - **Enter** (or the arrow): confirm your name at the start of an island
 - **Shift + `**: start over (forget this island's save and begin again; the name is asked again)
 - **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame, quality level `q0` to `q4`); while it is shown you can zoom out further, to 25
