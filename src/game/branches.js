@@ -17,7 +17,9 @@
  *   - Taking a branch leaves its spot empty; REGROW to REGROW + REGROW_SPREAD
  *     days later (fixed per spot and per time it was taken) a new one lies
  *     there. A branch laid in a pile or carried is a copy of the spot's piece:
- *     the same id can be carried while a new one has grown back.
+ *     the same id can be carried while a new one has grown back. The regrown branch is a new
+ *     object, without the wetness of the old one (no `t`), and carries `g`, the day it grew
+ *     (game/wood: rain that fell before g did not wet it).
  *
  * Pure data on a world; no DOM, no Three.js.
  *
@@ -95,7 +97,13 @@ export function createBranches(w, saved) {
   }
   function update(total) {
     let n = 0;
-    taken.forEach((at, id) => { if (total >= back(id, at)) { taken.delete(id); n++; } });
+    taken.forEach((at, id) => {
+      const when = back(id, at);
+      if (total < when) return;
+      taken.delete(id); n++;
+      const s = id - BRANCH_ID0, list = branchesOfTile(w, w.tiles[Math.floor(s / TILE_SPAN)]), old = list[s % TILE_SPAN];
+      if (old) { const { t, ...fresh } = old; list[s % TILE_SPAN] = { ...fresh, g: when }; }   // a new piece: it starts dry, whatever the old one (maybe still carried) was
+    });
     if (n) branches.version++;
   }
   function state() { return { taken: [...taken] }; }

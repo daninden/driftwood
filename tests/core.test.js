@@ -76,4 +76,12 @@ describe('core/slicer', () => {
     const g = work(); expect(g.next()).toEqual({ value: 100, done: true });
     expect(drain(work())).toBe(100);
   });
+  it('cancel closes the generator (finally runs) and the job never resumes', () => {
+    let t = 0, closed = 0, n = 0; const s = createSlicer(() => t);
+    function* work() { try { for (;;) { t += 3; n++; if (s.over()) yield; } } finally { closed++; } }
+    const job = s.job(work()); job.run(5);
+    const before = n; job.cancel(); job.cancel();
+    expect(closed).toBe(1); expect(job.done).toBe(true);
+    job.run(50); expect(n).toBe(before);
+  });
 });

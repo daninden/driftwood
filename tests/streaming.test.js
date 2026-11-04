@@ -55,4 +55,22 @@ describe('createStreamer', () => {
     expect(dropped.length).toBe(before);
     expect([...s.entries.keys()].every(t => Math.hypot(t.x0 - 250, t.z0 - 250) < 120)).toBe(true);
   });
+  it('cancels a build that is dropped before it is finished: it never resumes, never reports ready, and its cleanup runs', () => {
+    let t = 0; const slicer = createSlicer(() => t), ready = [], dropped = [], steps = [], cleaned = [];
+    const build = tile => (function* () {
+      try { for (let i = 0; i < 1000; i++) { t += 5; steps.push(tile.tx + ',' + tile.tz); if (slicer.over()) yield; } return 'done'; }
+      finally { cleaned.push(tile.tx + ',' + tile.tz); }
+    })();
+    const s = createStreamer({ tiles: grid(), build, slicer, onReady: (tl, v) => ready.push(v), onDrop: (tl, v) => dropped.push(v) });
+    s.update({ x: 1, z: 1 }, 5.4, 1.6); s.pump(6);   // one build is started, far from finished
+    expect(s.pending()).toBeGreaterThan(0);
+    const started = [...s.entries.entries()].find(([, e]) => e.state === 'building')[0], key = started.tx + ',' + started.tz;
+    s.update({ x: 250, z: 250 }, 5.4, 1.6);   // walked away: everything is dropped
+    expect(cleaned).toContain(key);
+    expect(dropped.every(v => v === undefined)).toBe(true);
+    const n = steps.filter(x => x === key).length;
+    for (let i = 0; i < 5; i++) s.pump(50);   // pumping the old job again does nothing for the dropped tile
+    expect(steps.filter(x => x === key).length).toBe(n);
+    expect(ready).not.toContain('done');
+  });
 });

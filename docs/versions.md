@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.22.1 "Loose ends" — 2026-11-04
+
+- Rain: loose wood anywhere on the island now gets wet from a shower, not only within 40 m of him. Far wood is caught up lazily: `weather.lastFall(total)` (new, `game/weather`) gives the end of the latest shower, and `wood.rain(..., lastFall)` soaks wood in the open that comes within reach as of that moment, as long as less than its drying time has passed. Washed-up wood (few pieces) is wetted wherever it lies. A shower he slept through also wets loose wood in the open now (not piles or carried wood, which can have been moved since). Caveat: the shelter check uses the lean-tos that exist at catch-up time.
+- Rain: a regrown branch starts dry. `branches.update` replaces the old object with a new one without `t`, carrying `g`, the day it grew, so rain from before it grew does not count. Caveat: `g` is not saved.
+- Low water finds: wood that washes up during a fast-forward sleep, after the high water has passed, gets its drying start at the last moment the sea still covered that spot (`washUp(n, avoid, total)` and `lastCovered` in `game/wood`), so it is never dry too early.
+- Tiles: no GPU leak was found (headless memory count stable over 4 rounds of walking 200 m away and back). A tile build that is dropped before it is finished is now cancelled: `job.cancel()` in `core/slicer` closes the generator, `render/streaming` cancels, and `render/nearTile` disposes what it had made.
+- Build: `dist/driftwood.html` now starts with `<meta charset="utf-8">` (`scripts/inline.js`), so the dev panel no longer shows garbled characters when it is opened from disk.
+- Tools: Vitest 3.2.7 to 5.1.0; `npm audit` reports 0 vulnerabilities; no config changes.
+
 ## 0.22 "Crab catch" — 2026-11-04
 
 - New: crabs can be caught and eaten, the second food after the coconut. Digging: beside a hole a crab has just fled into (the crab stays in its hole while he is within 5 m, as always) a short press of the action button makes him kneel and dig for 5 s (work kind `dig`, icon a hand with claws over a hole); the dig catches with chance 0.5, fixed by the seed and the number of digs so far (`game/crabs`, like `fire.attempt`, so it cannot be repeated for luck); a failed dig sends the crab out of the back (`wildlife.escape`: it stays hidden three times as long and is no longer there to dig for). More crabs are out at low water, so there are more fled crabs then.

@@ -5,7 +5,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createWeather, FIRST_MIN, FIRST_MAX, GAP_MIN, GAP_MAX, LEN_MIN, LEN_MAX, RAMP, FALLING, WOOD_SHELTER, FIRE_SHELTER, STRENGTH_MIN } from '../src/game/weather.js';
-import { dryness, DRY_DAYS, BRANCH_DRY_DAYS, createWood } from '../src/game/wood.js';
+import { dryness, DRY_DAYS, BRANCH_DRY_DAYS, RAIN_REACH, createWood } from '../src/game/wood.js';
 import { createFire, BURN, FUEL_MAX, EMBERS, TORCH_DAYS, RAIN_BURN, RAIN_OUT, TORCH_RAIN, BURNT_DAYS } from '../src/game/fire.js';
 import { createLeantos } from '../src/game/leanto.js';
 import { createBranches, branchesOfTile } from '../src/game/branches.js';
@@ -147,6 +147,52 @@ describe('wood in the rain', () => {
     expect(start.t).toBe(t0); expect(br.t).toBe(t1);
     expect(dryness(start, h.clock.total)).toBeLessThan(0.1);
     expect(h.state().wood.wet.map(e => e[0])).toEqual(expect.arrayContaining([start.id, br.id]));   // and goes on being saved while it is wet
+  });
+  it('wets loose wood further than the reach too: caught up when he comes near, within a drying time of the shower', () => {
+    const far = logs.find(l => Math.hypot(l.x - spawn.x, l.z - spawn.z) > RAIN_REACH + 20), wood = createWood(w, undefined, createBranches(w));
+    expect(far).toBeDefined();
+    const near = { x: far.x, z: far.z }, away = spawn;
+    wood.rain(10, true, () => false, away, 10); expect(far.t).toBeUndefined();   // out of reach while it falls
+    wood.rain(10.1, false, () => false, away, 10.05); expect(far.t).toBeUndefined();   // still far away
+    wood.rain(10.2, false, () => false, near, 10.05);   // he comes by: it was wet since the shower
+    expect(far.t).toBeCloseTo(10.05); expect(dryness(far, 10.2)).toBeCloseTo(0.15);
+    expect(wood.state().wet.map(e => e[0])).toContain(far.id);
+    delete far.t;
+    wood.rain(10.05 + DRY_DAYS + 0.1, false, () => false, near, 10.05); expect(far.t).toBeUndefined();   // long dried: nothing to catch up
+    wood.rain(10.2, false, () => true, near, 10.05); expect(far.t).toBeUndefined();   // under a roof: dry
+  });
+  it('does not catch up carried wood or piles after the shower: dry wood moved into the open stays dry', () => {
+    const wood = createWood(w, undefined, createBranches(w)), roof = (x) => x > 100;
+    const p = { x: 200, z: 0, kind: 'driftwood', logs: [piece(900020, 0, 0), piece(900021, 0, 0)] };
+    wood.piles.push(p);
+    wood.rain(10, true, roof, { x: 200, z: 0 });   // the shower: the pile is under the roof, dry
+    expect(p.logs[0].t).toBeUndefined();
+    wood.take({ kind: 'pile', pile: p });   // after it, he carries the dry wood into the open and lays a new pile there
+    wood.rain(10.1, false, roof, { x: 0, z: 0 }, 10.05);
+    expect(wood.carried.every(l => l.t === undefined)).toBe(true);
+    wood.drop(0, 0, 0);
+    wood.rain(10.2, false, roof, { x: 0, z: 0 }, 10.05);
+    expect(wood.piles[0].logs.every(l => l.t === undefined)).toBe(true);
+    wood.rain(10.3, true, roof, { x: 0, z: 0 }); expect(wood.piles[0].logs.every(l => l.t === 10.3)).toBe(true);   // new rain does wet it
+  });
+  it('wets all washed-up wood, wherever it lies', () => {
+    const lost = w.tiles.flatMap(t => t.drift.map(l => l.id)), empty = createWood(w, { lost });
+    const got = empty.washUp(3); expect(got.length).toBeGreaterThan(0);
+    const farOne = got.find(l => Math.hypot(l.x - spawn.x, l.z - spawn.z) > RAIN_REACH + 20); expect(farOne).toBeDefined();
+    empty.rain(20, true, () => false, spawn); expect(dryness(farOne, 20)).toBe(0);
+  });
+  it('keeps a regrown branch dry even though the one that lay there was wet', () => {
+    const br = createBranches(w), wood = createWood(w, undefined, br);
+    const tile = w.tiles.find(t => t.trees.length && br.groundBranches(t).length), b = br.groundBranches(tile)[0];
+    wood.rain(10, true, () => false, b); expect(b.t).toBe(10);
+    expect(br.take(b, 10)).toBe(true);
+    br.update(10 + 9);   // grown back
+    const again = br.piece(b.id); expect(br.onGround(again)).toBe(true);
+    expect(again.t).toBeUndefined(); expect(dryness(again, 19)).toBe(1);
+    expect(again.g).toBeGreaterThan(10);
+    const g = again.g;
+    wood.rain(g + 0.2, false, () => false, b, g - 0.05); expect(again.t).toBeUndefined();   // the rain fell before it grew
+    wood.rain(g + 0.2, true, () => false, b); expect(again.t).toBe(g + 0.2);                // rain while it lies there: wet, like the rest
   });
   it('lets go of the saved wet list once the wood has dried', () => {
     const wood = createWood(w, undefined, createBranches(w));

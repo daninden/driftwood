@@ -20,6 +20,9 @@
  *   weather.raining(total)      true while the intensity is at least FALLING
  *   weather.shower(total)       the shower under way at total, or null
  *   weather.next(total)         the shower under way, or the next one to come
+ *   weather.lastFall(total)     the latest moment at or before total that rain fell (total itself while it falls,
+ *                               else the end of the latest shower), or null when it has not rained yet (for wood that
+ *                               was out of reach or asleep, game/wood rain)
  *
  * Depends on: core/noise, core/math
  */
@@ -58,5 +61,16 @@ export function createWeather(seed) {
     const s = shower(total);
     return s ? s.strength * ss(0, RAMP, total - s.start) * ss(0, RAMP, s.end - total) : 0;
   }
-  return { showers, shower, next, intensity, raining: total => intensity(total) >= FALLING };
+  function lastFall(total) {
+    if (!(total >= 0)) return null;
+    upTo(total + 1);
+    for (let i = list.length - 1; i >= 0; i--) {
+      const s = list[i]; if (s.start > total) continue;
+      if (total >= s.end) return s.end;
+      if (intensity(total) >= FALLING) return total;
+      if (total > (s.start + s.end) / 2) return s.end;   // easing off: it fell until just now
+    }
+    return null;
+  }
+  return { showers, shower, next, intensity, lastFall, raining: total => intensity(total) >= FALLING };
 }

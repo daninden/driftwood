@@ -14,7 +14,11 @@
  *   onReady(tile, value), onDrop(tile, value | undefined)
  *   streamer.update(focus, zoom, aspect, yaw?, pitch?)
  *                                         decide what is wanted, drop what
- *                                         is far out of view, start the
+ *                                         is far out of view (a build still
+ *                                         running is cancelled: its generator
+ *                                         is closed and never resumed, so a
+ *                                         dropped tile never reaches onReady
+ *                                         and onDrop gets undefined), start the
  *                                         nearest queued build
  *   streamer.pump(ms)                      work on the current build
  *   streamer.entries                       Map<tile, { state, value }>
@@ -42,7 +46,7 @@ export function createStreamer({ tiles, build, onReady, onDrop, slicer, maxZoom 
     for (const t of land) if (!entries.has(t) && inView(t, 0)) entries.set(t, { state: 'queued' });
     entries.forEach((e, t) => {
       if (inView(t, 30)) return;
-      if (current && current.tile === t) current = null;
+      if (current && current.tile === t) { current.job.cancel(); current = null; }
       onDrop(t, e.value); entries.delete(t);
     });
     if (!current) {

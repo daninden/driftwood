@@ -28,10 +28,22 @@ import { addTree, addPine, addPalm, addBush, addRoots, addTideLine, rockColor } 
 const GRASS = [[0xa9b062, 0x98a356], null, [0x6a8a3c, 0x7a9446], [0xb3ab6c, 0xa39d62, 0xbfb47a], [0xa8a272, 0x9a9468]];
 
 export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
+  const own = [];   // what a cancelled build must dispose
+  let finished = false;
+  try {
+    const group = yield* buildBody(w, colorAt, kit, tile, slicer, anisotropy, own);
+    finished = true; return { group };
+  } finally {
+    if (!finished) own.forEach(d => d.dispose());
+  }
+}
+
+function* buildBody(w, colorAt, kit, tile, slicer, anisotropy, own) {
   const { H, Lat, slope, tierAt, riverAt, forestB, forestF } = w;
   const group = new THREE.Group(), B = new Batch(outlineMat);
-  const geo = yield* tileGeometry(w, tile, 160, slicer), tex = yield* tileTexture(w, colorAt, tile, 1024, slicer, anisotropy);
-  const mesh = new THREE.Mesh(geo, terrainMat(tex)); mesh.receiveShadow = true; mesh.castShadow = true; mesh.userData.terrain = true; group.add(mesh);
+  const geo = yield* tileGeometry(w, tile, 160, slicer); own.push(geo);
+  const tex = yield* tileTexture(w, colorAt, tile, 1024, slicer, anisotropy); own.push(tex);
+  const mesh = new THREE.Mesh(geo, terrainMat(tex)); own.push(mesh.material); mesh.receiveShadow = true; mesh.castShadow = true; mesh.userData.terrain = true; group.add(mesh);
   const r = mulberry32(hashInt(w.seed + 11, tile.tx, tile.tz));
 
   for (const t of tile.trees) { addTree(B, kit, t, r); if (slicer.over()) yield; }
@@ -66,7 +78,7 @@ export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
   }
   B.build(group);
 
-  return { group };
+  return group;
 }
 
 export function disposeGroup(group) {

@@ -11,6 +11,7 @@
  *   const job = slicer.job(work());
  *   // every frame:
  *   const res = job.run(8);   // spend at most ~8 ms; res.done, res.value
+ *   job.cancel();             // give up: the generator is closed (its finally blocks run) and never resumes
  *
  * A generator run outside a job (slicer never started) never yields early:
  * over() is false while no budget is set, so `drain(gen)` finishes it in one go.
@@ -26,6 +27,7 @@ export function createSlicer(now = () => performance.now()) {
     return {
       get done() { return done; },
       get value() { return value; },
+      cancel() { if (!done) { done = true; gen.return(); } },
       run(ms) {
         if (done) return { done, value };
         end = now() + ms;

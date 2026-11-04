@@ -382,14 +382,14 @@ export function createGame(world, spawn, opts = {}) {
     clock.advance(gameDt);
     game.sea = seaLevel(clock.total);
     const n = highWaters(clock.total);
-    if (n > wood.tide) { for (let k = Math.max(wood.tide + 1, n - 2); k <= n; k++) wood.washUp(k, player); wood.tide = n; }
+    if (n > wood.tide) { for (let k = Math.max(wood.tide + 1, n - 2); k <= n; k++) wood.washUp(k, player, clock.total); wood.tide = n; }
     wood.flood(game.sea);
     wood.tideUpdate(game.sea, clock.total);   // wood under the sea cannot be picked up and starts drying again
     thirst.update(gameDt / DAY_SECONDS);
     hunger.update(gameDt / DAY_SECONDS);
     game.rain = weather.intensity(clock.total);
     const falling = game.rain >= FALLING;
-    if (!(Math.abs(clock.total - rainAt) < RAIN_EVERY)) { rainAt = clock.total; wood.rain(clock.total, falling, (x, z) => leantos.covers(x, z, WOOD_SHELTER), player); }   // wood in the open gets wet
+    if (!(Math.abs(clock.total - rainAt) < RAIN_EVERY)) { rainAt = clock.total; wood.rain(clock.total, falling, (x, z) => leantos.covers(x, z, WOOD_SHELTER), player, weather.lastFall(clock.total)); }   // wood in the open gets wet
     fire.update(gameDt / DAY_SECONDS, falling ? (x, z) => !leantos.covers(x, z, FIRE_SHELTER) : null, player, clock.total);   // fires and torches in the open burn down faster
     fire.flood(game.sea);
     leantos.flood(game.sea);

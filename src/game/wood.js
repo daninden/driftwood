@@ -39,7 +39,7 @@
  *     wherever it lies or is carried; the wood that lay on the beach at the
  *     start is dry. Only dry wood makes a fire catch (game/fire).
  *   - Rain (0.21, game/weather) wets wood again: wood.rain soaks what lies in the open
- *     (loose pieces within RAIN_REACH of him, every pile, and what he carries) by setting
+ *     (loose pieces within RAIN_REACH of him, all washed-up wood, every pile, and what he carries) by setting
  *     its log.t to now, so it dries again from the moment the rain stops. Wood under a roof
  *     (the sheltered callback) stays as it is. A branch dries in BRANCH_DRY_DAYS (half a day),
  *     driftwood in DRY_DAYS. What rain soaked and is not washed-up wood (start wood, branches)
@@ -68,14 +68,21 @@
  *   wood.consume(pile, n) -> the top n pieces of a pile, taken off the island (to build, game/leanto)
  *   wood.drop(x, z, heading, inWater?, wetAt?) -> true when something was laid down
  *     (wetAt(x, z) -> true for water, to keep a new pile out of it)
- *   wood.washUp(n, avoid?) -> the logs high water number n brought (none
+ *   wood.washUp(n, avoid?, total?) -> the logs high water number n brought (none
  *     within 2 m of avoid { x, z }, the castaway); deterministic in (seed, n).
- *     Each carries t, the day of that high water (game/tide), for drying.
+ *     Each carries t, the day of that high water (game/tide), for drying. When total (the clock now)
+ *     is later (a sleep skipped over the high water) and the sea has fallen below the spot since, t is the
+ *     last moment the sea still covered it, so nothing appears dry that has just been uncovered.
  *   wood.tideUpdate(sea, total)  tells the wood the sea level (pieces under it cannot be picked
  *     up) and restarts the drying (log.t = total) of every washed-up piece the sea covers
- *   wood.rain(total, falling, sheltered, at)  while falling is true, soaks the wood in the open near at { x, z } (the
- *     castaway) that sheltered(x, z) does not cover: loose pieces within RAIN_REACH, all piles, what is carried
- *     (by his place). Always lets go of wood that has dried. Bumps wood.version when a dry piece got wet.
+ *   wood.rain(total, falling, sheltered, at, lastFall?)  while falling is true, soaks the wood in the open near at { x, z } (the
+ *     castaway) that sheltered(x, z) does not cover: loose pieces within RAIN_REACH, all washed-up wood, all piles, what is
+ *     carried (by his place). Always lets go of wood that has dried. Bumps wood.version when a dry piece got wet.
+ *     lastFall (game/weather lastFall): when it is not falling but rain fell less than a drying time ago, wood in the open
+ *     near at that is not wet since then is soaked as of lastFall (what lay out of reach during the shower, or the
+ *     shower he slept through). Only loose wood on the ground is caught up: carried wood and piles can have been moved
+ *     since, so they are soaked only while it falls. A branch that grew after lastFall (its `g`) stays dry. Far wood is thus caught up
+ *     lazily, when he comes near, with no work for the rest of the island.
  *   wood.drying(total)  true while some washed-up, carried or rain-soaked piece can still be wet
  *   wood.takePile(pile) -> its logs, taken off the island (to burn, game/fire)
  *   wood.giveOne(ok?) -> the top piece carried that ok(log) accepts (any, without
@@ -92,11 +99,11 @@
  * logsNear(world, x, z, reach) -> the first logs of the tiles within reach of (x, z)
  * distToLog(log, x, z) -> { d, x, z }  distance to the log's axis and the nearest point on it
  *
- * Depends on: core/noise, world/constants, game/tide, game/branches (ids only)
+ * Depends on: core/noise, world/constants, game/tide (seaLevel), game/branches (ids only)
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
-import { FIRST_HIGH, PERIOD, RANGE } from './tide.js';
+import { FIRST_HIGH, PERIOD, RANGE, seaLevel } from './tide.js';
 import { BRANCH_ID0 } from './branches.js';
 
 export const CARRY_MAX = 3;
@@ -255,17 +262,29 @@ export function createWood(w, saved, branches = null) {
   }
 
   // rain: soak the wood in the open near at, let go of what has dried
-  function rain(total, falling, sheltered, at) {
+  function rain(total, falling, sheltered, at, lastFall = null) {
     for (const [id, l] of soaked) if (dryness(l, total) >= 1) soaked.delete(id);
-    if (!falling) return;
+    // while it falls: soak now. Otherwise catch up on a shower that ended less than a drying time ago (wood out of reach, or a
+    // sleep that skipped the shower): wood in the open that is looked at again gets wet as of the end of that shower
+    const t = falling ? total : (lastFall !== null && Number.isFinite(lastFall) && total - lastFall < DRY_DAYS ? lastFall : null);
+    if (t === null) return;
     let fresh = false;
-    const soak = l => { if (dryness(l, total) > 0.02) fresh = true; l.t = total; if (!washedIds.has(l.id)) soaked.set(l.id, l); };
-    if (!sheltered(at.x, at.z)) wood.carried.forEach(soak);
-    for (const p of wood.piles) if (!sheltered(p.x, p.z)) p.logs.forEach(soak);
+    const soak = l => {
+      if (l.g !== undefined && l.g > t) return;   // a branch that grew after the rain
+      if (l.t !== undefined && l.t >= t) return;   // already wet since
+      if (total - t >= dryDays(l)) return;          // dried again since
+      if (dryness(l, total) > 0.02) fresh = true;
+      l.t = t; if (!washedIds.has(l.id)) soaked.set(l.id, l);
+    };
+    if (falling) {   // carried wood and piles can move: only the rain falling now is known to have hit them
+      if (!sheltered(at.x, at.z)) wood.carried.forEach(soak);
+      for (const p of wood.piles) if (!sheltered(p.x, p.z)) p.logs.forEach(soak);
+    }
     const loose = [...logsNear(w, at.x, at.z, RAIN_REACH), ...(branches ? branches.near(at.x, at.z, RAIN_REACH) : [])];
-    for (const list of washed.values()) loose.push(...list);
+    for (const list of washed.values()) loose.push(...list);   // washed-up wood is few: all of it, wherever it lies
     for (const l of loose) {
-      if (taken.has(l.id) || Math.hypot(l.x - at.x, l.z - at.z) > RAIN_REACH || sheltered(l.x, l.z)) continue;
+      if (taken.has(l.id) || sheltered(l.x, l.z)) continue;
+      if (!washedIds.has(l.id) && Math.hypot(l.x - at.x, l.z - at.z) > RAIN_REACH) continue;
       soak(l);
     }
     if (fresh) wood.version++;
@@ -287,7 +306,19 @@ export function createWood(w, saved, branches = null) {
   }
   const inStrip = (x, y, z) => y > LOW + 0.02 && y < -0.03 && w.slope(x, z) < 0.35 && !w.riverAt(x, z);
 
-  function washUp(n, avoid) {
+  // the latest moment between t0 (high water) and total that the sea stood over height y (t0 when it never did again)
+  function lastCovered(y, t0, total) {
+    const STEP = 1 / 288;   // 5 game minutes
+    let b = total;
+    while (b > t0 && !(y < seaLevel(b))) b -= STEP;
+    if (b <= t0) return t0;
+    if (b === total) return total;
+    let lo = b, hi = Math.min(total, b + STEP);   // covered at lo, not at hi
+    for (let i = 0; i < 16; i++) { const m = (lo + hi) / 2; if (y < seaLevel(m)) lo = m; else hi = m; }
+    return lo;
+  }
+
+  function washUp(n, avoid, total) {
     const brought = [];
     for (const tile of w.tiles) {
       const cap = tile.drift ? tile.drift.length : 0; if (!cap) continue;
@@ -300,7 +331,7 @@ export function createWood(w, saved, branches = null) {
         if (!inStrip(x, y, z)) continue;   // the strip between low and high water, not in a river
         if (avoid && Math.hypot(x - avoid.x, z - avoid.z) < 2) continue;
         if (near(x, z, WASH_GAP).some(l => onBeach(l) && Math.hypot(l.x - x, l.z - z) < WASH_GAP) || wood.piles.some(p => Math.hypot(p.x - x, p.z - z) < WASH_GAP)) continue;
-        const l = { id: nextId++, x, y, z, len, a, rad, t: FIRST_HIGH + n * PERIOD }; addWashed(l); here.push(l); brought.push(l); got++;
+        const t0 = FIRST_HIGH + n * PERIOD, l = { id: nextId++, x, y, z, len, a, rad, t: total > t0 ? lastCovered(y, t0, total) : t0 }; addWashed(l); here.push(l); brought.push(l); got++;
       }
     }
     if (brought.length) { wood.fresh = brought; wood.washes++; wood.version++; }

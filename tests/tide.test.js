@@ -141,6 +141,20 @@ describe('low water finds', () => {
     wood.tideUpdate(0, 4); expect(dryness(l, 4)).toBeCloseTo(0.5);            // carried: the sea does not reset it
     expect(dryness(l, 4.6)).toBe(1);
   });
+  it('washes up during a fast-forward only as dry as the sea has left it: drying starts when the sea last covered the spot', () => {
+    const { wood } = emptied(12), H = FIRST_HIGH + PERIOD, now = H + PERIOD * 0.4;   // slept through: the sea is well down
+    const got = wood.washUp(1, undefined, now); expect(got.length).toBeGreaterThan(0);
+    for (const l of got) {
+      expect(l.t).toBeGreaterThanOrEqual(H); expect(l.t).toBeLessThanOrEqual(now);
+      expect(seaLevel(l.t - 0.001)).toBeGreaterThan(l.y);                    // covered a moment before
+      if (seaLevel(now) < l.y) expect(seaLevel(l.t + 0.003)).toBeLessThan(l.y + 1e-6);   // and not for long after
+      expect(dryness(l, now)).toBeLessThan(1);
+    }
+    const same = emptied(12).wood.washUp(1);   // no total: as before, t is the high water itself
+    expect(same.map(l => l.t)).toEqual(same.map(() => H));
+    const covered = emptied(12).wood.washUp(1, undefined, H + 0.001);
+    for (const l of covered) expect(l.t).toBeGreaterThanOrEqual(H);
+  });
   it('lies there for the next high water, which only adds wood up to the cap', () => {
     const { ts, wood } = emptied(12), first = wood.washUp(1);
     for (let n = 2; n < 30; n++) wood.washUp(n);
