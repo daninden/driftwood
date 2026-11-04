@@ -30,7 +30,10 @@
  * terrainAt(world, x, z, sea?) -> { y, L, s, rv, inRiver, depth, pa, fr, climb }
  *   sea: the current sea level (default 0, high water); depth is the depth
  *   of the river or the sea at (x, z)
- * stepFactor(world, from, x, z, sea?) -> 0 (blocked) or a speed factor 0..1
+ * stepFactor(world, from, x, z, sea?) -> 0 (blocked) or a speed factor 0..1. The steepness rule is symmetric: a step
+ *   is allowed when it would be allowed onto the ground at either end (each judged by its own slope, the step's grade,
+ *   and the climbing route there), so a step you took up into a steep pocket can always be taken back out. Water is
+ *   not symmetric on purpose (only going deeper is blocked).
  * obstaclesNear(world, x, z) -> [{ x, z, r }] blocking circles from the tiles
  *   around (x, z); r already includes the castaway's own radius (BODY)
  * bushFactor(world, x, z) -> speed factor 0..1 from bushes at (x, z)
@@ -72,6 +75,13 @@ export const BUSH_SLOW = 0.45;  // in the middle of a bush you go at 55 %
 /** Stride factor from the needs' combined walking speed (sleep x thirst x hunger):
  *  1 - WEARY_STRIDE * (1 - needsSpeed); at the worst (0.29) about 0.72. */
 export function weariStride(needsSpeed) { return 1 - WEARY_STRIDE * (1 - Math.min(1, Math.max(0, needsSpeed))); }
+
+// A step is judged at two points ahead (stepFactor) but he lands somewhere between, and sliding round a trunk moves him
+// again: the slope where he ends can be a good deal steeper than at the points judged (the ground is rough), and a flood
+// can leave him deeper in a river than he could wade in. canOccupy forgives that much.
+const OCCUPY_SLOPE = 3.2;   // steepness he may rest on anywhere (a step is judged at 1.25, a scramble at 3.2)
+const OCCUPY_CLIMB = 0.5;   // more than the haul limit on a climbing route
+const OCCUPY_DEPTH = 0.6;   // river depth (the same as the sea's)
 
 const cache = new WeakMap();
 function tileObstacles(w, tile) {
@@ -147,19 +157,25 @@ export function terrainAt(w, x, z, sea = 0) {
   return { y, L, s, rv, inRiver, depth: inRiver ? rv.lw - y : (y < sea ? sea - y : 0), pa, fr, climb };
 }
 
+/** Speed factor for a step of steepness `steep` onto ground `b` (terrainAt), or 0 when it is a wall. */
+function climbFactor(b, steep) {
+  if (steep < 0.85) return 1;
+  if (steep < 1.25) return 0.7;
+  if (b.climb <= 0.25) return 0;
+  // benches and root walls are short steep steps you haul yourself up
+  const limit = 3.2 + 1.6 * Math.max(b.pa.bench, b.pa.roots);
+  return steep < 3.2 ? 0.42 : steep < limit ? 0.3 : 0;
+}
+
 export function stepFactor(w, a, x, z, sea = 0) {
   const b = terrainAt(w, x, z, sea), dist = Math.hypot(x - a.x, z - a.z) || 1e-6, grade = (b.y - a.y) / dist;
   const deep = sea - 0.6;   // a rising tide may have overtaken you down to RANGE deeper: from there you can wade back
   if ((b.y < deep && (b.y <= a.y || a.y < deep - 0.5)) || (b.inRiver && b.depth > WADE_MAX && (b.y <= a.y || terrainAt(w, a.x, a.z, sea).depth <= WADE_MAX))) return 0;
   const steep = Math.max(b.s, Math.abs(grade));
-  let f;
-  if (steep < 0.85) f = 1;
-  else if (steep < 1.25) f = 0.7;
-  else if (b.climb > 0.25) {
-    // benches and root walls are short steep steps you haul yourself up
-    const limit = 3.2 + 1.6 * Math.max(b.pa.bench, b.pa.roots);
-    if (steep < 3.2) f = 0.42; else if (steep < limit) f = 0.3; else return 0;
-  } else return 0;
+  let f = climbFactor(b, steep);
+  // Symmetric: a step you could take from (x, z) to here you can take back, so a steep pocket you walked into is never a trap.
+  if (!f) { const t = terrainAt(w, a.x, a.z, sea); f = climbFactor(t, Math.max(t.s, Math.abs(grade))); }
+  if (!f) return 0;
   if (b.depth > 0.05) f *= b.depth > 0.25 ? 0.45 : 0.7;
   if (w.tiles && b.climb <= 0.25) f *= bushFactor(w, x, z);
   return f;
@@ -171,6 +187,20 @@ export function canStand(w, x, z, sea = 0) {
   if (!Number.isFinite(t.y) || t.y < sea - 0.6 || (t.inRiver && t.depth > WADE_MAX)) return false;
   if (!(t.s < 0.85 || (t.climb > 0.25 && t.s < 3.2))) return false;
   return !(w.tiles && obstaclesNear(w, x, z).some(o => Math.hypot(x - o.x, z - o.z) < o.r));
+}
+
+/**
+ * True when (x, z) is a spot walking can leave him at: on the island, not in open sea or river water deeper than WADE_MAX,
+ * not inside a trunk, boulder or crag (resting on its rim is fine, to 5 cm inside where sliding between two left him), and on ground no steeper than he can stand on while
+ * climbing: up to 3.2 anywhere, up to the haul limit (3.2, 4.8 on a bench or root wall) plus 0.5 on a climbing route, and wading no deeper than 0.6; the slack is for where a step ends between the points it was judged at. Wider than
+ * canStand, which puts him down from outside (a click, a save of an older island); a saved spot he walked to passes this.
+ */
+export function canOccupy(w, x, z, sea = 0) {
+  if (!(Math.abs(x) < HALF - 1 && Math.abs(z) < HALF - 1)) return false;
+  const t = terrainAt(w, x, z, sea);
+  if (!Number.isFinite(t.y) || t.y < sea - 0.6 || (t.inRiver && t.depth > OCCUPY_DEPTH)) return false;
+  if (!(t.s < OCCUPY_SLOPE || (t.climb > 0.25 && t.s < 3.2 + 1.6 * Math.max(t.pa.bench, t.pa.roots) + OCCUPY_CLIMB))) return false;
+  return !(w.tiles && obstaclesNear(w, x, z).some(o => Math.hypot(x - o.x, z - o.z) < o.r - 0.05));
 }
 
 export function nearestStandable(w, x, z, sea = 0, maxR = 15) {

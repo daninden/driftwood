@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.27.3 "Fixes" — 2026-11-04
+
+Fixes from the first playtest-bot run (5 seeds x 10 game days, 2 x 40 days, on 0.27.2).
+
+- Movement: he could be trapped in steep pockets beside climbing roots (seed 7 near (-111.9, -91.8): 16 of 24 directions blocked, the bot stayed there for days and collapsed from thirst). The steepness check judged a step only by the ground it ends on, so a step up a root route was allowed but the same step back down was not. Now a step is allowed when it passes judged at its end or at its start (`climbFactor` in `game/movement`): every step he could take, he can take back. Water stays one-way on purpose (only going deeper is blocked); walls still block. Sampled on seeds 7 and 1337: about 1,200 asymmetric steps before, 0 after.
+- Loading: a save no longer moves him up to 0.5 m. The saved spot is kept when `canOccupy` allows it (not open sea or water deeper than 0.6 m, not steeper than he can be, not more than 5 cm inside a trunk or boulder); only a truly invalid spot falls back to `nearestStandable`.
+- Rain and saving: the day a branch regrew (`g`) is now saved (`branches.grown`, kept 3 days), so after loading, the catch-up for the last shower no longer wets branches that grew after it (the wet list differed by 3 entries after a round trip).
+- Tooling: the playtest bot is in the repository (`scripts/playtest.js`, `scripts/playtest-bot.js`, `scripts/playtest-lib.js`; `npm run build`, then `npm run playtest -- --seed 1337,7 --days 10 --out DIR`, default `playtest-out/`, gitignored). It plays through the real inputs with fast-forwarded time, reloads from a save every game day and compares, and writes a per-day report.
+- Rerun on seeds 7 and 1337: no trap, 0 page errors, all save round trips match. Open: on seed 7 the bot still gets stuck at river crossings right at the wading limit (see the handover).
+- Tests: `tests/trap.test.js` (new, 10). 831 tests in all.
+
 ## 0.27.2 "Row" — 2026-11-04
 
 - The drawings in the inventory row can be clicked or tapped to use them at once (`game.use(kind)`, pure; `isUsable` and `data-kind` in `render/carryMark`): a coconut is eaten (2 s), a full shell drunk (1.5 s, half a day of thirst less), berries or a banana bunch eaten (the oldest first), each also when he is not hungry or thirsty; a crab is roasted and eaten beside a fire with flames. Wood under the arm may stay there. Refused (the drawing gives a small shake) when asleep, kneeling or busy, with a torch in hand, in water, or for a crab without a fire. Wood, branches, fronds, stones, fibre and empty shells are not clickable.

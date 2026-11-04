@@ -31,6 +31,8 @@
  * and when, for their regrowing) and `leantos: { list: [{ id, x, z, heading, progress }], nextId }`
  * (the lean-tos, finished or half built); the branches in piles are part of `wood.piles`
  * (kind 'branch', ids from game/branches BRANCH_ID0). Both optional: older saves have none.
+ * Since 0.27.3 `branches` may also carry `grown: [[id, day]]` (regrown branches and the day they grew, for 3 days, so rain from
+ * before they grew stays off them after a load).
  * Since 0.22 a save may also carry `crabs: { carried: [total], gone: [[crabId, back]], digs }` (the crabs he carries with the
  * moment each was caught, the caught crabs with the day they return to their colony, and the number of digs); optional, older saves have none.
  * Since 0.25 a save may also carry `shells: { full: [boolean], nuts }` (the half shells he keeps, at most 2, each full of water or not, and the
@@ -96,7 +98,7 @@ function valid(s, seed) {
   if (fi.torch !== null && fi.torch !== undefined && !(obj(fi.torch) && num(fi.torch.left))) return false;
   if (s.thirst !== undefined && !(obj(s.thirst) && num(s.thirst.days))) return false;
   if (s.hunger !== undefined && !(obj(s.hunger) && num(s.hunger.days))) return false;
-  if (s.branches !== undefined && !(obj(s.branches) && optArr(s.branches, 'taken') && (!s.branches.taken || s.branches.taken.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1]))))) return false;
+  if (s.branches !== undefined && !(obj(s.branches) && optArr(s.branches, 'taken') && (!s.branches.taken || s.branches.taken.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1]))) && optArr(s.branches, 'grown') && (!s.branches.grown || s.branches.grown.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1]))))) return false;
   if (s.fronds !== undefined && !(obj(s.fronds) && optArr(s.fronds, 'taken') && (!s.fronds.taken || (s.fronds.taken.length <= 8192 && s.fronds.taken.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1])))))) return false;
   if (s.stones !== undefined && !(obj(s.stones) && optArr(s.stones, 'taken') && (!s.stones.taken || (s.stones.taken.length <= 16384 && s.stones.taken.every(Number.isInteger))))) return false;
   if (w.stones !== undefined && !(arr(w.stones) && w.stones.length <= 2 && w.stones.every(Number.isInteger))) return false;

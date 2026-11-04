@@ -11,8 +11,9 @@
  * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire, thirst, hunger, branches, fronds, stones, leantos, crabs, shells, berries, bananas }?) -> game
  *   The options are what state() returns, so restoring a save is
  *   createGame(world, spawn, saved) (see save.js): each part starts from its
- *   saved state. A saved player { x, z, heading } who cannot stand there any
- *   more (the island changed) is moved to the nearest spot he can
+ *   saved state. A saved player { x, z, heading } stays exactly where he
+ *   was when walking can leave him there (movement canOccupy: against a trunk, on a steep step of a climbing
+ *   route); one who cannot be there any more (the island changed) is moved to the nearest spot he can stand
  *   (movement nearestStandable), else he starts at spawn. Kneeling work and
  *   a pending tap are not saved.
  *   wantsToMove(input) -> true while keys, the thumb stick or a target ask to walk;
@@ -138,7 +139,7 @@
  * Depends on: game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
  *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/water, game/wildlife, game/fireflies, game/weather
  */
-import { createPlayer, moveIntent, stepPlayer, terrainAt, nearestStandable, weariStride } from './movement.js';
+import { createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, nearestStandable, weariStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
 import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, dryness } from './wood.js';
 import { seaLevel, highWaters } from './tide.js';
@@ -178,7 +179,7 @@ export const wantsToMove = input => !!(input.up || input.down || input.left || i
 
 export function createGame(world, spawn, opts = {}) {
   const clock = createClock(opts.time, opts.day);
-  const saved = opts.player && nearestStandable(world, opts.player.x, opts.player.z, seaLevel(clock.total));
+  const sea0 = seaLevel(clock.total), saved = opts.player && (canOccupy(world, opts.player.x, opts.player.z, sea0) ? { x: opts.player.x, z: opts.player.z } : nearestStandable(world, opts.player.x, opts.player.z, sea0));
   const player = createPlayer(saved ? { x: saved.x, z: saved.z, y: world.H(saved.x, saved.z) } : spawn), branches = createBranches(world, opts.branches), fronds = createFronds(world, opts.fronds), stones = createStones(world, opts.stones), wood = createWood(world, opts.wood, branches, fronds, stones), leantos = createLeantos(world, opts.leantos), sleep = createSleep(opts.sleep);
   const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger), breath = createBreath(), crabs = createCrabs(world.seed, opts.crabs), shells = createShells(opts.shells), berries = createForage(world, BERRIES, opts.berries), bananas = createForage(world, BANANAS, opts.bananas);
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;

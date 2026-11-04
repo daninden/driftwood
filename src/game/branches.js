@@ -19,11 +19,11 @@
  *     there. A branch laid in a pile or carried is a copy of the spot's piece:
  *     the same id can be carried while a new one has grown back. The regrown branch is a new
  *     object, without the wetness of the old one (no `t`), and carries `g`, the day it grew
- *     (game/wood: rain that fell before g did not wet it).
+ *     (game/wood: rain that fell before g did not wet it); g is saved for GROWN_KEEP days.
  *
  * Pure data on a world; no DOM, no Three.js.
  *
- * BRANCH_ID0, REGROW, REGROW_SPREAD, BRANCH_LEN, BRANCH_RAD
+ * BRANCH_ID0, GROWN_KEEP, REGROW, REGROW_SPREAD, BRANCH_LEN, BRANCH_RAD
  * branchesOfTile(world, tile) -> [branch]   all the branches of a tile (taken or not)
  * createBranches(world, saved?) -> branches
  *   branches.version          goes up with every change, for the renderer
@@ -34,7 +34,7 @@
  *   branches.take(b, total)   -> true when it was taken off the ground (false: gone
  *                             already); total: the days on the clock, for when it grows back
  *   branches.update(total)    lets taken branches grow again when their time has come
- *   branches.state() -> { taken: [[id, total]] }   plain, for saving
+ *   branches.state() -> { taken: [[id, total]], grown?: [[id, g]] }   plain, for saving
  *   saved: such a state, to start from
  *
  * Depends on: core/noise, world/constants
@@ -42,6 +42,7 @@
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 
+export const GROWN_KEEP = 3;               // days a regrown branch's day of growth is kept for the rain check (a shower older than a drying time no longer counts)
 export const BRANCH_ID0 = 1 << 24;         // branch ids start here, far above any driftwood id
 const TILE_SPAN = 4096;                    // ids per tile (a tile has far fewer than 4096 trees)
 export const REGROW = 4, REGROW_SPREAD = 4;   // days before a taken branch lies there again
@@ -73,8 +74,17 @@ export function branchesOfTile(w, tile) {
 
 export function createBranches(w, saved) {
   const taken = new Map();   // id -> the day it was taken
+  const grown = new Map();   // id -> the day a regrown branch grew, kept for GROWN_KEEP days (saved, so the rain of before it grew stays off it)
   const branches = { version: 0, groundBranches, near, onGround, piece, take, update, state };
-  if (saved) for (const [id, at] of saved.taken || []) if (piece(id)) taken.set(id, at);
+  if (saved) {
+    for (const [id, at] of saved.taken || []) if (piece(id)) taken.set(id, at);
+    for (const [id, g] of saved.grown || []) if (!taken.has(id) && Number.isFinite(g)) regrow(id, g);
+  }
+  function regrow(id, when) {
+    const s = id - BRANCH_ID0, tile = w.tiles[Math.floor(s / TILE_SPAN)]; if (!tile || !piece(id)) return;
+    const list = branchesOfTile(w, tile), old = list[s % TILE_SPAN], { t, ...fresh } = old;   // a new piece: it starts dry, whatever the old one (maybe still carried) was
+    list[s % TILE_SPAN] = { ...fresh, g: when }; grown.set(id, when);
+  }
   const back = (id, at) => at + REGROW + REGROW_SPREAD * (hashInt(id, Math.floor(at * 1000), 79) / 4294967296);
 
   function piece(id) {
@@ -100,13 +110,12 @@ export function createBranches(w, saved) {
     taken.forEach((at, id) => {
       const when = back(id, at);
       if (total < when) return;
-      taken.delete(id); n++;
-      const s = id - BRANCH_ID0, list = branchesOfTile(w, w.tiles[Math.floor(s / TILE_SPAN)]), old = list[s % TILE_SPAN];
-      if (old) { const { t, ...fresh } = old; list[s % TILE_SPAN] = { ...fresh, g: when }; }   // a new piece: it starts dry, whatever the old one (maybe still carried) was
+      taken.delete(id); n++; regrow(id, when);
     });
+    for (const [id, g] of grown) if (total - g > GROWN_KEEP) grown.delete(id);
     if (n) branches.version++;
   }
-  function state() { return { taken: [...taken] }; }
+  function state() { return { taken: [...taken], ...(grown.size ? { grown: [...grown] } : {}) }; }
   return branches;
 }
 
