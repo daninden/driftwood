@@ -17,6 +17,8 @@
  *        burn), and the damp sand under it (a dark, low-opacity patch)
  * BRANCH branches under the trees: dark bark colours and dry leaf colours
  * COCO   coconuts under the palms
+ * BERRY  berries on the lowland bushes (0.26): red and dark purple
+ * BANANA wild banana plants (0.26): green-brown false trunk, green and older brownish leaves, green-yellow fruit, dark purple bud, brown stalk
  * WILD   the animals: crab (orange-red body, claws, darker legs, black eyes), seabird
  *        (white, grey wing tips and tail, orange beak and legs), fish (the soft blue-green
  *        shadow in the water and its pale end when it fades, the silver jumper)
@@ -56,6 +58,8 @@ export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8
 export const DRIFT = Object.freeze({ dry: [0xa8987c, 0x9a8a70, 0xb4a68c, 0x8e8068], wet: 0x40393a, damp: 0x8c6a30 });
 export const BRANCH = Object.freeze({ bark: [0x5a4631, 0x4f3d2b, 0x654f38], leaf: [0xb08a45, 0x9c7a3a, 0xc19a52] });
 export const COCO = Object.freeze([0x7a5a36, 0x6a4c2e, 0x8a6a3e]);
+export const BERRY = Object.freeze({ fruit: [0xc2243a, 0xa51d34, 0x6a2a6a, 0x4a2258, 0xd0364a] });
+export const BANANA = Object.freeze({ stem: 0x8f9a58, base: 0x7d7a48, stalk: 0x6e5a36, bud: 0x5a2848, leaf: [0x4a8a32, 0x55953a, 0x3f7a2c, 0x5c9a3e], old: [0x8a8c3a, 0x7a7a34], fruit: [0xbfd048, 0xa9c443, 0xd0d856] });
 export const WILD = Object.freeze({
   crab: { hole: 0x6b5336, body: 0xd4522a, claw: 0xe0683a, leg: 0xa8401f, eye: 0x1b1410 },
   bird: { body: 0xf4f1ea, tip: 0x7b7f86, tail: 0xd9d7d0, beak: 0xe6a238, leg: 0xd98a3a, eye: 0x1b1410 },

@@ -165,7 +165,7 @@ async function boot() {
   let wasAsleep = game.sleep.asleep, button = null;
   const show = info => {
     const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
-    mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); half.update(game.hunger.days, now); carry.update({ fibre: game.fibre.carried, driftwood: game.wood.carried.filter(l => !l.branch).length, branch: game.wood.carried.filter(l => l.branch).length, crab: game.crabs.carried.length, nut: game.shells.nuts, shell: game.shells.empty(), water: game.shells.full() }, now);
+    mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); half.update(game.hunger.days, now); carry.update({ fibre: game.fibre.carried, driftwood: game.wood.carried.filter(l => !l.branch).length, branch: game.wood.carried.filter(l => l.branch).length, crab: game.crabs.carried.length, nut: game.shells.nuts, berries: game.berries.carried.length, banana: game.bananas.carried.length, shell: game.shells.empty(), water: game.shells.full() }, now);
     if (button) button.update(game.action(), input.actionFill());
     ink.update(skyAt(info.time).day);
     who.update(dayLine(name, day), now);

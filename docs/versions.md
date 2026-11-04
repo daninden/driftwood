@@ -2,6 +2,16 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.26 "Inland" — 2026-11-04
+
+- New: food away from the coast (`game/forage`, pure; derived from the bushes of the world like branches from the trees, so the generated world is unchanged).
+- Berry bushes: 1 in 4 lowland bushes bears red and dark purple berries (seed 1337: 472, the nearest 36 m inland from the start, 78 within 100 m; none on the beach). A press beside one picks a handful: eaten at once when hunger is above half a day (1/3 day of hunger less), otherwise carried (at most 2, a berry cluster in the row). The bush bears again 2 to 4 days later; a carried handful spoils after a day (`render/berries`).
+- Wild bananas: rare plants beside rain forest bushes (seed 1337: 10, the nearest about 90 m from the start). A false trunk of about 2 m, six or seven long arching paddle leaves (one or two older ones hanging and torn) and a bunch of four tiers of green-yellow bananas with a purple bud on a curved stalk to one side (`render/bananas`). A press picks the bunch: eaten at once when hungry (a whole day of hunger less), otherwise carried (at most 1, row drawing). It grows back in 7 to 8 days; a carried bunch keeps 3 days.
+- Priorities: a bush or banana plant competes by distance with the other things near him. With empty hands and nothing near, a full shell (when thirsty) comes first, then carried berries, then a carried bunch, then a carried coconut (what spoils first is eaten first). Icons: a berry cluster and a bunch with an arrow up for picking, the plain drawing for eating a carried one.
+- Save: optional `berries` and `bananas` (`{ carried, picked }`); older saves load; `momentKey` counts them.
+- Not done: clicking a bush or banana plant does not walk to it (the action button beside it does the picking). The banana bunch hangs to a side fixed per plant, so from some view angles it is behind the trunk.
+- Tests: `tests/forage.test.js` (new, 25); the smoke test picks berries from the nearest bush (smoke-37, smoke-38). 779 tests in all.
+
 ## 0.25 "Shell" — 2026-11-04
 
 - New: storing water and coconuts (`game/shells`, pure). After eating a coconut (husked on the ground or carried) he keeps the empty half shell, at most 2 (`SHELL_MAX`); shells do not count as wood and do not slow him.

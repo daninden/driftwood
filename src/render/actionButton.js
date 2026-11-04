@@ -25,7 +25,7 @@
  * torch with a stroke of ground (plant), the drop (drink), a flame (light, hold)
  * a small lean-to (build, hold), the crescent moon (sleep, hold) and, since 0.22, a hand with claws over a
  * hole (dig) and a crab over a flame (roast), and since 0.25 a whole coconut with an arrow up (take), a half shell with a drop over it
- * (fill) and a tilted half shell with water in it (sip). Eating a carried nut uses the half coconut (husk).
+ * (fill) and a tilted half shell with water in it (sip). Eating a carried nut uses the half coconut (husk). Since 0.26 (game/forage) a cluster of berries with an arrow up (berries: picks them, or eats them on the spot when he is hungry), a bunch with an arrow up (bananas), and the plain cluster or bunch for eating a carried one (eatBerries, eatBanana).
  *
  * The pointer handling is the button's own: a finger or the mouse on it goes
  * to input.actionStart/actionEnd and never reaches the world (no walk tap, no
@@ -75,9 +75,13 @@ export const ICONS = {
   nut: `<g transform="translate(-7.2 -5.5) scale(0.72)">${DRAWINGS.nut}</g><path d="M0 -3V-11M-3.5 -7.5L0 -11L3.5 -7.5"/>`,
   fill: `<g transform="translate(-9.5 -8.5) scale(0.95)">${DRAWINGS.shell}</g><g transform="translate(-3.2 -12.4) scale(0.45)"><path d="${DROP_PATH}"/></g>`,
   sip: `<g transform="rotate(-38) translate(-10 -13.5)">${DRAWINGS.water}</g>`,
+  berries: `<g transform="translate(-7.2 -5.5) scale(0.72)">${DRAWINGS.berries}</g><path d="M0 -3V-11M-3.5 -7.5L0 -11L3.5 -7.5"/>`,
+  bananas: `<g transform="translate(-7.2 -5.5) scale(0.72)">${DRAWINGS.banana}</g><path d="M0 -3V-11M-3.5 -7.5L0 -11L3.5 -7.5"/>`,
+  eatBerries: `<g transform="translate(-10 -13)">${DRAWINGS.berries}</g>`,
+  eatBanana: `<g transform="translate(-10 -13)">${DRAWINGS.banana}</g>`,
   moon: '<path d="M3 -10.5A10 10 0 1 0 10.5 3A7.5 7.5 0 0 1 3 -10.5Z"/>',
 };
-export const ICON_OF = { pickup: 'pickup', lay: 'lay', take: 'nut', fill: 'fill', sip: 'sip', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon', dig: 'dig', roast: 'roast' };
+export const ICON_OF = { pickup: 'pickup', lay: 'lay', take: 'nut', fill: 'fill', sip: 'sip', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon', dig: 'dig', roast: 'roast', berries: 'berries', bananas: 'bananas', eatBerries: 'eatBerries', eatBanana: 'eatBanana' };
 
 export function buttonIcons(action) {
   const tap = action && action.tap ? ICON_OF[action.tap.kind] || null : null, hold = action && action.hold ? ICON_OF[action.hold.kind] || null : null;

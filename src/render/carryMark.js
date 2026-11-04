@@ -2,7 +2,7 @@
  * render/carryMark — the quiet row of small ink drawings next to the moon
  * mark that shows what the castaway carries loose. For now only the tufts
  * of coconut fibre (game/fibre `carried`, 0..3) and, since 0.16, one twig with a
- * leaf for each branch carried (`branch`) and, since 0.22, one small crab for each crab carried (`crab`, at most two, game/crabs); since 0.25 (game/shells) one whole coconut for each nut carried (`nut`, at most two), an empty half shell (`shell`) and a half shell with water in it (`water`), both at most two together; one weathered
+ * leaf for each branch carried (`branch`) and, since 0.22, one small crab for each crab carried (`crab`, at most two, game/crabs); since 0.26 (game/forage) a little cluster of berries for each handful carried (`berries`, at most two) and a bunch of bananas (`banana`, at most one); since 0.25 (game/shells) one whole coconut for each nut carried (`nut`, at most two), an empty half shell (`shell`) and a half shell with water in it (`water`), both at most two together; one weathered
  * log for each piece of driftwood carried (`driftwood`, wood that is not a branch; wet or dry it looks the same), drawn before the branches. The torch
  * is in his hand and never in the row. Later items (nails, a
  * knife, ...) add a key to ITEMS and a drawing to DRAWINGS.
@@ -26,7 +26,7 @@
  */
 import { ss } from '../core/math.js';
 
-export const ITEMS = ['fibre', 'driftwood', 'branch', 'crab', 'nut', 'shell', 'water'];
+export const ITEMS = ['fibre', 'driftwood', 'branch', 'crab', 'berries', 'banana', 'nut', 'shell', 'water'];
 export const REST_OPACITY = 0.5, PEAK_OPACITY = 0.95;
 export const HOLD = 3, EASE = 2;   // seconds held clear, then easing back
 
@@ -61,6 +61,9 @@ export const DRAWINGS = {
   crab: `<g transform="translate(10 13.5) scale(0.95)">${CRAB_PATHS}</g>`,
   // 0.25: a whole coconut with its three eyes, a half shell seen from the side (bowl and oval rim), and the same with water in it (a wavy water line and a ripple stroke)
   nut: '<path d="M10 5.6C14.6 5.6 17.4 9.4 17.4 14C17.4 19 14.2 22.6 10 22.6C5.8 22.6 2.6 19 2.6 14C2.6 9.4 5.4 5.6 10 5.6Z"/><path d="M10 5.6C10.4 4.4 11.4 3.4 12.6 3"/><circle cx="7.8" cy="11.2" r="0.9"/><circle cx="12.2" cy="11.2" r="0.9"/><circle cx="10" cy="14.4" r="0.9"/>',
+  // 0.26: a cluster of seven berries hanging from a short stem with a leaf, and a bunch of three bananas on a stalk
+  berries: '<path d="M10 7.6V2.8"/><path d="M10 7.6C12.4 4.4 15.6 3.8 17.4 5C16.4 8 13.2 9 10 7.6Z"/><circle cx="6.8" cy="11.4" r="2.5"/><circle cx="13.2" cy="11.4" r="2.5"/><circle cx="4.2" cy="17" r="2.5"/><circle cx="10" cy="16.6" r="2.5"/><circle cx="15.8" cy="17" r="2.5"/><circle cx="7.2" cy="22" r="2.5"/><circle cx="12.8" cy="22" r="2.5"/>',
+  banana: '<path d="M9 3V8"/><path d="M9 8C3.6 10 3.2 17.6 8 22.8C7.2 17.2 7.8 12.4 9 8Z"/><path d="M9 8C7.2 13 7.2 18.4 10 23.4C12.6 18.4 11.8 12.6 9 8Z"/><path d="M9 8C14.4 10 16.8 17.4 12.2 22.8C12.4 17.2 10.6 12.4 9 8Z"/>',
   shell: SHELL_EMPTY,
   water: SHELL_FULL,
   fibre: '<path d="M10 20C8 14 4.5 10 3 5.5"/><path d="M10 20C9.5 14 8 9 7.5 3.5"/><path d="M10 20C10.5 13 11.5 9 12.5 3"/><path d="M10 20C12 14 15 10 17 6"/><path d="M10 20C11 16 14 14 16 12.5"/><path d="M8.2 19.6L11.8 21.4M8.4 21.6L11.6 23.4"/>',

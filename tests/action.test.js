@@ -366,8 +366,8 @@ describe('the action input', () => {
 
 describe('the button: icons, opacity and the DOM', () => {
   it('has a drawing for every kind of action, in the ink', () => {
-    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'build', 'sleep', 'dig', 'roast', 'take', 'fill', 'sip']).toContain(kind); }
-    expect(Object.keys(ICON_OF).length).toBe(15);
+    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'build', 'sleep', 'dig', 'roast', 'take', 'fill', 'sip', 'berries', 'bananas', 'eatBerries', 'eatBanana']).toContain(kind); }
+    expect(Object.keys(ICON_OF).length).toBe(19);
     expect(buttonIcons({ tap: null, hold: { kind: 'build' } })).toEqual({ main: 'leanto', side: null });
     for (const svg of Object.values(ICONS)) expect(svg).not.toMatch(/fill="(?!none)/);
   });

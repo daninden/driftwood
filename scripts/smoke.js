@@ -20,6 +20,7 @@
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
 // smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
 // smoke-30 wood out at low water on the wet strip, smoke-31 the same spot at high water (0.18).
+// smoke-37 beside the berry bush nearest the start, ripe berries on it and the berries icon on the button; after a press (not hungry) the handful in the row and the bush bare (0.26 "Inland", also in the quick run).
 // smoke-36 the row with a nut, an empty and a full half shell beside the fibre tuft (0.25, also in the quick run).
 // smoke-34 the dig icon beside a hole a crab fled into, smoke-35 the crab in the row and the roast icon beside a fire (0.22, both also in the quick run).
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
@@ -246,6 +247,32 @@ if (shells.kept.length !== 1 || shells.kept[0] !== false) errors.push('did not k
 if (shells.row !== 3) errors.push('the row shows ' + shells.row + ' drawings for two shells and a nut, expected 3');
 await shot('smoke-36.png', { quick: true, settle: 400 });
 await page.evaluate(() => { const s = window.__driftwood.game.shells; s.list.length = 0; s.nuts = 0; });
+
+// Inland (0.26): walk (teleport) to the berry bush nearest the start, see the berries icon, press the button (not hungry: the handful is carried, the bush is bare),
+// then put everything back where it was. The first shot shows the ripe bush, the second the row and the bare bush.
+const berryBefore = await page.evaluate(start => {
+  const { world, game, step } = window.__driftwood, p = game.player, back = { x: p.x, z: p.z };
+  const bushes = world.tiles.flatMap(t => game.berries.bearingIn(t)).sort((a, b) => Math.hypot(a.x - start.x, a.z - start.z) - Math.hypot(b.x - start.x, b.z - start.z));
+  const b = bushes[0]; window.__berry = { id: b.id, back };
+  p.x = b.x - b.r - 0.3; p.z = b.z + 0.2; p.y = world.H(p.x, p.z); game.hunger.days = 0.2; step(0.2);
+  const tap = game.action().tap;
+  return { kind: tap && tap.kind, eat: tap && tap.eat, from: Math.hypot(b.x - start.x, b.z - start.z) };
+}, start);
+console.log('berries', JSON.stringify(berryBefore));
+if (berryBefore.kind !== 'berries' || berryBefore.eat) errors.push('beside a berry bush the button says ' + JSON.stringify(berryBefore));
+await shot('smoke-37.png', { quick: true, look: true });
+const berryAfter = await page.evaluate(() => {
+  const { game, step } = window.__driftwood, p = game.player;
+  window.__press(); step(0.05); step(2, () => !p.stoop);
+  const out = { carried: game.berries.carried.length, picked: game.berries.picked.size, hunger: game.hunger.days, row: document.querySelectorAll('#carry svg').length };
+  window.__driftwood.draw(); out.row = document.querySelectorAll('#carry svg').length;
+  return out;
+});
+console.log('berries after the press', JSON.stringify(berryAfter));
+if (berryAfter.carried !== 1 || berryAfter.picked !== 1 || berryAfter.hunger > 0.3) errors.push('the berry press did not carry one handful: ' + JSON.stringify(berryAfter));
+if (berryAfter.row < 1) errors.push('the row shows no berries');
+await shot('smoke-38.png', { quick: true, look: true, settle: 400 });
+await page.evaluate(() => { const { world, game, step } = window.__driftwood, p = game.player, k = window.__berry; game.berries.carried.length = 0; game.berries.picked.clear(); game.berries.version++; game.hunger.days = 1.67; p.x = k.back.x; p.z = k.back.z; p.y = world.H(p.x, p.z); step(0.2); });
 
 // Fire: lay a pile of four dry pieces (the first beach wood) on the dry sand
 // above the tide line, press F beside it and drill (smoke-9); when it does
