@@ -6,9 +6,9 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createClock, DAY_SECONDS } from '../src/game/clock.js';
 import { seaLevel, highWaters, PERIOD, RANGE, FIRST_HIGH } from '../src/game/tide.js';
-import { createWood, WASH_MAX, dryness } from '../src/game/wood.js';
+import { createWood, WASH_MAX, dryness, logTop } from '../src/game/wood.js';
 import { createGame } from '../src/game/game.js';
-import { stepFactor } from '../src/game/movement.js';
+import { stepFactor, canStand, WADE_MAX } from '../src/game/movement.js';
 
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
@@ -130,6 +130,28 @@ describe('low water finds', () => {
     wood.tideUpdate(-RANGE, 1.2);
     const f = wood.find(l.x, l.z, 0.3); expect(f.log).toBe(l);
     expect(wood.take(f)).toBe(1); expect(wood.carried).toEqual([l]);
+  });
+  it('can be found and picked up while part of it sticks out of the water, not when the sea covers its top', () => {
+    const { wood } = emptied(12), l = wood.washUp(1)[0], top = logTop(l);
+    expect(top).toBeCloseTo(l.y + 1.7 * l.rad);
+    wood.tideUpdate(top + 0.01, 1); expect(wood.find(l.x, l.z, 0.3)).toBeNull();          // just over the top: out of sight
+    wood.tideUpdate(top, 1); expect(wood.find(l.x, l.z, 0.3)).toBeNull();                   // level with the top: covered
+    wood.tideUpdate(top - 0.01, 1.1);                                                       // the top shows, the spot is still under water
+    expect(l.y).toBeLessThan(top - 0.01); const f = wood.find(l.x, l.z, 0.3); expect(f.log).toBe(l);
+    expect(wood.take(f)).toBe(1); expect(wood.carried).toEqual([l]);
+  });
+  it('never needs deeper wading than he can do: the water at a log that shows is shallower than WADE_MAX', () => {
+    const { wood } = emptied(12), got = wood.washUp(1).concat(wood.washUp(2), wood.washUp(3)); expect(got.length).toBeGreaterThan(0);
+    for (const l of got) {
+      wood.tideUpdate(logTop(l) - 1e-6, 1);
+      expect(wood.find(l.x, l.z, 0.3)).not.toBeNull();
+      expect(logTop(l) - 1e-6 - l.y).toBeLessThan(WADE_MAX);
+      expect(canStand(w, l.x, l.z, logTop(l) - 1e-6)).toBe(true);
+    }
+  });
+  it('washes up only wood that is wholly under water at high water', () => {
+    const { wood } = emptied(12);
+    for (let n = 1; n < 12; n++) for (const l of wood.washUp(n)) { expect(logTop(l)).toBeLessThan(0); wood.tideUpdate(0, FIRST_HIGH + n * PERIOD); expect(wood.find(l.x, l.z, 0.3)).toBeNull(); }
   });
   it('stays wet while the sea covers it and dries once it is out and carried up', () => {
     const { wood } = emptied(12), l = wood.washUp(1)[0];

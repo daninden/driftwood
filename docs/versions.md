@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.22.4 "Above water" — 2026-11-04
+
+- Wood: a piece that still sticks out of the water can be found and picked up; only wood the sea covers wholly is out of reach. The top of a log is `logTop(log) = log.y + TOP_K * log.rad` (`TOP_K` 1.7, as the renderer lifts it), and `wood.find` skips a log only when the sea is at or above that top. The action button, tap-to-walk and `take` all follow. A log that shows lies at most 0.22 m deep, below `WADE_MAX`, so he can always stand beside it.
+- Wash-up: new wood is only placed where the whole log is under water at high water, so it is still never seen to appear.
+- Unchanged: the sea covering a log's spot still restarts its drying.
+- Tests: `tests/tide.test.js` (sea above, level with and just below the top; the water depth at a log that shows; washed-up wood wholly covered at high water).
+
 ## 0.22.3 "Speaker" — 2026-11-04
 
 - Sound: the small ink speaker above the moon now shows on every device, not only on touch-only ones; a click on it turns sound on or off like **M** (`src/main.js`, `render/soundMark`).

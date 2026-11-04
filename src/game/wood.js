@@ -23,16 +23,21 @@
  *   - Piles stay where they are. Nothing is solid: you walk over wood.
  *   - Every high water (game/tide) washes up new wood in the strip between low
  *     and high water (ground between the low-water and the high-water sea
- *     level, not in a river), placed while the spot is under water, so it is
- *     never seen to appear: at most WASH_MAX pieces per beach tile, and never
+ *     level, not in a river), placed while the whole log is under water at
+ *     high water (logTop below 0), so it is never seen to appear: at most WASH_MAX pieces per beach tile, and never
  *     more loose wood on a tile than it had at the start (its cap), so the
  *     beach never fills up. Piles do not count. Each washed-up piece is new,
  *     with its own id and its own look, fixed by its place. Wood that lies
  *     there stays (the next high water only adds up to the cap).
- *   - A piece whose spot is under the sea (log.y below the current sea level)
- *     cannot be found or picked up; at low water it can, also on wet sand or
- *     in shallow water (tideUpdate sets the level).
- *   - The sea covering a piece starts its drying over (log.t = now, tideUpdate).
+ *   - A piece can be found and picked up as long as part of it sticks out of the water: the sea
+ *     level (tideUpdate) is below the top of the log (logTop: log.y + TOP_K * log.rad, the ground
+ *     under it plus the axis lift and the radius the renderer gives it). A piece the sea covers
+ *     completely cannot be found or picked up; at low water it can, also on wet sand or in
+ *     shallow water. Reach by wading is no extra rule: a piece that sticks out lies at most
+ *     0.22 m deep, far under WADE_MAX (game/movement, waist deep 0.35), so he can always stand
+ *     beside it.
+ *   - The sea covering a piece (its spot, log.y below the level) starts its drying over
+ *     (log.t = now, tideUpdate), also while the top still shows.
  *   - A pile laid on sand that the flood covers (at low water, below the
  *     high-water line) is taken back by the sea.
  *   - Freshly washed-up wood is wet and salty. It dries over DRY_DAYS (a day)
@@ -73,7 +78,7 @@
  *     Each carries t, the day of that high water (game/tide), for drying. When total (the clock now)
  *     is later (a sleep skipped over the high water) and the sea has fallen below the spot since, t is the
  *     last moment the sea still covered it, so nothing appears dry that has just been uncovered.
- *   wood.tideUpdate(sea, total)  tells the wood the sea level (pieces under it cannot be picked
+ *   wood.tideUpdate(sea, total)  tells the wood the sea level (pieces wholly under it cannot be picked
  *     up) and restarts the drying (log.t = total) of every washed-up piece the sea covers
  *   wood.rain(total, falling, sheltered, at, lastFall?)  while falling is true, soaks the wood in the open near at { x, z } (the
  *     castaway) that sheltered(x, z) does not cover: loose pieces within RAIN_REACH, all washed-up wood, all piles, what is
@@ -92,6 +97,7 @@
  *     lost: [id], tide, nextId, wet?: [[id, t]] }   plain, for saving (wet: rain-soaked start wood and branches)
  *   saved: such a state, to start from
  * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, WASH_MAX, DRY_DAYS, BRANCH_DRY_DAYS, RAIN_REACH
+ * TOP_K, logTop(log) -> the height of a log's top (log.y + TOP_K * log.rad, TOP_K 1.7); under the sea while that is below the sea level
  * kindOf(log) -> 'branch' for a branch, else 'driftwood' (the kind of pile a piece goes on)
  *   An older save may hold a pile of more than PILE_MAX: it is loaded as it is
  *   (it takes no more wood, and can be picked up from as usual).
@@ -120,6 +126,9 @@ const WASH_GAP = 1.3;             // a new piece keeps this far from other wood
 export const DRY_DAYS = 1;        // washed-up wood is dry after a day
 export const BRANCH_DRY_DAYS = 0.5;   // a wet branch dries in half that
 export const RAIN_REACH = 40;     // rain wets loose wood this close to him (what he cannot see is not worked out)
+
+export const TOP_K = 1.7;         // the axis lies 0.7 radii over the ground (render/driftwood) and the log is one radius thick above it
+export const logTop = log => log.y + TOP_K * log.rad;
 
 export const kindOf = log => log && log.branch ? 'branch' : 'driftwood';
 
@@ -183,7 +192,7 @@ export function createWood(w, saved, branches = null) {
   function find(x, z, reach, only) {
     let best = null, bd = reach;
     if (only !== 'pile') for (const l of near(x, z, reach)) {
-      if (taken.has(l.id) || (!l.branch && l.y < sea)) continue;   // under the sea: out of reach until it falls dry
+      if (taken.has(l.id) || (!l.branch && logTop(l) <= sea)) continue;   // wholly under the sea: out of reach until a part of it shows
       const q = distToLog(l, x, z); if (q.d < bd) { bd = q.d; best = { kind: 'log', log: l, x: q.x, z: q.z, d: q.d }; }
     }
     if (only !== 'log') for (const p of wood.piles) {
@@ -328,7 +337,7 @@ export function createWood(w, saved, branches = null) {
       let got = 0;
       for (let k = 0; k < 40 && got < want; k++) {
         const c = cells[Math.floor(r() * cells.length)], x = c[0] + r() - 0.5, z = c[1] + r() - 0.5, len = 0.9 + r() * 1.3, a = r() * Math.PI, rad = 0.07 + r() * 0.06, y = w.H(x, z);
-        if (!inStrip(x, y, z)) continue;   // the strip between low and high water, not in a river
+        if (!inStrip(x, y, z) || y + TOP_K * rad >= 0) continue;   // the strip between low and high water, not in a river; under water in whole at high water
         if (avoid && Math.hypot(x - avoid.x, z - avoid.z) < 2) continue;
         if (near(x, z, WASH_GAP).some(l => onBeach(l) && Math.hypot(l.x - x, l.z - z) < WASH_GAP) || wood.piles.some(p => Math.hypot(p.x - x, p.z - z) < WASH_GAP)) continue;
         const t0 = FIRST_HIGH + n * PERIOD, l = { id: nextId++, x, y, z, len, a, rad, t: total > t0 ? lastCovered(y, t0, total) : t0 }; addWashed(l); here.push(l); brought.push(l); got++;
