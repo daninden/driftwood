@@ -31,13 +31,15 @@
  * pileTally(pile) -> { count, part, full }   the strokes for a pile. Pure.
  * createTallyView(container) -> { update(dt, { game, camera, H, player }) }
  *   container: the element the layer goes into (the island view's container).
- *   Touches the DOM only when a drawing or a position (to half a pixel) changes.
+ *   Touches the DOM only when a drawing or a position (to half a pixel) changes. 0.27.7: the layer's size comes from render/screenRect
+ *   (kept, not measured every frame) and a frame makes no Map or list: only piles and fires that are beside him or already have a mark are looked at.
  *
- * Depends on: three, game/wood (PILE_MAX), game/fire (BURN, FUEL_MAX)
+ * Depends on: three, game/wood (PILE_MAX), game/fire (BURN, FUEL_MAX), render/screenRect
  */
 import * as THREE from 'three';
 import { PILE_MAX } from '../game/wood.js';
 import { BURN, FUEL_MAX } from '../game/fire.js';
+import { rectOf } from './screenRect.js';
 
 export const BESIDE = 1.8;       // how close to the middle of a pile or fire counts as beside it (F reaches 1.2 from his feet, plus the reach of a pile)
 export const STROKE_WIDTH = 1.7, GLOW_WIDTH = 3.8;   // ink stroke and the glow stroke under it, in drawing units
@@ -108,32 +110,36 @@ export function createTallyView(container) {
     return { el, path, glow, key: '', alpha: 0, x: 0, y: 0, z: 0, w: 0, h: 0, shown: '', pos: '' };
   }
 
+  const want = new Set();   // reused each frame
+  // the mark of a pile or fire at x, z, `up` metres over the ground (made when it is first beside him)
+  function mark(thing, near, x, z, up, t, ground) {
+    let m = marks.get(thing); if (!m) { m = make(); marks.set(thing, m); }
+    m.x = x; m.z = z; m.y = ground(x, z) + up;
+    const key = t.count + ':' + t.part + ':' + t.full;
+    if (key !== m.key) {
+      m.key = key;
+      const d = tallyDrawing(t.count, t.part, t.full);
+      m.path.setAttribute('d', d.d); m.glow.setAttribute('d', d.d); m.w = d.width * SIZE; m.h = d.height * SIZE;
+      m.el.setAttribute('width', m.w.toFixed(1)); m.el.setAttribute('height', m.h.toFixed(1)); m.el.setAttribute('viewBox', `0 0 ${d.width.toFixed(1)} ${d.height.toFixed(1)}`);
+      m.empty = t.count === 0 && !t.part;
+    }
+    m.target = near && !m.empty ? 1 : 0;
+  }
+
   function update(dt, { game, camera, H: ground, player }) {
-    const want = new Map();   // thing -> { x, y, z, tally }
+    want.clear();   // the things that exist and are beside him or have a mark
     for (const p of game.wood.piles) {
       const near = Math.hypot(p.x - player.x, p.z - player.z) <= BESIDE;
+      if (!near && !marks.has(p)) continue;
       const sh = leantoShift(p.x, p.z, game.leantos && game.leantos.list);
-      want.set(p, { near, x: p.x + sh.dx, z: p.z + sh.dz, up: 0.55 + Math.ceil(p.logs.length / 2) * 0.19, tally: pileTally(p) });
+      want.add(p); mark(p, near, p.x + sh.dx, p.z + sh.dz, 0.55 + Math.ceil(p.logs.length / 2) * 0.19, pileTally(p), ground);
     }
     for (const f of game.fire.fires) {
       const near = Math.hypot(f.x - player.x, f.z - player.z) <= BESIDE;
-      want.set(f, { near, x: f.x, z: f.z, up: 1.45, tally: fireTally(f.fuel) });
+      if (!near && !marks.has(f)) continue;
+      want.add(f); mark(f, near, f.x, f.z, 1.45, fireTally(f.fuel), ground);
     }
-    for (const [thing, w] of want) {
-      if (!w.near && !marks.has(thing)) continue;
-      let m = marks.get(thing); if (!m) { m = make(); marks.set(thing, m); }
-      m.x = w.x; m.z = w.z; m.y = ground(w.x, w.z) + w.up;
-      const t = w.tally, key = t.count + ':' + t.part + ':' + t.full;
-      if (key !== m.key) {
-        m.key = key;
-        const d = tallyDrawing(t.count, t.part, t.full);
-        m.path.setAttribute('d', d.d); m.glow.setAttribute('d', d.d); m.w = d.width * SIZE; m.h = d.height * SIZE;
-        m.el.setAttribute('width', m.w.toFixed(1)); m.el.setAttribute('height', m.h.toFixed(1)); m.el.setAttribute('viewBox', `0 0 ${d.width.toFixed(1)} ${d.height.toFixed(1)}`);
-        m.empty = t.count === 0 && !t.part;
-      }
-      m.target = w.near && !m.empty ? 1 : 0;
-    }
-    const rc = layer.getBoundingClientRect();
+    const rc = rectOf(layer);
     for (const [thing, m] of marks) {
       if (!want.has(thing)) m.target = 0;
       const step = dt / (m.target > m.alpha ? FADE_IN : FADE_OUT);

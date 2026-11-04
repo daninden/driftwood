@@ -16,9 +16,10 @@
  * createRainView(container, { max }?) -> { update(dt, intensity, day), setMax(n) }   once per drawn frame
  *   day: 0 (night) .. 1; at night the streaks stay light and nearly as strong as by day (0.27.6: they were barely visible against the dark grading), a little greyer and fainter
  *
- * Depends on: core/noise
+ * Depends on: core/noise, render/screenRect
  */
 import { mulberry32 } from '../core/noise.js';
+import { rectOf } from './screenRect.js';
 
 export const STREAKS_MAX = 220;
 const SLANT = 0.13;   // sideways per downwards: the rain leans a little with the wind
@@ -45,7 +46,7 @@ export function createRainView(container, opts = {}) {
   function update(dt, intensity, day = 1) {
     const n = streakCount(intensity, max);
     if (!n) { if (shown) { cv.style.display = 'none'; shown = false; } return; }
-    const rc = container.getBoundingClientRect(), ratio = Math.min(2, window.devicePixelRatio || 1), W = Math.round(rc.width * ratio), H = Math.round(rc.height * ratio);
+    const rc = rectOf(container), ratio = Math.min(2, window.devicePixelRatio || 1), W = Math.round(rc.width * ratio), H = Math.round(rc.height * ratio);
     if (!shown) { cv.style.display = 'block'; shown = true; }
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     advance(streaks, Math.min(dt, 0.1));

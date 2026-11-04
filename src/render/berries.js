@@ -14,10 +14,10 @@
  * addBerries(B, kit, plant)   one bush's berries, into a Batch
  * createBerryView(scene, world, kit, forage) -> berryView
  *   berryView.addTile(tile), berryView.dropTile(tile)   with the detailed tiles
- *   berryView.update()   rebuilds the tiles when a bush was picked or bore again (forage.version)
+ *   berryView.update()   rebuilds the tiles when a bush was picked or bore again (forage.version): only the tiles in forage.dirty (render/tileRebuild)
  *
  * Depends on: three, core/noise, world/vegetation, render/batch, render/geometry, render/materials,
- *   render/nearTile (disposeGroup), render/palette
+ *   render/nearTile (disposeGroup), render/tileRebuild, render/palette
  */
 import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
@@ -25,6 +25,7 @@ import { Batch } from './batch.js';
 import { mat4 } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
+import { rebuildTiles } from './tileRebuild.js';
 import { BERRY } from './palette.js';
 import { bushSize } from '../world/vegetation.js';
 
@@ -52,7 +53,7 @@ export function createBerryView(scene, w, kit, forage) {
   function update() {
     if (forage.version === seen) return;
     seen = forage.version;
-    tiles.forEach((g, tile) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
+    rebuildTiles(tiles, forage.dirty, w.tiles, (tile, g) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
   }
   return { addTile, dropTile, update };
 }

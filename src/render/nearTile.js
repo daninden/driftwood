@@ -84,7 +84,7 @@ function* buildBody(w, colorAt, kit, tile, slicer, anisotropy, own) {
 export function disposeGroup(group) {
   group.traverse(o => {
     if (o.isInstancedMesh) { o.dispose(); if (o.userData.ownGeometry) o.geometry.dispose(); }
-    else if (o.isMesh) { o.geometry.dispose(); if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+    else if (o.isMesh) { o.geometry.dispose(); if (!o.material.userData.shared) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }   // a shared material (userData.shared) outlives the group
   });
   if (group.parent) group.parent.remove(group);
 }

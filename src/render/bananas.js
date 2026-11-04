@@ -19,10 +19,10 @@
  * addBanana(B, kit, plant, bearing)   one plant, into a Batch
  * createBananaView(scene, world, kit, forage) -> bananaView
  *   bananaView.addTile(tile), bananaView.dropTile(tile)   with the detailed tiles
- *   bananaView.update()   rebuilds the tiles when a bunch was picked or grew back (forage.version)
+ *   bananaView.update()   rebuilds the tiles when a bunch was picked or grew back (forage.version): only the tiles in forage.dirty (render/tileRebuild)
  *
  * Depends on: three, core/noise, render/batch, render/geometry, render/materials,
- *   render/nearTile (disposeGroup), render/palette
+ *   render/nearTile (disposeGroup), render/tileRebuild, render/palette
  */
 import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
@@ -30,6 +30,7 @@ import { Batch } from './batch.js';
 import { mat4, stickMatrix } from './geometry.js';
 import { outlineMat, toon } from './materials.js';
 import { disposeGroup } from './nearTile.js';
+import { rebuildTiles } from './tileRebuild.js';
 import { BANANA } from './palette.js';
 
 const NX = 24, NZ = 4;
@@ -111,7 +112,7 @@ export function createBananaView(scene, w, kit, forage) {
   function update() {
     if (forage.version === seen) return;
     seen = forage.version;
-    tiles.forEach((g, tile) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
+    rebuildTiles(tiles, forage.dirty, w.tiles, (tile, g) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
   }
   return { addTile, dropTile, update };
 }

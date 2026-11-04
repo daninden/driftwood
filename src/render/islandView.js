@@ -35,6 +35,8 @@
  *     (render/water) and the sheen on the ground (render/materials setGroundWet)
  *   view.waterTime   the water's clock in seconds (render/water `clock`; audio/mix breathes the surf with it)
  *   view.setWindTime(t) / view.windTime   the wind's clock in seconds (it runs with the drawn frames' dt; the smoke test sets it so shots repeat)
+ *   view.building        true when the last render built tiles (a detailed tile pumped, or far tiles made): its cost is not the game's own, so
+ *     the quality governor (render/quality) leaves such frames out
  *   view.canvas
  *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
  *   view.prepare(player, progress?)  builds the detailed tiles in view before
@@ -62,7 +64,7 @@ import { createFootprints } from './footprints.js';
 import { createCamera } from './camera.js';
 import { createMood } from './mood.js';
 import { skyAt } from './sky.js';
-import { createWoodView, driftColor, woodLook, logParts } from './driftwood.js';
+import { createWoodView, driftColor, woodLook, dryStep, logParts } from './driftwood.js';
 import { createCocoView } from './coconuts.js';
 import { createBranchView } from './branches.js';
 import { createFindsView } from './finds.js';
@@ -73,6 +75,7 @@ import { createFireView } from './fire.js';
 import { createTallyView } from './tallyMarks.js';
 import { createWildlifeView } from './wildlife.js';
 import { createFireflyView } from './fireflies.js';
+import { createLightLayer } from './lightLayer.js';
 import { dryness } from '../game/wood.js';
 import { windState } from './wind.js';
 import { setWind } from './windShader.js';
@@ -95,13 +98,31 @@ export async function createIslandView(world, container, progress, start, opts =
   const slicer = createSlicer();
   const near = new Map();   // tile -> { group }
   const startLights = opts.settings ? opts.settings.fireLights : undefined; let fireLights = startLights;   // the pool of fire lights is sized once, by the quality at the start
-  let woodView = null, cocoView = null, branchView = null, findsView = null, leantoView = null, berryView = null, bananaView = null, fireView = null, tallyView = null, wildView = null, flyView = null, game = null;
+  let woodView = null, cocoView = null, branchView = null, findsView = null, leantoView = null, berryView = null, bananaView = null, fireView = null, tallyView = null, wildView = null, flyView = null, lightLayer = null, game = null, building = false;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso),
     onReady: (tile, v) => { stage.tagTerrain(v.group); scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); } },
     onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); findsView.dropTile(tile); berryView.dropTile(tile); bananaView.dropTile(tile); } },
   });
+  // what he carries, as the hero draws it: rebuilt only when a piece, or the look of its dryness, changes (nothing carried is the usual case)
+  const NO_LOAD = [];
+  const loadPieces = [], loadLooks = [];
+  let load = NO_LOAD;
+  function loadOf(wood, total) {
+    const n = wood.carried.length + wood.stones.length;
+    if (!n) { loadPieces.length = 0; loadLooks.length = 0; return NO_LOAD; }
+    let same = n === loadPieces.length, i = 0;
+    for (const list of [wood.carried, wood.stones]) for (const l of list) {
+      const d = dryness(l, total), look = dryStep(d) + woodLook(d).sheen * 2;   // the colour changes in dry steps, the sheen at one dryness
+      if (same && (loadPieces[i] !== l || loadLooks[i] !== look)) same = false;
+      loadPieces[i] = l; loadLooks[i] = look; i++;
+    }
+    if (same) return load;
+    loadPieces.length = loadLooks.length = n;
+    load = [...wood.carried, ...wood.stones].map(l => { const d = dryness(l, total); return { len: l.len, rad: l.rad, col: driftColor(l, d), wet: woodLook(d).sheen }; });
+    return load;
+  }
   let windSeconds = 0;   // the wind's own clock: the drawn time, so gusts do not race while he sleeps
   const hero = createHero(scene), steps = createFootprints(scene, world.H), cam = createCamera();
   const mood = createMood({ stage, canvas: renderer.domElement, container });
@@ -115,22 +136,24 @@ export async function createIslandView(world, container, progress, start, opts =
     water.setSea(sea);
     const total = game ? game.clock.total : 0;
     if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); findsView.update(); berryView.update(); bananaView.update(); leantoView.update(); }
-    hero.update(player, t.depth, game ? [...game.wood.carried, ...game.wood.stones].map(l => { const d = dryness(l, total); return { len: l.len, rad: l.rad, col: driftColor(l, d), wet: woodLook(d).sheen }; }) : []);
+    hero.update(player, t.depth, game ? loadOf(game.wood, total) : NO_LOAD);
     steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver);
     steps.wash(sea);
     const { yaw, pitch } = cam;
     streamer.update(player, cam.zoom, aspect, yaw, pitch);
-    streamer.pump(BUILD_MS);
-    pumpFarTiles(far, tile => tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch), FAR_MS);
+    building = streamer.pump(BUILD_MS);
+    if (pumpFarTiles(far, tile => tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch), FAR_MS) > 0) building = true;
     updateFarTiles(far, tile => !near.has(tile) && tileInView(tile, cam.target, cam.zoom, aspect, 20, yaw, pitch));
     const sky = skyAt(info.time);
     const rain = game ? game.rain : 0;
     water.tick(dt, sky.day, rain); setGroundWet(rain); rainView.update(dt, rain, sky.day);
     windSeconds += dt; setWind(windState(world.seed, windSeconds, total, sky.day), windSeconds);
+    if (lightLayer) lightLayer.begin();
     if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H, heroFlame: hero.flame });
     if (tallyView) tallyView.update(dt, { game, camera: cam.camera, H: world.H, player });
     if (wildView) wildView.update(dt);
     if (flyView) flyView.update(dt, cam.camera);
+    if (lightLayer) lightLayer.end();
     stage.followSun({ target: cam.target, yaw, pitch, zoom: cam.zoom, aspect }, sky.light.dir);
     mood.update(world.tierAt(t.L), dt, sky, rain);
     renderer.render(scene, cam.camera);
@@ -141,10 +164,11 @@ export async function createIslandView(world, container, progress, start, opts =
     woodView = createWoodView(scene, world, kit, g.wood); cocoView = createCocoView(scene, world, kit, g.fibre);
     branchView = createBranchView(scene, world, kit, g.branches); findsView = createFindsView(scene, world, kit, g.fronds, g.stones); berryView = createBerryView(scene, world, kit, g.berries); bananaView = createBananaView(scene, world, kit, g.bananas); leantoView = createLeantoView(scene, world, kit, g.leantos);
     near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); });
-    fireView = createFireView(scene, container, g.fire, { pool: startLights, active: fireLights });
+    lightLayer = createLightLayer(container);   // the glow of the fires and the fireflies share one small canvas
+    fireView = createFireView(scene, container, g.fire, { pool: startLights, active: fireLights, layer: lightLayer });
     tallyView = createTallyView(container);
     wildView = createWildlifeView(scene, g.wildlife);
-    flyView = createFireflyView(container, g.fireflies);
+    flyView = createFireflyView(container, g.fireflies, lightLayer);
   }
 
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), onLog = new THREE.Vector3();
@@ -187,5 +211,5 @@ export async function createIslandView(world, container, progress, start, opts =
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
   const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
-  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: next => { stage.applyQuality(next); if (next && next.fireLights !== undefined) { fireLights = next.fireLights; if (fireView) fireView.setActive(fireLights); } if (next && next.rainStreaks !== undefined) rainView.setMax(next.rainStreaks); }, canvas: renderer.domElement, scene, stats, setWindTime: t => { windSeconds = t; }, get windTime() { return windSeconds; }, get waterTime() { return water.clock; }, settle, prepare };
+  return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: next => { stage.applyQuality(next); if (next && next.fireLights !== undefined) { fireLights = next.fireLights; if (fireView) fireView.setActive(fireLights); } if (next && next.rainStreaks !== undefined) rainView.setMax(next.rainStreaks); }, get building() { return building; }, canvas: renderer.domElement, scene, stats, setWindTime: t => { windSeconds = t; }, get windTime() { return windSeconds; }, get waterTime() { return water.clock; }, settle, prepare };
 }

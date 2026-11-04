@@ -17,9 +17,9 @@
  * addFrondPile(B, kit, H, pile), addStonePile(B, kit, H, pile)   the pieces of a pile into a Batch
  * createFindsView(scene, world, kit, fronds, stones) -> { addTile, dropTile, update }
  *   addTile(tile), dropTile(tile)   with the detailed tiles
- *   update()   rebuilds the tiles when a frond or stone was taken or a frond fell again
+ *   update()   rebuilds the tiles when a frond or stone was taken or a frond fell again: only the tiles in fronds.dirty and stones.dirty (render/tileRebuild)
  *
- * Depends on: three, core/noise, render/batch, render/geometry, render/materials, render/nearTile (disposeGroup), render/palette
+ * Depends on: three, core/noise, render/batch, render/geometry, render/materials, render/nearTile (disposeGroup), render/tileRebuild, render/palette
  */
 import * as THREE from 'three';
 import { hashInt } from '../core/noise.js';
@@ -27,6 +27,7 @@ import { Batch } from './batch.js';
 import { mat4 } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
+import { rebuildTiles } from './tileRebuild.js';
 import { FROND, STONE } from './palette.js';
 
 const FROND_SY = 0.16, FROND_LIFT = 0.04;   // the arch squeezed flat, a hair above the ground
@@ -89,7 +90,8 @@ export function createFindsView(scene, w, kit, fronds, stones) {
   function update() {
     const key = fronds.version + ':' + stones.version; if (key === seen) return;
     seen = key;
-    tiles.forEach((g, tile) => { if (g) disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
+    const redo = (tile, g) => { if (g) disposeGroup(g); tiles.set(tile, tileGroup(tile)); };
+    rebuildTiles(tiles, fronds.dirty, w.tiles, redo); rebuildTiles(tiles, stones.dirty, w.tiles, redo);
   }
   return { addTile, dropTile, update };
 }

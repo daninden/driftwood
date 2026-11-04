@@ -27,6 +27,8 @@
  * branchesOfTile(world, tile) -> [branch]   all the branches of a tile (taken or not)
  * createBranches(world, saved?) -> branches
  *   branches.version          goes up with every change, for the renderer
+ *   branches.dirty                 a Set of the indices of the tiles (world.tiles) whose pieces changed since the view last looked (take, regrowth), for
+ *                           the renderer to rebuild just those; the view empties it. Plain data, nothing is saved from it
  *   branches.groundBranches(tile)  the branches lying under the trees of a tile
  *   branches.near(x, z, reach)     the branches lying on the ground within reach (and a log's width) of (x, z)
  *   branches.onGround(b)      true while the branch lies there
@@ -50,6 +52,7 @@ export const BRANCH_LEN = [0.8, 1.2], BRANCH_RAD = [0.04, 0.056];
 
 const cache = new WeakMap();   // tile -> [branch]
 
+const tileOfId = id => Math.floor((id - BRANCH_ID0) / TILE_SPAN);   // the index of the tile in world.tiles that a branch's id points to
 const tileOf = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
 
 /** The branches under the trees of a tile: about half of the trees have one or two. Deterministic in the tree's place. */
@@ -75,7 +78,7 @@ export function branchesOfTile(w, tile) {
 export function createBranches(w, saved) {
   const taken = new Map();   // id -> the day it was taken
   const grown = new Map();   // id -> the day a regrown branch grew, kept for GROWN_KEEP days (saved, so the rain of before it grew stays off it)
-  const branches = { version: 0, groundBranches, near, onGround, piece, take, update, state };
+  const branches = { version: 0, dirty: new Set(), groundBranches, near, onGround, piece, take, update, state };
   if (saved) {
     for (const [id, at] of saved.taken || []) if (piece(id)) taken.set(id, at);
     for (const [id, g] of saved.grown || []) if (!taken.has(id) && Number.isFinite(g)) regrow(id, g);
@@ -103,14 +106,14 @@ export function createBranches(w, saved) {
   }
   function take(b, total = 0) {
     if (!b || !b.branch || taken.has(b.id) || !piece(b.id)) return false;
-    taken.set(b.id, total); branches.version++; return true;
+    taken.set(b.id, total); branches.dirty.add(tileOfId(b.id)); branches.version++; return true;
   }
   function update(total) {
     let n = 0;
     taken.forEach((at, id) => {
       const when = back(id, at);
       if (total < when) return;
-      taken.delete(id); n++; regrow(id, when);
+      taken.delete(id); n++; branches.dirty.add(tileOfId(id)); regrow(id, when);
     });
     for (const [id, g] of grown) if (total - g > GROWN_KEEP) grown.delete(id);
     if (n) branches.version++;

@@ -21,6 +21,8 @@
  * frondsOfTile(world, tile) -> [frond]   all the fronds of a tile (taken or not)
  * createFronds(world, saved?) -> fronds
  *   fronds.version          goes up with every change, for the renderer
+ *   fronds.dirty            a Set of the indices of the tiles (world.tiles) whose pieces changed since the view last looked (taken, grown back), so the view
+ *                           rebuilds just those; the view empties it. Not saved
  *   fronds.groundFronds(tile)   the fronds lying under the palms of a tile
  *   fronds.near(x, z, reach)    the fronds lying on the ground within reach of (x, z)
  *   fronds.onGround(f)      true while the frond lies there
@@ -37,6 +39,7 @@ import { HALF, T, NT } from '../world/constants.js';
 
 export const FROND_ID0 = 2 << 24;          // frond ids start here, above the branch ids
 const TILE_SPAN = 4096;
+const tileOfId = id => Math.floor((id - FROND_ID0) / TILE_SPAN);   // the index in world.tiles that a frond's id points to
 export const FROND_SHARE = 1 / 3;
 export const REGROW = 4, REGROW_SPREAD = 2;   // days before a taken frond lies there again
 export const FROND_LEN = [1.4, 1.8];
@@ -60,7 +63,7 @@ export function frondsOfTile(w, tile) {
 
 export function createFronds(w, saved) {
   const taken = new Map();   // id -> the day it was taken
-  const fronds = { version: 0, groundFronds, near, onGround, piece, take, update, state };
+  const fronds = { version: 0, dirty: new Set(), groundFronds, near, onGround, piece, take, update, state };
   if (saved) for (const [id, at] of saved.taken || []) if (piece(id)) taken.set(id, at);
   const back = (id, at) => at + REGROW + REGROW_SPREAD * (hashInt(id, Math.floor(at * 1000), 607) / 4294967296);
 
@@ -80,11 +83,11 @@ export function createFronds(w, saved) {
   }
   function take(f, total = 0) {
     if (!f || !f.frond || taken.has(f.id) || !piece(f.id)) return false;
-    taken.set(f.id, total); fronds.version++; return true;
+    taken.set(f.id, total); fronds.dirty.add(tileOfId(f.id)); fronds.version++; return true;
   }
   function update(total) {
     let n = 0;
-    taken.forEach((at, id) => { if (total >= back(id, at)) { taken.delete(id); n++; } });
+    taken.forEach((at, id) => { if (total >= back(id, at)) { taken.delete(id); n++; fronds.dirty.add(tileOfId(id)); } });
     if (n) fronds.version++;
   }
   function state() { return { taken: [...taken] }; }

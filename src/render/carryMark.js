@@ -19,10 +19,13 @@
  * isUsable(kind) -> bool      pure. Wood, branches, fronds, stones, fibre and empty shells are not usable
  * carryItems(state) -> [key]  one key per thing carried, e.g. { fibre: 2 } -> ['fibre', 'fibre']. Pure.
  * carryChanged(a, b) -> bool  true when the counts differ. Pure.
+ * carryState(game, out?) -> state  pure: the counts of what the game says he carries, written into out (a new object by default) so a frame makes no
+ *   garbage; wood counts as driftwood, branch or frond by the flag on each piece (0.27.7)
  * carryOpacity(since) -> 0..1 opacity `since` seconds after the last change. Pure.
  * createCarryMark(el) -> { update(state, now) }   el: the #carry element
  *   (index.html); state: e.g. { fibre: n }; now: seconds (any steady clock).
- *   Only touches the DOM when the drawings or the opacity step changed.
+ *   Only touches the DOM when the drawings or the opacity step changed; the counts are compared first and the drawings (an SVG string) are only built
+ *   when a count changed (0.27.7).
  *
  * Depends on: core/math
  */
@@ -42,6 +45,15 @@ export function carryItems(state) {
 }
 
 export const carryChanged = (a, b) => ITEMS.some(k => ((a && a[k]) || 0) !== ((b && b[k]) || 0));
+
+export function carryState(game, out = {}) {
+  let driftwood = 0, branch = 0, frond = 0;
+  for (const l of game.wood.carried) { if (l.branch) branch++; else if (l.frond) frond++; else driftwood++; }
+  out.fibre = game.fibre.carried; out.driftwood = driftwood; out.branch = branch; out.frond = frond; out.stone = game.wood.stones.length;
+  out.crab = game.crabs.carried.length; out.nut = game.shells.nuts; out.berries = game.berries.carried.length; out.banana = game.bananas.carried.length;
+  out.shell = game.shells.empty(); out.water = game.shells.full();
+  return out;
+}
 
 export function carryOpacity(since) {
   if (!(since >= 0) || since >= HOLD + EASE) return REST_OPACITY;
@@ -78,13 +90,15 @@ export const isUsable = key => USABLE.includes(key);
 const svg = key => `<svg viewBox="0 0 20 26" aria-hidden="true" data-kind="${key}"${isUsable(key) ? ' class="use"' : ''}>${DRAWINGS[key]}</svg>`;
 
 export function createCarryMark(el, onUse) {
-  let prev = null, changedAt = -Infinity, html = null, shown = '', lastNow = 0;
+  let prev = null, changedAt = -Infinity, shown = '', lastNow = 0;
   function update(state, now) {
     if (!el) return;
-    if (prev && carryChanged(prev, state)) changedAt = now;
-    prev = { ...state };
-    const h = carryItems(state).map(svg).join('');
-    if (h !== html) { html = h; el.innerHTML = h; }
+    if (!prev) { prev = {}; for (const k of ITEMS) prev[k] = state[k] || 0; el.innerHTML = carryItems(state).map(svg).join(''); }
+    else if (carryChanged(prev, state)) {
+      changedAt = now;
+      for (const k of ITEMS) prev[k] = state[k] || 0;
+      el.innerHTML = carryItems(state).map(svg).join('');
+    }
     const o = carryOpacity(now - changedAt).toFixed(2);
     if (o !== shown) { shown = o; el.style.opacity = o; }
   }

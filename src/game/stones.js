@@ -20,6 +20,8 @@
  * stonesOfTile(world, tile) -> [stone]   all the stones of a tile (taken or not)
  * createStones(world, saved?) -> stones
  *   stones.version          goes up with every change, for the renderer
+ *   stones.dirty            a Set of the indices of the tiles (world.tiles) whose pieces changed since the view last looked (taken, grown back), so the view
+ *                           rebuilds just those; the view empties it. Not saved
  *   stones.groundStones(tile)   the stones lying in a tile
  *   stones.near(x, z, reach)    the stones lying on the ground within reach of (x, z)
  *   stones.onGround(s)      true while the stone lies there
@@ -35,6 +37,7 @@ import { HALF, T, NT } from '../world/constants.js';
 
 export const STONE_ID0 = 3 << 24;          // stone ids start here, above the frond ids
 const TILE_SPAN = 4096;
+const tileOfId = id => Math.floor((id - STONE_ID0) / TILE_SPAN);   // the index in world.tiles that a stone's id points to
 export const STONE_MAX = 2;
 export const STONE_RAD = [0.08, 0.13];
 const BANK_NEAR = 0.3, BANK_FAR = 1.8, BANK_CHANCE = 0.4, ROCK_CHANCE = 0.4, CELL = 2;
@@ -69,7 +72,7 @@ export function stonesOfTile(w, tile) {
 
 export function createStones(w, saved) {
   const taken = new Set();
-  const stones = { version: 0, groundStones, near, onGround, piece, take, state };
+  const stones = { version: 0, dirty: new Set(), groundStones, near, onGround, piece, take, state };
   if (saved) for (const id of saved.taken || []) if (piece(id)) taken.add(id);
 
   function piece(id) {
@@ -88,7 +91,7 @@ export function createStones(w, saved) {
   }
   function take(s) {
     if (!s || !s.stone || taken.has(s.id) || !piece(s.id)) return false;
-    taken.add(s.id); stones.version++; return true;
+    taken.add(s.id); stones.dirty.add(tileOfId(s.id)); stones.version++; return true;
   }
   function state() { return { taken: [...taken] }; }
   return stones;

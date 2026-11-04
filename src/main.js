@@ -10,7 +10,7 @@
  * seconds of play, when wood is laid down, a fire is lit or goes out, a torch
  * is planted or taken, or he falls asleep or wakes, and when the page is
  * hidden or closed, and shortly after the view (turn, tilt, zoom) stops
- * changing (createViewSaver). The view is saved with it and restored at start-up
+ * changing (createViewSaver). What counts as "something worth saving" (save momentKey) is looked at twice a second (createMomentWatcher, 0.27.7). The view is saved with it and restored at start-up
  * straight into its pose, before the first tiles are chosen (no easing from the
  * default). At start-up a valid save is laid over the generated
  * island, silently. With `?spawn`, `?time` or `?awake` (tests) nothing is
@@ -63,7 +63,7 @@
  * Quality (render/quality): the game lowers its own quality on a slow device. Once the island is
  * in, a governor watches the time between drawn, non-idle frames and steps down one level (smaller
  * shadow map, lighter shadow filter, pixel ratio 1, no terrain shadows) when it is slower than about
- * 27 fps; the level is kept per device in localStorage (`driftwood-quality`) and the next start begins
+ * 27 fps (frames in which tiles were built, view.building, do not count, 0.27.7); the level is kept per device in localStorage (`driftwood-quality`) and the next start begins
  * there. `?quality=N` (0 to 4) forces a level and stops the adapting (tests). The dev panel shows `qN`.
  *
  * The height grids, the slowest part of generating the world, are built in
@@ -90,7 +90,7 @@ import { createInput } from './game/input.js';
 import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
 import { createHungerMark } from './render/hungerMark.js';
-import { createCarryMark } from './render/carryMark.js';
+import { createCarryMark, carryState } from './render/carryMark.js';
 import { createThumbStick, touchOnly } from './render/thumbStick.js';
 import { createActionButton } from './render/actionButton.js';
 import { createDevPanel, DEV_PANEL_VISIBLE } from './render/devPanel.js';
@@ -108,7 +108,7 @@ import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt
 import { VERSION, NAME } from './version.js';
 import { zoomMax } from './core/view.js';
 import { settingsFor, parseQuality, pickStart, loadLevel, saveLevel, createGovernor } from './render/quality.js';
-import { createSaveStore, parseHash, withoutNew, isResetKey, momentKey, createViewSaver, SAVE_EVERY } from './save.js';
+import { createSaveStore, parseHash, withoutNew, isResetKey, createMomentWatcher, createViewSaver, SAVE_EVERY } from './save.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
 import HeightWorker from './heightWorker.js?worker&inline';
@@ -163,9 +163,10 @@ async function boot() {
   let name = saved && typeof saved.name === 'string' ? saved.name : '';   // set from the prompt below when asked
   const startDay = saved && Number.isInteger(saved.startDay) ? saved.startDay : (saved ? 0 : game.clock.day);   // day 1 is the day the game started
   let wasAsleep = game.sleep.asleep, button = null;
+  const carrySt = {};   // the counts of what he carries, filled in place each frame
   const show = info => {
     const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
-    mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); half.update(game.hunger.days, now); carry.update({ fibre: game.fibre.carried, driftwood: game.wood.carried.filter(l => !l.branch && !l.frond).length, branch: game.wood.carried.filter(l => l.branch).length, frond: game.wood.carried.filter(l => l.frond).length, stone: game.wood.stones.length, crab: game.crabs.carried.length, nut: game.shells.nuts, berries: game.berries.carried.length, banana: game.bananas.carried.length, shell: game.shells.empty(), water: game.shells.full() }, now);
+    mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); half.update(game.hunger.days, now); carry.update(carryState(game, carrySt), now);
     if (button) button.update(game.action());
     ink.update(skyAt(info.time).day);
     who.update(dayLine(name, day), now);
@@ -180,10 +181,11 @@ async function boot() {
 
   createThumbStick(document.getElementById('stick'), input);
   button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
-  let stopSaving = testing || !!asking, sinceSave = 0, moment = momentKey(game);
+  let stopSaving = testing || !!asking, sinceSave = 0;
+  const moments = createMomentWatcher(game);   // looks for something worth saving twice a second, not every frame
   const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, view: view.pose }); sinceSave = 0; } };
   const viewSaver = createViewSaver();
-  const autosave = dt => { sinceSave += dt; if (viewSaver.update(view.pose, dt)) save(); const m = momentKey(game); if (m !== moment || sinceSave >= SAVE_EVERY) { moment = m; save(); } };
+  const autosave = dt => { sinceSave += dt; if (viewSaver.update(view.pose, dt)) save(); if (moments.update(dt) || sinceSave >= SAVE_EVERY) save(); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
   window.addEventListener('pagehide', save);
   window.addEventListener('keydown', e => { if (isResetKey(e)) { stopSaving = true; store.clear(); location.reload(); } });
@@ -225,7 +227,7 @@ async function boot() {
     frames++;
     if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input })) quiet.poke(now);
     dev.frame(real, performance.now() - t0, idle, view.zoom);
-    const lower = governor.frame(real, idle);
+    const lower = governor.frame(real, idle, view.building);
     if (lower !== null) { view.setQuality(settingsFor(lower, { touch })); dev.setQuality(lower); if (!testing) saveLevel(lower); }
   });
 }

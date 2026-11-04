@@ -8,7 +8,7 @@
  *   far: { map: Map<tile, Group>, rest: tiles still to build }
  *   Only the tiles for which first(tile) is true (those in view at the
  *   start) are built before the game starts (onMake(group) is called for every tile built, before it is added: islandView sets its shadow casting); the rest wait in far.rest.
- * pumpFarTiles(far, inView(tile), ms) builds waiting tiles within about ms,
+ * pumpFarTiles(far, inView(tile), ms) -> number of tiles made; builds waiting tiles within about ms,
  *   tiles in view first, otherwise in order (nearest the start first)
  * updateFarTiles(far, isVisible(tile)) sets group visibility each frame
  *
@@ -52,10 +52,12 @@ export async function buildFarTiles(w, colorAt, kit, scene, progress, first = ()
 
 export function pumpFarTiles(far, inView, ms) {
   const t0 = performance.now();
+  let made = 0;
   while (far.rest.length && performance.now() - t0 < ms) {
     let i = far.rest.findIndex(inView); if (i < 0) i = 0;
-    far.make(far.rest.splice(i, 1)[0]);
+    far.make(far.rest.splice(i, 1)[0]); made++;
   }
+  return made;
 }
 
 export function updateFarTiles(far, isVisible) { far.map.forEach((g, tile) => { g.visible = isVisible(tile); }); }

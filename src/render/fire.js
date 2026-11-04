@@ -14,9 +14,9 @@
  *     rebuilt), of which `active` are given out each frame, brighter at night.
  *     A light that changes the fire it serves first fades out and then fades
  *     in on the new one (FADE seconds), so nothing pops. At night a soft warm
- *     glow is laid over the picture round every light that is on (a DOM layer
- *     above the night grading of render/mood, which would otherwise darken the
- *     firelight with everything else).
+ *     glow is laid over the picture round every light that is on: two prebaked sprites (a wide soft glow and a small bright core)
+ *     drawn into the shared light layer (render/lightLayer, 0.27.7: a small canvas above the night grading of render/mood, which would
+ *     otherwise darken the firelight with everything else; before it was a full-screen div with CSS gradients rebuilt every frame).
  *
  *   - A burnt place put out by the rain (`wet: true`, 0.21) is wet ash: the ash darker, the char ends the same.
  *   - A burnt place (game/fire `burnt`) is what a fire leaves when it goes out: a
@@ -41,7 +41,9 @@
  * FLAME_LOCAL, flameWorld(torch, out)   where the flame is, in the torch's
  *   space and in the world (with the tilt of a held or askew torch); the
  *   torch lights and their glow sit exactly there
- * createFireView(scene, container, fire, { pool, active }?) -> fireView
+ * createFireView(scene, container, fire, { pool, active, layer }?) -> fireView
+ *   layer: the light layer to draw the glow into (islandView shares one with the fireflies and calls its begin and end round the frame);
+ *   by default one of its own in the container
  *   pool: how many point lights for fires and torches in the ground (default POOL, fixed for the session);
  *   active: how many of them are given out (default pool; fireView.setActive(n) lowers it with the quality,
  *   the rest stay in the scene at intensity 0); fireView.lights is the number of point lights in the scene
@@ -52,11 +54,12 @@
  *     H: the world's ground height; heroFlame(out) -> out | null: the flame
  *     of the torch in his hand in world space (render/hero `flame`)
  *
- * Depends on: three, render/materials, render/palette, game/clock, game/fire
+ * Depends on: three, render/materials, render/palette, render/lightLayer, game/clock, game/fire
  */
 import * as THREE from 'three';
 import { toon, outlineMat } from './materials.js';
 import { FIRE } from './palette.js';
+import { createLightLayer, radialSprite } from './lightLayer.js';
 import { DAY_SECONDS } from '../game/clock.js';
 import { EMBERS, BURNT_DAYS, BURN, FUEL_MAX } from '../game/fire.js';
 
@@ -192,9 +195,11 @@ export function createFireView(scene, container, fire, opts = {}) {
   };
   const torchView = createTorches(scene);
   const wisp = createSmoke(scene, 0.3);
-  const glow = document.createElement('div'); glow.style.cssText = 'position:fixed;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0;';
-  container.appendChild(glow);
-  const v = new THREE.Vector3(), flame = new THREE.Vector3();
+  const layer = opts.layer || createLightLayer(container), own = !opts.layer;
+  const [gr, gg, gb] = FIRE.glow;   // the sprites of the glow, at full strength: a wide soft one and a small bright core, drawn with the light's own alpha
+  const wide = radialSprite(128, [[0, `rgba(${gr},${gg},${gb},0.6)`], [0.3, `rgba(${gr},${gg},${gb},0.22)`], [0.65, `rgba(${gr},${gg},${gb},0.06)`], [1, `rgba(${gr},${gg},${gb},0)`]]);
+  const core = radialSprite(64, [[0, 'rgba(255,214,140,0.95)'], [0.55, 'rgba(255,170,90,0.5)'], [1, 'rgba(255,170,90,0)']]);
+  const v = new THREE.Vector3(), flame = new THREE.Vector3(), spots = new Float64Array((pool + 1) * 4);
   let clock = 0;
 
   function build(f) {
@@ -274,16 +279,21 @@ export function createFireView(scene, container, fire, opts = {}) {
     place(handLight, carried, night);
     for (const s of slots) place(s.light, s.src, night, s.k);
     // at night a warm glow round every light that is on, over the night grading
-    const rc = container.getBoundingClientRect(), [r, g, b] = FIRE.glow, grads = [];
-    for (const l of [...(carried ? [{ ...carried, k: 1 }] : []), ...slots.filter(s => s.src && s.k > 0).map(s => ({ ...s.src, k: s.k }))]) {
-      v.set(l.x, l.exact ? l.y : l.y - 0.3, l.z).project(camera);
-      const sx = ((v.x + 1) / 2 * rc.width).toFixed(0), sy = (1 - v.y) / 2 * rc.height, px = l.range * (0.6 + 0.4 * l.pow) / (camera.top - camera.bottom) * rc.height * 0.5;
-      const k = l.pow * (0.8 + 0.2 * l.fl) * l.k, a = x => (x * k).toFixed(3);
-      grads.push(`radial-gradient(circle ${(px * 0.12).toFixed(0)}px at ${sx}px ${(sy - px * 0.05).toFixed(0)}px, rgba(255,214,140,${a(0.95)}), rgba(255,170,90,${a(0.5)}) 55%, rgba(255,170,90,0) 100%)`);
-      grads.push(`radial-gradient(circle ${px.toFixed(0)}px at ${sx}px ${sy.toFixed(0)}px, rgba(${r},${g},${b},${a(0.6)}), rgba(${r},${g},${b},${a(0.22)}) 30%, rgba(${r},${g},${b},${a(0.06)}) 65%, rgba(${r},${g},${b},0) 100%)`);
+    if (own) layer.begin();
+    if (night > 0.04) {   // by day there is nothing to draw
+      const rc = layer.rect(), per = rc.height / (camera.top - camera.bottom);
+      let n = 0;   // the glows of this frame (x, y, radius, alpha), in a buffer kept between frames: the wide soft ones first, then the bright cores over them
+      const shine = (l, fade) => {
+        v.set(l.x, l.exact ? l.y : l.y - 0.3, l.z).project(camera);
+        const px = l.range * (0.6 + 0.4 * l.pow) * per * 0.5;
+        spots[n++] = (v.x + 1) / 2 * rc.width; spots[n++] = (1 - v.y) / 2 * rc.height; spots[n++] = px; spots[n++] = night * night * l.pow * (0.8 + 0.2 * l.fl) * fade;
+      };
+      if (carried) shine(carried, 1);
+      for (const s of slots) if (s.src && s.k > 0 && n < spots.length) shine(s.src, s.k);
+      for (let i = 0; i < n; i += 4) layer.draw(wide, spots[i], spots[i + 1], spots[i + 2], spots[i + 3]);
+      for (let i = 0; i < n; i += 4) layer.draw(core, spots[i], spots[i + 1] - spots[i + 2] * 0.05, spots[i + 2] * 0.12, spots[i + 3], true);
     }
-    glow.style.background = grads.join(',') || 'none';
-    glow.style.opacity = (night * night).toFixed(3);
+    if (own) layer.end();
   }
   return { update, setActive(n) { active = Math.min(pool, Math.max(0, Math.floor(n))); }, get lights() { return pool + 1; } };
 }

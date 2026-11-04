@@ -9,10 +9,10 @@
  * createCocoView(scene, world, kit, fibre) -> cocoView
  *   cocoView.addTile(tile), cocoView.dropTile(tile)   with the detailed tiles
  *   cocoView.update()   rebuilds the tiles when nuts were taken or fell again
- *     (fibre.version)
+ *     (fibre.version), and only the tiles in fibre.dirty (render/tileRebuild)
  *
  * Depends on: three, core/noise, render/batch, render/geometry, render/materials,
- *   render/nearTile (disposeGroup), render/palette
+ *   render/nearTile (disposeGroup), render/tileRebuild, render/palette
  */
 import * as THREE from 'three';
 import { hashInt } from '../core/noise.js';
@@ -20,6 +20,7 @@ import { Batch } from './batch.js';
 import { mat4 } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
+import { rebuildTiles } from './tileRebuild.js';
 import { COCO } from './palette.js';
 
 export function addCoconut(B, kit, H, c) {
@@ -35,7 +36,7 @@ export function createCocoView(scene, w, kit, fibre) {
   function update() {
     if (fibre.version === seen) return;
     seen = fibre.version;
-    tiles.forEach((g, tile) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
+    rebuildTiles(tiles, fibre.dirty, w.tiles, (tile, g) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
   }
   return { addTile, dropTile, update };
 }

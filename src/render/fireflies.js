@@ -1,25 +1,26 @@
 /**
  * render/fireflies — draws the fireflies of game/fireflies (0.17.4 "Fireflies").
  *
- * A layer of its own over the picture, above the night grading (like the glow
- * round fires in render/fire): a transparent 2D canvas, additive, with one small
- * sprite per firefly baked once in code, a warm yellow centre in a soft halo.
+ * Drawn into the light layer (render/lightLayer, 0.27.7: the same small canvas as the glow round fires, above the night grading,
+ * additive), with one small sprite per firefly baked once in code, a warm yellow centre in a soft halo.
  * No point lights and nothing in the 3D scene, so the light count and the shaders
- * stay as they are, and the grading cannot dim them. The cost is a clear and at
- * most MAX_FLIES drawImage calls per frame. Like the glow it ignores the depth
- * of the scene (a firefly drifts 0.3 to 2 m up, in the open or between trees).
- * By day the list is empty and the canvas is hidden. Never counts as "something
+ * stay as they are, and the grading cannot dim them. The cost is at most MAX_FLIES
+ * drawImage calls per frame into a half-size canvas (before 0.27.7 a full-size canvas was cleared and redrawn as well). Like the glow
+ * it ignores the depth of the scene (a firefly drifts 0.3 to 2 m up, in the open or between trees).
+ * By day the list is empty and nothing is drawn. Never counts as "something
  * happening" for the frame pacer.
  *
  * MAX_FLIES (300)
  * haloRadius(pxPerM) -> css px of the soft halo (grows with the zoom, within limits), pure
  * glowSprite(size) -> a canvas with the baked sprite
- * createFireflyView(container, fireflies) -> { update(dt, camera) }   once per drawn frame
- *   fireflies: game.fireflies; camera: the orthographic camera
+ * createFireflyView(container, fireflies, layer?) -> { update(dt, camera) }   once per drawn frame
+ *   fireflies: game.fireflies; camera: the orthographic camera; layer: the light layer to draw into (islandView shares one with the
+ *   fire's glow and calls its begin and end round the frame), by default one of its own in the container
  *
- * Depends on: three (a Vector3 to project)
+ * Depends on: three (a Vector3 to project), render/lightLayer
  */
 import * as THREE from 'three';
+import { createLightLayer } from './lightLayer.js';
 
 export const MAX_FLIES = 300;
 const SPRITE = 64;
@@ -37,29 +38,21 @@ export function glowSprite(size = SPRITE) {
   return c;
 }
 
-export function createFireflyView(container, fireflies) {
-  const cv = document.createElement('canvas');
-  cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen;display:none;';
-  container.appendChild(cv);
-  const g = cv.getContext('2d'), sprite = glowSprite(), v = new THREE.Vector3();
-  let shown = false;
+export function createFireflyView(container, fireflies, shared) {
+  const layer = shared || createLightLayer(container), sprite = glowSprite(), v = new THREE.Vector3();
   function update(dt, camera) {
     const list = fireflies.list();
-    if (!list.length) { if (shown) { cv.style.display = 'none'; shown = false; } return; }
-    const rc = container.getBoundingClientRect(), ratio = Math.min(2, window.devicePixelRatio || 1), W = Math.round(rc.width * ratio), H = Math.round(rc.height * ratio);
-    if (!shown) { cv.style.display = 'block'; shown = true; }
-    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
-    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H); g.globalCompositeOperation = 'lighter';
-    const rad = haloRadius(rc.height / (camera.top - camera.bottom)) * ratio, n = Math.min(list.length, MAX_FLIES);
-    for (let i = 0; i < n; i++) {
-      const f = list[i]; if (f.glow < 0.01) continue;
-      v.set(f.x, f.y, f.z).project(camera);
-      if (v.x < -1.1 || v.x > 1.1 || v.y < -1.1 || v.y > 1.1) continue;
-      g.globalAlpha = Math.min(1, f.glow);
-      const r = rad * (0.75 + 0.25 * f.glow);
-      g.drawImage(sprite, (v.x + 1) / 2 * W - r, (1 - v.y) / 2 * H - r, r * 2, r * 2);
+    if (!shared) layer.begin();
+    if (list.length) {
+      const rc = layer.rect(), rad = haloRadius(rc.height / (camera.top - camera.bottom)), n = Math.min(list.length, MAX_FLIES);
+      for (let i = 0; i < n; i++) {
+        const f = list[i]; if (f.glow < 0.01) continue;
+        v.set(f.x, f.y, f.z).project(camera);
+        if (v.x < -1.1 || v.x > 1.1 || v.y < -1.1 || v.y > 1.1) continue;
+        layer.draw(sprite, (v.x + 1) / 2 * rc.width, (1 - v.y) / 2 * rc.height, rad * (0.75 + 0.25 * f.glow), Math.min(1, f.glow));
+      }
     }
-    g.globalAlpha = 1;
+    if (!shared) layer.end();
   }
   return { update };
 }

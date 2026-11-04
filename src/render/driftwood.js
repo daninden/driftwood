@@ -24,7 +24,10 @@
  * between low and high water (0.18, ground below 0) gets none: the sea covers it
  * and draws over it (the sea is drawn after the opaque wood), so it shows faintly
  * through shallow water. The look is rebuilt on a step of drying while
- * `wood.drying(total)` says some piece can still be wet.
+ * `wood.drying(total)` says some piece can still be wet, and then only the tiles that hold a piece that can still look wet (game/wood stillWet) are rebuilt (0.27.7).
+ * What changed otherwise is the tiles in `wood.dirty` (a log taken, wood washed up or wetted by rain; render/tileRebuild); the piles are
+ * one group of their own, rebuilt on every change. The damp patches of a tile share a few materials (DAMP_BUCKETS opacity steps, kept
+ * for the life of the view) and each opacity step is one merged mesh per tile.
  *
  * woodLook(dry) -> { wet, sheen }   pure; wet 0..1 is how much of the wet colour
  *   is mixed in (1 until BURN_DRY, 0 from BURN_DRY + BLEACH), sheen 1 while it
@@ -32,6 +35,8 @@
  * dampPatch(log, dry) -> { opacity, scale } | null   pure; the damp patch under a
  *   beach log at dryness dry: null once it is dry enough to burn
  * dryStep(dry) -> dry rounded down to DRY_STEPS steps a day
+ * DAMP_BUCKETS (8), dampBucket(opacity) -> 1..DAMP_BUCKETS the opacity step of a damp patch (rounded to the nearest, at least 1), dampOpacity(bucket) -> its opacity; pure
+ * mergeGeometries(list) -> one BufferGeometry (position, uv, normal, index) from the list, which is disposed
  * Piles of fronds and of stones (game/wood kinds 'frond' and 'stone', 0.27) are drawn by render/finds; driftColor gives a carried frond or stone its colour.
  * A branch (game/branches, `log.branch`) is dark bark whatever its dryness (driftColor) and
  * is drawn thin in piles; on the ground and under the arm see render/branches and render/hero.
@@ -49,8 +54,8 @@
  *     (wood.version, or a step of drying) and fades in freshly washed-up
  *     wood (dt in real seconds, total the days on the clock)
  *
- * Depends on: three, core/noise, render/geometry, render/finds, render/nearTile (disposeGroup),
- *   render/palette, render/materials (wetToon), game/wood (dryness, read only),
+ * Depends on: three, core/noise, core/math, render/geometry, render/batch, render/finds, render/nearTile (disposeGroup), render/tileRebuild,
+ *   render/palette, render/materials (wetToon), game/wood (dryness, stillWet, read only), world/constants,
  *   game/fire (TORCH_DRY), game/tide (to see whether any wood is still wet)
  */
 import * as THREE from 'three';
@@ -60,7 +65,9 @@ import { Batch } from './batch.js';
 import { outlineMat, toon } from './materials.js';
 import { disposeGroup } from './nearTile.js';
 import { DRIFT, BRANCH } from './palette.js';
-import { dryness, DRY_DAYS } from '../game/wood.js';
+import { dryness, stillWet, DRY_DAYS } from '../game/wood.js';
+import { rebuildTiles } from './tileRebuild.js';
+import { NT } from '../world/constants.js';
 import { frondColor, stoneColor, addFrondPile, addStonePile } from './finds.js';
 import { TORCH_DRY } from '../game/fire.js';
 import { ss } from '../core/math.js';
@@ -71,6 +78,10 @@ export const BURN_DRY = TORCH_DRY;   // dry enough to burn: the wood looks wet u
 export const BLEACH = 0.1;           // then it bleaches to its own colour over this much of the drying
 const COLS = DRIFT.dry, WET = new THREE.Color(DRIFT.wet), DRY_STEPS = 40, WET_MIX = 0.92;   // the look of drying wood changes in steps (30 s of play)
 const DAMP_MAX = 0.55, DAMP_SHRINK = 0.45, DAMP_RINGS = 3, DAMP_SEGS = 20, DAMP_LIFT = 0.025;
+
+export const DAMP_BUCKETS = 8;
+export const dampBucket = opacity => Math.max(1, Math.min(DAMP_BUCKETS, Math.round(opacity / DAMP_MAX * DAMP_BUCKETS)));
+export const dampOpacity = bucket => DAMP_MAX * bucket / DAMP_BUCKETS;
 
 export const dryStep = dry => Math.floor(dry * DRY_STEPS + 1e-9) / DRY_STEPS;
 
@@ -176,33 +187,64 @@ export function dampGeometry(H, log, scale = 1) {
   return g;
 }
 
+/** One geometry from several of the same layout (position, uv, normal, index); the sources are disposed. */
+export function mergeGeometries(list) {
+  let nv = 0, ni = 0;
+  for (const g of list) { nv += g.attributes.position.count; ni += g.index.count; }
+  const pos = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), nor = new Float32Array(nv * 3), idx = new Uint32Array(ni);
+  let v = 0, i = 0;
+  for (const g of list) {
+    pos.set(g.attributes.position.array, v * 3); uv.set(g.attributes.uv.array, v * 2); nor.set(g.attributes.normal.array, v * 3);
+    for (let k = 0; k < g.index.count; k++) idx[i + k] = g.index.array[k] + v;
+    v += g.attributes.position.count; i += g.index.count; g.dispose();
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); out.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); out.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); out.setIndex(new THREE.BufferAttribute(idx, 1));
+  return out;
+}
+
 export function createWoodView(scene, w, rawKit, wood) {
   const tiles = new Map();   // tile -> group of its beach logs (and their damp patches)
-  let piles = null, seen = -1, washes = wood.washes, fading = null, fadeT = 0, fresh = new Set(), now = 0, dryKey = -1;
+  let piles = null, seen = -1, washes = wood.washes, fading = null, fadeT = 0, fresh = new Set(), now = 0, dryKey = -1, dryStale = false;
   const wetMat = wetToon(), damp = dampMap();
   const kit = { ...rawKit, wetMat };
   const fadeMat = toon(0xffffff, { transparent: true, opacity: 0 }), fadeWetMat = wetToon(0xffffff, { transparent: true, opacity: 0 });
   const fadeOutline = outlineMat.clone(); fadeOutline.transparent = true; fadeOutline.opacity = 0;
   const build = (add, mat = kit.smallMat, ol = outlineMat) => { const grp = new THREE.Group(), B = new Batch(ol); add(B, mat); B.build(grp); scene.add(grp); return grp; };
-  // the damp patches of some beach logs, into a group; k scales their opacity (1: full; fading wood: 0 and rising)
-  const addPatches = (grp, logs, k) => {
+  // the damp patches of some beach logs, into a group, one merged mesh for each opacity step. A tile's patches share the material of
+  // their step (kept for good); the patches of fading wood (fade true) get materials of their own, whose opacity rises from 0 with the wood
+  const dampMats = new Map();
+  const dampMat = (bucket, fade) => {
+    const make = () => toon(DRIFT.damp, { transparent: true, opacity: fade ? 0 : dampOpacity(bucket), alphaMap: damp, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    if (fade) return make();
+    let m = dampMats.get(bucket); if (!m) { m = make(); m.userData.shared = true; dampMats.set(bucket, m); }
+    return m;
+  };
+  const addPatches = (grp, logs, fade) => {
+    const by = new Map();
     for (const l of logs) {
       const p = l.y < 0 ? null : dampPatch(l, dryness(l, now)); if (!p) continue;   // none in the strip the sea covers: no patch on top of the water
-      const m = new THREE.Mesh(dampGeometry(w.H, l, p.scale), toon(DRIFT.damp, { transparent: true, opacity: p.opacity * k, alphaMap: damp, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-      m.userData.base = p.opacity; m.castShadow = false; m.receiveShadow = true; m.renderOrder = 1; grp.add(m);
+      const b = dampBucket(p.opacity); if (!by.has(b)) by.set(b, []); by.get(b).push(dampGeometry(w.H, l, p.scale));
     }
+    by.forEach((geos, b) => {
+      const m = new THREE.Mesh(mergeGeometries(geos), dampMat(b, fade));
+      if (fade) m.userData.base = dampOpacity(b);
+      m.castShadow = false; m.receiveShadow = true; m.renderOrder = 1; grp.add(m);
+    });
   };
   const tileGroup = tile => {
     const logs = wood.beachLogs(tile).filter(l => !fresh.has(l)), grp = build(B => { for (const l of logs) addBeachLog(B, kit, w.H, l, dryness(l, now)); });
-    addPatches(grp, logs, 1); return grp;
+    addPatches(grp, logs, false); return grp;
   };
-  const rebuildTiles = () => tiles.forEach((g, tile) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
+  const redo = (tile, g) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); };
+  const tileKey = tile => tile.tz * NT + tile.tx;
+  const markTiles = holds => tiles.forEach((g, tile) => { if (wood.beachLogs(tile).some(holds)) wood.dirty.add(tileKey(tile)); });   // tiles holding a log that `holds`
   const buildFading = () => {
     if (fading) disposeGroup(fading);
     const logs = [...fresh].filter(l => wood.onBeach(l));
     fading = build((B, mat) => { for (const l of logs) addBeachLog(B, { ...kit, smallMat: mat, wetMat: fadeWetMat }, w.H, l, dryness(l, now)); }, fadeMat, fadeOutline);
     fading.traverse(o => { o.castShadow = false; });   // no shadow before the wood is there
-    addPatches(fading, logs, 0);
+    addPatches(fading, logs, true);
   };
 
   function addTile(tile) { if (tile.drift && tile.drift.length && !tiles.has(tile)) tiles.set(tile, tileGroup(tile)); }
@@ -212,12 +254,16 @@ export function createWoodView(scene, w, rawKit, wood) {
     const dk = Math.floor(total * DRY_STEPS / DRY_DAYS);
     if (dk !== dryKey) {   // a step of drying: only worth a rebuild while some wood can still be wet (the latest wash-up is under a day old)
       dryKey = dk;
-      if (wood.drying(total)) seen = -1;
+      if (wood.drying(total)) dryStale = true;
     }
-    if (wood.washes !== washes) { washes = wood.washes; fresh = new Set(wood.fresh); fadeT = 0; seen = -1; }
-    if (wood.version !== seen) {
+    if (wood.washes !== washes) { washes = wood.washes; fresh = new Set(wood.fresh); fadeT = 0; }
+    if (wood.version !== seen || dryStale) {
+      const first = seen === -1;
       seen = wood.version;
-      rebuildTiles();
+      if (dryStale && !first) markTiles(l => stillWet(l, total));   // only the tiles that hold wood that can still look wet
+      rebuildTiles(tiles, first ? undefined : wood.dirty, w.tiles, redo);
+      if (first) wood.dirty.clear();
+      dryStale = false;
       if (fresh.size) buildFading();
       if (piles) disposeGroup(piles);
       piles = build(B => { for (const p of wood.piles) addPile(B, kit, w.H, p, now); });
@@ -226,7 +272,7 @@ export function createWoodView(scene, w, rawKit, wood) {
       fadeT += dt;
       const k = Math.min(1, fadeT / FADE_IN); fadeMat.opacity = k; fadeWetMat.opacity = k; fadeOutline.opacity = k;
       if (fading) fading.traverse(o => { if (o.userData.base !== undefined) o.material.opacity = o.userData.base * k; });
-      if (k >= 1) { fresh = new Set(); if (fading) { disposeGroup(fading); fading = null; } rebuildTiles(); }
+      if (k >= 1) { markTiles(l => fresh.has(l)); fresh = new Set(); if (fading) { disposeGroup(fading); fading = null; } rebuildTiles(tiles, wood.dirty, w.tiles, redo); }
     }
   }
   return { addTile, dropTile, update };

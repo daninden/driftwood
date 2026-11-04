@@ -56,6 +56,7 @@
  * momentKey(game) -> string           changes when something worth saving
  *   happens: wood laid down or taken from a pile, a lean-to started or finished, a fire lit or gone out, a
  *   torch stuck in the ground or taken up, falling asleep or waking up, a crab caught or eaten or gone bad, a shell kept, filled or drunk, a coconut picked up or eaten, berries or a banana bunch picked, eaten or gone bad
+ * MOMENT_EVERY (0.5), createMomentWatcher(game, every?) -> { update(dt) -> bool }   true when momentKey changed since the last look; it only looks every `every` seconds (0.27.7), not every frame
  * parseHash(hash) -> { seed, fresh }  from `#seed-<n>` and/or `new`, joined
  *   with `&` (`#new`, `#seed-2024`, `#seed-2024&new`); seed defaults to 1337
  * withoutNew(hash) -> string          the hash with `new` removed
@@ -142,6 +143,13 @@ export function createViewSaver(settle = VIEW_SETTLE) {
 export function momentKey(game) {
   const f = game.fire;
   return [game.wood.piles.length, game.wood.piles.reduce((n, p) => n + p.logs.length, 0), f.fires.length, f.torches.length, game.sleep.asleep ? 1 : 0, game.leantos.list.length, game.leantos.list.filter(l => l.progress >= 1).length, game.leantos.list.map(l => Object.keys(l.up || {}).filter(k => l.up[k] >= 1).length).join(''), game.crabs.carried.length, game.crabs.gone.size, game.shells.list.map(f => (f ? 1 : 0)).join(''), game.shells.nuts, game.berries.carried.length, game.berries.picked.size, game.bananas.carried.length, game.bananas.picked.size].join(',');
+}
+
+export const MOMENT_EVERY = 0.5;   // seconds between looks at momentKey
+/** Watches momentKey: update(dt) is true when it changed since the last look; it only looks every `every` seconds (0.27.7: it was built every frame). */
+export function createMomentWatcher(game, every = MOMENT_EVERY) {
+  let key = momentKey(game), t = 0;
+  return { update(dt) { t += dt; if (t < every) return false; t = 0; const k = momentKey(game); if (k === key) return false; key = k; return true; } };
 }
 
 export function parseHash(hash) {

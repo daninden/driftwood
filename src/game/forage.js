@@ -31,6 +31,8 @@
  *   forage.carried          [total]  the game clock (days) at which each handful or bunch was picked, oldest first
  *   forage.picked           Map plantId -> total at which it was picked
  *   forage.version          goes up with every change, for the renderer
+ *   forage.dirty            a Set of the indices of the tiles (world.tiles) whose pieces changed since the view last looked (taken, grown back), so the view
+ *                           rebuilds just those; the view empties it. Not saved
  *   forage.plantsIn(tile)   the plants of a tile, picked or not
  *   forage.bearing(p)       true while the plant has its berries or bunch
  *   forage.bearingIn(tile)  the plants of a tile that bear now
@@ -78,7 +80,7 @@ export function plantsOfTile(w, tile, kind) {
 
 export function createForage(w, kind, saved) {
   const byId = new Map(), picked = new Map();   // picked: id -> the day it was picked
-  const forage = { carried: [], picked, version: 0, plantsIn, bearing, bearingIn, find, full, pick, stow, eat, update, state };
+  const forage = { carried: [], picked, version: 0, dirty: new Set(), plantsIn, bearing, bearingIn, find, full, pick, stow, eat, update, state };
   const plant = id => {
     if (byId.has(id)) return byId.get(id);
     const tile = w.tiles[Math.floor(id / TILE_SPAN)];
@@ -111,14 +113,14 @@ export function createForage(w, kind, saved) {
   function full() { return forage.carried.length >= kind.max; }
   function pick(p, total) {
     if (!p || picked.has(p.id) || !plant(p.id)) return false;
-    picked.set(p.id, total); forage.version++; return true;
+    picked.set(p.id, total); forage.dirty.add(Math.floor(p.id / TILE_SPAN)); forage.version++; return true;
   }
   function stow(total) { if (full()) return false; forage.carried.push(total); forage.version++; return true; }
   function eat() { if (!forage.carried.length) return false; forage.carried.shift(); forage.version++; return true; }
   function update(total) {
     if (forage.carried.some(t => total - t >= kind.keep)) { forage.carried = forage.carried.filter(t => total - t < kind.keep); forage.version++; }
     let n = 0;
-    picked.forEach((at, id) => { if (total >= back(id, at)) { picked.delete(id); n++; } });
+    picked.forEach((at, id) => { if (total >= back(id, at)) { picked.delete(id); n++; forage.dirty.add(Math.floor(id / TILE_SPAN)); } });
     if (n) forage.version++;
   }
   function state() { return { carried: forage.carried.slice(), picked: [...picked] }; }

@@ -22,6 +22,8 @@
  * createFibre(world, saved?) -> fibre
  *   fibre.carried            tufts carried (0..FIBRE_MAX)
  *   fibre.version            goes up with every change, for the renderer
+ *   fibre.dirty            a Set of the indices of the tiles (world.tiles) whose pieces changed since the view last looked (taken, grown back), so the view
+ *                           rebuilds just those; the view empties it. Not saved
  *   fibre.onGround(coco)     true while the coconut lies there
  *   fibre.groundCocos(tile)  the coconuts lying under the palms of a tile
  *   fibre.find(x, z, reach) -> { kind: 'coco', coco, x, z, d } | null   the nearest (d: distance)
@@ -59,16 +61,17 @@ export function nutsOfTile(w, tile) {
 const tileOf = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
 
 export function createFibre(w, saved) {
-  const byId = new Map();
-  for (const t of w.tiles) for (const c of nutsOfTile(w, t)) byId.set(c.id, c);
+  const byId = new Map(), tileOfNut = new Map();   // tileOfNut: id -> the index of its tile in world.tiles
+  w.tiles.forEach((t, k) => { for (const c of nutsOfTile(w, t)) { byId.set(c.id, c); tileOfNut.set(c.id, k); } });
   const taken = new Map();   // id -> the day it was taken
-  const fibre = { carried: 0, version: 0, onGround, groundCocos, find, take, husk, tuft, use, update, state };
+  const fibre = { carried: 0, version: 0, dirty: new Set(), onGround, groundCocos, find, take, husk, tuft, use, update, state };
   if (saved) {
     fibre.carried = Math.max(0, Math.min(FIBRE_MAX, saved.carried | 0));
     for (const [id, at] of saved.taken || []) if (byId.has(id)) taken.set(id, at);
   }
   const back = (id, at) => at + REGROW + REGROW_SPREAD * (hashInt(id, Math.floor(at * 1000), 61) / 4294967296);
 
+  function mark(id) { const k = tileOfNut.get(id); if (k !== undefined) fibre.dirty.add(k); }
   function onGround(c) { return !taken.has(c.id); }
   function groundCocos(tile) { return nutsOfTile(w, tile).filter(onGround); }
   function find(x, z, reach) {
@@ -86,17 +89,17 @@ export function createFibre(w, saved) {
   }
   function take(c, total) {
     if (fibre.carried >= FIBRE_MAX || !c || taken.has(c.id)) return false;
-    taken.set(c.id, total); fibre.carried++; fibre.version++; return true;
+    taken.set(c.id, total); fibre.carried++; mark(c.id); fibre.version++; return true;
   }
   function husk(c, total) {
     if (!c || taken.has(c.id)) return false;
-    taken.set(c.id, total); if (fibre.carried < FIBRE_MAX) fibre.carried++; fibre.version++; return true;
+    taken.set(c.id, total); if (fibre.carried < FIBRE_MAX) fibre.carried++; mark(c.id); fibre.version++; return true;
   }
   function tuft() { if (fibre.carried >= FIBRE_MAX) return false; fibre.carried++; fibre.version++; return true; }
   function use() { if (fibre.carried <= 0) return false; fibre.carried--; fibre.version++; return true; }
   function update(total) {
     let n = 0;
-    taken.forEach((at, id) => { if (total >= back(id, at)) { taken.delete(id); n++; } });
+    taken.forEach((at, id) => { if (total >= back(id, at)) { taken.delete(id); n++; mark(id); } });
     if (n) fibre.version++;
   }
   function state() { return { carried: fibre.carried, taken: [...taken] }; }

@@ -14,10 +14,10 @@
  * createBranchView(scene, world, kit, branches) -> branchView
  *   branchView.addTile(tile), branchView.dropTile(tile)   with the detailed tiles
  *   branchView.update()   rebuilds the tiles when a branch was taken or grew
- *     back (branches.version)
+ *     back (branches.version), and only the tiles in branches.dirty (render/tileRebuild)
  *
  * Depends on: three, core/noise, render/batch, render/geometry, render/materials,
- *   render/nearTile (disposeGroup), render/palette
+ *   render/nearTile (disposeGroup), render/tileRebuild, render/palette
  */
 import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
@@ -25,6 +25,7 @@ import { Batch } from './batch.js';
 import { mat4, stickMatrix } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
+import { rebuildTiles } from './tileRebuild.js';
 import { BRANCH } from './palette.js';
 import { driftColor } from './driftwood.js';
 
@@ -63,7 +64,7 @@ export function createBranchView(scene, w, kit, branches) {
   function update() {
     if (branches.version === seen) return;
     seen = branches.version;
-    tiles.forEach((g, tile) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
+    rebuildTiles(tiles, branches.dirty, w.tiles, (tile, g) => { disposeGroup(g); tiles.set(tile, tileGroup(tile)); });
   }
   return { addTile, dropTile, update };
 }

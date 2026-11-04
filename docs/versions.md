@@ -2,6 +2,19 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.27.7 "Lighter" — 2026-11-04
+
+Performance, from a code review; the look stays the same apart from a slightly softer fire glow falloff and damp patches whose opacity moves in 8 steps.
+
+- Fire glow and fireflies: one shared canvas at half the screen size with prebaked radial sprites (`render/lightLayer`), cleared once and hidden when nothing glows, instead of a full-screen CSS gradient rebuilt every frame and a full-size firefly canvas.
+- Screen size: measured once and refreshed on resize, orientation change and visual viewport changes (`render/screenRect`), instead of a forced layout every frame in the light layer, tally marks and rain.
+- Tile rebuilds: the game modules (branches, coconuts, berries, bananas, fronds, stones, wood) keep a `dirty` set of the tiles that changed, and the views rebuild only those (`render/tileRebuild`, full rebuild as fallback); a drying step rebuilds only tiles that still hold wet wood (`stillWet` in `game/wood`). Not saved.
+- Damp patches: 8 opacity steps with one shared material each and one merged mesh per step per tile.
+- Less garbage per frame: the carry row counts are filled in place and its drawings only rebuilt on a change; the hero's load list, the tally marks and the fire glow positions reuse their buffers; the save moment is checked every 0.5 s (`createMomentWatcher`).
+- Quality: the governor ignores frames in which tiles were built, and the frame after (`frame(dt, idle, building)`), so walking does not step quality down.
+- Measured headless on a desktop GPU (`scripts/perf.js`, new): a branch pickup frame 8.4 -> 2.4 ms, other pickups about 2 -> 1.7 ms; normal frames (1.4 ms) and draw calls (356 to 476) unchanged; what the glow layer saves on the compositor is not visible to these measurements.
+- Tests: `tests/lighter.test.js` (new, 21). 869 tests in all. Playtest 3 days on 1337: clean.
+
 ## 0.27.6 "Seen" — 2026-11-04
 
 - Behind a tree crown or rock the castaway is no longer a pale ghost: his occluded silhouette is the dark ink brown (`HERO.silhouette` 0x2a1a10) at 0.8 opacity (`SIL_OPACITY`, was a pale 0xf4ead2 at 0.42), one flat shape, so he can be found in forest and on steep ground. Not checked at night.

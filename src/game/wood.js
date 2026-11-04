@@ -64,6 +64,8 @@
  *   wood.load()             pieces carried in all (wood, branches, fronds and stones): each slows him by CARRY_SLOW
  *   wood.piles              [{ x, z, kind, logs: [log] }]  (bottom first)
  *   wood.version            goes up with every change, for the renderer
+ *   wood.dirty              a Set of the indices of the tiles (world.tiles) whose beach logs changed since the view last looked (one taken, wood washed up,
+ *                           a log wetted by rain), so the view rebuilds just those; the view empties it. Not saved. Piles and what is carried are not in it
  *   wood.fresh              the logs of the latest wash-up (for fading them in)
  *   wood.washes             goes up with every wash-up that brought wood
  *   wood.tide               the number of the last high water that washed up
@@ -109,6 +111,7 @@
  *   An older save may hold a pile of more than PILE_MAX: it is loaded as it is
  *   (it takes no more wood, and can be picked up from as usual).
  * dryness(log, total) -> 0 (just washed up) .. 1 (dry), total: days on the clock
+ * stillWet(log, total) -> true while a piece can still look wet (it has a wetting time and its drying time, plus a little, is not over); pure
  * logsNear(world, x, z, reach) -> the first logs of the tiles within reach of (x, z)
  * distToLog(log, x, z) -> { d, x, z }  distance to the log's axis and the nearest point on it
  *
@@ -145,6 +148,7 @@ const PILE_KINDS = ['driftwood', 'branch', 'frond', 'stone'];
 
 const dryDays = log => log.branch ? BRANCH_DRY_DAYS : DRY_DAYS;
 export const dryness = (log, total) => log.t === undefined ? 1 : Math.max(0, Math.min(1, (total - log.t) / dryDays(log)));
+export const stillWet = (log, total) => log.t !== undefined && total - log.t < dryDays(log) + 0.05;
 
 export function distToLog(log, x, z) {
   const ca = Math.cos(log.a), sa = Math.sin(log.a), h = log.len / 2;
@@ -163,18 +167,19 @@ export function logsNear(w, x, z, reach) {
 const tileOf = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
 
 export function createWood(w, saved, branches = null, fronds = null, stones = null) {
-  const byId = new Map();
+  const byId = new Map(), homeOf = new Map();   // homeOf: id of a first log -> the index of its tile
   let nextId = 0;
-  for (const t of w.tiles) if (t.drift) for (const l of t.drift) { byId.set(l.id, l); nextId = Math.max(nextId, l.id + 1); }
+  w.tiles.forEach((t, k) => { if (t.drift) for (const l of t.drift) { byId.set(l.id, l); homeOf.set(l.id, k); nextId = Math.max(nextId, l.id + 1); } });
   const taken = new Set(), lost = new Set();   // lost: first logs the sea took back
   const washed = new Map();                      // tile index -> [log] washed up since the start
   let sea = -Infinity;   // the current sea level (tideUpdate)
   const washedIds = new Set();   // ids of the wood washed up since the start (saved in full, with its t)
   const soaked = new Map();   // id -> log: wood the rain wet that is not saved with the washed-up wood (start wood, branches)
-  const wood = { carried: [], stones: [], load, tideUpdate, drying, rain, piles: [], version: 0, fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, take, drop, washUp, flood, takePile, giveOne, consume, state };
+  const wood = { carried: [], stones: [], load, tideUpdate, drying, rain, piles: [], version: 0, dirty: new Set(), fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, take, drop, washUp, flood, takePile, giveOne, consume, state };
   const special = id => id >= STONE_ID0 ? (stones ? stones.piece(id) : null) : id >= FROND_ID0 ? (fronds ? fronds.piece(id) : null) : (branches ? branches.piece(id) : null);   // a branch, frond or stone by its id
   function load() { return wood.carried.length + wood.stones.length; }   // pieces under his arm and in his hands: each slows him
-  const addWashed = l => { washedIds.add(l.id); const k = tileOf(l.x, l.z); if (!washed.has(k)) washed.set(k, []); washed.get(k).push(l); byId.set(l.id, l); };
+  const homeTile = l => homeOf.has(l.id) ? homeOf.get(l.id) : tileOf(l.x, l.z);
+  const addWashed = l => { washedIds.add(l.id); const k = tileOf(l.x, l.z); wood.dirty.add(k); if (!washed.has(k)) washed.set(k, []); washed.get(k).push(l); byId.set(l.id, l); };
   if (saved) {
     for (const l of saved.washed || []) addWashed({ ...l });
     nextId = Math.max(nextId, saved.nextId || 0);
@@ -228,7 +233,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
       if (l.branch) { if (!branches || !branches.take(l, total)) return 0; }
       else if (l.frond) { if (!fronds || !fronds.take(l, total)) return 0; }
       else if (l.stone) { if (!stones || !stones.take(l)) return 0; }
-      else { if (taken.has(l.id)) return 0; taken.add(l.id); }
+      else { if (taken.has(l.id)) return 0; taken.add(l.id); wood.dirty.add(homeTile(l)); }
       hold.push(l); wood.version++; return 1;
     }
     const p = thing.pile; if (!wood.piles.includes(p)) return 0;
@@ -285,7 +290,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     for (const list of washed.values()) for (const l of list) if (l.y < level && l.t !== undefined && !taken.has(l.id)) l.t = total;   // carried up, it dries
   }
   function drying(total) {
-    const wet = l => l.t !== undefined && total - l.t < dryDays(l) + 0.05;
+    const wet = l => stillWet(l, total);
     for (const list of washed.values()) for (const l of list) if (wet(l)) return true;
     for (const l of soaked.values()) if (wet(l)) return true;
     return wood.carried.some(wet);
@@ -306,6 +311,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
       if (total - t >= dryDays(l)) return;          // dried again since
       if (dryness(l, total) > 0.02) fresh = true;
       l.t = t; if (!washedIds.has(l.id)) soaked.set(l.id, l);
+      if (!l.branch && !taken.has(l.id)) wood.dirty.add(homeTile(l));   // a log on the beach looks wet from now on
     };
     if (falling) {   // carried wood and piles can move: only the rain falling now is known to have hit them
       if (!sheltered(at.x, at.z)) wood.carried.forEach(soak);

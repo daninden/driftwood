@@ -22,12 +22,13 @@
  * nextLevel(level, { touch, dpr }?) -> the next level down whose settings differ in effect (on a touch device
  *   level 0 is level 1, on a screen with a pixel ratio of 1 level 3 is level 2, so those steps are skipped),
  *   or `level` itself when there is no lower one
- * createGovernor({ level, adapt?, touch?, dpr? }) -> { level, frame(dt, idle) -> new level | null }
+ * createGovernor({ level, adapt?, touch?, dpr? }) -> { level, frame(dt, idle, building?) -> new level | null }
  *   Measures the mean time between drawn frames over MEASURE seconds of normal (not idle)
  *   play; above SLOW_DT (a frame rate under 27, a tolerance of 10 % on the target of
  *   30) it steps one level down and returns the new level, else null. The first START_SETTLE seconds and
  *   SETTLE_STEP seconds after each step, and a second after a gap (a hidden tab), are ignored, so
- *   tile building does not count; so are idle frames and the first frame after idling (the interval
+ *   tile building does not count; nor do the frames in which tiles were built (`building`, 0.27.7: render/islandView `building`; the streamer pumps up to
+ *   9 ms and the far tiles 3 ms a frame) and the first frame after one (its interval holds the building); so are idle frames and the first frame after idling (the interval
  *   there is the idle rate, not the cost). One frame counts for at most 0.2 s. It is the interval, not the work
  *   time, that is measured: the work time leaves out the graphics card, and on a touch device capped at 30 a
  *   healthy interval is 33 ms. With adapt false (a forced level) it never steps.
@@ -65,16 +66,18 @@ export function nextLevel(level, { touch = false, dpr = 1 } = {}) {
 }
 
 export function createGovernor({ level = 0, adapt = true, touch = false, dpr = 1 } = {}) {
-  let lvl = clamp(level), settle = START_SETTLE, sum = 0, n = 0, time = 0, wasIdle = false;
+  let lvl = clamp(level), settle = START_SETTLE, sum = 0, n = 0, time = 0, wasIdle = false, wasBuilding = false;
   const reset = () => { sum = 0; n = 0; time = 0; };
   return {
     get level() { return lvl; },
-    frame(dt, idle = false) {
+    frame(dt, idle = false, building = false) {
       if (!adapt || !(dt > 0) || nextLevel(lvl, { touch, dpr }) === lvl) return null;
-      if (dt > GAP) { reset(); settle = Math.max(settle, SETTLE_GAP); wasIdle = false; return null; }
-      if (settle > 0) { settle -= dt; reset(); wasIdle = idle; return null; }
-      if (idle) { wasIdle = true; return null; }
-      if (wasIdle) { wasIdle = false; return null; }
+      if (dt > GAP) { reset(); settle = Math.max(settle, SETTLE_GAP); wasIdle = false; wasBuilding = building; return null; }
+      if (settle > 0) { settle -= dt; reset(); wasIdle = idle; wasBuilding = building; return null; }
+      if (idle) { wasIdle = true; wasBuilding = building; return null; }
+      if (wasIdle) { wasIdle = false; wasBuilding = building; return null; }
+      const skip = building || wasBuilding; wasBuilding = building;   // the interval of a frame holds the work of the one before it
+      if (skip) return null;
       sum += Math.min(dt, MAX_DT); n++; time += dt;
       if (time < MEASURE || n < MIN_FRAMES) return null;
       const mean = sum / n; reset();
