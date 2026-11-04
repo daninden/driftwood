@@ -91,7 +91,7 @@ describe('what a short press does', () => {
     expect(g.action().tap.kind).toBe('pickup'); press(g); expect(g.wood.carried.length).toBe(2);
   });
   it('husks a coconut within reach, kneeling, for one tuft of fibre; with three tufts he still eats it, without another tuft', () => {
-    const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z), { hunger: { days: 1 } });   // hungry enough to eat it on the spot (0.25: else he picks it up)
+    const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z), { hunger: { days: 1 } });   // hungry enough to eat it on the spot
     expect(g.action().tap).toMatchObject({ kind: 'husk' });
     press(g, 'tap', 0.3); expect(g.player.work.kind).toBe('husk'); run(g, makeInput(), HUSK_TIME + 0.2); expect(g.fibre.carried).toBe(1);
     const full = createGame(w, at(c.x + 0.3, c.z), { fibre: { carried: 3 }, hunger: { days: 3 }, thirst: { days: 1 } });
@@ -366,8 +366,8 @@ describe('the action input', () => {
 
 describe('the button: icons, opacity and the DOM', () => {
   it('has a drawing for every kind of action, in the ink', () => {
-    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'build', 'sleep', 'dig', 'roast', 'take', 'fill', 'sip', 'berries', 'bananas', 'eatBerries', 'eatBanana']).toContain(kind); }
-    expect(Object.keys(ICON_OF).length).toBe(19);
+    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'build', 'sleep', 'dig', 'roast', 'fill', 'sip', 'berries', 'bananas', 'eatBerries', 'eatBanana']).toContain(kind); }
+    expect(Object.keys(ICON_OF).length).toBe(18);
     expect(buttonIcons({ tap: null, hold: { kind: 'build' } })).toEqual({ main: 'leanto', side: null });
     for (const svg of Object.values(ICONS)) expect(svg).not.toMatch(/fill="(?!none)/);
   });

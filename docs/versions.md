@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.27.1 "Husk" — 2026-11-04
+
+- Fix: fibre no longer depends on hunger. At a coconut on the ground a short press always husks it (4 s) and gives a tuft when there is room; then he eats the nut when hunger is above half a day, or else carries the husked nut (at most 2; with 2 carried he eats it). In 0.25 a player who was not hungry and had a tuft picked nuts up whole and could not gather more fibre.
+- A carried nut is already husked: eating it takes 2 s (`EAT_TIME` in `game/shells`), only when hungry, with no extra tuft; he keeps the shell. Carried nuts from older saves count as husked.
+- Gone: the separate `take` of a whole nut and its button icon (`fibre.pick`).
+- Tests: `tests/shells.test.js` and `tests/action.test.js` follow; 811 tests in all.
+
 ## 0.27 "Home" — 2026-11-04
 
 - New materials: fallen palm fronds under about 1 palm in 3 (seed 1337: 561, 66 within 100 m of the start; back 4 to 6 days after taken; carried like wood, at most 3 together with wood and branches, always dry, not fuel; `game/fronds`) and stones at the foot of boulders and crags and along river banks (2522, 309 within 100 m; at most 2 carried apart from the wood, each slows like a piece of wood; no regrowing; `game/stones`). Both have their own piles (at most 12, tally marks), row drawings and a look on the ground (`render/finds`).

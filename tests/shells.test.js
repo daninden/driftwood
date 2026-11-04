@@ -1,12 +1,12 @@
 // Storing water and coconuts (0.25 "Shell"): the half shells he keeps, filling them at the river, drinking
-// a full one elsewhere, carrying a coconut instead of eating it, the order of the action button, the save,
+// a full one elsewhere, husking a coconut and carrying it instead of eating it, the order of the action button, the save,
 // and the drawings in the row and on the button.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { nutsOfTile } from '../src/game/fibre.js';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, HUSK_TIME, NUT_DRINK } from '../src/game/game.js';
-import { createShells, SHELL_MAX, NUT_MAX, SIP_DRINK, FILL_TIME, SIP_TIME, DRINK_AT, SIP_AT, EAT_AT } from '../src/game/shells.js';
+import { createShells, SHELL_MAX, NUT_MAX, SIP_DRINK, FILL_TIME, SIP_TIME, DRINK_AT, SIP_AT, EAT_AT, EAT_TIME } from '../src/game/shells.js';
 import { NUT_FOOD } from '../src/game/hunger.js';
 import { TORCH_DAYS } from '../src/game/fire.js';
 import { terrainAt } from '../src/game/movement.js';
@@ -161,43 +161,54 @@ describe('drinking a full shell away from the water', () => {
     expect(kind(atE({ ...thirsty, fire: { torch: { left: TORCH_DAYS } } }))).toBe('plant');
     expect(kind(atE({ ...thirsty, wood: { carried: [], piles: [{ x: E.x + 0.5, z: E.z, logs: logs.slice(10, 13).map(l => l.id) }] } }))).toBe('pickup');
     expect(kind(createGame(w, at(logs[0].x + 0.3, logs[0].z), thirsty))).toBe('pickup');
-    expect(kind(createGame(w, at(cocos[0].x + 0.3, cocos[0].z), thirsty))).toMatch(/^(take|husk)$/);
+    expect(kind(createGame(w, at(cocos[0].x + 0.3, cocos[0].z), thirsty))).toBe('husk');
     expect(kind(atE(thirsty))).toBe('sip');   // and with nothing near it is the shell
   });
 });
 
 describe('carrying a coconut', () => {
-  it('not hungry (half a day or less) he picks the nut up whole: no tuft, no meal, no shell', () => {
-    const g = atNut({ hunger: { days: EAT_AT }, fibre: { carried: 1 } });
-    expect(kind(g)).toBe('take');
-    press(g, 0.3); expect(g.shells.nuts).toBe(1); expect(g.fibre.onGround(cocos[0])).toBe(false);
-    expect(g.fibre.carried).toBe(1); expect(g.hunger.days).toBeCloseTo(EAT_AT, 1); expect(g.shells.list).toEqual([]); expect(g.player.work).toBeNull();
-    expect(g.player.stoop).toBeGreaterThan(0);
+  it('not hungry (half a day or less) he husks the nut, gets a tuft and carries it: no meal, no shell', () => {
+    const g = atNut({ hunger: { days: 0.3 } });
+    expect(kind(g)).toBe('husk');
+    press(g, 0.3); expect(g.player.work.kind).toBe('husk');
+    run(g, makeInput(), HUSK_TIME + 0.3);
+    expect(g.player.work).toBeNull(); expect(g.fibre.carried).toBe(1); expect(g.shells.nuts).toBe(1); expect(g.fibre.onGround(cocos[0])).toBe(false);
+    expect(g.hunger.days).toBeLessThan(EAT_AT); expect(g.shells.list).toEqual([]);
   });
-  it('hungry (more than half a day) or carrying two already, the press husks and eats it on the spot', () => {
-    expect(kind(atNut({ hunger: { days: EAT_AT + 0.05 } }))).toBe('husk');
-    expect(kind(atNut({ hunger: { days: 0 }, fibre: { carried: 1 }, shells: { full: [], nuts: NUT_MAX } }))).toBe('husk');
-    expect(kind(atNut({ hunger: { days: 0 } }))).toBe('husk');   // no fibre at all: husk it (a fresh player needs a tuft to light a fire)
-    expect(kind(atNut({ hunger: { days: 0 }, fibre: { carried: 1 } }))).toBe('take');
+  it('with three tufts he still husks and carries the nut, without another tuft', () => {
+    const g = atNut({ hunger: { days: 0 }, fibre: { carried: 3 } });
+    press(g, 0.3); run(g, makeInput(), HUSK_TIME + 0.3);
+    expect(g.fibre.carried).toBe(3); expect(g.shells.nuts).toBe(1); expect(g.fibre.onGround(cocos[0])).toBe(false);
   });
-  it('a taken nut grows back like a husked one', () => {
-    const g = atNut({ fibre: { carried: 1 } }); press(g, 0.3);
+  it('with two nuts carried already he eats the husked one, hungry or not, and keeps the shell', () => {
+    const g = atNut({ hunger: { days: 0 }, shells: { full: [], nuts: NUT_MAX } });
+    press(g, 0.3); run(g, makeInput(), HUSK_TIME + 0.3);
+    expect(g.shells.nuts).toBe(NUT_MAX); expect(g.fibre.carried).toBe(1); expect(g.shells.list).toEqual([false]);
+  });
+  it('hungry (more than half a day) he eats it at once: food, drink, a tuft and the shell', () => {
+    const g = atNut({ hunger: { days: 2 }, thirst: { days: 1 } });
+    expect(kind(g)).toBe('husk');
+    press(g, 0.3); run(g, makeInput(), HUSK_TIME + 0.3);
+    expect(g.shells.nuts).toBe(0); expect(g.fibre.carried).toBe(1); expect(g.shells.list).toEqual([false]);
+    expect(g.hunger.days).toBeCloseTo(2 - NUT_FOOD, 1); expect(g.thirst.days).toBeCloseTo(1 - NUT_DRINK, 1);
+  });
+  it('a carried nut grows back like a husked one', () => {
+    const g = atNut({ hunger: { days: 0 } }); press(g, 0.3); run(g, makeInput(), HUSK_TIME + 0.3);
     expect(g.fibre.onGround(cocos[0])).toBe(false);
     g.fibre.update(g.clock.total + 11); expect(g.fibre.onGround(cocos[0])).toBe(true);
   });
-  it('eats a carried nut anywhere when hungry: husk time, food, a quarter day of drink, a tuft and the shell', () => {
+  it('eats a carried nut anywhere when hungry: EAT_TIME, food, a quarter day of drink, no tuft, and the shell', () => {
     const g = atE({ shells: { full: [], nuts: 2 }, hunger: { days: 2 }, thirst: { days: 1 } });
     expect(g.action().tap).toMatchObject({ kind: 'husk', carried: true });
     press(g); expect(g.player.work.kind).toBe('husk');
-    run(g, makeInput(), HUSK_TIME - 0.5); expect(g.shells.nuts).toBe(2);
+    run(g, makeInput(), EAT_TIME - 0.5); expect(g.shells.nuts).toBe(2);
     run(g, makeInput(), 1);
-    expect(g.player.work).toBeNull(); expect(g.shells.nuts).toBe(1); expect(g.fibre.carried).toBe(1); expect(g.shells.list).toEqual([false]);
+    expect(g.player.work).toBeNull(); expect(g.shells.nuts).toBe(1); expect(g.fibre.carried).toBe(0); expect(g.shells.list).toEqual([false]);
     expect(g.hunger.days).toBeCloseTo(2 - NUT_FOOD, 1); expect(g.thirst.days).toBeCloseTo(1 - NUT_DRINK, 1);
   });
-  it('is not offered when he is not hungry, and a carried nut does not spoil', () => {
-    const g = atE({ shells: { full: [], nuts: 1 }, hunger: { days: EAT_AT }, fibre: { carried: 1 } });
+  it('is not offered when he is not hungry (even with no fibre), and a carried nut does not spoil', () => {
+    const g = atE({ shells: { full: [], nuts: 1 }, hunger: { days: EAT_AT } });
     expect(kind(g)).toBeNull();
-    expect(kind(atE({ shells: { full: [], nuts: 1 }, hunger: { days: 0 } }))).toBe('husk');   // no fibre: eat it for the tuft
     g.clock.advance(4 * 1200); run(g, makeInput(), 0.1); expect(g.shells.nuts).toBe(1);
   });
   it('the order away from things: lay, plant, then a full shell when thirsty, then a nut when hungry', () => {
@@ -243,10 +254,10 @@ describe('drawings', () => {
     expect(carryChanged({ nut: 1 }, { nut: 2 })).toBe(true); expect(carryChanged({ shell: 1, water: 0 }, { shell: 1 })).toBe(false);
     expect(DRAWINGS.water.length).toBeGreaterThan(DRAWINGS.shell.length);   // the same shell with water in it
   });
-  it('has button icons for take, fill and sip', () => {
-    expect(buttonIcons({ tap: { kind: 'take' }, hold: null })).toEqual({ main: 'nut', side: null });
+  it('has button icons for fill and sip, and no icon for taking a nut whole any more', () => {
+    expect(ICON_OF.take).toBeUndefined(); expect(ICONS.nut).toBeUndefined();
     expect(buttonIcons({ tap: { kind: 'fill' }, hold: { kind: 'sleep' } })).toEqual({ main: 'fill', side: 'moon' });
     expect(buttonIcons({ tap: { kind: 'sip' }, hold: null })).toEqual({ main: 'sip', side: null });
-    for (const k of ['take', 'fill', 'sip']) expect(ICONS[ICON_OF[k]]).toBeTruthy();
+    for (const k of ['fill', 'sip']) expect(ICONS[ICON_OF[k]]).toBeTruthy();
   });
 });

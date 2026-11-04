@@ -63,8 +63,8 @@
  *     water, its bank and the castaway himself are just ground.
  *     Everything he does goes through the action button (input.takeAction(),
  *     Space or render/actionButton): game.action() says what it would do now.
- *   0.25 "Shell": tap kinds 'take' (a coconut within REACH, hunger not above EAT_AT, at least one tuft of fibre carried, room for a carried nut: picks it up whole), 'husk' (the same
- *   coconut when he is hungry, has no fibre at all or carries two already; or, with `carried: true` and no `thing`, a carried nut eaten anywhere), 'fill' (river water within 0.8 m,
+ *   0.25 "Shell": tap kinds 'husk' (a coconut within REACH: always husked, HUSK_TIME, a tuft of fibre when there is room; when it is done he eats it if hunger is above EAT_AT or he
+ *   carries two already, else he carries the husked nut, 0.27.1 "Husk"; or, with `carried: true` and no `thing`, a carried nut eaten anywhere when hunger is above EAT_AT: EAT_TIME, no tuft, he keeps the shell), 'fill' (river water within 0.8 m,
  *   thirst not above DRINK_AT, an empty shell: kneels FILL_TIME and fills it; otherwise the water offers 'drink') and 'sip' (a full shell drunk
  *   anywhere: SIP_DRINK off the thirst). The order of priority is written out in `action` and in docs/design.md, "The action button".
  *   0.26 "Inland": tap kinds 'berries' and 'bananas' (a bearing bush or banana plant within REACH of its edge, game/forage: hungry, hunger above EAT_AT, he picks and eats at once
@@ -81,7 +81,7 @@
  *     DIG_TIME, about half the time he catches it, game/crabs), 'roast' (0.22: a crab carried, a fire with flames within BESIDE, no torch in hand: kneels
  *     ROAST_TIME and eats one, hunger.eat(CRAB_FOOD); a nearer coconut or hole wins, and it beats 'torch' at the same fire) and 'pickup' (a piece within REACH, or a pile within BESIDE when
  *     his arm is empty; no hand free with a torch; room for CARRY_MAX), 'husk'
- *     (a coconut within REACH: kneels HUSK_TIME, one tuft of fibre, and he eats the nut: hunger.eat(), thirst.sip(NUT_DRINK), always), 'torch'
+ *     (a coconut within REACH: kneels HUSK_TIME, one tuft of fibre when there is room; then he eats the nut, hunger.eat(), thirst.sip(NUT_DRINK), when hungry, else carries it), 'torch'
  *     (empty-handed: a burning brand out of a fire within BESIDE, not from
  *     embers, or a torch in the ground within REACH) and 'drink' (fresh river
  *     water within 0.8 m, game/water; wood is laid down and a torch stuck in
@@ -122,7 +122,7 @@
  *   it costs BUILD_COST days of rest) and has built a lean-to (game/leanto). The heading
  *   of a new one is the view's yaw (input.yaw, else the starting view). Sleeping within
  *   about a metre of a finished one is sheltered (game/sleep). A coconut is always offered
- *   for 'husk' (he eats it); the tuft comes only when there is room for it (game/fibre husk).
+ *   for 'husk'; the tuft comes only when there is room for it (game/fibre husk).
  *
  *   0.27 "Home": fronds (under the arm with the wood, never fuel) and stones (in his hands, at most 2, apart from the wood) are picked up and
  *   laid down like wood, each piece slows him (wood.load()). hold kind 'upgrade' (`what`: 'walls', 'bed' or 'ring', game/leanto UPGRADES): beside a finished lean-to
@@ -140,7 +140,7 @@ import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, dryness } f
 import { seaLevel, highWaters } from './tide.js';
 import { createSleep } from './sleep.js';
 import { createFibre } from './fibre.js';
-import { createShells, FILL_TIME, SIP_TIME, SIP_DRINK, DRINK_AT, SIP_AT, EAT_AT, NUT_MAX } from './shells.js';
+import { createShells, FILL_TIME, SIP_TIME, EAT_TIME, SIP_DRINK, DRINK_AT, SIP_AT, EAT_AT, NUT_MAX } from './shells.js';
 import { createBranches } from './branches.js';
 import { createFronds } from './fronds.js';
 import { createStones } from './stones.js';
@@ -256,8 +256,8 @@ export function createGame(world, spawn, opts = {}) {
         if (log) cands.push({ d: log.d, a: { kind: 'pickup', thing: log } });
         if (pile) cands.push({ d: pile.d, a: { kind: 'pickup', thing: pile } });
       }
-      const coco = fibre.find(px, pz, REACH);   // hungry (or two nuts carried already): husked and eaten on the spot, a tuft only comes with room; else picked up whole
-      if (coco) cands.push({ d: coco.d, a: { kind: hunger.days > EAT_AT || !fibre.carried || shells.nuts >= NUT_MAX ? 'husk' : 'take', thing: coco } });
+      const coco = fibre.find(px, pz, REACH);   // 0.27.1: always husked (a tuft when there is room); at the end he eats it when hungry (or with two carried already), else carries it
+      if (coco) cands.push({ d: coco.d, a: { kind: 'husk', thing: coco } });
       for (const [f, kind] of [[berries, 'berries'], [bananas, 'bananas']]) {   // 0.26: berry bushes and banana plants; hungry he eats on the spot, else the pick is carried (if there is room)
         const p = f.find(px, pz, REACH), eat = hunger.days > EAT_AT;
         if (p && (eat || !f.full())) cands.push({ d: p.d, a: { kind, eat, thing: p } });
@@ -283,7 +283,7 @@ export function createGame(world, spawn, opts = {}) {
         if (shells.full() && thirst.days > SIP_AT) tap = { kind: 'sip' };
         else if (hunger.days > EAT_AT && berries.carried.length) tap = { kind: 'eatBerries' };   // 0.26: what spoils first is eaten first
         else if (hunger.days > EAT_AT && bananas.carried.length) tap = { kind: 'eatBanana' };
-        else if (shells.nuts && (hunger.days > EAT_AT || !fibre.carried)) tap = { kind: 'husk', carried: true };
+        else if (shells.nuts && hunger.days > EAT_AT) tap = { kind: 'husk', carried: true };
       }
     }
     const b = buildable(), u = b ? null : upgradable(), l = b || u ? null : lightable();
@@ -315,8 +315,7 @@ export function createGame(world, spawn, opts = {}) {
     input.clearTarget();
     if (a.thing && a.kind !== 'drink' && a.kind !== 'fill') face(a.thing);
     if (a.kind === 'pickup') { if (wood.take(a.thing, clock.total)) stoop(); }
-    else if (a.kind === 'husk') work = { kind: 'husk', t: 0, dur: HUSK_TIME, thing: a.thing ? a.thing.coco : null };   // no thing: a carried nut
-    else if (a.kind === 'take') { if (shells.nuts < NUT_MAX && fibre.pick(a.thing.coco, clock.total)) { shells.addNut(); stoop(); } }
+    else if (a.kind === 'husk') work = { kind: 'husk', t: 0, dur: a.thing ? HUSK_TIME : EAT_TIME, thing: a.thing ? a.thing.coco : null };   // no thing: a carried nut (already husked: EAT_TIME)
     else if (a.kind === 'berries' || a.kind === 'bananas') {
       const f = a.kind === 'berries' ? berries : bananas;
       if ((a.eat || !f.full()) && f.pick(a.thing.plant, clock.total)) { if (a.eat) hunger.eat(a.kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); else f.stow(clock.total); stoop(); }
@@ -372,7 +371,10 @@ export function createGame(world, spawn, opts = {}) {
     if (wk.kind === 'upgrade') { if (leantos.list.includes(wk.thing) && pay(wk.thing, wk, UPGRADES[wk.what].steps)) leantos.upgraded(wk.thing, wk.what, 1); return; }
     if (wk.kind === 'build') { wk.thing.progress = 1; return; }
     if (wk.kind === 'husk') {
-      if (wk.thing) fibre.husk(wk.thing, clock.total); else if (shells.eatNut()) fibre.tuft(); else return;   // a carried nut
+      if (wk.thing) {   // a nut from the ground: husked (a tuft when there is room), then eaten when hungry or with two carried already, else carried
+        if (!fibre.husk(wk.thing, clock.total)) return;
+        if (hunger.days <= EAT_AT && shells.addNut()) return;
+      } else if (!shells.eatNut()) return;   // a carried nut is already husked: no tuft
       hunger.eat(); thirst.sip(NUT_DRINK); shells.keep(); return;   // he keeps the empty half shell
     }
     if (wk.kind === 'drink') { thirst.drink(); return; }

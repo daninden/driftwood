@@ -7,7 +7,7 @@
  *     of the palms that have nuts only about a third (so about 1 in 5 of all palms) keep one nut,
  *     the first of the palm; chosen by a hash of the seed, tile and palm. The world itself is unchanged.
  *   - Picking one up, the castaway kneels and tears off the husk (game/game):
- *     that gives one tuft of fibre. The nut itself is not kept.
+ *     that gives one tuft of fibre when there is room, hungry or not (0.27.1). The nut itself is eaten or carried (game/game, game/shells).
  *   - He carries at most FIBRE_MAX tufts, kept loose in his shorts
  *     (drawn in the inventory row, render/carryMark). Fibre weighs nothing and does not slow him down.
  *   - A tuft is used up by every attempt to light a fire, whether it
@@ -28,8 +28,7 @@
  *   fibre.take(coco, total) -> true when it gave a tuft (false: hands full or gone)
  *     total: the days on the clock (game/clock), for when it grows back
  *   fibre.husk(coco, total) -> true when the nut was taken off the ground: it gives a tuft only
- *     when there is room (FIBRE_MAX), else none (he still eats it; game/game); false: gone already
- *   fibre.pick(coco, total) -> true when the nut was picked up whole (0.25: it is carried, game/shells; no tuft, no regrowth change: it grows back like a husked one)
+ *     when there is room (FIBRE_MAX), else none (the nut is still his: eaten or carried; game/game); false: gone already
  *   fibre.tuft() -> true when a tuft was added (room under FIBRE_MAX)
  *   fibre.use() -> true when a tuft was used up
  *   fibre.update(total)      lets taken nuts fall again when their time has come
@@ -63,7 +62,7 @@ export function createFibre(w, saved) {
   const byId = new Map();
   for (const t of w.tiles) for (const c of nutsOfTile(w, t)) byId.set(c.id, c);
   const taken = new Map();   // id -> the day it was taken
-  const fibre = { carried: 0, version: 0, onGround, groundCocos, find, take, husk, pick, tuft, use, update, state };
+  const fibre = { carried: 0, version: 0, onGround, groundCocos, find, take, husk, tuft, use, update, state };
   if (saved) {
     fibre.carried = Math.max(0, Math.min(FIBRE_MAX, saved.carried | 0));
     for (const [id, at] of saved.taken || []) if (byId.has(id)) taken.set(id, at);
@@ -92,10 +91,6 @@ export function createFibre(w, saved) {
   function husk(c, total) {
     if (!c || taken.has(c.id)) return false;
     taken.set(c.id, total); if (fibre.carried < FIBRE_MAX) fibre.carried++; fibre.version++; return true;
-  }
-  function pick(c, total) {
-    if (!c || taken.has(c.id)) return false;
-    taken.set(c.id, total); fibre.version++; return true;
   }
   function tuft() { if (fibre.carried >= FIBRE_MAX) return false; fibre.carried++; fibre.version++; return true; }
   function use() { if (fibre.carried <= 0) return false; fibre.carried--; fibre.version++; return true; }
