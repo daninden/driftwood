@@ -93,6 +93,7 @@ export function createPath(world, opts = {}) {
     }
     return null;
   }
+  const open = (ix, iz) => { let n = 0; for (let d = 0; d < 8; d++) if (edgeF(ix, iz, d) > 0.05 && ++n >= 2) return true; return false; };   // not shut in by walls or trunks
   function startCell(from) {   // the nearest cell he can step to from where he stands (he may stand on a slope that is no cell of its own, below a wall): else the nearest
     const ix = cell(from.x), iz = cell(from.z), y = Number.isFinite(from.y) ? from.y : world.H(from.x, from.z), list = [];
     for (let a = -6; a <= 6; a++) for (let b = -6; b <= 6; b++) if (isStand(ix + a, iz + b)) list.push([ix + a, iz + b, Math.hypot(centre(ix + a) - from.x, centre(iz + b) - from.z)]);
@@ -101,19 +102,15 @@ export function createPath(world, opts = {}) {
     return list.length ? [list[0][0], list[0][1]] : null;
   }
   function find(from, to, maxExp = 90000, retry = true) {
-    const s = startCell(from), g = nearestCell(to.x, to.z, 4, ok);
+    const s = startCell(from), g = nearestCell(to.x, to.z, 4, (ix, iz) => ok(ix, iz) && open(ix, iz));
     if (!s || !g) { if (retry && banned.size) { banned.clear(); return find(from, to, maxExp, false); } return null; }
-    let gk = g[1] * N + g[0]; const sk = s[1] * N + s[0], goals = new Set([gk]);
-    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {   // any cell by the goal will do: the nearest one may be shut in by trunks
-      const ix = g[0] + a, iz = g[1] + b;
-      if (isStand(ix, iz) && ok(ix, iz) && Math.hypot(centre(ix) - to.x, centre(iz) - to.z) < 2.6) goals.add(iz * N + ix);
-    }
+    const gk = g[1] * N + g[0], sk = s[1] * N + s[0];
     const gs = new Map([[sk, 0]]), came = new Map(), h = new Heap(), closed = new Set();
     const hf = (ix, iz) => { const dx = Math.abs(ix - g[0]), dz = Math.abs(iz - g[1]); return (Math.max(dx, dz) + 0.414 * Math.min(dx, dz)) * C * 1.1; };
     h.push(hf(s[0], s[1]), sk); let exp = 0, found = false;
     while (h.size) {
       const [, k] = h.pop(); if (closed.has(k)) continue; closed.add(k);
-      if (goals.has(k)) { found = true; gk = k; break; }
+      if (k === gk) { found = true; break; }
       if (++exp > maxExp) break;
       const ix = k % N, iz = (k - ix) / N, g0 = gs.get(k);
       for (let d = 0; d < 8; d++) {
@@ -123,6 +120,7 @@ export function createPath(world, opts = {}) {
         if (ng < (gs.get(nk) ?? 1e18)) { gs.set(nk, ng); came.set(nk, k); h.push(ng + hf(nx, nz), nk); }
       }
     }
+    if (!found && exp > 3000) console.log('FAIL', exp, from.x.toFixed(1), from.z.toFixed(1), '->', to.x.toFixed(1), to.z.toFixed(1), 'start', s, 'goal', g, 'allow', !!path.allow);
     if (!found) { if (retry && banned.size) { banned.clear(); return find(from, to, maxExp, false); } return null; }
     const pts = []; for (let k = gk; k !== undefined; k = came.get(k)) { const ix = k % N, iz = (k - ix) / N; pts.push({ x: centre(ix), z: centre(iz) }); }
     pts.reverse(); return { pts, cost: gs.get(gk) };
