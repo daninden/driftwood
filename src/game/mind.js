@@ -1,5 +1,5 @@
 /**
- * game/mind — Dave's head (0.28 "Habit"): what the castaway does by himself when the player leaves him alone.
+ * game/mind — Dave's head (0.28 "Habit", 0.28.2 "Pastime"): what the castaway does by himself when the player leaves him alone.
  *
  * After QUIET (30 s, game/input `createTakeover`) without any input main hands the game this mind's input instead of the player's;
  * any input of the player takes it back at once (`release`). The mind adds NO game rule: it fills an input object like the player's
@@ -18,20 +18,28 @@
  *   4 fire    in the evening (EVENING 0.6 to BED_FROM): dry driftwood (else branches) to a pile at the fire spot at home, enough for WOOD_WANT (6) pieces of
  *             burning (a branch counts half), the pile lit from LIGHT_FROM (0.74) when it holds at least FIRE_MIN pieces and LIGHT_MIN_FUEL (3) pieces' worth and he has
  *             fibre (or a torch in hand), and the fire fed from the piles when its fuel is below FEED_BELOW (0.6 of the most it holds)
- *   5 stores  by day (DAY_FROM 0.2 to EVENING): a nut husked for fibre and to carry (NUT_WANT 2, game limits) and wood to the pile at the fire spot, as above.
+ *   5 stores  by day (DAY_FROM 0.2 to EVENING): a nut husked to carry (NUT_WANT 2, game limits) and for fibre (the first tuft always, up to FIBRE_WANT 3 tufts when he is hungry
+ *             enough to eat the nut, `huskWanted`), and wood to the pile at the fire spot, as above, then topped up to PILE_FULL (12) pieces, with the pile's own kind only.
  *             Driftwood and branches are never both piled there in piles of 6 or more (the arc would offer to build and not to light)
- *   6 idle    stands still 5 to 20 seconds after each task (REST_MIN, REST_MAX, drawn from the seed), walks back to within IDLE_NEAR (8 m) of home,
- *             and once a day around sunset (GAZE_FROM 0.76 to 0.83) walks to the shore (or the fire) and stands a while looking out. No pose, no line of text
+ *   6 idle    (0.28.2) by day (STROLL_FROM to STROLL_TO, `strollNow`, 9 times in 10) a STROLL on known ground instead of standing about: `strollKind` picks one of shore (the waterline:
+ *             one to three stretches along it; dry washed-up driftwood within 8 m is picked up when an arm is free and the pile has room), river (to the water, fills empty shells,
+ *             a drink if thirsty), palms (a round past a palm or two; husks a nut on the ground if the stores want one) or forest (a berry bush or two; a handful from one that bears
+ *             when hunger is 0.6 or more), never the same kind twice in a row; places drawn from the PRNG among the known ones (`strollCands`: inside the known ground, standable,
+ *             within STROLL_RANGE 80 m of home, a way of at most STROLL_MAX_COST), pauses of 2 to 6 s on the way (PAUSE_CHANCE), wood carried is laid on the pile at home (`deliver`).
+ *             Otherwise (night, nothing to walk to) he walks back to within IDLE_NEAR (8 m) of home and lingers 5 to 12 s. Once a day around sunset (GAZE_FROM 0.76 to 0.83) he walks
+ *             to the shore (or the fire) and stands a while looking out. No pose, no line of text. After each task he stands 3 to 8 s, now and then (1 in 5) 15 to 30 s (`restSeconds`, from the seed)
  * The one exception to staying on known ground (0.28, decided later the same day): SEARCH. Thirsty with no fresh water known, or hungry with no food known and none
  * carried, he walks out from home into the unknown, ring after ring, to the nearest unknown spot that borders what he knows (downhill for water, the low coast for
  * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water or food is known; then he is back on known ground only.
- * A higher need breaks into a lower goal (checked every CHECK seconds); a goal keeps going otherwise and a failing one is left alone for a while (`cool`).
+ * A higher need breaks into a lower goal (checked every CHECK seconds); a goal keeps going otherwise and a failing one is left alone for a while (`cool`; 0.28.2: 10 to 40 s, a failed
+ * light 100 s, or 300 s when one tuft of fibre is left; a failed try keeps the last tuft).
  * Walking a path: he heads for the next waypoint and moves on at 0.45 m; he cuts a corner (moves on at up to 1.1 m) only when path.clear says the line to the one after is open
  * (0.28.1: a climbing route is a narrow band). He walks; only very thirsty (thirst >= 1.3) and far (20 m or more) does he run.
  *
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
- * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now
+ * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now (s.pileLogs: pieces in the biggest pile there)
+ * huskWanted(s), restSeconds(r1, r2), strollKind(avail, last, r), strollNow(s, r)   pure; the choices of the pastimes (0.28.2), tested in tests/mind.test.js
  * RANK   the priority of each goal (lower wins)
  * createMind(world, game, opts?) -> mind
  *   mind.input        the input-like object main passes to game.update while the mind is in charge: up, down, left, right false, run, stick null, target, yaw (main sets
@@ -41,10 +49,11 @@
  *                     A kneeling job already begun is left to finish (the player's own input stops it as usual)
  *   mind.step(dt)     once per game.update while in charge, before it: decides and fills mind.input
  *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set)
- *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, gazes, events: [..] } for tests and the playtest bot (searches: how many searches he began)
+ *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, gazes, strolls, strollKinds: {kind: n}, events: [..] } for tests and the playtest bot (searches: how many searches he began)
  *   mind.chose()      true while a sleep he chose himself is being started (the tests tell it from a collapse); mind.lastKind() the kind of the last button he used; mind.path the path finder
  *   opts.stream       a number to vary the chance (default 0)
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
+ *   mind.strollCands(centre?, range?)  { shore, river, palms, forest: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
  *
@@ -62,12 +71,15 @@ import { ringCentre } from './leanto.js';
 export const THIRST_GO = 0.8, THIRST_TOPUP = 0.4, THIRST_SIP = 0.3, NEAR_WATER = 40;
 export const HUNGER_GO = 1, TIRED_GO = 1.5;
 export const EVENING = 0.6, LIGHT_FROM = 0.74, BED_FROM = 0.87, DAWN = 0.17, DAY_FROM = 0.2, GAZE_FROM = 0.76, GAZE_TO = 0.83;
-export const WOOD_WANT = 6, NUT_WANT = 2, FEED_BELOW = 0.6, LIGHT_MIN_FUEL = 3, IDLE_NEAR = 8;
+export const WOOD_WANT = 6, NUT_WANT = 2, FIBRE_WANT = 3, PILE_FULL = 12, FEED_BELOW = 0.6, LIGHT_MIN_FUEL = 3, IDLE_NEAR = 8;   // 0.28.2: stores up to a full pile (PILE_MAX of game/wood) and 3 tufts (FIBRE_MAX of game/fibre)
 export const SEARCH_LIMIT = 900;   // seconds a goal may take while it is searching for water or food
-export const REST_MIN = 5, REST_MAX = 20, CHECK = 1.5;
+export const REST_MIN = 3, REST_MAX = 8, REST_LONG_MIN = 15, REST_LONG_MAX = 30, REST_LONG_CHANCE = 0.2, CHECK = 1.5;   // 0.28.2: mostly a short rest, now and then a long one
+export const STROLL_FROM = 0.19, STROLL_TO = 0.8, STROLL_CHANCE = 0.9, STROLL_LIMIT = 300, STROLL_RANGE = 80, STROLL_MAX_COST = 150;   // pastimes on known ground, by day (0.28.2)
+export const LINGER_MIN = 5, LINGER_MAX = 12, PAUSE_CHANCE = 0.45, PAUSE_MIN = 2, PAUSE_MAX = 6;
+export const STROLL_KINDS = ['shore', 'river', 'palms', 'forest'], STROLL_WEIGHT = { shore: 3, river: 2, palms: 2, forest: 2 };
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 220, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
-const COOL = { drink: 60, eat: 90, sleep: 60, light: 300, gather: 90, husk: 120, fire: 30, stores: 30 };   // seconds a failed goal is left alone
+const COOL = { drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
 const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light'];   // the kinds of the arc / ring he ever chooses (never build, upgrade, torch)
 
 export function fireStep(s) {
@@ -82,13 +94,32 @@ export function fireStep(s) {
   return null;
 }
 
+// a nut to husk: for the fibre of the first tuft always; to carry up to NUT_WANT; for fibre up to FIBRE_WANT only when he is hungry enough to eat the nut that the husking gives him (with two carried he eats it)
+export function huskWanted(s) { return s.nuts < NUT_WANT || s.fibre < 1 || (s.fibre < FIBRE_WANT && s.hunger >= 0.5); }
+
 export function storesStep(s) {
   const t = s.time;
   if (!(t >= DAY_FROM && t < EVENING)) return null;
-  if ((s.nuts < NUT_WANT || s.fibre < 1) && !s.cool.husk) return 'husk';
-  if (s.stock < WOOD_WANT && !s.fireLit && !s.cool.gather) return 'wood';   // a fire still burning by day is not fed: the wood waits for the evening
+  if (huskWanted(s) && !s.cool.husk) return 'husk';
+  // a fire still burning by day is not fed: the wood waits for the evening; a pile is topped up to PILE_FULL pieces once the evening's 6 are there (s.pileLogs: pieces in the biggest pile at the fire spot)
+  if ((s.stock < WOOD_WANT || (s.pileLogs ?? PILE_FULL) < PILE_FULL) && !s.fireLit && !s.cool.gather) return 'wood';
   return null;
 }
+
+/** How long he stands after a task (seconds): r1 in [0,1) decides short or long, r2 in [0,1) where in the range. */
+export function restSeconds(r1, r2) { return r1 < REST_LONG_CHANCE ? REST_LONG_MIN + (REST_LONG_MAX - REST_LONG_MIN) * r2 : REST_MIN + (REST_MAX - REST_MIN) * r2; }
+
+/** Which stroll: avail {shore, river, palms, forest} (true where he knows a place for it), last = the kind of the one before (not twice in a row if there is another), r in [0,1). null when there is none. */
+export function strollKind(avail, last, r) {
+  let ks = STROLL_KINDS.filter(k => avail[k]); if (ks.length > 1) ks = ks.filter(k => k !== last);
+  if (!ks.length) return null;
+  let x = r * ks.reduce((n, k) => n + STROLL_WEIGHT[k], 0);
+  for (const k of ks) { x -= STROLL_WEIGHT[k]; if (x < 0) return k; }
+  return ks.at(-1);
+}
+
+/** Does he go for a stroll now (by day; a need that comes due breaks into the stroll like into any lowest goal), given r in [0,1)? */
+export function strollNow(s, r) { return s.time >= STROLL_FROM && s.time < STROLL_TO && r < STROLL_CHANCE; }
 
 export function chooseGoal(s) {
   if (s.asleep) return 'none';
@@ -109,7 +140,7 @@ export function createMind(world, game, opts = {}) {
   const inside = (x, z) => known.has(x, z) && known.has(x + MARGIN, z) && known.has(x - MARGIN, z) && known.has(x, z + MARGIN) && known.has(x, z - MARGIN)
     && known.has(x + DIAG, z + DIAG) && known.has(x - DIAG, z - DIAG) && known.has(x + DIAG, z - DIAG) && known.has(x - DIAG, z + DIAG);
   const path = createPath(world, { allow: inside }), pathFree = createPath(world);   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
-  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, searches: 0, events: [] };
+  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, searches: 0, strolls: 0, strollKinds: {}, events: [] };
   const mind = { input: null, active: false, get searching() { return inp.learns === true; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let now = 0, cur = null, restUntil = 0, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
   let pressed = null, choice = null, sleepKey = false, sinceCheck = 0;
@@ -197,7 +228,7 @@ export function createMind(world, game, opts = {}) {
     return {
       asleep: game.sleep.asleep || p.lie > 0, time: clock.time, thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake, canLie: game.sleep.canLie(),
       water: wp.length > 0, waterNear: near, shellsEmpty: game.shells.empty(), shellsFull: game.shells.full(), nuts: game.shells.nuts, fibre: game.fibre.carried, torch: !!game.fire.torch,
-      fireLit: !!f, fireFuel: f ? f.fuel / FUEL_MAX : 0, stock: st, spare: piles.reduce((n, q) => n + fuelOfPile(q), 0) - st,
+      fireLit: !!f, fireFuel: f ? f.fuel / FUEL_MAX : 0, stock: st, pileLogs: best ? best.logs.length : 0, spare: piles.reduce((n, q) => n + fuelOfPile(q), 0) - st,
       canLight: !!best && best.logs.length >= FIRE_MIN && fuelOfPile(best) >= LIGHT_MIN_FUEL && (game.fibre.carried > 0 || !!game.fire.torch), cool,
     };
   }
@@ -387,11 +418,12 @@ export function createMind(world, game, opts = {}) {
   // goes first, so a pile of branches and a pile of driftwood do not both grow to 6 (the arc would then offer to build, not to light)
   function* gatherWood() {
     const fs = fireSpot(), best = bestPile(fs), st = best ? fuelOfPile(best) : 0;
+    const topUp = !!best && st >= WOOD_WANT;   // the evening's wood is there: only fill the pile up, and only with its own kind (two piles of 6 or more would make the arc offer to build)
     const order = best && best.kind === 'branch' ? ['branch', 'drift'] : ['drift', 'branch'];
-    for (const kind of order) {
+    for (const kind of topUp ? order.slice(0, 1) : order) {
       if (!nearestBy(kind, 45, 4)) continue;
       const dest = () => { const q = firePiles(fs).filter(x => x.kind === (kind === 'branch' ? 'branch' : 'driftwood') && x.logs.length < 12).sort((a, b) => b.logs.length - a.logs.length)[0]; return q ? standNear(q.x, q.z, 1) || fs : fs; };
-      return yield* gather(kind, dest, Math.max(1, Math.ceil((WOOD_WANT - st) / (kind === 'branch' ? 0.5 : 1))));
+      return yield* gather(kind, dest, topUp ? Math.max(1, PILE_FULL - best.logs.length) : Math.max(1, Math.ceil((WOOD_WANT - st) / (kind === 'branch' ? 0.5 : 1))));
     }
     return false;
   }
@@ -415,7 +447,9 @@ export function createMind(world, game, opts = {}) {
         if (!done) { stats.lightRefused++; ev('light-not-offered', { arc: game.action().options.map(o => o.kind).join() }); cool('light'); return false; }
       }
       yield* waitActs(30); yield* waitIdle();
+      if (!fireAt(fs) && !game.fire.torch && game.fibre.carried <= 1) break;   // a try that failed: the last tuft is kept for another time
     }
+    if (!fireAt(fs)) cool('light', game.fibre.carried <= 1 ? COOL.light * 3 : COOL.light);
     return !!fireAt(fs);
   }
 
@@ -461,11 +495,104 @@ export function createMind(world, game, opts = {}) {
     return true;
   }
 
+  // ---------- pastimes (0.28.2 "Pastime"): strolls on known ground instead of standing about ----------
+  // Places for a stroll, all inside the known ground (`inside`), standable, and within STROLL_RANGE of home: shore (the waterline, where wood washes up), river (fresh water),
+  // palms (a round past a palm), forest (a berry bush at a forest edge). Lists of { x, z, ... }; computed when a stroll is chosen, the pick is the PRNG's.
+  function strollCands(centre = homeSpot(), range = STROLL_RANGE) {
+    const out = { shore: [], river: [], palms: [], forest: [] }, tiles = tilesNear(centre.x, centre.z, range);
+    for (let r = 8; r <= range; r += 8) for (let i = 0; i < 24; i++) {
+      const a = (i + (r / 8 % 2) * 0.5) * Math.PI / 12, x = centre.x + Math.sin(a) * r, z = centre.z + Math.cos(a) * r, y = world.H(x, z);
+      if (y > 0.3 && y < 1.2 && world.H(x + Math.sin(a) * 3, z + Math.cos(a) * 3) < y - 0.15 && inside(x, z) && canStand(world, x, z, 0)) out.shore.push({ x, z });
+    }
+    for (const q of waterPts()) if (Math.hypot(q.x - centre.x, q.z - centre.z) <= range) { const st = standNear(q.x, q.z); if (st) out.river.push({ x: st.x, z: st.z, wx: q.x, wz: q.z }); }
+    const around = (o, d) => { const a = rand() * Math.PI * 2; return standNear(o.x + Math.sin(a) * d, o.z + Math.cos(a) * d, 1.5); };
+    for (const t of tiles) {
+      for (const o of t.palms) if (Math.hypot(o.x - centre.x, o.z - centre.z) <= range && inside(o.x, o.z)) { const st = around(o, 2.4); if (st) out.palms.push({ x: st.x, z: st.z, px: o.x, pz: o.z }); }
+      for (const o of game.berries.plantsIn(t)) if (Math.hypot(o.x - centre.x, o.z - centre.z) <= range && inside(o.x, o.z)) { const st = around(o, 1.8); if (st) out.forest.push({ x: st.x, z: st.z, px: o.x, pz: o.z }); }
+    }
+    return out;
+  }
+  const pauseHere = function* (chance = PAUSE_CHANCE) { if (rand() >= chance) return; const until = now + PAUSE_MIN + (PAUSE_MAX - PAUSE_MIN) * rand(); while (now < until) yield; };   // stands a moment, looking about
+  const pickCand = (list, from, minD = 6) => {   // a random place at least minD from where he stands that he can reach by a way of reasonable length (tries a few)
+    const far = list.filter(c => Math.hypot(c.x - from.x, c.z - from.z) >= minD);
+    for (let k = 0; k < 4 && far.length; k++) { const c = far.splice(rand() * far.length | 0, 1)[0]; if (path.cost(p, c) < STROLL_MAX_COST) return c; }
+    return null;
+  };
+  // washed-up dry driftwood within a few metres: picked up when he has an arm free and the pile at home has room; brought to the pile on the way home (carried wood is laid down by `deliver`)
+  function* pickUpDrift() {
+    for (let n = 0; n < 2; n++) {
+      const best = bestPile(fireSpot());
+      if (W.carried.length >= 2 || (carriedKind() && carriedKind() !== 'drift') || (best && best.kind === 'driftwood' && best.logs.length >= PILE_FULL) || (best && best.kind === 'branch' && fuelOfPile(best) >= WOOD_WANT)) return;
+      const t = scan('drift', p.x, p.z, 8)[0]; if (!t) return;
+      const before = W.carried.length;
+      yield* walk(t.x, t.z, { tap: true, stop: 0.4, until: () => { const a = game.action().tap; return !!a && a.kind === 'pickup' && !!a.thing && a.thing.kind === 'log' && Math.hypot(a.thing.x - t.x, a.thing.z - t.z) < 1.5; } });
+      let k = pressKind(['pickup']); if (k) yield* waitIdle();
+      yield;
+      if (W.carried.length <= before) { markBad('drift', t.o, 600); return; }
+    }
+  }
+  function* deliver() {   // wood under his arm from a stroll goes to the pile at the fire spot (a pile of its own kind within a metre, else a new one there)
+    if (!W.carried.length || (carriedKind() !== 'drift' && carriedKind() !== 'branch')) return;
+    const fs = fireSpot(), kind = carriedKind() === 'branch' ? 'branch' : 'driftwood';
+    const q = firePiles(fs).filter(x => x.kind === kind && x.logs.length < PILE_FULL).sort((a, b) => b.logs.length - a.logs.length)[0], d = q ? standNear(q.x, q.z, 1) || fs : fs;
+    if (!(yield* walk(d.x, d.z, { stop: 0.35 }))) return;
+    for (let n = 0; n < 3 && W.carried.length; n++) { if (!pressKind(['lay'])) break; yield* waitIdle(); }
+  }
+  function* arrive(kind, c) {   // what he does at the end of a leg
+    if (kind === 'shore') { yield* pauseHere(); yield* pickUpDrift(); return; }
+    if (kind === 'river') {
+      const empty = game.shells.empty() > 0 || game.thirst.days >= THIRST_TOPUP;
+      if (empty) {
+        const kinds = game.thirst.days >= THIRST_TOPUP ? ['drink', 'fill'] : ['fill'];
+        for (let n = 0; n < 4 && (game.shells.empty() > 0 || game.thirst.days >= THIRST_TOPUP); n++) { if (!pressKind(kinds)) break; yield* waitIdle(); }
+      }
+      yield* pauseHere(0.7); return;
+    }
+    if (kind === 'palms') {
+      yield* pauseHere(0.7);   // a look up at the crown
+      const s = senses(); if (huskWanted(s) && !s.cool.husk && scan('coco', p.x, p.z, 8).length) yield* huskGoal();
+      return;
+    }
+    if (kind === 'forest') {
+      yield* pauseHere(0.7);
+      const t = game.hunger.days >= 0.6 ? scan('berry', p.x, p.z, 6)[0] : null;   // a handful from a bush that bears, when he is a little hungry
+      if (t) {
+        const near = () => { const a = game.action().tap; return !!a && a.kind === 'berries'; };
+        yield* walk(t.x, t.z, { stop: 0.4, until: near });
+        const k = pressKind(['berries']); if (k) yield* waitIdle(); else markBad('berry', t.o, 600);
+      }
+    }
+  }
+  function* stroll(kind, cands) {   // one to three legs (the shore: along the waterline), pauses on the way, then home with what he found
+    if (cur) cur.limit = STROLL_LIMIT;
+    const legs = 1 + (rand() * (kind === 'shore' ? 3 : 2) | 0);
+    let list = cands[kind], from = homeSpot();
+    for (let leg = 0; leg < legs; leg++) {
+      const c = pickCand(list, leg ? p : from, leg ? 8 : 6); if (!c) break;
+      ev('stroll', { kind, leg, to: [+c.x.toFixed(1), +c.z.toFixed(1)] });
+      const near = kind === 'river' ? () => { const a = game.action(); return [a.tap, ...a.options].some(o => o && (o.kind === 'drink' || o.kind === 'fill')); } : null;
+      const ok = yield* walk(c.x, c.z, { stop: kind === 'river' ? 0.3 : 1.2, until: near });
+      if (!ok) break;
+      yield* arrive(kind, c);
+      if (leg + 1 < legs) list = list.filter(q => Math.hypot(q.x - p.x, q.z - p.z) < 35);   // the next stretch (of shore, or the next palm or bush) lies near this one
+    }
+    yield* deliver();
+    return true;
+  }
+
+  let lastStroll = null;
   function* idleGoal() {
     const h = homeSpot(), t = clock.time;
     if (t >= GAZE_FROM && t < GAZE_TO && gazedDay !== clock.day) { gazedDay = clock.day; return yield* gaze(); }
-    const sp = h.kind === 'leanto' ? fireSpot(h) : { x: h.x, z: h.z };
-    if (dist(p, sp) > IDLE_NEAR) { const s = standNear(sp.x, sp.z, 3); if (s) yield* walk(s.x, s.z, { stop: 3 }); }
+    if (W.carried.length) yield* deliver();
+    const s = senses();
+    if (strollNow(s, rand())) {
+      const cands = strollCands(h), kind = strollKind({ shore: cands.shore.length > 0, river: cands.river.length > 0, palms: cands.palms.length > 0, forest: cands.forest.length > 0 }, lastStroll, rand());
+      if (kind) { lastStroll = kind; stats.strolls = (stats.strolls || 0) + 1; stats.strollKinds[kind] = (stats.strollKinds[kind] || 0) + 1; return yield* stroll(kind, cands); }
+    }
+    const sp = h.kind === 'leanto' ? fireSpot(h) : { x: h.x, z: h.z };   // else: back to within IDLE_NEAR of home and stands a while
+    if (dist(p, sp) > IDLE_NEAR) { const q = standNear(sp.x, sp.z, 3); if (q) yield* walk(q.x, q.z, { stop: 3 }); }
+    const until = now + LINGER_MIN + (LINGER_MAX - LINGER_MIN) * rand(); while (now < until) yield;
     return true;
   }
 
@@ -537,12 +664,12 @@ export function createMind(world, game, opts = {}) {
       if (r.done) {
         const name = cur.name, failed = r.value === false;
         endGoal(null, failed);
-        restUntil = now + REST_MIN + (REST_MAX - REST_MIN) * rand();
+        restUntil = now + restSeconds(rand(), rand());
       }
     }
   }
   mind.chose = () => chose;
   mind.lastKind = () => lastKind;
-  mind.path = path;
+  mind.path = path; mind.strollCands = strollCands;
   return mind;
 }

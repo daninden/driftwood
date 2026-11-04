@@ -3,9 +3,11 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
-import { createMind, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX } from '../src/game/mind.js';
+import { mulberry32 } from '../src/core/noise.js';
+import { createMind, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted } from '../src/game/mind.js';
 import { createTakeover, QUIET } from '../src/game/input.js';
-import { runMind } from './helpers/mindSim.js';
+import { runMind, walkFirstDay } from './helpers/mindSim.js';
+import { canStand } from '../src/game/movement.js';
 
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
@@ -51,7 +53,7 @@ describe('choosing a goal', () => {
     expect(chooseGoal(calm({ thirst: 0.2, shellsEmpty: 1, waterNear: true }))).toBe('idle');
   });
   it('eats at a day of hunger', () => {
-    expect(chooseGoal(calm({ hunger: HUNGER_GO - 0.01 }))).toBe('idle'); expect(chooseGoal(calm({ hunger: HUNGER_GO }))).toBe('eat');
+    expect(chooseGoal(calm({ hunger: HUNGER_GO - 0.01, fibre: 3 }))).toBe('idle'); expect(chooseGoal(calm({ hunger: HUNGER_GO }))).toBe('eat');
   });
   it('sleeps at night or when tired, but only once he may lie down (half a day awake), and never when asleep', () => {
     expect(chooseGoal(calm({ canLie: false, time: 0.95, awake: 0.3 }))).not.toBe('sleep');
@@ -81,6 +83,60 @@ describe('choosing a goal', () => {
   });
 });
 
+describe('pastimes (0.28.2 "Pastime")', () => {
+  it('rests mostly 3 to 8 seconds after a task and only now and then 15 to 30', () => {
+    expect(restSeconds(0.5, 0)).toBe(REST_MIN); expect(restSeconds(0.99, 1)).toBe(REST_MAX);
+    expect(restSeconds(0, 0)).toBe(REST_LONG_MIN); expect(restSeconds(REST_LONG_CHANCE - 0.001, 1)).toBeCloseTo(REST_LONG_MAX, 9);
+    const rng = mulberry32(5); let long = 0, n = 2000, sum = 0;
+    for (let i = 0; i < n; i++) { const r = restSeconds(rng(), rng()); sum += r; if (r >= REST_LONG_MIN) long++; else { expect(r).toBeGreaterThanOrEqual(REST_MIN); expect(r).toBeLessThanOrEqual(REST_MAX); } }
+    expect(long / n).toBeGreaterThan(0.16); expect(long / n).toBeLessThan(0.24);   // about 1 in 5
+    expect(sum / n).toBeLessThan(11);
+  });
+  it('picks a stroll among the places he knows, varied, and none without a place', () => {
+    const all = { shore: true, river: true, palms: true, forest: true };
+    expect(STROLL_KINDS).toEqual(['shore', 'river', 'palms', 'forest']);
+    expect(strollKind({ shore: false, river: false, palms: false, forest: false }, null, 0.5)).toBeNull();
+    expect(strollKind({ shore: false, river: true, palms: false, forest: false }, 'river', 0.5)).toBe('river');   // the only one he knows
+    expect(strollKind({ ...all, shore: false, forest: false }, null, 0.01)).toBe('river');
+    const rng = mulberry32(9), seen = {}; let last = null, twice = 0;
+    for (let i = 0; i < 400; i++) { const k = strollKind(all, last, rng()); seen[k] = (seen[k] || 0) + 1; if (k === last) twice++; last = k; }
+    expect(Object.keys(seen).sort()).toEqual([...STROLL_KINDS].sort()); expect(twice).toBe(0);   // never the same twice in a row when there is another
+  });
+  it('strolls by day only, and a stroll is the usual choice when there is nothing else to do', () => {
+    expect(strollNow(calm({ time: STROLL_FROM }), 0.1)).toBe(true); expect(strollNow(calm({ time: STROLL_FROM - 0.02 }), 0.1)).toBe(false);
+    expect(strollNow(calm({ time: STROLL_TO }), 0.1)).toBe(false); expect(strollNow(calm({ time: 0.5 }), 0.99)).toBe(false);
+    expect(chooseGoal(calm())).toBe('idle');   // the stroll is what 'idle' does
+  });
+  it('keeps more stores: a full pile of wood, three tufts of fibre, nuts carried', () => {
+    expect(PILE_FULL).toBe(12); expect(FIBRE_WANT).toBe(3);
+    expect(storesStep(calm({ pileLogs: 8 }))).toBe('wood');   // the evening's 6 are there, the pile is filled up
+    expect(storesStep(calm({ pileLogs: 12 }))).toBeNull(); expect(storesStep(calm({ pileLogs: 8, fireLit: true }))).toBeNull();   // full / a burning fire is not fed by day
+    expect(storesStep(calm({ pileLogs: 8, cool: { gather: true } }))).toBeNull();
+    expect(storesStep(calm({ fibre: 1, hunger: 0.6 }))).toBe('husk');   // a tuft more, when he is hungry enough to eat the nut that comes with it
+    expect(storesStep(calm({ fibre: 1, hunger: 0.2 }))).toBeNull();   // not so hungry: the nut would be wasted
+    expect(huskWanted(calm({ fibre: 0, hunger: 0 }))).toBe(true); expect(huskWanted(calm({ nuts: 1 }))).toBe(true); expect(huskWanted(calm({ fibre: 3, hunger: 0.9 }))).toBe(false);
+  });
+  it('leaves a failed goal alone only a third as long as before, and a failed light waits longer when one tuft is left', async () => {
+    const src = (await import('node:fs')).readFileSync(new URL('../src/game/mind.js', import.meta.url), 'utf8');
+    expect(src).toMatch(/const COOL = \{ drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10 \}/);
+    expect(src).toMatch(/cool\('light', game\.fibre\.carried <= 1 \? COOL\.light \* 3 : COOL\.light\)/);
+  });
+  it('chooses stroll places only on known ground, 1.5 m inside its edge, and standable', () => {
+    for (const know of [false, true]) {
+      const g = createGame(w, spawn); if (know) walkFirstDay(w, g, spawn);
+      const m = createMind(w, g); m.engage();
+      const c = m.strollCands(), margin = 1.5;
+      let n = 0;
+      for (const kind of STROLL_KINDS) for (const q of c[kind]) {
+        n++; expect(g.known.has(q.x, q.z)).toBe(true);
+        for (const [dx, dz] of [[margin, 0], [-margin, 0], [0, margin], [0, -margin]]) expect(g.known.has(q.x + dx, q.z + dz)).toBe(true);
+        expect(canStand(w, q.x, q.z, 0)).toBe(true);
+      }
+      if (know) expect(n).toBeGreaterThan(10);
+    }
+  });
+});
+
 describe('the mind with a game', () => {
   it('has an input object of its own that never wakes him, never lights or builds by key, and learns no new ground', () => {
     const g = createGame(w, spawn), m = createMind(w, g), i = m.input;
@@ -88,14 +144,14 @@ describe('the mind with a game', () => {
     expect([i.up, i.down, i.left, i.right, i.stick, i.target]).toEqual([false, false, false, false, null, null]);
     expect(m.active).toBe(false); m.step(1); expect(i.target).toBeNull(); expect(m.goal).toBeNull();   // not in charge: it does nothing
   });
-  it('is idle for 5 to 20 seconds first, then starts a goal; engaging twice or releasing at once is harmless', () => {
+  it('is idle for a moment first, then starts a goal; engaging twice or releasing at once is harmless', () => {
     const g = createGame(w, spawn), m = createMind(w, g); m.release(); m.engage(); m.engage();
     expect(m.active).toBe(true); expect(m.resting).toBe(true);
     let first = null;
     for (let t = 0; t < 30 && !first; t += 0.1) { m.step(0.1); g.update(m.input, 0.1); if (m.goal) first = t; }
     expect(first).not.toBeNull(); expect(first).toBeGreaterThan(0.9); expect(first).toBeLessThan(3.2);
     m.release(); expect(m.active).toBe(false); expect(m.goal).toBeNull(); expect(m.input.target).toBeNull(); expect(m.input.takeAction()).toBeNull(); expect(m.input.takeChoice()).toBeNull(); expect(m.input.takeSleep()).toBe(false);
-    expect(REST_MIN).toBe(5); expect(REST_MAX).toBe(20);
+    expect(REST_MIN).toBe(3); expect(REST_MAX).toBe(8);
   });
   it('lets go of what it was doing when the player takes over (the target is gone, the game goes on with the player\'s input)', () => {
     const g = createGame(w, spawn), m = createMind(w, g); m.engage();

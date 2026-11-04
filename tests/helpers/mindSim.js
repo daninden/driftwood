@@ -1,4 +1,5 @@
 // Test helper for the mind (0.28 "Habit"): Dave alone, no player input, for some game days, with the numbers measured on the way.
+// 0.28.2: also reports the share of the waking time he stands still (r.idleShare: awake, not walking, not kneeling or bending).
 // Not a test itself. runMind(world, spawn, { days, know, dt, game? }) -> report
 import { createGame } from '../../src/game/game.js';
 import { createMind } from '../../src/game/mind.js';
@@ -45,7 +46,7 @@ export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state
   game.shells.fill = () => { const ok = fo(); if (ok) r.fills++; return ok; };
   game.fire.attempt = (...a) => { const f = ao(...a); if (f) r.fires++; else r.firesFail++; return f; };
   const end = clock.total + days;
-  let still = 0, lastX = p.x, lastZ = p.z, wasAsleep = sl.asleep;
+  let still = 0, awakeSecs = 0, standSecs = 0, lastX = p.x, lastZ = p.z, wasAsleep = sl.asleep;
   const input = mind.input;
   while (clock.total < end) {
     try { mind.step(dt); game.update(input, dt); } catch (e) { r.errors.push(String(e && e.stack || e).slice(0, 400)); break; }
@@ -54,6 +55,7 @@ export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state
     if (game.thirst.days >= 1) r.thirstyTicks++; if (game.hunger.days >= 2) r.hungryTicks++;
     if (mind.searching) r.searchTicks++; else if (!game.known.has(p.x, p.z)) r.outside++;   // outside a search he is always on ground he knows
     if (game.leantos.list.length > r.lean) { r.builds += game.leantos.list.length - r.lean; r.lean = game.leantos.list.length; }
+    if (!sl.asleep && !(p.lie > 0)) { awakeSecs += dt; if (!p.moving && !p.work && !(p.stoop > 0)) standSecs += dt; }   // standing still: awake, not walking, not kneeling or bending
     // stuck: a walking goal and no movement
     const moved = Math.hypot(p.x - lastX, p.z - lastZ); lastX = p.x; lastZ = p.z;
     if (mind.walking && moved < 0.002 && !sl.asleep && !p.work && !(p.stoop > 0)) { still += dt; r.stuckMax = Math.max(r.stuckMax, still); if (still > 8 && still - dt <= 8) r.stuckSelf++; } else still = 0;
@@ -63,6 +65,7 @@ export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state
   r.chosenSleeps = r.sleeps.filter(s => s.chosen).length;
   r.warmSleeps = r.sleeps.filter(s => s.warm).length; r.coldSleeps = r.sleeps.length - r.warmSleeps;
   r.idleSecs = mind.stats.idleSecs; r.stuck = mind.stats.stuck; r.nopath = mind.stats.nopath; r.lightRefused = mind.stats.lightRefused; r.gazes = mind.stats.gazes; r.searches = mind.stats.searches; r.goals = mind.stats.goals; r.events = mind.stats.events;
+  r.awakeSecs = awakeSecs; r.standSecs = standSecs; r.idleShare = awakeSecs ? standSecs / awakeSecs : 0;
   r.simSeconds = r.ticks * dt; r.days = days;
   r.final = { thirst: game.thirst.days, hunger: game.hunger.days, time: clock.time, day: clock.day, x: p.x, z: p.z, known: game.known.count, leantos: game.leantos.list.length, piles: game.wood.piles.map(q => q.kind + q.logs.length), nuts: game.shells.nuts, fibre: game.fibre.carried };
   return { r, game, mind };

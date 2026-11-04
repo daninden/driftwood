@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.28.2 "Pastime" — 2026-11-04
+
+When left alone Dave stood still far too much (30 to 95 % of the time in the sims): he worked only when a need or the evening asked for it, then idled near home. Now he has quiet pastimes, agreed with the user on 2026-11-04. No rule, pose, text line or element is added; `game/mind` only.
+
+- **Strolls on known ground** instead of standing about, by day: along the waterline (one to three stretches; picks up dry washed-up driftwood within 8 m when an arm is free and the pile has room, lays it on the home pile on the way home), to the river (fills empty shells, a drink if thirsty), a round past the palms (husks a nut on the ground when the stores want one), along the forest edge to a berry bush (a handful from one that bears when a little hungry). Places drawn from the seeded PRNG among known, standable cells inside the 1.5 m margin and within 80 m of home; never the same kind twice in a row; walking pace; pauses of 2 to 6 s on the way. Nine times in ten by day, else (and at night) he lingers 5 to 12 s near home. The sunset gaze stays.
+- **More stores**: the wood pile at the fire spot is topped up to a full pile (12; branches in a pile of their own, never a second pile of 6 or more of the other kind) once the evening's 6 pieces are there, and fibre to 3 tufts (a nut for fibre only when he is hungry enough, 0.5 days, to eat it if he carries two, so no nut is wasted). A fire burning by day is still not fed.
+- **Shorter waits after a failure**: cooldowns about a third of before (10 to 40 s; a failed light 100 s, 300 s when one tuft is left; a failed try now keeps the last tuft).
+- **Rest after a task**: 3 to 8 s (was 5 to 20), 1 time in 5 long, 15 to 30 s.
+- Measured (10 days, walked / fresh), standing still as a share of the waking time: seed 1337 48 % / 59 % (was 79 % / 87 %), seed 7 31 % / 48 %, seed 2024 47 % / 62 %, seed 11 50 % / 44 %; highest thirst 0.89 to 1.06, highest hunger 1.00 to 1.21, no collapse, a night of his own every night, no step on unknown ground outside a search. Details in `docs/design.md`, "Habit".
+- Tests: `tests/mind.test.js` (rest distribution, stroll choice and kinds, stores, cooldowns, stroll places only on known ground), the life sims report `idleShare` and assert it (below 60 % walked, 70 % fresh) and that he strolls and varies it. README: one sentence.
+
 ## 0.28.1 "Scramble" — 2026-11-04
 
 A bug fix for the habit and the playtest bot: they stalled for seconds, again and again, on steep scrambles and in thickets (seed 7: the water lay up a scramble, 313 stalls, 7 thirst collapses in 10 days; seed 11: 338 stalls at the stores). No walking rule changed: the paths were wrong, not the rules.

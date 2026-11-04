@@ -18,7 +18,7 @@ export function lifeSuite(seed, { walked, fresh }) {
   };
   describe(`Dave alone on island ${seed}`, () => {
     it('lives ten days on the ground a first day would have shown him', () => {
-      const { r } = runMind(w, spawn, { days: 10, know: true });
+      const { r, mind } = runMind(w, spawn, { days: 10, know: true });
       common(r);
       const c = walked;
       expect(r.maxThirst).toBeLessThan(c.maxThirst); expect(r.maxHunger).toBeLessThan(c.maxHunger);
@@ -26,6 +26,9 @@ export function lifeSuite(seed, { walked, fresh }) {
       expect(r.chosenSleeps).toBeGreaterThanOrEqual(c.chosenSleeps);   // he lay down by himself on (almost) every night
       expect(r.stuckSelf).toBeLessThanOrEqual(c.stuckSelf); expect(r.stuckMax).toBeLessThan(c.stuckMax);
       expect(r.idleSecs).toBeGreaterThan(0);
+      expect(mind.stats.strolls).toBeGreaterThan(20);   // he really goes about (shore, river, palms, forest)
+      expect(Object.keys(mind.stats.strollKinds).length).toBeGreaterThanOrEqual(3);   // and varies it
+      if (c.idle !== undefined) expect(r.idleShare).toBeLessThan(c.idle);   // 0.28.2: he strolls and gathers instead of standing about (share of the waking time spent standing still)
       if (c.warm !== undefined) expect(r.warmSleeps).toBeGreaterThanOrEqual(c.warm);
     });
     it('lives ten days from a new game, with only the ground round the start known: he searches for water and food himself', () => {
@@ -37,6 +40,7 @@ export function lifeSuite(seed, { walked, fresh }) {
       expect(r.collapses).toBeLessThanOrEqual(c.collapses);
       expect(r.chosenSleeps).toBeGreaterThanOrEqual(c.chosenSleeps);
       expect(r.stuckMax).toBeLessThan(c.stuckMax);
+      if (c.idle !== undefined) expect(r.idleShare).toBeLessThan(c.idle);
       if (c.searches) expect(r.searches).toBeGreaterThanOrEqual(c.searches);
     });
   });

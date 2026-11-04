@@ -310,9 +310,14 @@ Agreed on 2026-11-04 (option B: he does the ordinary, the player the special). W
 2. **Eat** at hunger 1 day: what he carries first (berries, a banana bunch, a nut), a carried crab roasted at a fire, a crab dug for when he stands at a hole; else the nearest food he knows by walking cost: a nut on the ground (husked, eaten), a bearing berry bush (3 times dearer) or a banana plant.
 3. **Sleep** once he may lie down and it is night (from 0.87 to 0.17 of the day) or he is tired (1.5 days awake): he walks home and lies down (Z). He collapses as usual when he must.
 4. **Fire**, in the evening (0.6 to 0.87): dry driftwood (else branches) to one pile at the fire spot at home, enough for 6 pieces of burning (a branch counts half), the pile lit from 0.74 when it holds at least 4 pieces and 3 pieces' worth and he carries fibre (or has a torch in his hand), and the fire fed from the piles when it holds less than 0.6 of the most it can. By day a fire that still burns is not fed; the wood waits for the evening.
-5. **Stores**, by day (0.2 to 0.6): a nut husked for fibre and to carry (two nuts, one tuft: the game's limits), and wood for the evening as above.
-6. **Doing nothing:** after each task he stands still for 5 to 20 s (drawn from a PRNG seeded by the island, so a run can be repeated), walks back to within 8 m of home, and once a day around sunset (0.76 to 0.83) walks to the shore (or the fire) and stands a while looking out. No new pose or animation.
-A higher need breaks into a lower goal (checked every 1.5 s); a goal that fails is left alone for a while (60 to 300 s). He walks; only very thirsty (1.3 days) and 20 m or more from the water does he run.
+5. **Stores**, by day (0.2 to 0.6): a nut husked to carry (two nuts, the game's limit) and for fibre (the first tuft always; up to three tufts, the game's limit, when he is hungry enough, 0.5 days, to eat the nut that the husking gives him when he already carries two, so no nut is wasted), and wood for the evening as above, then topped up to a full pile of 12 pieces (0.28.2 "Pastime"; driftwood, or branches in a pile of their own, never both in piles of 6 or more).
+6. **Pastimes instead of standing about (0.28.2 "Pastime", agreed 2026-11-04)**: by day (0.19 to 0.8), when there is nothing else to do, nine times in ten he goes for a quiet **stroll** on known ground, a different kind each time (never the same twice in a row), the places drawn from the seeded PRNG among the known ones within 80 m of home (and a way of at most 150 m):
+   - **along the waterline** (one to three stretches along the shore): washed-up dry driftwood within 8 m is picked up when an arm is free and the home pile has room, and laid on the pile when he is home again;
+   - **to the river**: fills his empty shells (and has a drink when he is a little thirsty), stands a moment;
+   - **a round past the palms** (one or two): a look up; husks a nut that lies on the ground if the stores want one;
+   - **along the forest edge** to a berry bush or two: eats a handful from a bush that bears when he is a little hungry (0.6 days).
+   He walks at walking pace and pauses now and then (45 % of the stretches, 2 to 6 s); one time in ten, and at night, he walks back to within 8 m of home and lingers 5 to 12 s instead. Nothing new is built or shown: no pose, no line, no sound. After a task he stands still for **3 to 8 s**, and now and then (1 in 5) for **15 to 30 s**. Once a day around sunset (0.76 to 0.83) he walks to the shore (or the fire) and stands a while looking out (unchanged).
+A higher need breaks into a lower goal (checked every 1.5 s); a goal that fails is left alone for a while (10 to 40 s; a failed light 100 s, or 300 s when one tuft of fibre is left, and a failed try keeps the last tuft; 0.28.2, it was 30 to 300 s). He walks; only very thirsty (1.3 days) and 20 m or more from the water does he run.
 
 **What he does not do (stays the player's):** he never builds (no lean-to, no upgrade: those kinds are never chosen, and the fire and branch piles are kept so that the arc offers to light and not to build), never gathers fronds or stones, never takes a torch himself, never explores (but for the search, below), writes no lines and sits in no new pose. **Home:** his nearest finished lean-to; else his last fire (burning, or the last lit); else the place where he last slept; else the place where he was when the habit took over.
 
@@ -334,6 +339,21 @@ A higher need breaks into a lower goal (checked every 1.5 s); a goal that fails 
 | 7 | fresh | 0.89 | 1.05 | 0 | 11 of 11 | 1 | 1 (789) | 12 |
 | 11 | walked | 1.15 | 1.20 | 0 | 11 of 11 | 3 | 0 | 338 |
 | 11 | fresh | 1.06 | 1.09 | 1 (tired) | 8 of 9 | 2 | 1 (780) | 297 |
+
+**Measured with the pastimes (0.28.2 "Pastime"; same setup, ten game days; "standing" = the share of the waking time he stands still, resting, lingering or gazing, not walking or kneeling; it includes the dark hours before dawn and after sunset, when he keeps by the fire and does not stroll; before 0.28.2 it was 79 % walked and 87 % fresh on seed 1337):**
+
+| seed | start | standing | highest thirst | highest hunger | collapses | nights lain down by himself | by a fire | searches | stuck detections |
+|---|---|---|---|---|---|---|---|---|---|
+| 1337 | walked | 48 % | 0.89 | 1.01 | 0 | 10 of 10 | 6 | 0 | 0 |
+| 1337 | fresh | 59 % | 0.97 | 1.13 | 0 | 12 of 12 | 4 | 3 | 0 |
+| 7 | walked | 31 % | 1.04 | 1.02 | 0 | 10 of 10 | 7 | 0 | 1 |
+| 7 | fresh | 48 % | 0.93 | 1.02 | 0 | 11 of 11 | 2 | 1 | 0 |
+| 2024 | walked | 47 % | 0.97 | 1.21 | 0 | 10 of 10 | 7 | 0 | 40 (none over 0.5 s; at the river crossing near (-106, -148)) |
+| 2024 | fresh | 62 % | 0.91 | 1.02 | 0 | 10 of 10 | 5 | 0 | 0 |
+| 11 | walked | 50 % | 0.92 | 1.00 | 0 | 11 of 11 | 0 | 0 | 0 |
+| 11 | fresh | 44 % | 1.06 | 1.20 | 0 | 11 of 11 | 2 | 1 | 1 |
+
+No step on unknown ground outside a search on any island. The fresh starts stand more because he knows few places to stroll to yet (they widen as he walks; the player's walking widens them too).
 
 So a fresh game no longer ends in thirst collapse or starving on any of the four islands. Seed 7 "walked" first showed a bug that was not the habit's (the water known there lies up a steep scramble where he stalled for 4 s again and again, 7 thirst collapses in 10 days); it was the path finder, fixed in 0.28.1 "Scramble" (see `docs/versions.md`), and seed 7 now passes like the others. He never built, never stood on an unknown cell outside a search, never woke himself. He stands still for a third to most of the time (86 % on seed 1337 walked, where there is little to do). Many nights are cold because dry driftwood and nuts are few and a fire costs a tuft of fibre whether it catches or not.
 

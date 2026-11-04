@@ -4,6 +4,6 @@
 import { lifeSuite } from './helpers/lifeSuite.js';
 
 lifeSuite(7, {
-  walked: { maxThirst: 1.4, maxHunger: 1.5, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3 },
-  fresh: { maxThirst: 1.4, maxHunger: 1.5, collapses: 0, chosenSleeps: 9, stuckMax: 3, searches: 1 },
+  walked: { idle: 0.6, maxThirst: 1.4, maxHunger: 1.5, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3 },
+  fresh: { idle: 0.7, maxThirst: 1.4, maxHunger: 1.5, collapses: 0, chosenSleeps: 9, stuckMax: 3, searches: 1 },
 });
