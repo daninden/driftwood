@@ -7,19 +7,19 @@ describe('known ground', () => {
     const k = createKnown();
     expect(k.count).toBe(0); expect(k.has(0, 0)).toBe(false); expect(k.near(0, 0, 50)).toBe(false);
   });
-  it('marks the cells whose middle is within 20 m of where he stands', () => {
-    const k = createKnown(); expect(k.visit(0, 0)).toBe(12);   // middles at +-5 and +-15: three per quarter circle, four quarters
-    expect(k.count).toBe(12);
+  it('marks the cells whose middle is within 40 m of where he stands (what he sees)', () => {
+    const k = createKnown(); expect(k.visit(0, 0)).toBe(52);   // middles at +-5, +-15, +-25, +-35 within 40 m
+    expect(k.count).toBe(52);
     expect(k.has(0, 0)).toBe(true); expect(k.has(14, 0)).toBe(true); expect(k.has(-14, -9)).toBe(true);
-    expect(k.has(26, 0)).toBe(false); expect(k.has(0, -26)).toBe(false); expect(k.has(19, 19)).toBe(false);
-    expect(CELL).toBe(10); expect(RADIUS).toBe(20);
+    expect(k.has(34, 0)).toBe(true); expect(k.has(46, 0)).toBe(false); expect(k.has(0, -46)).toBe(false); expect(k.has(36, 36)).toBe(false); expect(k.has(26, 26)).toBe(true);
+    expect(CELL).toBe(10); expect(RADIUS).toBe(40);
   });
   it('walking on marks more, standing or shuffling about marks nothing new', () => {
     const k = createKnown(); k.visit(0, 0);
     expect(k.visit(1, 1)).toBe(0);   // less than STEP away
     expect(k.visit(0, STEP - 0.1)).toBe(0);
-    expect(k.visit(30, 0)).toBeGreaterThan(0);
-    expect(k.has(40, 0)).toBe(true); expect(k.has(60, 0)).toBe(false);
+    expect(k.visit(60, 0)).toBeGreaterThan(0);
+    expect(k.has(90, 0)).toBe(true); expect(k.has(110, 0)).toBe(false);
   });
   it('marks only the cell he stands in when told to learn nothing (radius 0), as the mind walks him', () => {
     const k = createKnown(); k.visit(0, 0);

@@ -45,7 +45,7 @@
  *   game.crabs                  the crabs he carries and the caught ones missing from their colonies (game/crabs, 0.22)
  *   game.berries                the berry bushes picked and the handfuls he carries (game/forage, 0.26)
  *   game.bananas                the banana plants picked and the bunch he carries (game/forage, 0.26)
- *   game.known                  the part of the island he has been to: cells of 10 m marked within 20 m of where he walked (game/known, 0.28 "Habit"). update() marks
+ *   game.known                  the part of the island he has been to: cells of 10 m marked within 40 m of where he walked (game/known, 0.28 "Habit"). update() marks
  *                               the cells round him in every frame in which he moves, unless the input says `learns: false` (game/mind walks him only over ground he knows; then only his own cell). A game
  *                               without a saved memory starts with the area round where he stands known
  *   game.wildlife               crabs, fish and birds within 30 m of him: atmosphere only, not saved (game/wildlife)

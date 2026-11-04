@@ -24,10 +24,11 @@
  *
  * Depends on: game/movement, world/constants
  */
-import { canStand, stepFactor } from './movement.js';
+import { canStand, stepFactor, obstaclesNear } from './movement.js';
 import { HALF } from '../world/constants.js';
 
 export const C = 1.5, N = Math.round(2 * HALF / C);
+const STEP = 0.25;   // the length of the short steps an edge is checked in (the probe of game/movement stepPlayer)
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 class Heap {
@@ -46,17 +47,30 @@ export function createPath(world, opts = {}) {
     let v = stand.get(k); if (v === undefined) { v = canStand(world, centre(ix), centre(iz), 0) ? 1 : 0; stand.set(k, v); }
     return v === 1;
   };
+  // The speed factor of walking the straight line a -> b in the short steps stepPlayer takes (a probe 0.25 m ahead): 0 when any step of it is
+  // a wall, else the pace over the whole line (the harmonic mean of the steps). The ground between two cells can be a good deal steeper than at
+  // the cells themselves (a climbing route is a narrow band), so a line judged only at its ends could not always be walked.
+  const walkFactor = (a, b) => {
+    const len = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(len / STEP)), sea = 0;
+    let prev = { x: a.x, z: a.z, y: world.H(a.x, a.z) }, inv = 0;
+    for (let i = 1; i <= n; i++) {
+      const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n, f = stepFactor(world, prev, x, z, sea);
+      if (f <= 0 || (world.tiles && obstaclesNear(world, x, z).some(o => Math.hypot(x - o.x, z - o.z) < o.r))) return 0;   // a wall, or a trunk or boulder in the way
+      inv += 1 / f; prev = { x, z, y: world.H(x, z) };
+    }
+    return n / inv;
+  };
   const edgeF = (ix, iz, d) => {
     const k = (iz * N + ix) * 8 + d; let f = efs.get(k);
     if (f === undefined) {
       const [dx, dz] = DIRS[d], ax = centre(ix), az = centre(iz);
       if (!isStand(ix + dx, iz + dz) || (dx && dz && (!isStand(ix + dx, iz) || !isStand(ix, iz + dz)))) f = 0;
-      else f = stepFactor(world, { x: ax, z: az, y: world.H(ax, az) }, centre(ix + dx), centre(iz + dz), 0);
+      else f = walkFactor({ x: ax, z: az }, { x: centre(ix + dx), z: centre(iz + dz) });
       efs.set(k, f);
     }
     return f;
   };
-  const path = { allow: opts.allow || null, banned, isStand, centre, cell, find, cost, nearestCell, ban };
+  const path = { allow: opts.allow || null, banned, isStand, centre, cell, find, cost, nearestCell, ban, walkable: (a, b) => walkFactor(a, b) > 0.05 };
   const ok = (ix, iz) => !path.allow || path.allow(centre(ix), centre(iz));
   function nearestCell(x, z, rings = 4, accept = null) {
     const ix = cell(x), iz = cell(z);

@@ -1,7 +1,7 @@
 /**
  * game/known — which part of the island the castaway knows (0.28 "Habit").
  *
- * The island is cut into square cells of CELL (10) metres. A cell is *known* once he has walked within RADIUS (20) metres of its middle
+ * The island is cut into square cells of CELL (10) metres. A cell is *known* once he has walked within RADIUS (40) metres of its middle
  * (the middle of the cell, not any corner): every few metres of walking marks the cells round him. It is a coarse memory, not a map: nothing
  * of it is drawn. It only says where the castaway's own habit (game/mind) may take him: he goes to places he has been and nowhere else.
  *
@@ -13,7 +13,7 @@
  *   known.has(x, z)           true when the cell of (x, z) is known
  *   known.hasCell(i)          true when cell index i (iz * NC + ix) is known
  *   known.near(x, z, r)       true when a known cell's middle is within r of (x, z)
- *   known.visit(x, z, r?)     he is at (x, z): marks the cells whose middle is within r (default RADIUS; 0: just his own cell). Looks only once he
+ *   known.visit(x, z, r?)     he is at (x, z): marks the cells whose middle is within r (default RADIUS, 40 m: what he sees; 0: just his own cell). Looks only once he
  *                             has moved STEP (2 m) since the last look (or r changed). Returns the number of cells newly known
  *   known.count               how many cells are known
  *   known.state() -> { cell, cells: [index] }   plain, for saving (sorted)
@@ -25,7 +25,7 @@
  */
 import { HALF, S } from '../world/constants.js';
 
-export const CELL = 10, RADIUS = 20, STEP = 2;
+export const CELL = 10, RADIUS = 40, STEP = 2;
 export const NC = Math.ceil(S / CELL), MAX_CELLS = NC * NC;
 
 const cellOf = v => Math.floor((v + HALF) / CELL);

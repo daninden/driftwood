@@ -39,9 +39,9 @@ describe('choosing a goal', () => {
     expect(chooseGoal(calm())).toBe('idle');
     expect(Object.keys(RANK)).toEqual(['drink', 'eat', 'sleep', 'fire', 'stores', 'idle']);
   });
-  it('drinks when thirsty and has water to go to (or a full shell), and does nothing about thirst it cannot help', () => {
+  it('drinks when thirsty (goes searching when he knows no water), and leaves a goal that just failed alone for a while', () => {
     expect(chooseGoal(calm({ thirst: 0.79 }))).toBe('idle'); expect(chooseGoal(calm({ thirst: 0.8 }))).toBe('drink');
-    expect(chooseGoal(calm({ thirst: 1.2, water: false }))).toBe('idle');
+    expect(chooseGoal(calm({ thirst: 1.2, water: false }))).toBe('drink');   // knowing none, he goes looking
     expect(chooseGoal(calm({ thirst: 1.2, water: false, shellsFull: 1 }))).toBe('drink');
     expect(chooseGoal(calm({ thirst: 1.2, cool: { drink: true } }))).toBe('idle');   // it just failed: left alone for a while
   });

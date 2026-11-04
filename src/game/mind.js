@@ -9,9 +9,9 @@
  * and never starts a sleep before he could choose to.
  *
  * What he does, in this order of priority (`chooseGoal`, pure, on a plain snapshot of the needs and the time of day):
- *   1 drink   thirst >= THIRST_GO (0.8 days): a full shell is drunk, else he walks to the nearest known fresh river water and kneels;
+ *   1 drink   thirst >= THIRST_GO (0.8 days): a full shell is drunk, else he walks to the nearest known fresh river water and kneels (knowing none, he searches, below);
  *             when empty shells are with him and the river is near (NEAR_WATER 40 m) and thirst >= THIRST_TOPUP (0.4), he goes to fill them too
- *   2 eat     hunger >= HUNGER_GO (1 day): berries, a banana bunch, a carried nut (the row), else the nearest known food by the way
+ *   2 eat     hunger >= HUNGER_GO (1 day; knowing no food and carrying none, he searches, below): berries, a banana bunch, a carried nut (the row), else the nearest known food by the way
  *             there (nut on the ground, bearing berry bush, banana plant), a carried crab roasted beside a fire, a crab dug for when he happens to stand at a hole it fled into
  *   3 sleep   once he may lie down (half a day awake) and it is night (from BED_FROM 0.87 to DAWN 0.17) or he is tired (awake >= TIRED_GO 1.5 days):
  *             he walks home (his lean-to; else his fire; else where he last slept; else where he was when the mind took over) and lies down
@@ -22,6 +22,9 @@
  *             Driftwood and branches are never both piled there in piles of 6 or more (the arc would offer to build and not to light)
  *   6 idle    stands still 5 to 20 seconds after each task (REST_MIN, REST_MAX, drawn from the seed), walks back to within IDLE_NEAR (8 m) of home,
  *             and once a day around sunset (GAZE_FROM 0.76 to 0.83) walks to the shore (or the fire) and stands a while looking out. No pose, no line of text
+ * The one exception to staying on known ground (0.28, decided later the same day): SEARCH. Thirsty with no fresh water known, or hungry with no food known and none
+ * carried, he walks out from home into the unknown, ring after ring, to the nearest unknown spot that borders what he knows (downhill for water, the low coast for
+ * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water or food is known; then he is back on known ground only.
  * A higher need breaks into a lower goal (checked every CHECK seconds); a goal keeps going otherwise and a failing one is left alone for a while (`cool`).
  * He walks; only very thirsty (thirst >= 1.3) and far (20 m or more) does he run.
  *
@@ -31,13 +34,13 @@
  * RANK   the priority of each goal (lower wins)
  * createMind(world, game, opts?) -> mind
  *   mind.input        the input-like object main passes to game.update while the mind is in charge: up, down, left, right false, run, stick null, target, yaw (main sets
- *                     it from the view), learns false (the game then learns no new ground from his steps), takeWake always false, takeAction / takeChoice / takeSleep /
+ *                     it from the view), learns false except while searching (the game then learns no new ground from his steps), takeWake always false, takeAction / takeChoice / takeSleep /
  *                     takeLight, pressing(), clearTarget(), cancelAction()
  *   mind.engage()     the mind takes over (remembers where he stands as the last home); mind.release() the player takes over: the goal is dropped, the input cleared.
  *                     A kneeling job already begun is left to finish (the player's own input stops it as usual)
  *   mind.step(dt)     once per game.update while in charge, before it: decides and fills mind.input
  *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set)
- *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, gazes, events: [..] } for tests and the playtest bot
+ *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, gazes, events: [..] } for tests and the playtest bot (searches: how many searches he began)
  *   mind.chose()      true while a sleep he chose himself is being started (the tests tell it from a collapse); mind.lastKind() the kind of the last button he used; mind.path the path finder
  *   opts.stream       a number to vary the chance (default 0)
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
@@ -59,6 +62,7 @@ export const THIRST_GO = 0.8, THIRST_TOPUP = 0.4, THIRST_SIP = 0.3, NEAR_WATER =
 export const HUNGER_GO = 1, TIRED_GO = 1.5;
 export const EVENING = 0.6, LIGHT_FROM = 0.74, BED_FROM = 0.87, DAWN = 0.17, DAY_FROM = 0.2, GAZE_FROM = 0.76, GAZE_TO = 0.83;
 export const WOOD_WANT = 6, NUT_WANT = 2, FEED_BELOW = 0.6, LIGHT_MIN_FUEL = 3, IDLE_NEAR = 8;
+export const SEARCH_LIMIT = 900;   // seconds a goal may take while it is searching for water or food
 export const REST_MIN = 5, REST_MAX = 20, CHECK = 1.5;
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 220, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
@@ -88,7 +92,7 @@ export function storesStep(s) {
 export function chooseGoal(s) {
   if (s.asleep) return 'none';
   const t = s.time, cool = s.cool || {};
-  if (!cool.drink && ((s.thirst >= THIRST_GO && (s.shellsFull > 0 || s.water)) || (s.shellsEmpty > 0 && s.waterNear && s.thirst >= THIRST_TOPUP))) return 'drink';
+  if (!cool.drink && (s.thirst >= THIRST_GO || (s.shellsEmpty > 0 && s.waterNear && s.thirst >= THIRST_TOPUP))) return 'drink';
   if (!cool.eat && s.hunger >= HUNGER_GO) return 'eat';
   if (!cool.sleep && s.canLie && (t >= BED_FROM || t < DAWN || s.awake >= TIRED_GO)) return 'sleep';
   if (!cool.fire && fireStep({ ...s, cool })) return 'fire';
@@ -103,9 +107,9 @@ export function createMind(world, game, opts = {}) {
   const MARGIN = 1.5, DIAG = MARGIN * 0.75;
   const inside = (x, z) => known.has(x, z) && known.has(x + MARGIN, z) && known.has(x - MARGIN, z) && known.has(x, z + MARGIN) && known.has(x, z - MARGIN)
     && known.has(x + DIAG, z + DIAG) && known.has(x - DIAG, z - DIAG) && known.has(x + DIAG, z - DIAG) && known.has(x - DIAG, z + DIAG);
-  const path = createPath(world, { allow: inside });
-  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, events: [] };
-  const mind = { input: null, active: false, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
+  const path = createPath(world, { allow: inside }), pathFree = createPath(world);   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
+  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, searches: 0, events: [] };
+  const mind = { input: null, active: false, get searching() { return inp.learns === true; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let now = 0, cur = null, restUntil = 0, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
   let pressed = null, choice = null, sleepKey = false, sinceCheck = 0;
   const coolUntil = {}, bad = new Map();
@@ -208,15 +212,15 @@ export function createMind(world, game, opts = {}) {
   const useRow = kind => { lastKind = 'use:' + kind; idleInput(); return game.use(kind, inp); };
 
   // ---------- walking ----------
-  function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground
-    const tap = !!o.tap, stop = o.stop ?? 1.0;
+  function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground (o.free: anywhere, for a search)
+    const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.free ? pathFree : path;
     let plan = null, pi = 0, finalSet = false, replans = 0, chk = { x: p.x, z: p.z, t: now }, stuckN = 0, seen = now;
     for (;;) {
       if (o.until && o.until()) { idleInput(); return true; }
       const d = Math.hypot(x - p.x, z - p.z);
       if (!tap && d <= stop) { idleInput(); return true; }
       if (!plan) {
-        plan = path.find(p, { x, z }); pi = 0;
+        plan = fd.find(p, { x, z }); pi = 0;
         if (!plan) { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); idleInput(); return false; }
         if (d < 3.5 && plan.pts.length <= 3) plan.direct = true;
       }
@@ -236,13 +240,13 @@ export function createMind(world, game, opts = {}) {
         if (moved < 0.3 && !busy() && tap && d < 1.3) { idleInput(); return true; }   // beside a thing that lies against a trunk: close enough
         if (moved < 0.3 && !busy()) {
           stuckN++; stats.stuck++; ev('stuck', { goal: cur && cur.name, to: [+x.toFixed(1), +z.toFixed(1)], dist: +d.toFixed(1), n: stuckN });
-          const ahead = plan.pts[Math.min(pi + 1, plan.pts.length - 1)]; if (ahead) path.ban(ahead.x, ahead.z);
-          if (path.banned.size > 40) path.banned.clear();
+          const ahead = plan.pts[Math.min(pi + 1, plan.pts.length - 1)]; if (ahead) fd.ban(ahead.x, ahead.z);
+          if (fd.banned.size > 40) fd.banned.clear();
           for (const t0 = now; now - t0 < 1.5;) {   // steer by hand for a moment: the free direction closest to the goal, over known ground
             const gx = x - p.x, gz = z - p.z, gl = Math.hypot(gx, gz) || 1; let bu = null, bs = -2;
             for (let a = 0; a < 24; a++) {
               const ang = a * Math.PI / 12, ux = Math.sin(ang), uz = Math.cos(ang);
-              if (!inside(p.x + ux * 1.5, p.z + uz * 1.5) || !canStand(world, p.x + ux * 0.6, p.z + uz * 0.6, game.sea)) continue;
+              if ((!o.free && !inside(p.x + ux * 1.5, p.z + uz * 1.5)) || !canStand(world, p.x + ux * 0.6, p.z + uz * 0.6, game.sea)) continue;
               const sc = (ux * gx + uz * gz) / gl; if (sc > bs) { bs = sc; bu = { ux, uz }; }
             }
             inp.target = bu ? { x: p.x + bu.ux * 2.5, z: p.z + bu.uz * 2.5 } : null; yield;
@@ -259,9 +263,50 @@ export function createMind(world, game, opts = {}) {
   function* waitActs(max = 25) { const t0 = now; yield; while (inp.target && inp.target.act && now - t0 < max) yield; yield; }
   const hurry = () => game.thirst.days >= 1.3;
 
+  // ---------- searching (the one exception to staying on known ground) ----------
+  // Thirsty with no fresh water known, or hungry with no food known and none carried: he walks out from home over the unknown, ring by ring (rings of 12 m,
+  // 24 points each) to the nearest unknown spot that borders what he knows, leaning downhill for water (rivers run to the sea) and to the low coast for food
+  // (palms) before the inland (berries), and learns what he walks past (inp.learns). Seeded by nothing: the same island gives the same search. When it is found he
+  // is back to known ground only.
+  let foodAt = -1, foodSeen = false, foodT = -9;   // food he knows and can walk to over known ground; looked at again when he knows more, at most every 2 s
+  const foodKnown = () => { if (foodAt !== known.count && now - foodT >= 2) { foodAt = known.count; foodT = now; foodSeen = !!(nearestBy('coco', 60) || nearestBy('berry', 60) || nearestBy('banana', 60, 2)); } return foodSeen; };
+  function frontier(kind, h, tried) {
+    const cands = [];
+    for (let r = 15; r <= 250; r += 12) for (let i = 0; i < 24; i++) {
+      const a = i * Math.PI / 12 + (r / 12 % 2) * Math.PI / 24, x = h.x + Math.sin(a) * r, z = h.z + Math.cos(a) * r;
+      if (!(Math.abs(x) < HALF - 8 && Math.abs(z) < HALF - 8) || known.has(x, z) || !known.near(x, z, 18) || !canStand(world, x, z, 0)) continue;
+      if (tried.some(q => Math.hypot(q.x - x, q.z - z) < 14)) continue;
+      const y = world.H(x, z), bias = kind === 'water' ? y * 2 : (y > 5 ? 15 : 0);
+      cands.push({ x, z, bias, score: Math.hypot(x - p.x, z - p.z) + bias });
+    }
+    cands.sort((u, v) => u.score - v.score);
+    let best = null;
+    for (const c of cands.slice(0, 5)) { const r = pathFree.find(p, c, 30000, false); if (!r) { tried.push(c); continue; } const sc = r.cost * 2.9 + c.bias; if (!best || sc < best.sc) best = { ...c, sc }; }
+    return best;
+  }
+  function* searchFor(kind) {
+    foodAt = -1; foodT = -9;
+    const found = () => kind === 'water' ? waterPts().length > 0 : foodKnown();
+    if (found()) return true;
+    stats.searches++; ev('search', { kind, thirst: +game.thirst.days.toFixed(2), hunger: +game.hunger.days.toFixed(2) });
+    if (cur) cur.limit = SEARCH_LIMIT;
+    inp.learns = true;
+    try {
+      const h = homeSpot(), tried = [];
+      for (let hop = 0; hop < 60 && !found(); hop++) {
+        const f = frontier(kind, h, tried); if (!f) return false;
+        tried.push(f);
+        yield* walk(f.x, f.z, { stop: 2, free: true, until: found });
+      }
+      if (found()) ev('search-found', { kind });
+      return found();
+    } finally { inp.learns = false; idleInput(); }
+  }
+
   // ---------- goals ----------
   function* drinkGoal() {
     if (game.shells.full() > 0 && game.thirst.days > THIRST_SIP && !game.fire.torch && game.thirst.days >= THIRST_GO) { if (useRow('water')) { yield* waitIdle(); return true; } }
+    if (!waterPts().length) { if (!(yield* searchFor('water'))) { ev('no-water'); return false; } }   // thirsty and knows no fresh water: he goes looking
     const badWater = [];
     for (let tries = 0; tries < 4; tries++) {
       const cand = waterPts().filter(q => !badWater.some(w => Math.hypot(w.x - q.x, w.z - q.z) < 2)).map(q => ({ ...q, d: Math.hypot(q.x - p.x, q.z - p.z) })).sort((a, b) => a.d - b.d).slice(0, 4);
@@ -287,8 +332,13 @@ export function createMind(world, game, opts = {}) {
     if (game.bananas.carried.length && game.hunger.days > 0.5 && useRow('banana')) { yield* waitIdle(); return true; }
     if (game.shells.nuts > 0 && useRow('nut')) { yield* waitIdle(); return true; }
     if (game.crabs.carried.length) { const f = game.fire.fires.find(q => game.fire.strength(q) > 0 && inside(q.x, q.z)); if (f) { yield* walk(f.x + 0.8, f.z + 0.4, { stop: 0.7 }); if (useRow('crab')) { yield* waitIdle(); return true; } } }
-    const cs = [], c = nearestBy('coco', 60), b = nearestBy('berry', 60), bn = nearestBy('banana', 60, 2);
-    if (c) cs.push({ kind: 'coco', t: c, w: c.cost }); if (b) cs.push({ kind: 'berry', t: b, w: b.cost * 3 }); if (bn) cs.push({ kind: 'banana', t: bn, w: bn.cost * 0.8 });
+    const foods = () => {
+      const cs = [], c = nearestBy('coco', 60), b = nearestBy('berry', 60), bn = nearestBy('banana', 60, 2);
+      if (c) cs.push({ kind: 'coco', t: c, w: c.cost }); if (b) cs.push({ kind: 'berry', t: b, w: b.cost * 3 }); if (bn) cs.push({ kind: 'banana', t: bn, w: bn.cost * 0.8 });
+      return cs;
+    };
+    let cs = foods();
+    if (!cs.length) { if (yield* searchFor('food')) cs = foods(); }   // hungry, nothing carried and no food known: he goes looking
     if (!cs.length) { ev('no-food'); return false; }
     cs.sort((a, q) => a.w - q.w); const pick = cs[0], t = pick.t, want = pick.kind === 'coco' ? ['husk'] : pick.kind === 'berry' ? ['berries'] : ['bananas'];
     const near = () => { const a = game.action().tap; return !!a && want.includes(a.kind) && !!a.thing && Math.hypot((a.thing.x ?? t.x) - t.x, (a.thing.z ?? t.z) - t.z) < 3; };
@@ -468,7 +518,7 @@ export function createMind(world, game, opts = {}) {
       sinceCheck = 0;
       const want = chooseGoal(senses());
       if (want in RANK && RANK[want] < cur.rank) endGoal('preempted by ' + want);
-      else if (now - cur.t0 > LIMIT[cur.name]) endGoal('timeout', true);
+      else if (now - cur.t0 > (cur.limit || LIMIT[cur.name])) endGoal('timeout', true);
     }
     if (!cur) {
       const crit = game.thirst.days >= 1.5 || game.hunger.days >= 3;
