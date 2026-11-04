@@ -39,7 +39,7 @@
  */
 import * as THREE from 'three';
 import { hashInt } from '../core/noise.js';
-import { Batch } from './batch.js';
+import { Batch, poolsOf } from './batch.js';
 import { stickMatrix, mat4 } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
@@ -162,7 +162,7 @@ export function ringStones(H, l, p) {
 export function createLeantoView(scene, w, kit, leantos) {
   const views = new Map();   // lean-to -> { group, key }
   const build = l => {
-    const g = new THREE.Group(), B = new Batch(outlineMat), pc = DRIFT.dry[hashInt(l.id, 3, 103) % DRIFT.dry.length];
+    const g = new THREE.Group(), B = new Batch(outlineMat, poolsOf(scene)), pc = DRIFT.dry[hashInt(l.id, 3, 103) % DRIFT.dry.length];
     leantoParts(w.H, l).forEach((s, i) => {
       const c = s.key === 'roof' ? BRANCH.bark[(i + l.id) % BRANCH.bark.length] : pc;
       B.add(s.key, kit.driftwood, kit.smallMat, stickMatrix(s.a, s.b, s.r / 0.09), c, { outline: 1.18 });

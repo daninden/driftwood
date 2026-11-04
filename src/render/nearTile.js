@@ -12,7 +12,10 @@
  * (The driftwood and coconuts that can be picked up are drawn by
  * render/driftwood and render/coconuts.)
  *
- * buildNearTile(world, colorAt, kit, tile, slicer) — generator; returns { group }
+ * buildNearTile(world, colorAt, kit, tile, slicer, anisotropy, pools?) — generator; returns { group }
+ *   pools (0.27.8, render/batch poolsOf): the tile's trees, rocks and ground cover go into the shared instanced pools of the scene
+ *   (the group then holds only the ground mesh); disposeGroup(group) gives the slots back. Without pools the group holds its own meshes.
+ * disposeGroup(group) — releases the pool slots of a group (render/batch releaseGroup), disposes its own meshes, removes it
  *
  * Depends on: three, core/noise, render/*
  */
@@ -20,27 +23,27 @@ import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
 import { T } from '../world/constants.js';
 import { terrainMat, outlineMat } from './materials.js';
-import { Batch } from './batch.js';
+import { Batch, releaseGroup } from './batch.js';
 import { mat4 } from './geometry.js';
 import { tileGeometry, tileTexture } from './terrainTile.js';
 import { addTree, addPine, addPalm, addBush, addRoots, addTideLine, rockColor } from './props.js';
 
 const GRASS = [[0xa9b062, 0x98a356], null, [0x6a8a3c, 0x7a9446], [0xb3ab6c, 0xa39d62, 0xbfb47a], [0xa8a272, 0x9a9468]];
 
-export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy) {
+export function* buildNearTile(w, colorAt, kit, tile, slicer, anisotropy, pools) {
   const own = [];   // what a cancelled build must dispose
   let finished = false;
   try {
-    const group = yield* buildBody(w, colorAt, kit, tile, slicer, anisotropy, own);
+    const group = yield* buildBody(w, colorAt, kit, tile, slicer, anisotropy, own, pools);
     finished = true; return { group };
   } finally {
     if (!finished) own.forEach(d => d.dispose());
   }
 }
 
-function* buildBody(w, colorAt, kit, tile, slicer, anisotropy, own) {
+function* buildBody(w, colorAt, kit, tile, slicer, anisotropy, own, pools) {
   const { H, Lat, slope, tierAt, riverAt, forestB, forestF } = w;
-  const group = new THREE.Group(), B = new Batch(outlineMat);
+  const group = new THREE.Group(), B = new Batch(outlineMat, pools);
   const geo = yield* tileGeometry(w, tile, 160, slicer); own.push(geo);
   const tex = yield* tileTexture(w, colorAt, tile, 1024, slicer, anisotropy); own.push(tex);
   const mesh = new THREE.Mesh(geo, terrainMat(tex)); own.push(mesh.material); mesh.receiveShadow = true; mesh.castShadow = true; mesh.userData.terrain = true; group.add(mesh);
@@ -82,6 +85,7 @@ function* buildBody(w, colorAt, kit, tile, slicer, anisotropy, own) {
 }
 
 export function disposeGroup(group) {
+  releaseGroup(group);
   group.traverse(o => {
     if (o.isInstancedMesh) { o.dispose(); if (o.userData.ownGeometry) o.geometry.dispose(); }
     else if (o.isMesh) { o.geometry.dispose(); if (!o.material.userData.shared) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }   // a shared material (userData.shared) outlives the group

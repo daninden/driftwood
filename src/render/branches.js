@@ -21,7 +21,7 @@
  */
 import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
-import { Batch } from './batch.js';
+import { Batch, poolsOf } from './batch.js';
 import { mat4, stickMatrix } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
@@ -58,7 +58,7 @@ export function addBranch(B, kit, H, b) {
 export function createBranchView(scene, w, kit, branches) {
   const tiles = new Map();   // tile -> group of its branches
   let seen = branches.version;
-  const tileGroup = tile => { const g = new THREE.Group(), B = new Batch(outlineMat); for (const b of branches.groundBranches(tile)) addBranch(B, kit, w.H, b); B.build(g); scene.add(g); return g; };
+  const tileGroup = tile => { const g = new THREE.Group(), B = new Batch(outlineMat, poolsOf(scene)); for (const b of branches.groundBranches(tile)) addBranch(B, kit, w.H, b); B.build(g); scene.add(g); return g; };
   function addTile(tile) { if (tile.trees && tile.trees.length && !tiles.has(tile)) tiles.set(tile, tileGroup(tile)); }
   function dropTile(tile) { const g = tiles.get(tile); if (g) { disposeGroup(g); tiles.delete(tile); } }
   function update() {

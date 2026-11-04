@@ -2,6 +2,16 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.27.8 "Bundle" — 2026-11-04
+
+Fewer draw calls, preventively for weaker laptops; the look is unchanged (the 44 smoke screenshots match the old build pixel for pixel apart from fire and water flicker).
+
+- Shared instanced pools: one `InstancedMesh` (plus its outline twin) per kind of small thing for the whole near area instead of one per kind per tile (`poolsOf(scene)` and `PoolSet` in `render/batch`; a pool per geometry, material, shadow flags, depth material, render order, outline and wind attribute). A tile build takes a run of slots, a tile dispose releases them and later runs slide down, so a pool's count is always its live instances. Pools grow by doubling and never shrink; only the changed range is uploaded, in `pools.flush()` before rendering. Pooled: the near tiles, branches, coconuts, berries, bananas, finds, driftwood tiles and piles, the lean-to and the far tiles' small batch. The wind shader is untouched.
+- Per-tile culling is dropped: the streamer already keeps only tiles in view plus a margin.
+- Measured (`scripts/perf.js --only draw`, 1366x768, desktop GPU, also with the CPU throttled 4x): draw calls including the shadow pass about 380 -> 170 at 8 near tiles and 480 -> 190 zoomed out; meshes 984 -> 414, instanced meshes 635 -> 65; throttled walking median 7.5 -> 3.9 ms, standing 6.9 -> 3.8 ms, zoomed out walking 9.0 -> 4.4 ms; a tile-build frame (throttled) 17.2 -> 13.9 ms; JS heap about 1 MB less. Not measured on an integrated GPU. The rest of the calls are mostly the per-tile terrain meshes (about 110).
+- Tools: `scripts/perf.js --only draw`; `view.stats()` reports triangles, geometries, textures, meshes, instanced meshes, instances and pools.
+- Tests: `tests/batch.test.js` (new, 9). 878 tests in all. Playtest 5 days on 1337 and 2024: clean.
+
 ## 0.27.7 "Lighter" — 2026-11-04
 
 Performance, from a code review; the look stays the same apart from a slightly softer fire glow falloff and damp patches whose opacity moves in 8 steps.

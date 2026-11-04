@@ -61,7 +61,7 @@
 import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
 import { stickMatrix } from './geometry.js';
-import { Batch } from './batch.js';
+import { Batch, poolsOf } from './batch.js';
 import { outlineMat, toon } from './materials.js';
 import { disposeGroup } from './nearTile.js';
 import { DRIFT, BRANCH } from './palette.js';
@@ -210,7 +210,7 @@ export function createWoodView(scene, w, rawKit, wood) {
   const kit = { ...rawKit, wetMat };
   const fadeMat = toon(0xffffff, { transparent: true, opacity: 0 }), fadeWetMat = wetToon(0xffffff, { transparent: true, opacity: 0 });
   const fadeOutline = outlineMat.clone(); fadeOutline.transparent = true; fadeOutline.opacity = 0;
-  const build = (add, mat = kit.smallMat, ol = outlineMat) => { const grp = new THREE.Group(), B = new Batch(ol); add(B, mat); B.build(grp); scene.add(grp); return grp; };
+  const build = (add, mat = kit.smallMat, ol = outlineMat, pooled = true) => { const grp = new THREE.Group(), B = new Batch(ol, pooled ? poolsOf(scene) : null); add(B, mat); B.build(grp); scene.add(grp); return grp; };
   // the damp patches of some beach logs, into a group, one merged mesh for each opacity step. A tile's patches share the material of
   // their step (kept for good); the patches of fading wood (fade true) get materials of their own, whose opacity rises from 0 with the wood
   const dampMats = new Map();
@@ -242,7 +242,7 @@ export function createWoodView(scene, w, rawKit, wood) {
   const buildFading = () => {
     if (fading) disposeGroup(fading);
     const logs = [...fresh].filter(l => wood.onBeach(l));
-    fading = build((B, mat) => { for (const l of logs) addBeachLog(B, { ...kit, smallMat: mat, wetMat: fadeWetMat }, w.H, l, dryness(l, now)); }, fadeMat, fadeOutline);
+    fading = build((B, mat) => { for (const l of logs) addBeachLog(B, { ...kit, smallMat: mat, wetMat: fadeWetMat }, w.H, l, dryness(l, now)); }, fadeMat, fadeOutline, false);
     fading.traverse(o => { o.castShadow = false; });   // no shadow before the wood is there
     addPatches(fading, logs, true);
   };

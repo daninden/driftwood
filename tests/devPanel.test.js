@@ -59,7 +59,7 @@ describe('label and version', () => {
     expect(devLabel('0.10', 'Wet wood', 30, 9, false, 10)).toBe('v0.10 · Wet wood · 30 fps · 9 ms');   // zoom only beyond 10
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.27.7'); expect(NAME).toBe('Lighter');
+    expect(VERSION).toBe('0.27.8'); expect(NAME).toBe('Bundle');
   });
   it('shows the quality level after the zoom and before idle, only when known', () => {
     expect(devLabel('0.22', 'Crab catch', 30, 9, false, 0, 1)).toBe('v0.22 · Crab catch · 30 fps · 9 ms · q1');

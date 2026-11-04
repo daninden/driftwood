@@ -38,7 +38,7 @@
  *   view.building        true when the last render built tiles (a detailed tile pumped, or far tiles made): its cost is not the game's own, so
  *     the quality governor (render/quality) leaves such frames out
  *   view.canvas
- *   view.stats() -> { nearTiles, pending, drawCalls }   for tests and tuning
+ *   view.stats() -> { nearTiles, pending, drawCalls (incl. the shadow pass), triangles, geometries, textures, meshes, instanced, instances, pools }   for tests and tuning
  *   view.prepare(player, progress?)  builds the detailed tiles in view before
  *     the game starts (async, reports progress('details', fraction))
  *   view.settle(player)  build all wanted detailed tiles at once (tests only)
@@ -58,6 +58,7 @@ import { buildFarTiles, pumpFarTiles, updateFarTiles } from './farTiles.js';
 import { SUMMIT_MAX } from './camera.js';
 import { T, HALF, NT } from '../world/constants.js';
 import { buildNearTile, disposeGroup } from './nearTile.js';
+import { poolsOf } from './batch.js';
 import { createStreamer, tileInView } from './streaming.js';
 import { createHero } from './hero.js';
 import { createFootprints } from './footprints.js';
@@ -97,11 +98,12 @@ export async function createIslandView(world, container, progress, start, opts =
   if (start) far.rest.sort((a, b) => Math.hypot(a.x0 - start.x, a.z0 - start.z) - Math.hypot(b.x0 - start.x, b.z0 - start.z));
   const slicer = createSlicer();
   const near = new Map();   // tile -> { group }
+  const pools = poolsOf(scene);   // the shared instanced pools of the near tiles and of what lies on the ground (render/batch)
   const startLights = opts.settings ? opts.settings.fireLights : undefined; let fireLights = startLights;   // the pool of fire lights is sized once, by the quality at the start
   let woodView = null, cocoView = null, branchView = null, findsView = null, leantoView = null, berryView = null, bananaView = null, fireView = null, tallyView = null, wildView = null, flyView = null, lightLayer = null, game = null, building = false;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
-    build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso),
+    build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso, pools),
     onReady: (tile, v) => { stage.tagTerrain(v.group); scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); } },
     onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); findsView.dropTile(tile); berryView.dropTile(tile); bananaView.dropTile(tile); } },
   });
@@ -156,6 +158,7 @@ export async function createIslandView(world, container, progress, start, opts =
     if (lightLayer) lightLayer.end();
     stage.followSun({ target: cam.target, yaw, pitch, zoom: cam.zoom, aspect }, sky.light.dir);
     mood.update(world.tierAt(t.L), dt, sky, rain);
+    pools.flush();
     renderer.render(scene, cam.camera);
   }
 
@@ -210,6 +213,6 @@ export async function createIslandView(world, container, progress, start, opts =
     const aspect = window.innerWidth / window.innerHeight;
     for (let i = 0; i < 200; i++) { streamer.update(player, cam.zoom, aspect, cam.yaw, cam.pitch); if (!streamer.pump(1e6)) break; }
   }
-  const stats = () => ({ nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls });
+  const stats = () => { let meshes = 0, instanced = 0, instances = 0; scene.traverse(o => { if (o.isMesh) { meshes++; if (o.isInstancedMesh) { instanced++; instances += o.count; } } }); return { pools: pools.stats(), nearTiles: near.size, pending: streamer.pending(), drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, meshes, instanced, instances }; };
   return { render, setGame, zoomBy: cam.zoomBy, setZoomMax: cam.setZoomMax, turn: cam.turn, setPose: cam.setPose, get pose() { return cam.pose; }, get yaw() { return cam.yaw; }, get zoom() { return cam.zoom; }, get settling() { return cam.settling; }, pickGround, setQuality: next => { stage.applyQuality(next); if (next && next.fireLights !== undefined) { fireLights = next.fireLights; if (fireView) fireView.setActive(fireLights); } if (next && next.rainStreaks !== undefined) rainView.setMax(next.rainStreaks); }, get building() { return building; }, canvas: renderer.domElement, scene, stats, setWindTime: t => { windSeconds = t; }, get windTime() { return windSeconds; }, get waterTime() { return water.clock; }, settle, prepare };
 }

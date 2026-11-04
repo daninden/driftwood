@@ -21,7 +21,7 @@
  */
 import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
-import { Batch } from './batch.js';
+import { Batch, poolsOf } from './batch.js';
 import { mat4 } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
@@ -47,7 +47,7 @@ export function addBerries(B, kit, p) {
 export function createBerryView(scene, w, kit, forage) {
   const tiles = new Map();   // tile -> group of the berries of its bushes
   let seen = forage.version;
-  const tileGroup = tile => { const g = new THREE.Group(), B = new Batch(outlineMat); for (const p of forage.bearingIn(tile)) addBerries(B, kit, p); B.build(g); scene.add(g); return g; };
+  const tileGroup = tile => { const g = new THREE.Group(), B = new Batch(outlineMat, poolsOf(scene)); for (const p of forage.bearingIn(tile)) addBerries(B, kit, p); B.build(g); scene.add(g); return g; };
   function addTile(tile) { if (tile.bushes && tile.bushes.length && !tiles.has(tile)) tiles.set(tile, tileGroup(tile)); }
   function dropTile(tile) { const g = tiles.get(tile); if (g) { disposeGroup(g); tiles.delete(tile); } }
   function update() {

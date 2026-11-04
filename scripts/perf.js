@@ -1,5 +1,8 @@
 // Performance measurements of a built game in a headless browser (0.27.7 "Lighter").
-// Usage: node scripts/perf.js [--html file] [--out prefix]
+// Usage: node scripts/perf.js [--html file] [--out prefix] [--only draw [--w 1366] [--h 768]]
+//   --only draw   only the draw-call and walking measurements of 0.27.8 "Bundle" (draw calls incl. the shadow pass, frame JS time walking
+//                 and standing, tile building, heap, geometry and instance counts after each round), at a laptop-like viewport, normal and with
+//                 the CPU slowed 4x; see docs/architecture.md, Instanced pools
 //   --html   the built game (default dist/driftwood.html)
 //   --out    prefix for the screenshots (default perf); it also keeps a copy of the numbers as JSON
 // Measures, in the page, with drawing paused and the game run in fixed steps (like scripts/smoke.js):
@@ -17,11 +20,12 @@ import { resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const args = process.argv.slice(2), arg = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
+const only = arg('--only', ''), vw = +arg('--w', 1366), vh = +arg('--h', 768);
 const file = resolve(arg('--html', fileURLToPath(new URL('../dist/driftwood.html', import.meta.url)))), out = arg('--out', 'perf');
 
 let browser = null;
 try { browser = await chromium.launch({ channel: 'chromium' }); } catch (e) { browser = await chromium.launch(); }
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const page = await browser.newPage({ viewport: only === 'draw' ? { width: vw, height: vh } : { width: 1280, height: 800 } });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
@@ -29,6 +33,7 @@ await page.goto('file://' + file + '?time=0.97&quality=0', { waitUntil: 'commit'
 await page.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
 await page.waitForTimeout(1500);
 await page.evaluate(() => window.__driftwood.pause(true));
+
 const cdp = await page.context().newCDPSession(page);
 const result = { errors };
 
@@ -45,6 +50,52 @@ const frames = n => page.evaluate(n => {
   return { mean: +(ms.reduce((s, v) => s + v, 0) / n).toFixed(3), median: +ms[n >> 1].toFixed(3), p95: +ms[Math.floor(n * 0.95)].toFixed(3), calls };
 }, n);
 const shot = async name => { await page.evaluate(() => window.__driftwood.draw()); await page.screenshot({ path: `${out}-${name}.png` }); };
+
+// 0. draw calls, frame time, tile building and memory while walking and standing, normal and with the CPU slowed down 4x (--only draw)
+async function drawSection() {
+  await page.evaluate(() => { const { game, view } = window.__driftwood; game.clock.time = 0.5; view.settle(game.player); });
+  const walk = (rounds, throttle, zoom) => page.evaluate(({ rounds, zoom }) => {
+    const { world, game, input, view } = window.__driftwood, p = game.player, ms = [], build = [], calls = [], steady = [];
+    const home = { x: p.x, z: p.z }, pose0 = view.pose;
+    view.zoomBy(zoom); for (let i = 0; i < 120; i++) { view.render(p, game.update(input, 1 / 30), 1 / 30); }
+    // a straight line inland and back (about 0.12 m a frame, a walking pace), several rounds
+    const len = 100, dx = home.x > 0 ? -1 : 1, dz = home.z > 0 ? -1 : 1, norm = Math.hypot(dx, dz), levels = [];
+    for (let r = 0; r < rounds; r++) {
+      for (let i = 0; i < 2 * Math.round(len / 0.12); i++) {
+        const a = i < len / 0.12 ? i * 0.12 : (2 * len / 0.12 - i) * 0.12;
+        p.x = home.x + dx / norm * a; p.z = home.z + dz / norm * a; p.y = world.H(p.x, p.z);
+        const info = game.update(input, 1 / 30), t = performance.now();
+        view.render(p, info, 1 / 30);
+        const d = performance.now() - t; ms.push(d); calls.push(view.stats().drawCalls); if (view.building) build.push(d); else steady.push(d);
+      }
+      p.x = home.x; p.z = home.z; p.y = world.H(p.x, p.z);
+      for (let i = 0; i < 90; i++) view.render(p, game.update(input, 1 / 30), 1 / 30);
+      levels.push(view.stats());
+    }
+    const q = (a, f) => { const b = a.slice().sort((x, y) => x - y); return b.length ? +b[Math.min(b.length - 1, Math.floor(b.length * f))].toFixed(2) : null; };
+    // standing
+    const st = []; for (let i = 0; i < 150; i++) { const info = game.update(input, 1 / 30), t = performance.now(); view.render(p, info, 1 / 30); st.push(performance.now() - t); }
+    view.setPose(pose0); for (let i = 0; i < 120; i++) view.render(p, game.update(input, 1 / 30), 1 / 30);
+    return { walk: { median: q(ms, 0.5), p95: q(ms, 0.95), max: q(ms, 1) }, walkSteady: { median: q(steady, 0.5), p95: q(steady, 0.95) }, tileBuildFrames: build.length, tileBuildMedian: q(build, 0.5), tileBuildP95: q(build, 0.95), tileBuildTotalMs: +build.reduce((s, v) => s + v, 0).toFixed(0), callsMedian: q(calls, 0.5), callsMax: q(calls, 1), stand: { median: q(st, 0.5), p95: q(st, 0.95), calls: view.stats().drawCalls }, levels };
+  }, { rounds, zoom });
+  const heap = async () => { await cdp.send('HeapProfiler.collectGarbage'); return Math.round((await cdp.send('Runtime.getHeapUsage')).usedSize / 1048576 * 10) / 10; };
+  await cdp.send('Runtime.enable'); await heap();
+  result.start = await page.evaluate(() => window.__driftwood.view.stats()); result.heapStartMB = await heap();
+  result.normal = await walk(2, 1, 0); result.heapAfterNormalMB = await heap();
+  result.zoomedOut = await walk(1, 1, 12); result.heapAfterZoomMB = await heap();
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  result.throttled = await walk(1, 4, 0);
+  result.throttledZoomedOut = await walk(1, 4, 12);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  result.end = await page.evaluate(() => window.__driftwood.view.stats()); result.heapEndMB = await heap();
+  await shot('draw-end');
+}
+
+if (only === 'draw') {
+  await drawSection();
+  console.log(JSON.stringify(result, null, 1)); writeFileSync(`${out}.json`, JSON.stringify(result, null, 1));
+  await browser.close(); process.exit(errors.length ? 1 : 0);
+}
 
 // 1. night beside a fire
 const start = await page.evaluate(() => {

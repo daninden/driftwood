@@ -23,7 +23,7 @@
  */
 import * as THREE from 'three';
 import { hashInt } from '../core/noise.js';
-import { Batch } from './batch.js';
+import { Batch, poolsOf } from './batch.js';
 import { mat4 } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
@@ -80,7 +80,7 @@ export function createFindsView(scene, w, kit, fronds, stones) {
   let seen = fronds.version + ':' + stones.version;
   const tileGroup = tile => {
     const list = fronds.groundFronds(tile), rocks = stones.groundStones(tile); if (!list.length && !rocks.length) return null;
-    const g = new THREE.Group(), B = new Batch(outlineMat);
+    const g = new THREE.Group(), B = new Batch(outlineMat, poolsOf(scene));
     for (const f of list) addFrond(B, kit, w.H, f);
     for (const s of rocks) addStone(B, kit, w.H, s);
     B.build(g); scene.add(g); return g;

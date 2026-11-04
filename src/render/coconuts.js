@@ -16,7 +16,7 @@
  */
 import * as THREE from 'three';
 import { hashInt } from '../core/noise.js';
-import { Batch } from './batch.js';
+import { Batch, poolsOf } from './batch.js';
 import { mat4 } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
@@ -30,7 +30,7 @@ export function addCoconut(B, kit, H, c) {
 export function createCocoView(scene, w, kit, fibre) {
   const tiles = new Map();   // tile -> group of its coconuts
   let seen = fibre.version;
-  const tileGroup = tile => { const g = new THREE.Group(), B = new Batch(outlineMat); for (const c of fibre.groundCocos(tile)) addCoconut(B, kit, w.H, c); B.build(g); scene.add(g); return g; };
+  const tileGroup = tile => { const g = new THREE.Group(), B = new Batch(outlineMat, poolsOf(scene)); for (const c of fibre.groundCocos(tile)) addCoconut(B, kit, w.H, c); B.build(g); scene.add(g); return g; };
   function addTile(tile) { if (tile.cocos && tile.cocos.length && !tiles.has(tile)) tiles.set(tile, tileGroup(tile)); }
   function dropTile(tile) { const g = tiles.get(tile); if (g) { disposeGroup(g); tiles.delete(tile); } }
   function update() {
