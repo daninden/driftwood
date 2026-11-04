@@ -15,8 +15,11 @@
  * POST_H, WIDTH, DEPTH, ROOF_N, FROND_N   the measures in metres, the number of roof branches and of fronds
  * leantoParts(H, l, progress?) -> [{ a, b, r, key }]   pure: the sticks of a lean-to at a
  *   progress (default its own); key is 'post', 'fork', 'ridge' or 'roof'
- * leantoFronds(H, l, progress?) -> [{ pos, yaw, pitch, sx, sz, k }]   pure: the fronds laid so far
- *   (pos on the ridge, yaw to the back, pitch down along the roof, scale along and across)
+ * roofLine(H, l, r) -> { a, b, f0, f1 }   pure: the roof's slope line at across-position r (a on the ridge, b at the foot)
+ * frondProfile(sx, psi) -> [[run, height]]   pure: a frond's centre line pitched down by psi
+ * leantoFronds(H, l, progress?) -> [{ pos, yaw, pitch, sx, sy, sz, k, slope }]   pure: the fronds laid so far
+ *   (0.22.2: each lies on the roof's slope line: pos on the ridge top, yaw to the back, pitch the
+ *   steepest at which the frond stays on or above the line, scale along, arch (FROND_SY) and across)
  * createLeantoView(scene, world, kit, leantos) -> { update() }
  *   update() builds, rebuilds (when the progress moved a step) and removes the groups
  *   to match leantos.list
@@ -66,13 +69,37 @@ export function leantoParts(H, l, progress = l.progress) {
 // A seeded number 0..1 per lean-to, index and slot, fixed by where it stands.
 const rndOf = (l, salt) => (k, slot) => hashInt(Math.round(l.x * 64) + k * 7 + slot * 131, Math.round(l.z * 64) + slot, salt + slot) / 4294967296;
 
+/** The roof's nominal slope line at across-position r: its top on the ridge (f = front + 0.04) and its foot at the back, as vectors in the world. */
+export function roofLine(H, l, r) {
+  const s = Math.sin(l.heading), c = Math.cos(l.heading), front = DEPTH / 2 - 0.05, back = -DEPTH / 2 - 0.05;
+  const at = (f, up) => { const x = l.x + s * f + c * r, z = l.z + c * f - s * r; return new THREE.Vector3(x, H(x, z) + up, z); };
+  return { a: at(front + 0.04, POST_H + 0.05 + ROOF_R), b: at(back, 0.04 + ROOF_R), f0: front + 0.04, f1: back };
+}
+
+// The frond's centre line in its own frame (see render/geometry: x along, y up), per metre x of its 2 m: it arches a little and then droops.
+const frondY = x => 0.25 * x - 0.275 * x * x;
+export const FROND_SY = 0.12;   // the arch squeezed to 12 %: laid on a roof the frond is nearly straight, not an arch with a gap under it
+const FROND_GAP = 0.015;       // metres the frond's base (and, where it touches, the whole frond) lies above the roof line
+
+/** The frond's centre line (at lengthwise scale sx, arch scale FROND_SY, pitched down by psi) as [run along the roof, height above the base] pairs; pure. */
+export function frondProfile(sx, psi, n = 24) {
+  const out = [];
+  for (let i = 0; i <= n; i++) { const x = 2 * i / n, X = sx * x, Y = FROND_SY * frondY(x); out.push([X * Math.cos(psi) + Y * Math.sin(psi), -X * Math.sin(psi) + Y * Math.cos(psi)]); }
+  return out;
+}
+
 export function leantoFronds(H, l, progress = l.progress) {
   const p = clamp01(progress), n = Math.ceil(FROND_N * clamp01((p - FROND_FROM) / (1 - FROND_FROM)) - 1e-9);
   const s = Math.sin(l.heading), c = Math.cos(l.heading), rnd = rndOf(l, 211), yaw0 = Math.atan2(c, -s), half = WIDTH / 2 - 0.1, out = [];
   for (let k = 0; k < n; k++) {
-    const r = -half + 0.1 + (k + (rnd(k, 0) - 0.5) * 0.5) / (FROND_N - 1) * (2 * half - 0.2), f = DEPTH / 2 + 0.2 + (rnd(k, 1) - 0.5) * 0.12;   // starting just in front of the ridge, so the fronds hang over it
-    const x = l.x + s * f + c * r, z = l.z + c * f - s * r;
-    out.push({ pos: new THREE.Vector3(x, H(x, z) + POST_H + 0.12 + k % 2 * 0.06, z), yaw: yaw0 + (rnd(k, 2) - 0.5) * 0.5, pitch: -(0.1 + rnd(k, 3) * 0.15), sx: 1.0 + rnd(k, 4) * 0.15, sz: 2.3 + rnd(k, 5) * 0.6, k });
+    const r = -half + 0.1 + (k + (rnd(k, 0) - 0.5) * 0.5) / (FROND_N - 1) * (2 * half - 0.2), line = roofLine(H, l, r);
+    // 0.22.2: each frond lies on the roof's slope line (before, a flat pitch of 0.1 to 0.25 rad above a roof of 0.7 rad: they floated half a metre above the branches)
+    const f = line.f0 + (rnd(k, 1) - 0.5) * 0.06, run = Math.hypot(line.b.x - line.a.x, line.b.z - line.a.z), drop = line.a.y - line.b.y, slope = drop / run, top = Math.atan(slope);
+    const sx = Math.min(1.2, run / (2 * Math.cos(Math.max(0, top - 0.1))) * (1.0 + rnd(k, 4) * 0.12)), jitter = rnd(k, 3) * 0.025;
+    let psi = top;   // the steepest pitch at which the whole frond stays on or above the roof line
+    while (psi > 0.05 && frondProfile(sx, psi).some(([u, v]) => v + slope * u < -1e-6)) psi -= 0.005;
+    const x = l.x + s * f + c * r, z = l.z + c * f - s * r, lift = k % 2 * 0.035;   // every second frond a little higher, so overlapping ones do not fight for the same pixels
+    out.push({ pos: new THREE.Vector3(x, line.a.y - slope * (line.f0 - f) + FROND_GAP + lift, z), yaw: yaw0 + (rnd(k, 2) - 0.5) * 0.4, pitch: -(psi - jitter), sx, sy: FROND_SY, sz: 2.3 + rnd(k, 5) * 0.5, k, slope });
   }
   return out;
 }
@@ -87,7 +114,7 @@ export function createLeantoView(scene, w, kit, leantos) {
     });
     const O = new THREE.Object3D();
     leantoFronds(w.H, l).forEach(f => {
-      O.position.copy(f.pos); O.rotation.order = 'YZX'; O.rotation.set(0, f.yaw, f.pitch); O.scale.set(f.sx, 1, f.sz); O.updateMatrix();
+      O.position.copy(f.pos); O.rotation.order = 'YZX'; O.rotation.set(0, f.yaw, f.pitch); O.scale.set(f.sx, f.sy, f.sz); O.updateMatrix();
       B.add('frond', kit.frond, kit.frondStillMat, O.matrix.clone(), P.frondTint[(l.id + f.k * 2) % 3 + (f.k % 2)], { depthMat: kit.frondStillDepth, receive: false });   // as the palms' fronds, no outline
     });
     B.build(g); scene.add(g); return g;

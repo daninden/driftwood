@@ -35,7 +35,8 @@
  *     ang: the angle (atan2(dz, dx)) of the body's long axis; a 0..1 how far out of the hole
  *   wildlife.hiding(x, z, reach) -> null | { id, x, z, d }   0.22: the nearest crab that fled into a hole within reach (d: distance to the hole) and is still hiding in it, with the hole's place
  *   wildlife.isHiding(id) -> true while crab id is still hiding in the hole it fled into
- *   wildlife.escape(id)   -> the crab ran out of the back of its hole: it stays hidden three times as long and is no longer there to dig for
+ *   wildlife.escape(id)   -> a failed dig: the crab pops out of the sand ESC_POP (0.5 to 1 m) from the hole on the far side from him, scuttles ESC_RUN (2 to 4 m) straight away from him
+ *     at ESC_SPEED and dives into another hole of its colony there (or digs in where it ends); it then stays hidden three times as long (30 to 60 s) and is not there to dig for
  *   (update's ctx may carry gone(id) -> true for a crab that was caught and is out of its colony: it is not there)
  *   wildlife.holes()  -> [{ x, y, z }]   the crab holes within ALIVE that the sea does not cover (dark dots in the sand)
  *   wildlife.fish()   -> [{ id, kind, x, y, z, ang, a, len, ph }]   a 0..1 how visible
@@ -58,6 +59,7 @@ import { coloniesOfTile, fishOfTile, birdCell, CELL } from './habitats.js';
 export const ALIVE = 30, SCARE = 3, SAFE = 5, HIDE = [10, 20], DART = 2, DART_TIME = 0.7, BACK_TIME = 4, HIDE_FISH = [8, 16], FISH_CLEAR = 2.5;
 export const JUMP_EVERY = [30, 90], JUMP_TIME = 0.9, SPLASH_TIME = 0.9, FLOCK_EVERY = [150, 300], FLOCK_FIRST = [90, 180], FLOCK_DIST = [11.5, 18.5], FLUSH = 4;
 export const ARRIVE = [0.2, 0.27], LEAVE = [0.69, 0.76], FLOCK_DAY = [0.27, 0.62], BIRD_H = 0.06;
+export const ESC_POP = [0.5, 1], ESC_RUN = [2, 4], ESC_SPEED = 3.4;
 const OUT_MIN = 0.45, CRAB_RUN = 0.7, CRAB_HOME = 0.9, CRAB_FLEE = 2.4;
 const SKY_AWAY = 220;   // metres the circling birds go out along the way to the rocky shore while arriving and leaving
 
@@ -95,6 +97,7 @@ export function createWildlife(w, { seed = w.seed } = {}) {
           s.need = between(s.r, HIDE); if (!want) s.t = s.need;
           crabS.set(crab.id, s);
         }
+        s.col = col;
         const d = dist(s.x, s.z);
         if (d > ALIVE) continue;   // frozen, not drawn
         s.moving = false;
@@ -110,15 +113,18 @@ export function createWildlife(w, { seed = w.seed } = {}) {
             if (s.run) { if (goTo(s.tx, s.tz, CRAB_RUN)) { s.run = false; s.t = 1.2 + s.r() * 3.5; } else s.moving = true; }
             else if (s.t <= 0) {
               const a = s.r() * Math.PI * 2, l = 0.25 + s.r() * 0.5, tx = s.x + Math.cos(a) * l, tz = s.z + Math.sin(a) * l;
-              if (Math.hypot(tx - hole.x, tz - hole.z) < 1.4 && sandOK(tx, tz)) { s.run = true; s.tx = tx; s.tz = tz; } else s.t = 0.3;
+              if ((Math.hypot(tx - hole.x, tz - hole.z) < 1.4 || Math.hypot(tx - hole.x, tz - hole.z) < Math.hypot(s.x - hole.x, s.z - hole.z)) && sandOK(tx, tz)) { s.run = true; s.tx = tx; s.tz = tz; } else s.t = 0.3;
             }
           }
         }
-        if (s.mode === 'home') {
+        if (s.mode === 'pop') {   // a failed dig: out of the sand, then away
+          s.a += dt / 0.2;
+          if (s.a >= 1) { s.a = 1; s.mode = 'home'; s.speed = ESC_SPEED; }
+        } else if (s.mode === 'home') {
           if (goTo(s.tx, s.tz, s.speed)) { s.mode = 'in'; s.run = false; }
         } else if (s.mode === 'in') {
           s.a -= dt / 0.25;
-          if (s.a <= 0) { s.a = 0; s.mode = 'hidden'; s.t = 0; s.need = between(s.r, HIDE); s.x = s.tx; s.z = s.tz; }
+          if (s.a <= 0) { s.a = 0; s.mode = 'hidden'; s.t = 0; s.need = between(s.r, HIDE) * (s.long ? 3 : 1); s.long = false; s.x = s.tx; s.z = s.tz; }
         } else if (s.mode === 'hidden') {
           if (want && d > SAFE) s.t += dt;
           if (s.t >= s.need) { s.mode = 'emerge'; s.a = 0; s.fled = false; }
@@ -145,7 +151,26 @@ export function createWildlife(w, { seed = w.seed } = {}) {
   const isHiding = id => { const s = crabS.get(id); return !!s && hidingIn(s); };
   function escape(id) {
     const s = crabS.get(id); if (!s) return;
-    s.fled = false; s.mode = 'hidden'; s.t = 0; s.need = between(s.r, HIDE) * 3;
+    s.fled = false; s.long = true; s.run = false; s.t = 0;
+    const hx = s.hole ? s.hole.x : s.x, hz = s.hole ? s.hole.z : s.z;
+    let base = Math.atan2(hz - p.z, hx - p.x); if (Math.hypot(hx - p.x, hz - p.z) < 0.05) base = s.ang;
+    const pop = between(s.r, ESC_POP), run = between(s.r, ESC_RUN);
+    let ang = base, px = hx + Math.cos(base) * pop, pz = hz + Math.sin(base) * pop;
+    for (const da of [0, 0.5, -0.5, 1, -1, 1.6, -1.6]) {   // the sand beyond the hole; turn aside when it is water or a bank
+      const a = base + da, x = hx + Math.cos(a) * pop, z = hz + Math.sin(a) * pop;
+      if (sandOK(x, z)) { ang = a; px = x; pz = z; break; }
+    }
+    s.x = px; s.z = pz; s.a = 0; s.mode = 'pop'; s.moving = false; s.ang = ang;
+    let tx = px, tz = pz, best = null;   // another hole of the colony 2 to 4.5 m on, away from him
+    if (s.col) for (const q of s.col.holes) {
+      if (q === s.hole || q.y <= sea + 0.05) continue;
+      const d = Math.hypot(q.x - px, q.z - pz); if (d < ESC_RUN[0] || d > ESC_RUN[1] + 0.5) continue;
+      const away = ((q.x - px) * Math.cos(ang) + (q.z - pz) * Math.sin(ang)) / d;
+      if (away > 0.3 && (!best || away > best.away)) best = { q, away };
+    }
+    if (best) { tx = best.q.x; tz = best.q.z; s.hole = best.q; }
+    else for (let l = run; l >= 0.5; l -= 0.5) { const x = px + Math.cos(ang) * l, z = pz + Math.sin(ang) * l; if (sandOK(x, z)) { tx = x; tz = z; break; } }
+    s.tx = tx; s.tz = tz;
   }
 
   // ---- fish

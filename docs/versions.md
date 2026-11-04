@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.22.2 "Clearer finds" — 2026-11-04
+
+- Crab catch: a failed dig is now visible. The crab pops out of the sand 0.5 to 1 m from the hole on the far side from him, scuttles away from him (3.4 m/s) and dives into another hole of its colony 2 to 4.5 m on, or digs in on the sand. It then stays hidden three times as long (30 to 60 s) and cannot be dug for (`wildlife.escape`, `ESC_POP`, `ESC_RUN`, `ESC_SPEED` in `game/wildlife`). A crab away from its home hole drifts back toward it. The chance is unchanged (0.5).
+- Inventory: driftwood carried now shows in the row, one small ink log per piece (rounded ends, two grain lines), before the branches; wet and dry look the same (`render/carryMark`, item `driftwood`).
+- Fish: the fish were black in every version until now, whatever their colour said: `setColorAt` ran while the pool's count was 0, so three r128 made an empty instance-colour buffer. The buffer is now made by hand. Fish are a soft teal (`0x3f8189`, opacity 0.58), about 30 % darker than the water by day and 20 % at dusk, and their fade to pale shows too. This is the likely reason they were not seen on phones (small black shapes at low alpha on a pale sea).
+- Camera: the depth range is 30 to 760 instead of 1 to 4000 (`depthRange` in `render/camera`), so a 16-bit depth buffer resolves about 1 cm instead of 6; the fish material has a polygon offset. Safety margins; not checked on a real phone.
+- Lean-to: the palm fronds lie on the roof branches instead of floating 0.5 to 0.6 m above them. Each frond starts on the ridge and follows the roof's slope line (`roofLine`, `frondProfile`, `FROND_SY` in `render/leanto`); its pose does not depend on the build stage.
+- Tests: `tests/crab.test.js` (a failed dig), `tests/render.test.js` (driftwood in the row), `tests/leanto.test.js` (fronds on the roof line), `tests/view.test.js` (depth range). 712 tests in all.
+
 ## 0.22.1 "Loose ends" — 2026-11-04
 
 - Rain: loose wood anywhere on the island now gets wet from a shower, not only within 40 m of him. Far wood is caught up lazily: `weather.lastFall(total)` (new, `game/weather`) gives the end of the latest shower, and `wood.rain(..., lastFall)` soaks wood in the open that comes within reach as of that moment, as long as less than its drying time has passed. Washed-up wood (few pieces) is wetted wherever it lies. A shower he slept through also wets loose wood in the open now (not piles or carried wood, which can have been moved since). Caveat: the shelter check uses the lean-tos that exist at catch-up time.

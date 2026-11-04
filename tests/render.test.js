@@ -6,7 +6,7 @@ import { flameWorld, FLAME_LOCAL } from '../src/render/fire.js';
 import { SIL_OPACITY, LEAN, HANG } from '../src/render/hero.js';
 import { printAlpha, MAX, FADE } from '../src/render/footprints.js';
 import { moonPath, markOpacity, CLEAR_BELOW } from '../src/render/restMark.js';
-import { carryItems, carryChanged, carryOpacity, createCarryMark, REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
+import { carryItems, carryChanged, carryOpacity, createCarryMark, DRAWINGS, ITEMS, REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 import { foamWeights, FOAM_LEVELS } from '../src/render/water.js';
 
 describe('silhouette', () => {
@@ -67,6 +67,12 @@ describe('carry mark', () => {
     for (let n = 0; n <= 3; n++) expect(carryItems({ fibre: n })).toEqual(Array(n).fill('fibre'));
     expect(carryItems({})).toEqual([]);
     expect(carryItems(null)).toEqual([]);
+  });
+  it('draws a log for each piece of driftwood, before the branches', () => {
+    expect(ITEMS.indexOf('driftwood')).toBe(ITEMS.indexOf('branch') - 1);
+    expect(carryItems({ fibre: 1, driftwood: 2, branch: 1 })).toEqual(['fibre', 'driftwood', 'driftwood', 'branch']);
+    expect(carryChanged({ driftwood: 1 }, { driftwood: 2 })).toBe(true);
+    expect(DRAWINGS.driftwood).toContain('<path'); expect(DRAWINGS.driftwood).not.toContain('fill'); expect(DRAWINGS.driftwood).not.toEqual(DRAWINGS.branch);
   });
   it('is faint at rest, clear right after a change and faint again later', () => {
     expect(carryOpacity(Infinity)).toBeCloseTo(REST_OPACITY);

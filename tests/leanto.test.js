@@ -17,7 +17,7 @@ import { DAY_SECONDS } from '../src/game/clock.js';
 import { FIRST_HIGH, PERIOD } from '../src/game/tide.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
 import { carryItems } from '../src/render/carryMark.js';
-import { leantoParts, leantoFronds, ROOF_N, FROND_N } from '../src/render/leanto.js';
+import { leantoParts, leantoFronds, roofLine, frondProfile, ROOF_N, FROND_N } from '../src/render/leanto.js';
 import { YAW } from '../src/core/view.js';
 
 let w, spawn, logs, all;
@@ -207,6 +207,24 @@ describe('building', () => {
     const n = [0.86, 0.9, 0.95, 1].map(p => leantoFronds(w.H, l, p).length);
     expect(n[0]).toBeGreaterThan(0); expect(n[3]).toBe(FROND_N);
     expect(n).toEqual([...n].sort((a, b) => a - b));   // one by one, never fewer
+  });
+  it('lays the fronds on the roof, not above it (0.22.2), at every stage and heading, on flat and on real ground', () => {
+    const flat = () => 0.3;
+    for (const H of [flat, w.H]) for (const heading of [0, 0.5, 2.1, 4]) {
+      const l = { id: 1, x: spawn.x, z: spawn.z, heading, progress: 1 };
+      const fr = leantoFronds(H, l);
+      expect(fr.length).toBe(FROND_N);
+      for (const f of fr) {
+        expect(leantoFronds(H, l, 0.9 + 0.02 * f.k).some(g => g.k === f.k && g.pos.equals(f.pos) && g.pitch === f.pitch)).toBe(true);   // a frond does not move while the others are added
+        const r = (f.pos.x - l.x) * Math.cos(heading) - (f.pos.z - l.z) * Math.sin(heading), line = roofLine(H, l, r), prof = frondProfile(f.sx, -f.pitch);
+        const gaps = prof.map(([u, v]) => v + f.slope * u);   // height above the slope line through the frond's base (the base is on the roof line, plus the gap and the layer lift)
+        const lowest = Math.min(...gaps), highest = Math.max(...gaps);
+        expect(lowest).toBeGreaterThan(-0.03);   // never sunk into the roof
+        expect(highest).toBeLessThan(0.11);      // never floating (the arch of a frond bulges a few cm above the line)
+        expect(f.pos.y - line.a.y).toBeLessThan(0.08);   // starts on the ridge top
+        expect(f.pitch).toBeLessThan(-0.3);      // follows the slope (the roof is about 0.7 rad)
+      }
+    }
   });
   it('is not solid: he walks through it', () => {
     const g = createGame(w, at(spawn.x - 1.5, spawn.z), { leantos: { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } });

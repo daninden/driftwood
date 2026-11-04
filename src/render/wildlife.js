@@ -16,9 +16,9 @@
  *           tips and tail, an orange beak and legs: a body and two wings that flap
  *           or glide (wings spread, tips up a little) or are folded back on the
  *           ground; a standing bird pecks by pitching its head down
- *   fish    a dark elongated shadow (0.35 to 0.6 m since 0.17.6, darker since 0.17.3) lying on the water (a soft flat shape with a
- *           tail, a little wiggle), drawn over the water so it reads under the
- *           surface; it fades by shrinking and by turning pale
+ *   fish    an elongated soft blue-green shadow (0.35 to 0.6 m since 0.17.6; 0.22.2: colour 0x3f8189 at opacity 0.58, was
+ *           0x0f2830 at 0.82, which never showed: every fish came out black because the instance colours were never allocated) lying on the water (a soft flat shape with a tail, a little wiggle), drawn over the
+ *           water so it reads under the surface (a polygon offset keeps it clear of the bed where the depth buffer is coarse); it fades by shrinking and by turning pale
  *   jump    a small silver fish on an arc, with a splash where it goes in and where
  *           it comes out: flat white flecks spreading and fading as the surf's foam
  *           (render/water) and a few drops thrown up
@@ -120,10 +120,10 @@ export function createWildlifeView(scene, wl) {
   const crabG = crabGeometry(), crab = pool(crabG, lit, MAX_CRABS), crabO = pool(crabG, outlineMat, MAX_CRABS);
   const bg = birdGeometries(), body = pool(bg.body, lit, MAX_BIRDS), bodyO = pool(bg.body, outlineMat, MAX_BIRDS);
   const wingR = pool(bg.right, lit, MAX_BIRDS), wingRO = pool(bg.right, outlineMat, MAX_BIRDS), wingL = pool(bg.left, lit, MAX_BIRDS), wingLO = pool(bg.left, outlineMat, MAX_BIRDS);
-  const shadow = new THREE.MeshBasicMaterial({ map: fishTexture(), transparent: true, opacity: 0.82, depthWrite: false });
+  const shadow = new THREE.MeshBasicMaterial({ map: fishTexture(), transparent: true, opacity: 0.58, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 });   // 0.22.2: softer; the offset keeps a shallow fish clear of the bed where the depth buffer is coarse (16 bits on some phones)
   const fish = pool(new THREE.PlaneGeometry(1, 0.36).rotateX(-Math.PI / 2), shadow, MAX_FISH, 5);
   const dark = new THREE.Color(WILD.fish.shadow), pale = new THREE.Color(WILD.fish.pale), tint = new THREE.Color();
-  fish.setColorAt(0, dark);   // creates the instance colours
+  fish.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_FISH * 3), 3);   // by hand: setColorAt would size it by fish.count, which is 0 here (that left every fish colour at zero: black, whatever WILD.fish.shadow said, up to 0.22.1)
 
   // the jumping fish, and its two splashes (one where it goes in, one where it comes out)
   const jumpFish = new THREE.Group(), JG = bake([

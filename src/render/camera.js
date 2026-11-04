@@ -28,20 +28,31 @@
  *   device coordinates), or null, by marching the view ray over the
  *   heightfield.
  *
+ * depthRange(dist?, zoomMax?, pitchMin?) -> { near, far }   pure: the camera's depth range for its distance (0.22.2: 30 to 760 instead of 1 to 4000, so a 16-bit depth buffer resolves 1 cm, not 6)
  * Depends on: three, core/view
  */
 import * as THREE from 'three';
-import { PITCH, YAW, PITCH_MIN, PITCH_MAX, ZOOM_START, ZOOM_MIN, ZOOM_MAX, clampView } from '../core/view.js';
+import { PITCH, YAW, PITCH_MIN, PITCH_MAX, ZOOM_START, ZOOM_MIN, ZOOM_MAX, ZOOM_DEV_MAX, clampView } from '../core/view.js';
 
 export const GAME_ZOOM = ZOOM_START, MIN_ZOOM = ZOOM_MIN, MAX_ZOOM = ZOOM_MAX, SUMMIT_FACTOR = 1.6, SUMMIT_MAX = 14;
 const R = 400, STEP = 1.1;
+// The depth range (0.22.2). Anything seen along a view ray lies between the lowest bed and the tallest thing above the summit; with the
+// widest view (ZOOM_DEV_MAX, a summit does not add to the dev zoom) and the flattest tilt that stretches it along the ray by (height range) / sin(tilt).
+// A range of 1 to 4000 gave a 16-bit depth buffer a step of 6 cm: shallow fish and layered fronds flickered or vanished on some phones.
+export const WORLD_Y = { low: -40, high: 100 }, TARGET_Y = { low: -5, high: 60 }, DEPTH_MARGIN = 60;   // metres: the world (bed, birds over the summit), where the camera may look at
+/** The camera's near and far for a camera R from its target: { near, far } enclosing every visible point of the world, with a margin; pure. */
+export function depthRange(dist = R, zoomMax = ZOOM_DEV_MAX, pitchMin = PITCH_MIN) {
+  const sin = Math.sin(pitchMin), cos = Math.cos(pitchMin);
+  const nearest = (zoomMax * cos + WORLD_Y.high - TARGET_Y.low) / sin, furthest = (zoomMax * cos + TARGET_Y.high - WORLD_Y.low) / sin;
+  return { near: Math.max(1, Math.floor((dist - nearest - DEPTH_MARGIN) / 10) * 10), far: Math.ceil((dist + furthest + DEPTH_MARGIN) / 10) * 10 };
+}
 
 export const stepZoom = (level, steps, max = MAX_ZOOM) => Math.min(max, Math.max(MIN_ZOOM, level * Math.pow(STEP, steps)));
 export const summitZoom = level => Math.min(SUMMIT_MAX, level * SUMMIT_FACTOR);
 export const turnView = (a, t) => ({ yaw: a.yaw + t.yaw, pitch: Math.min(PITCH_MAX, Math.max(PITCH_MIN, a.pitch + t.pitch)) });
 
 export function createCamera() {
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 4000);
+  const depth = depthRange(), camera = new THREE.OrthographicCamera(-1, 1, 1, -1, depth.near, depth.far);
   const at = new THREE.Vector3(), goal = new THREE.Vector3();
   const state = { zoom: GAME_ZOOM, level: GAME_ZOOM, yaw: YAW, pitch: PITCH, ready: false, zoomGoal: GAME_ZOOM };
   let aim = { yaw: YAW, pitch: PITCH }, limit = MAX_ZOOM;

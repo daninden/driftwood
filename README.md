@@ -68,7 +68,7 @@ To build a **lean-to**, make a pile of at least six pieces of driftwood and a pi
 
 ### Coconut fibre
 
-Coconuts lie under the palms. Stand beside one and press the button: he kneels and husks it, and you eat the nut (see Hunger); you also get a tuft of fibre, as long as you have room for it. You can carry at most three tufts; with three he still eats the nut, but gets no fourth tuft. They show as small drawings next to the moon: faint most of the time, clearer for a moment when the number changes.
+Coconuts lie under the palms. Stand beside one and press the button: he kneels and husks it, and you eat the nut (see Hunger); you also get a tuft of fibre, as long as you have room for it. You can carry at most three tufts; with three he still eats the nut, but gets no fourth tuft. They show as small drawings next to the moon: faint most of the time, clearer for a moment when the number changes. The same row shows each piece of driftwood you carry as a small weathered log, each branch as a twig and each crab as a small crab.
 
 ### Thirst
 
@@ -84,7 +84,7 @@ The food is the coconut. Husking one now takes a little longer, about four secon
 
 ### Crabs
 
-Crabs live in holes in the sand of the beach, more of them out on the wet sand at low water. Walk up to a colony and the crabs scuttle into their holes. Stand beside a hole one has hidden in (while you stay close it keeps hiding) and press the button: he kneels and digs, about five seconds. About half the time he gets the crab; otherwise it has run out of the back of the hole and stays hidden a good while longer. You cannot dig again for luck: whether a dig catches is decided by the island and the number of digs so far. At low water, with all the crabs out, there are many more holes to try than at high water.
+Crabs live in holes in the sand of the beach, more of them out on the wet sand at low water. Walk up to a colony and the crabs scuttle into their holes. Stand beside a hole one has hidden in (while you stay close it keeps hiding) and press the button: he kneels and digs, about five seconds. About half the time he gets the crab; otherwise you see the crab pop out of the sand a little way off, scuttle away from you and dive into another hole, where it stays hidden a good while longer. You cannot dig again for luck: whether a dig catches is decided by the island and the number of digs so far. At low water, with all the crabs out, there are many more holes to try than at high water.
 
 You can carry two crabs at most, shown as small crabs in the row next to the moon. They do not slow you and do not count against the three pieces of wood. A crab is never eaten raw: beside a fire that has flames (not just embers) press the button and he kneels about eight seconds to roast and eat one. That takes away two thirds of a day of hunger, half of what a coconut does. A raw crab you have not roasted within a day (twenty minutes of play) goes bad and is gone from the row. A crab you caught is missing from its colony; it comes back after three to five days. Walk off before you are done and nothing happens (the crab stays with you).
 

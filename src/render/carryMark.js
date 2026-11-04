@@ -2,8 +2,9 @@
  * render/carryMark — the quiet row of small ink drawings next to the moon
  * mark that shows what the castaway carries loose. For now only the tufts
  * of coconut fibre (game/fibre `carried`, 0..3) and, since 0.16, one twig with a
- * leaf for each branch carried (`branch`) and, since 0.22, one small crab for each crab carried (`crab`, at most two, game/crabs); driftwood and the torch are in
- * his hands or on the ground and never in the row. Later items (nails, a
+ * leaf for each branch carried (`branch`) and, since 0.22, one small crab for each crab carried (`crab`, at most two, game/crabs); one weathered
+ * log for each piece of driftwood carried (`driftwood`, wood that is not a branch; wet or dry it looks the same), drawn before the branches. The torch
+ * is in his hand and never in the row. Later items (nails, a
  * knife, ...) add a key to ITEMS and a drawing to DRAWINGS.
  *
  * Same ink as the moon (`--ink`, render/ink), strokes 2 px with the glow `--halo` behind them (index.html, 0.13.3), journal-style strokes, no boxes, frames,
@@ -25,7 +26,7 @@
  */
 import { ss } from '../core/math.js';
 
-export const ITEMS = ['fibre', 'branch', 'crab'];
+export const ITEMS = ['fibre', 'driftwood', 'branch', 'crab'];
 export const REST_OPACITY = 0.5, PEAK_OPACITY = 0.95;
 export const HOLD = 3, EASE = 2;   // seconds held clear, then easing back
 
@@ -53,6 +54,7 @@ export const CRAB_PATHS = '<ellipse cx="0" cy="1" rx="6.3" ry="4.3"/><path d="M-
 // strokes tied together at one end (round caps, no fill)
 export const DRAWINGS = {
   branch: '<path d="M4 23C7 17 11 11 16 3"/><path d="M8.6 17C11 16.5 13.5 17.5 15 19.5"/><path d="M12 10.8C10.5 8.6 8 8 5.5 8.8"/><path d="M13.6 7C15.5 6 17.5 6.5 18.5 8"/>',
+  driftwood: '<path d="M5.4 21C7.2 15 10.6 9 14.2 4.8C15.6 3.4 17.6 4.4 17 6.2C14.8 11.4 11.2 17.6 8.4 22.6C7.4 24.4 4.6 23.4 4.8 21.8C4.8 21.5 5.2 21 5.4 21Z"/><path d="M8.2 18.4C10 14.8 12 11.6 14 8.6"/><path d="M10.6 19.2C11.6 17.4 12.6 15.8 13.4 14.4"/>',
   crab: `<g transform="translate(10 13.5) scale(0.95)">${CRAB_PATHS}</g>`,
   fibre: '<path d="M10 20C8 14 4.5 10 3 5.5"/><path d="M10 20C9.5 14 8 9 7.5 3.5"/><path d="M10 20C10.5 13 11.5 9 12.5 3"/><path d="M10 20C12 14 15 10 17 6"/><path d="M10 20C11 16 14 14 16 12.5"/><path d="M8.2 19.6L11.8 21.4M8.4 21.6L11.6 23.4"/>',
 };

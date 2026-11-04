@@ -142,3 +142,16 @@ describe('touch input', () => {
     input.dispose();
   });
 });
+
+describe('the camera depth range (0.22.2)', () => {
+  it('encloses every visible point of the widest, flattest view and is far tighter than 1 to 4000', async () => {
+    const { depthRange, WORLD_Y, TARGET_Y } = await import('../src/render/camera.js');
+    const { PITCH_MIN, ZOOM_DEV_MAX } = await import('../src/core/view.js');
+    const { near, far } = depthRange(400);
+    expect(near).toBeGreaterThanOrEqual(1); expect(far - near).toBeLessThan(1000);
+    // the nearest point on a ray: the tallest thing seen from the lowest target at the top of the screen; the furthest: the deepest bed from the highest target at the bottom
+    const p = PITCH_MIN, near0 = 400 - (ZOOM_DEV_MAX * Math.cos(p) + WORLD_Y.high - TARGET_Y.low) / Math.sin(p), far0 = 400 + (ZOOM_DEV_MAX * Math.cos(p) + TARGET_Y.high - WORLD_Y.low) / Math.sin(p);
+    expect(near).toBeLessThan(near0 - 50); expect(far).toBeGreaterThan(far0 + 50);
+    expect(depthRange(400, 10).far).toBeLessThan(far);   // a shorter zoom needs less
+  });
+});

@@ -9,7 +9,7 @@ import { createGame, wantsToMove } from '../src/game/game.js';
 import { createCrabs, DIG_TIME, ROAST_TIME, DIG_CHANCE, CARRY_CRABS, CRAB_FOOD, SPOIL_AFTER, REGROW } from '../src/game/crabs.js';
 import { createHunger, NUT_FOOD } from '../src/game/hunger.js';
 import { coloniesOfTile } from '../src/game/habitats.js';
-import { SAFE } from '../src/game/wildlife.js';
+import { SAFE, ESC_RUN, HIDE } from '../src/game/wildlife.js';
 import { BURN, EMBERS } from '../src/game/fire.js';
 import { terrainAt } from '../src/game/movement.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
@@ -218,6 +218,30 @@ describe('saving', () => {
   });
   it('changes the moment key when a crab is caught or eaten', () => {
     const g = fireScene({ fire: false }), k = momentKey(g); g.crabs.eat(); expect(momentKey(g)).not.toBe(k);
+  });
+});
+
+describe('a failed dig', () => {
+  it('shows the crab popping out, running away from him and hiding again for a long time', () => {
+    const { g, hole: h } = crabScene();
+    expect(h).toBeTruthy();
+    const id = h.id, me = { x: g.player.x, z: g.player.z }, idle = makeInput();
+    expect(g.wildlife.isHiding(id)).toBe(true);
+    g.wildlife.escape(id);
+    expect(g.wildlife.isHiding(id)).toBe(false); expect((g.wildlife.hiding(h.x, h.z, 1) || {}).id).not.toBe(id);
+    g.update(idle, 0.05);
+    const at = () => g.wildlife.crabs().find(c => c.id === id);
+    let c = at(); expect(c).toBeTruthy();
+    const d0 = Math.hypot(c.x - h.x, c.z - h.z); expect(d0).toBeGreaterThan(0.3); expect(d0).toBeLessThan(1.1);
+    expect(Math.hypot(c.x - me.x, c.z - me.z)).toBeGreaterThan(Math.hypot(h.x - me.x, h.z - me.z) - 0.05);   // on the far side
+    let ran = 0, last = c, seen = true;
+    for (let t = 0; t < 4; t += 1 / 30) { g.update(idle, 1 / 30); c = at(); if (!c) { seen = false; break; } if (c.moving) ran += Math.hypot(c.x - last.x, c.z - last.z); last = c; }
+    expect(seen || ran > 0).toBe(true);
+    expect(ran).toBeGreaterThan(ESC_RUN[0] - 0.3); expect(ran).toBeLessThan(ESC_RUN[1] + 1.2);
+    run(g, idle, 1);
+    expect(at()).toBeUndefined();   // hidden again
+    expect(g.wildlife.isHiding(id)).toBe(false); expect((g.wildlife.hiding(g.player.x, g.player.z, 12) || {}).id).not.toBe(id);
+    run(g, idle, HIDE[1] * 3 - 6); expect(at()).toBeUndefined();   // still down: the long hide
   });
 });
 
