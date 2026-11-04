@@ -7,7 +7,7 @@ import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createWood, PILE_MAX, PILE_JOIN, PILE_NEXT } from '../src/game/wood.js';
 import { BURN, FUEL_MAX, TORCH_DRY } from '../src/game/fire.js';
-import { tallyDrawing, fireTally, pileTally, createTallyView, BESIDE, STROKE_WIDTH, GLOW_WIDTH } from '../src/render/tallyMarks.js';
+import { tallyDrawing, fireTally, pileTally, leantoShift, LEANTO_NEAR, LEANTO_SHIFT, createTallyView, BESIDE, STROKE_WIDTH, GLOW_WIDTH } from '../src/render/tallyMarks.js';
 import { pieces } from '../src/render/fire.js';
 import { FIRST_HIGH, PERIOD } from '../src/game/tide.js';
 
@@ -197,5 +197,24 @@ describe('the tally view', () => {
 describe('tally marks on any ground (0.13.3)', () => {
   it('the glow stroke under the ink is clearly wider than the ink', () => {
     expect(STROKE_WIDTH).toBeGreaterThanOrEqual(1.7); expect(GLOW_WIDTH).toBeGreaterThan(STROKE_WIDTH * 2);
+  });
+});
+
+describe('tally marks next to a lean-to (0.27.6)', () => {
+  const l = { x: 10, z: 10, heading: Math.PI };
+  it('does not move marks that are far from every lean-to', () => {
+    expect(leantoShift(10 + LEANTO_NEAR + 0.1, 10, [l])).toEqual({ dx: 0, dz: 0 });
+    expect(leantoShift(0, 0, [])).toEqual({ dx: 0, dz: 0 });
+    expect(leantoShift(0, 0, undefined)).toEqual({ dx: 0, dz: 0 });
+  });
+  it('moves them away from the nearest lean-to by LEANTO_SHIFT', () => {
+    const s = leantoShift(11, 10, [l]);
+    expect(s.dx).toBeCloseTo(LEANTO_SHIFT); expect(s.dz).toBeCloseTo(0);
+    const t = leantoShift(10, 8.5, [{ x: 30, z: 30, heading: 0 }, l]);
+    expect(t.dx).toBeCloseTo(0); expect(t.dz).toBeCloseTo(-LEANTO_SHIFT);
+  });
+  it('moves marks right at the middle out of the back, away from the open side', () => {
+    const s = leantoShift(10, 10, [l]);   // open side faces heading PI: -z, so out of the back is +z
+    expect(s.dz).toBeCloseTo(LEANTO_SHIFT); expect(Math.abs(s.dx)).toBeLessThan(1e-6);
   });
 });

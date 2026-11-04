@@ -10,8 +10,8 @@
  * and in flat colour areas (skin against cloth), not in small parts.
  *
  * Where anything hides the figure (a rock wall, a boulder, a trunk, a
- * crown, a palm, a bush, a fern), an even, semi-transparent light silhouette
- * (SIL_OPACITY, one flat shape, no pattern) shows through, so you never lose it.
+ * crown, a palm, a bush, a fern), an even, semi-transparent dark ink silhouette
+ * (SIL_OPACITY, one flat shape in the dark brown of the ink, no pattern) shows through, so you never lose it.
  *
  * Carried driftwood is held under the left arm, at its real length (low
  * enough that the head and hat stay readable). A load (0.10) shortens his steps
@@ -56,7 +56,7 @@ import { makeTorch, flameWorld } from './fire.js';
 // do not add up to a patchy shape. It blends like a transparent material but
 // stays in the opaque pass (custom blending), so renderOrder puts it before
 // the figure, which then covers it.
-export const SIL_OPACITY = 0.42;
+export const SIL_OPACITY = 0.8;
 export const HANG = 0.3;   // his head hangs forward this much (radians) when he is about to collapse from thirst
 export const LEAN = 0.10;   // forward lean per carried piece, radians (three pieces: about 17 degrees), from the hips
 const silMat = new THREE.MeshBasicMaterial({

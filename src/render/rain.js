@@ -14,7 +14,7 @@
  * makeStreaks(n) -> [{ x, y, speed, len, a }]  the streaks, pure (x, y in 0..1 of the screen)
  * advance(streaks, dt) -> moves them down (speed in screen heights a second) and wraps them, in place
  * createRainView(container, { max }?) -> { update(dt, intensity, day), setMax(n) }   once per drawn frame
- *   day: 0 (night) .. 1, the streaks are paler and fainter in the dark
+ *   day: 0 (night) .. 1; at night the streaks stay light and nearly as strong as by day (0.27.6: they were barely visible against the dark grading), a little greyer and fainter
  *
  * Depends on: core/noise
  */
@@ -51,7 +51,7 @@ export function createRainView(container, opts = {}) {
     advance(streaks, Math.min(dt, 0.1));
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
     g.lineCap = 'round'; g.lineWidth = Math.max(1, 1.1 * ratio);
-    const pale = 0.45 + 0.55 * day, rgb = Math.round(150 + 90 * day), fade = 0.5 * Math.min(1, intensity * 1.2) * pale;
+    const pale = 0.8 + 0.2 * day, rgb = Math.round(185 + 55 * day), fade = 0.5 * Math.min(1, intensity * 1.2) * pale;
     for (const pass of [0, 1]) {   // two strengths in two strokes: the near streaks clearer than the far ones
       g.strokeStyle = `rgba(${rgb},${rgb + 8},${Math.min(255, rgb + 18)},${(fade * (pass ? 1 : 0.55)).toFixed(3)})`;
       g.beginPath();

@@ -10,7 +10,7 @@
  *        (hemisphere) by day, at dusk and at night, and the multiply grading
  *        of golden hour, dusk and night
  * HERO   the castaway: sun-tanned skin, yellowed torn shirt, faded shorts,
- *        dark hair and beard, straw hat, staff, and the light silhouette
+ *        dark hair and beard, straw hat, staff, and the dark ink silhouette
  *        that shows when something hides the figure
  * DRIFT  driftwood: the bleached colours of dry wood, the dark, cool grey-brown
  *        of wet wood just washed up (mixed in until it is dry enough to
@@ -55,7 +55,7 @@ export const TG = Object.freeze([
 
 export const BUSHC = Object.freeze([[0x8a9a52, 0x9aa45a], P.bush, [0x4f7038, 0x5a7a3c, 0x46683a], [0x7d7f52, 0x8a8752, 0x6f7448, 0x857a5c], [0x7d8452, 0x8a8a5a]]);
 
-export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8a7558, hair: 0x4a3222, hat: 0xc9b07a, staff: 0x7a5a3a, silhouette: 0xf4ead2 });
+export const HERO = Object.freeze({ skin: 0xbf8a68, shirt: 0xe6dcbf, shorts: 0x8a7558, hair: 0x4a3222, hat: 0xc9b07a, staff: 0x7a5a3a, silhouette: 0x2a1a10 });
 
 export const DRIFT = Object.freeze({ dry: [0xa8987c, 0x9a8a70, 0xb4a68c, 0x8e8068], wet: 0x40393a, damp: 0x8c6a30 });
 export const BRANCH = Object.freeze({ bark: [0x5a4631, 0x4f3d2b, 0x654f38], leaf: [0xb08a45, 0x9c7a3a, 0xc19a52] });

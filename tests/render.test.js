@@ -11,7 +11,7 @@ import { foamWeights, FOAM_LEVELS } from '../src/render/water.js';
 
 describe('silhouette', () => {
   it('is an even, quiet shape: semi-transparent, in the opaque pass', () => {
-    expect(SIL_OPACITY).toBeGreaterThanOrEqual(0.35); expect(SIL_OPACITY).toBeLessThanOrEqual(0.5);
+    expect(SIL_OPACITY).toBeGreaterThanOrEqual(0.5); expect(SIL_OPACITY).toBeLessThanOrEqual(0.85);
   });
 });
 

@@ -16,13 +16,18 @@
  * he walks away (or the pile is gone). Nothing is drawn while no pile or fire
  * is near him.
  *
- * BESIDE, FADE_IN, FADE_OUT, STROKE_WIDTH (1.7), GLOW_WIDTH (3.8)
+ * 0.27.6 "Seen": the marks of a pile close to a lean-to are not drawn above the pile (they would float over the roof) but above a point
+ * LEANTO_SHIFT metres further out, on the side away from the lean-to's middle (leantoShift).
+ *
+ * BESIDE, LEANTO_NEAR (2.6), LEANTO_SHIFT (1.5), FADE_IN, FADE_OUT, STROKE_WIDTH (1.7), GLOW_WIDTH (3.8)
  * tallyDrawing(count, part, full) -> { width, height, d }   the strokes as SVG path
  *   data in a box of width × height units: count whole strokes, part: a short
  *   stroke after them, full: the double line under. Pure.
  * fireTally(fuel) -> { count, part, full }   the strokes for a fire holding
  *   fuel (days of burning, game/fire): count whole pieces, part a half-burnt
  *   piece, full at 8. Pure.
+ * leantoShift(x, z, leantos) -> { dx, dz }   pure: how far (metres) the marks of a pile or fire at x, z move away from the nearest lean-to
+ *   within LEANTO_NEAR of its middle ({ x, z, heading } of game/leanto); { 0, 0 } when none is near.
  * pileTally(pile) -> { count, part, full }   the strokes for a pile. Pure.
  * createTallyView(container) -> { update(dt, { game, camera, H, player }) }
  *   container: the element the layer goes into (the island view's container).
@@ -36,6 +41,7 @@ import { BURN, FUEL_MAX } from '../game/fire.js';
 
 export const BESIDE = 1.8;       // how close to the middle of a pile or fire counts as beside it (F reaches 1.2 from his feet, plus the reach of a pile)
 export const STROKE_WIDTH = 1.7, GLOW_WIDTH = 3.8;   // ink stroke and the glow stroke under it, in drawing units
+export const LEANTO_NEAR = 2.6, LEANTO_SHIFT = 1.5;   // a lean-to's roof is about 2 m wide and 1.5 m deep
 export const FADE_IN = 0.35, FADE_OUT = 0.6;
 const FIRE_MAX = Math.round(FUEL_MAX / BURN);
 const SIZE = 2.1;                // pixels per drawing unit
@@ -63,6 +69,16 @@ export function tallyDrawing(count, part = false, full = false) {
     seg.push(`M-1 ${H + 4}L${(width + 1).toFixed(1)} ${(H + 3.4).toFixed(1)}`, `M0.5 ${H + 6.6}L${(width - 0.5).toFixed(1)} ${(H + 6.2).toFixed(1)}`);
   }
   return { width, height: H + (full ? 8 : 3), d: seg.join('') };
+}
+
+export function leantoShift(x, z, leantos) {
+  let best = null, bd = LEANTO_NEAR;
+  for (const l of leantos || []) { const d = Math.hypot(x - l.x, z - l.z); if (d < bd) { bd = d; best = l; } }
+  if (!best) return { dx: 0, dz: 0 };
+  let ux = x - best.x, uz = z - best.z;
+  if (bd < 0.3) { ux = -Math.sin(best.heading || 0); uz = -Math.cos(best.heading || 0); }   // right at the middle: out of the closed back
+  else { ux /= bd; uz /= bd; }
+  return { dx: ux * LEANTO_SHIFT, dz: uz * LEANTO_SHIFT };
 }
 
 export const pileTally = pile => ({ count: Math.min(pile.logs.length, PILE_MAX), part: false, full: pile.logs.length >= PILE_MAX });
@@ -96,7 +112,8 @@ export function createTallyView(container) {
     const want = new Map();   // thing -> { x, y, z, tally }
     for (const p of game.wood.piles) {
       const near = Math.hypot(p.x - player.x, p.z - player.z) <= BESIDE;
-      want.set(p, { near, x: p.x, z: p.z, up: 0.55 + Math.ceil(p.logs.length / 2) * 0.19, tally: pileTally(p) });
+      const sh = leantoShift(p.x, p.z, game.leantos && game.leantos.list);
+      want.set(p, { near, x: p.x + sh.dx, z: p.z + sh.dz, up: 0.55 + Math.ceil(p.logs.length / 2) * 0.19, tally: pileTally(p) });
     }
     for (const f of game.fire.fires) {
       const near = Math.hypot(f.x - player.x, f.z - player.z) <= BESIDE;

@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.27.6 "Seen" — 2026-11-04
+
+- Behind a tree crown or rock the castaway is no longer a pale ghost: his occluded silhouette is the dark ink brown (`HERO.silhouette` 0x2a1a10) at 0.8 opacity (`SIL_OPACITY`, was a pale 0xf4ead2 at 0.42), one flat shape, so he can be found in forest and on steep ground. Not checked at night.
+- Rain at night reads: the night streak colour is lighter (185, was 150) and the night opacity factor 0.8 (was 0.45); day rain is unchanged (`render/rain`).
+- The tally marks of a pile within 2.6 m of a lean-to's middle are shown above a point 1.5 m further out, away from the lean-to, so they no longer cover the roof (`leantoShift`, `LEANTO_NEAR`, `LEANTO_SHIFT` in `render/tallyMarks`); fires are not shifted.
+- Docs: also carries the design.md text for 0.27.5 "Leaner" (coconuts, food values, berries), which did not make it into that push.
+- Tests: `tests/piles.test.js` (the shift), `tests/render.test.js` (silhouette opacity). 848 tests in all.
+
 ## 0.27.5 "Leaner" — 2026-11-04
 
 - Balance from the playtest (no real hunger in 10 to 40 days on any seed): coconuts under about 1 palm in 10 (`NUT_SHARE` 1/6 of the palms with nuts, was 1/3), back in 10 to 14 days (was 6 to 10); a nut takes away 1 day of hunger (`NUT_FOOD`, was 4/3); berries on 1 lowland bush in 8 (`BERRY_SHARE`, was 1 in 4). A crab stays 2/3 day. Seed 1337: 173 nuts (22 within 100 m of the start) and 227 berry bushes (38 within 100 m).
