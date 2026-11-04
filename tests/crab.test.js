@@ -30,7 +30,7 @@ const makeInput = (o = {}) => {
   const i = { up: false, down: false, left: false, right: false, run: false, target: null, action: null, hold: null, sleep: false, ...o };
   i.clearTarget = () => { i.target = null; };
   i.takeAction = () => { const a = i.action; i.action = null; return a; };
-  i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
+  i.takeLight = () => { const h = i.hold; i.hold = null; return h; };
   i.takeSleep = () => { const s = i.sleep; i.sleep = false; return s; };
   i.pressing = () => false;
   return i;
@@ -271,7 +271,7 @@ describe('the marks', () => {
   it('has the icons dig and roast for the two actions', () => {
     expect(ICON_OF.dig).toBe('dig'); expect(ICON_OF.roast).toBe('roast');
     expect(ICONS.dig).toBeTruthy(); expect(ICONS.roast).toContain('<ellipse');
-    expect(buttonIcons({ tap: { kind: 'dig' }, hold: null })).toEqual({ main: 'dig', side: null });
-    expect(buttonIcons({ tap: { kind: 'roast' }, hold: { kind: 'sleep' } })).toEqual({ main: 'roast', side: 'moon' });
+    expect(buttonIcons({ tap: { kind: 'dig' }, options: [] })).toEqual({ main: 'dig', options: [] });
+    expect(buttonIcons({ tap: { kind: 'roast' }, options: [{ kind: 'sleep', big: true }] })).toEqual({ main: 'roast', options: [{ key: 'moon', label: 'Sleep' }] });
   });
 });

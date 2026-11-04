@@ -217,7 +217,7 @@ describe('typing the name', () => {
     for (const code of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ShiftLeft']) t.press('keydown', code);
     expect(input.up || input.down || input.left || input.right || input.run).toBe(false);
     t.press('keydown', 'KeyZ'); t.press('keydown', 'KeyF');
-    expect(input.takeSleep()).toBe(false); expect(input.takeHold()).toBeNull(); expect(input.takeWake()).toBe(false);
+    expect(input.takeSleep()).toBe(false); expect(input.takeLight()).toBe(false); expect(input.takeWake()).toBe(false);
     t.press('keydown', 'Equal'); expect(input.takeZoom()).toBe(0);
     t.press('keydown', 'KeyQ'); expect(input.takeTurn(1).yaw).toBe(0);
     const tick = t.press('keydown', 'Backquote', '`');

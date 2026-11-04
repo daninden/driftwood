@@ -29,7 +29,7 @@ const makeInput = (o = {}) => {
   const i = { up: false, down: false, left: false, right: false, run: false, target: null, action: null, hold: null, sleep: false, ...o };
   i.clearTarget = () => { i.target = null; };
   i.takeAction = () => { const a = i.action; i.action = null; return a; };
-  i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
+  i.takeLight = () => { const h = i.hold; i.hold = null; return h; };
   i.takeSleep = () => { const s = i.sleep; i.sleep = false; return s; };
   i.pressing = () => false;
   return i;
@@ -256,8 +256,8 @@ describe('drawings', () => {
   });
   it('has button icons for fill and sip, and no icon for taking a nut whole any more', () => {
     expect(ICON_OF.take).toBeUndefined(); expect(ICONS.nut).toBeUndefined();
-    expect(buttonIcons({ tap: { kind: 'fill' }, hold: { kind: 'sleep' } })).toEqual({ main: 'fill', side: 'moon' });
-    expect(buttonIcons({ tap: { kind: 'sip' }, hold: null })).toEqual({ main: 'sip', side: null });
+    expect(buttonIcons({ tap: { kind: 'fill' }, options: [{ kind: 'sleep', big: true }] })).toEqual({ main: 'fill', options: [{ key: 'moon', label: 'Sleep' }] });
+    expect(buttonIcons({ tap: { kind: 'sip' }, options: [] })).toEqual({ main: 'sip', options: [] });
     for (const k of ['fill', 'sip']) expect(ICONS[ICON_OF[k]]).toBeTruthy();
   });
 });

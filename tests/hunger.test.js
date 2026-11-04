@@ -24,12 +24,13 @@ beforeAll(async () => {
 const makeInput = (o = {}) => {
   const i = { up: false, down: false, left: false, right: false, run: false, target: null, hold: null, action: null, ...o };
   i.clearTarget = () => { i.target = null; };
-  i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
+  i.takeLight = () => { const h = i.hold; i.hold = null; return h; };
   i.takeAction = () => { const a = i.action; i.action = null; return a; };
   i.pressing = () => false;
   return i;
 };
-const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
+const bigOf = g => g.action().options.find(o => o.big) || null;   // the big option (light, build, upgrade, sleep) the arc would show
+const run = (g, input, s, dt = 1 / 30) => { if (input.big) { input.big = false; g.act(bigOf(g)); } for (let t = 0; t < s; t += dt) g.update(input, dt); };
 const at = (x, z) => ({ x, z, y: w.H(x, z) });
 const husking = o => { const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z), { hunger: { days: 1 }, ...o }), input = makeInput({ action: 'tap' }); run(g, input, 0.2); return { g, input, c }; };
 
@@ -118,7 +119,7 @@ describe('what hunger does', () => {
     const drill = days => {
       const p = { x: spawn.x + 0.4, z: spawn.z };
       const g = createGame(w, spawn, { hunger: { days }, wood: { carried: [], piles: [{ ...p, logs: logs.slice(0, FIRE_MIN).map(l => l.id) }] }, fibre: { carried: 2 } });
-      const a0 = g.sleep.awake; run(g, makeInput({ action: 'hold' }), DRILL_TIME + 1.5); return g.sleep.awake - a0;
+      const a0 = g.sleep.awake; run(g, makeInput({ big: true }), DRILL_TIME + 1.5); return g.sleep.awake - a0;
     };
     const diff = drill(HUNGRY_AT + 0.1) - drill(0);
     expect(diff).toBeCloseTo(DRILL_COST * (HUNGRY_DRILL - 1), 1);

@@ -37,8 +37,9 @@
  * On touch-only devices the thumb stick #stick (render/thumbStick) bottom right
  * walks and runs through the same input object. The action button #action
  * (render/actionButton; Space does the same) sits above the stick there and in
- * the bottom right corner on a desktop: each frame it is given what
- * game.action() says a press would do, and input.actionFill() for its ring.
+ * the bottom right corner on a desktop: each frame it is given what game.action()
+ * offers (the ring does `tap`; up to three `options` are icons in an arc above it, #arc,
+ * clicked or tapped, or keys 1 to 3, through input.choose).
  *
  * Sound (0.20, audio/): audio/mix (pure) decides what should be heard from the world and the game state,
  * audio/sound builds the Web Audio graph and follows it. Sound starts with the first key or tap (the browser rule;
@@ -165,7 +166,7 @@ async function boot() {
   const show = info => {
     const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
     mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); half.update(game.hunger.days, now); carry.update({ fibre: game.fibre.carried, driftwood: game.wood.carried.filter(l => !l.branch && !l.frond).length, branch: game.wood.carried.filter(l => l.branch).length, frond: game.wood.carried.filter(l => l.frond).length, stone: game.wood.stones.length, crab: game.crabs.carried.length, nut: game.shells.nuts, berries: game.berries.carried.length, banana: game.bananas.carried.length, shell: game.shells.empty(), water: game.shells.full() }, now);
-    if (button) button.update(game.action(), input.actionFill());
+    if (button) button.update(game.action());
     ink.update(skyAt(info.time).day);
     who.update(dayLine(name, day), now);
     if (wasAsleep && !game.sleep.asleep) wakes.show(wakeLine(name, day), now);   // any end of a sleep
@@ -178,7 +179,7 @@ async function boot() {
   input.yaw = view.yaw;
 
   createThumbStick(document.getElementById('stick'), input);
-  button = createActionButton(document.getElementById('action'), input);
+  button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
   let stopSaving = testing || !!asking, sinceSave = 0, moment = momentKey(game);
   const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, view: view.pose }); sinceSave = 0; } };
   const viewSaver = createViewSaver();

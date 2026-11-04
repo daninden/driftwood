@@ -1,7 +1,7 @@
 // Branches and the lean-to (0.16): branches under the trees (deterministic per
 // seed, the generated world untouched), picking up and carrying them with
 // driftwood, piles of their own, burning half as long, lighting a branch pile;
-// building a lean-to (condition, hold instead of light, 6 + 6 consumed,
+// building a lean-to (condition, build instead of light, 6 + 6 consumed,
 // interruption and resuming, the rest it costs, the heading), sleeping under it,
 // the flood, and saving.
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -30,13 +30,14 @@ beforeAll(async () => {
 const makeInput = (o = {}) => {
   const i = { up: false, down: false, left: false, right: false, run: false, target: null, hold: null, action: null, sleep: false, ...o };
   i.clearTarget = () => { i.target = null; };
-  i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
+  i.takeLight = () => { const h = i.hold; i.hold = null; return h; };
   i.takeAction = () => { const a = i.action; i.action = null; return a; };
   i.takeSleep = () => { const s = i.sleep; i.sleep = false; return s; };
   i.pressing = () => false;
   return i;
 };
-const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
+const bigOf = g => g.action().options.find(o => o.big) || null;   // the big option (light, build, upgrade, sleep) the arc would show
+const run = (g, input, s, dt = 1 / 30) => { if (input.big) { input.big = false; g.act(bigOf(g)); } for (let t = 0; t < s; t += dt) g.update(input, dt); };
 const at = (x, z) => ({ x, z, y: w.H(x, z) });
 const nearestBranch = (x, z) => all.slice().sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
 const bids = (from, n) => all.slice(from, from + n).map(b => b.id);
@@ -124,7 +125,7 @@ describe('burning branches', () => {
   });
   it('a pile of branches is lit with a torch like a driftwood pile, and burns half as long', () => {
     const g = createGame(w, spawn, { wood: { carried: [], piles: [{ ...P1(), kind: 'branch', logs: bids(0, 6) }] }, fire: { torch: { left: 0.05 } } });
-    expect(g.action().hold).toMatchObject({ kind: 'light' });
+    expect(bigOf(g)).toMatchObject({ kind: 'light' });
     run(g, makeInput({ hold: { key: true } }), 4);
     expect(g.fire.fires.length).toBe(1); expect(g.fire.fires[0].fuel).toBeCloseTo(3 * BURN, 2); expect(g.wood.piles.length).toBe(0);
   });
@@ -144,20 +145,20 @@ describe('the build condition', () => {
     b.logs.push({ id: 9 }); d.logs.pop(); expect(siteFor(piles, b)).toBeNull();
     expect(NEED).toBe(6);
   });
-  it('shows the lean-to as the hold beside either pile, instead of lighting', () => {
+  it('shows the lean-to as the big icon beside either pile, instead of lighting', () => {
     const g = withPiles();
-    expect(g.action().hold).toMatchObject({ kind: 'build' });   // with fibre and a pile of 4 or more he could also light: building wins
+    expect(bigOf(g)).toMatchObject({ kind: 'build' });   // with fibre and a pile of 4 or more he could also light: building wins
     g.player.x = spawn.x - 0.4; g.player.z = spawn.z + 1.2;   // beside the branch pile
-    expect(g.action().hold).toMatchObject({ kind: 'build' });
-    const few = withPiles(8, 5); expect(few.action().hold).toMatchObject({ kind: 'light' });
+    expect(bigOf(g)).toMatchObject({ kind: 'build' });
+    const few = withPiles(8, 5); expect(bigOf(few)).toMatchObject({ kind: 'light' });
     const far = createGame(w, spawn, { wood: { carried: [], piles: [{ ...P1(), kind: 'driftwood', logs: dids(0, 8) }, { x: spawn.x + 0.4, z: spawn.z + 2.6, kind: 'branch', logs: bids(0, 8) }] }, fibre: { carried: 1 } });
-    expect(far.action().hold).toMatchObject({ kind: 'light' });
+    expect(bigOf(far)).toMatchObject({ kind: 'light' });
   });
 });
 
 describe('building', () => {
-  it('a hold builds instead of drilling: 6 + 6 go out of the piles, the rest stays, and it is done in a minute', () => {
-    const g = withPiles(), input = makeInput({ action: 'hold', yaw: 1.0 }), t0 = g.clock.total, awake0 = g.sleep.awake;
+  it('its icon builds instead of drilling: 6 + 6 go out of the piles, the rest stays, and it is done in a minute', () => {
+    const g = withPiles(), input = makeInput({ big: true, yaw: 1.0 }), t0 = g.clock.total, awake0 = g.sleep.awake;
     run(g, input, 3);
     expect(g.player.work).toMatchObject({ kind: 'build' });
     expect(g.wood.piles.map(p => [p.kind, p.logs.length])).toEqual([['driftwood', 2], ['branch', 1]]);
@@ -172,7 +173,7 @@ describe('building', () => {
     expect(BUILD_COST).toBeCloseTo(2 * DRILL_COST, 6);
   });
   it('takes the heading from the starting view when the input has none', () => {
-    const g = withPiles(); run(g, makeInput({ action: 'hold' }), 2);
+    const g = withPiles(); run(g, makeInput({ big: true }), 2);
     expect(g.leantos.list[0].heading).toBe(YAW);
   });
   it('works with F too, from beside the branch pile', () => {
@@ -180,8 +181,8 @@ describe('building', () => {
     run(g, makeInput({ hold: { key: true } }), 4);
     expect(g.player.work).toMatchObject({ kind: 'build' }); expect(g.leantos.list.length).toBe(1);
   });
-  it('is stopped by walking, the lean-to stays half built, and holding beside it builds on', () => {
-    const g = withPiles(), input = makeInput({ action: 'hold', yaw: 2.0 });
+  it('is stopped by walking, the lean-to stays half built, and its icon beside it builds on', () => {
+    const g = withPiles(), input = makeInput({ big: true, yaw: 2.0 });
     run(g, input, 20);
     const l = g.leantos.list[0], p1 = l.progress;
     expect(p1).toBeGreaterThan(0.2); expect(p1).toBeLessThan(0.4);
@@ -190,11 +191,11 @@ describe('building', () => {
     run(g, input, 3); expect(l.progress).toBe(p1);
     g.player.x = l.x + 0.8; g.player.z = l.z; g.player.y = w.H(g.player.x, g.player.z);
     const left = g.wood.piles.map(p => p.logs.length);
-    expect(g.action().hold).toMatchObject({ kind: 'build', leanto: l });
-    input.action = 'hold'; run(g, input, 5); expect(g.player.work).toMatchObject({ kind: 'build' });
+    expect(bigOf(g)).toMatchObject({ kind: 'build', leanto: l });
+    input.big = true; run(g, input, 5); expect(g.player.work).toMatchObject({ kind: 'build' });
     expect(g.wood.piles.map(p => p.logs.length)).toEqual(left);   // nothing more is taken
     run(g, input, BUILD_TIME); expect(l.progress).toBe(1); expect(g.leantos.list.length).toBe(1); expect(l.heading).toBe(2.0);
-    expect(g.action().hold && g.action().hold.kind).not.toBe('build');
+    expect(bigOf(g) && bigOf(g).kind).not.toBe('build');
   });
   it('rises in steps: posts, then a ridge pole, then a roof', () => {
     const l = { x: spawn.x, z: spawn.z, heading: 0.5, progress: 0 }, keys = p => new Set(leantoParts(w.H, l, p).map(s => s.key));
@@ -280,7 +281,7 @@ describe('the flood and saving', () => {
     const h = at0(high); h.update(makeInput(), 0.1); expect(h.leantos.list.map(l => l.id)).toEqual([2]);
   });
   it('is saved: branches taken, branch piles, lean-tos with position, heading and progress', () => {
-    const g = withPiles(), input = makeInput({ action: 'hold', yaw: 0.7 });
+    const g = withPiles(), input = makeInput({ big: true, yaw: 0.7 });
     g.wood.carried.push(all[30]); g.branches.take(all[30], g.clock.total);
     run(g, input, 12);
     const s = JSON.parse(serialise(g.state()));

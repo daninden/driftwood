@@ -22,7 +22,7 @@ beforeAll(async () => {
 const makeInput = (o = {}) => {
   const i = { up: false, down: false, left: false, right: false, run: false, target: null, hold: null, action: null, sleep: false, ...o };
   i.clearTarget = () => { i.target = null; };
-  i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
+  i.takeLight = () => { const h = i.hold; i.hold = null; return h; };
   i.takeSleep = () => { const s = i.sleep; i.sleep = false; return s; };
   i.takeAction = () => { const a = i.action; i.action = null; return a; };
   i.pressing = () => false;
@@ -51,7 +51,7 @@ function busyGame() {
   // light the pile by the first position, take a torch, stick one, take another
   g.player.x = pile.x - 0.75; g.player.z = pile.z; g.player.y = w.H(g.player.x, g.player.z);
   g.wood.drop(g.player.x, g.player.z, g.player.heading);   // (the wet piece joins a pile)
-  input.hold = { key: true }; run(g, input, 16);
+  input.hold = true; run(g, input, 16);
   expect(g.fire.fires.length).toBeGreaterThan(0);
   expect(g.fire.takeTorch(g.fire.fires[0])).toBe(true); g.player.torch = true;
   input.action = 'tap'; run(g, input, 1);

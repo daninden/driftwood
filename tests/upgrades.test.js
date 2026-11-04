@@ -1,6 +1,6 @@
 // Shelter upgrades (0.27 "Home"): the fallen palm fronds and the stones (derived from the world, the generated island
 // untouched), carrying and piles of their own, building the upgrades of a finished lean-to (side walls, a bed, a stone
-// fire ring) with a hold, what each does (dry radius, cold sleep, rest rate, fire ring), the save and the pictures' pure parts.
+// fire ring) with their icon, what each does (dry radius, cold sleep, rest rate, fire ring), the save and the pictures' pure parts.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
@@ -32,13 +32,14 @@ beforeAll(async () => {
 const makeInput = (o = {}) => {
   const i = { up: false, down: false, left: false, right: false, run: false, target: null, hold: null, action: null, sleep: false, ...o };
   i.clearTarget = () => { i.target = null; };
-  i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
+  i.takeLight = () => { const h = i.hold; i.hold = null; return h; };
   i.takeAction = () => { const a = i.action; i.action = null; return a; };
   i.takeSleep = () => { const s = i.sleep; i.sleep = false; return s; };
   i.pressing = () => false;
   return i;
 };
-const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
+const bigOf = g => g.action().options.find(o => o.big) || null;   // the big option (light, build, upgrade, sleep) the arc would show
+const run = (g, input, s, dt = 1 / 30) => { if (input.big) { input.big = false; g.act(bigOf(g)); } for (let t = 0; t < s; t += dt) g.update(input, dt); };
 const ids = (list, from, n) => list.slice(from, from + n).map(o => o.id);
 const LT = () => ({ id: 0, x: spawn.x + 0.5, z: spawn.z, heading: 0, progress: 1 });
 // a game with a finished lean-to beside the start and piles of the given kinds 1.5 m from its centre
@@ -160,36 +161,36 @@ describe('the upgrades: when they can be built', () => {
     expect(UPGRADES.walls).toEqual({ steps: 6, per: { frond: 1 } });
     expect(UPGRADES.bed).toEqual({ steps: 4, per: { branch: 1, frond: 1 } });
     expect(UPGRADES.ring).toEqual({ steps: 8, per: { stone: 1 } });
-    expect(camp({ fr: 6 }).action().hold).toMatchObject({ kind: 'upgrade', what: 'walls' });
-    expect(camp({ fr: 5 }).action().hold && camp({ fr: 5 }).action().hold.kind).not.toBe('upgrade');
-    expect(camp({ fr: 4, br: 4, up: { walls: 1 } }).action().hold).toMatchObject({ kind: 'upgrade', what: 'bed' });
-    expect(camp({ fr: 3, br: 4, up: { walls: 1 } }).action().hold && camp({ fr: 3, br: 4, up: { walls: 1 } }).action().hold.kind).not.toBe('upgrade');
-    expect(camp({ st: 8 }).action().hold).toMatchObject({ kind: 'upgrade', what: 'ring' });
-    expect(camp({ st: 7 }).action().hold && camp({ st: 7 }).action().hold.kind).not.toBe('upgrade');
+    expect(bigOf(camp({ fr: 6 }))).toMatchObject({ kind: 'upgrade', what: 'walls' });
+    expect(bigOf(camp({ fr: 5 })) && bigOf(camp({ fr: 5 })).kind).not.toBe('upgrade');
+    expect(bigOf(camp({ fr: 4, br: 4, up: { walls: 1 } }))).toMatchObject({ kind: 'upgrade', what: 'bed' });
+    expect(bigOf(camp({ fr: 3, br: 4, up: { walls: 1 } })) && bigOf(camp({ fr: 3, br: 4, up: { walls: 1 } })).kind).not.toBe('upgrade');
+    expect(bigOf(camp({ st: 8 }))).toMatchObject({ kind: 'upgrade', what: 'ring' });
+    expect(bigOf(camp({ st: 7 })) && bigOf(camp({ st: 7 })).kind).not.toBe('upgrade');
   });
   it('the order is free: the first one whose materials are there, walls before bed before ring', () => {
-    expect(camp({ fr: 10, br: 4, st: 8 }).action().hold.what).toBe('walls');
-    expect(camp({ fr: 4, br: 4, st: 8 }).action().hold.what).toBe('bed');
-    expect(camp({ st: 8, fr: 3 }).action().hold.what).toBe('ring');
+    expect(bigOf(camp({ fr: 10, br: 4, st: 8 })).what).toBe('walls');
+    expect(bigOf(camp({ fr: 4, br: 4, st: 8 })).what).toBe('bed');
+    expect(bigOf(camp({ st: 8, fr: 3 })).what).toBe('ring');
   });
   it('needs the piles within 3 m of the lean-to and himself beside it, and only once each', () => {
     expect(UP_NEAR).toBe(3); expect(UP_REACH).toBeGreaterThan(1.7);
-    const farPiles = camp({ fr: 6, far: 3.1 }); expect(farPiles.action().hold && farPiles.action().hold.kind).not.toBe('upgrade');
-    const g = camp({ fr: 6 }); g.player.x = spawn.x + 4; g.player.z = spawn.z; expect(g.action().hold && g.action().hold.kind).not.toBe('upgrade');
+    const farPiles = camp({ fr: 6, far: 3.1 }); expect(bigOf(farPiles) && bigOf(farPiles).kind).not.toBe('upgrade');
+    const g = camp({ fr: 6 }); g.player.x = spawn.x + 4; g.player.z = spawn.z; expect(bigOf(g) && bigOf(g).kind).not.toBe('upgrade');
     expect(upgradeFor({ ...LT(), up: { walls: 1, bed: 1, ring: 1 } }, [{ x: spawn.x, z: spawn.z, kind: 'stone', logs: ids(stones, 0, 12) }])).toBeNull();
     const half = { ...LT(), progress: 0.5 }; expect(upgradeFor(half, [{ x: half.x, z: half.z, kind: 'frond', logs: ids(fronds, 0, 6) }])).toBeNull();
   });
   it('the button shows what will be built', () => {
     for (const [what, fr, br, st] of [['walls', 6, 0, 0], ['bed', 4, 4, 0], ['ring', 0, 0, 8]]) {
       const icons = buttonIcons(camp({ fr, br, st, up: what === 'bed' ? { walls: 1 } : undefined }).action());
-      expect([icons.main, icons.side]).toContain(what); expect(ICONS[what]).toMatch(/</);   // a pile beside him is also picked up by a press: that icon is the large one
+      expect(icons.options.map(o => o.key)).toContain(what); expect(ICONS[what]).toMatch(/</);   // a pile beside him is also picked up by a press: that is the ring's icon, the upgrade is in the arc
     }
   });
 });
 
 describe('building an upgrade', () => {
-  it('a hold builds it in steps: one frond a step, 30 seconds of work, the rest it costs', () => {
-    const g = camp({ fr: 7 }), input = makeInput({ action: 'hold' }), t0 = g.clock.total, awake0 = g.sleep.awake;
+  it('its icon builds it in steps: one frond a step, 30 seconds of work, the rest it costs', () => {
+    const g = camp({ fr: 7 }), input = makeInput({ big: true }), t0 = g.clock.total, awake0 = g.sleep.awake;
     run(g, input, 3);
     expect(g.player.work).toMatchObject({ kind: 'upgrade' });
     const l = g.leantos.list[0];
@@ -201,10 +202,10 @@ describe('building an upgrade', () => {
     expect(g.player.work).toBeNull(); expect(l.up.walls).toBe(1); expect(g.wood.piles.map(p => p.logs.length)).toEqual([1]);
     expect(g.leantos.has(l, 'walls')).toBe(true);
     const days = g.clock.total - t0; expect(g.sleep.awake - awake0 - days).toBeCloseTo(UP_COST, 1);
-    expect(g.action().hold && g.action().hold.kind).not.toBe('upgrade');   // built once
+    expect(bigOf(g) && bigOf(g).kind).not.toBe('upgrade');   // built once
   });
-  it('walking off keeps the progress and what was used; holding again builds on with only the rest', () => {
-    const g = camp({ fr: 6 }), input = makeInput({ action: 'hold' });
+  it('walking off keeps the progress and what was used; choosing it again builds on with only the rest', () => {
+    const g = camp({ fr: 6 }), input = makeInput({ big: true });
     run(g, input, 10);
     const l = g.leantos.list[0], p1 = l.up.walls, left = g.wood.piles.reduce((n, p) => n + p.logs.length, 0);
     expect(p1).toBeGreaterThan(0.2); expect(p1).toBeLessThan(0.5);
@@ -212,15 +213,15 @@ describe('building an upgrade', () => {
     input.up = true; g.update(input, 1 / 30); input.up = false;
     expect(g.player.work).toBeNull(); run(g, input, 2); expect(l.up.walls).toBe(p1);
     g.player.x = l.x + 0.8; g.player.z = l.z; g.player.y = w.H(g.player.x, g.player.z);
-    expect(g.action().hold).toMatchObject({ kind: 'upgrade', what: 'walls' });
-    input.action = 'hold'; run(g, input, UP_TIME + 2);
+    expect(bigOf(g)).toMatchObject({ kind: 'upgrade', what: 'walls' });
+    input.big = true; run(g, input, UP_TIME + 2);
     expect(l.up.walls).toBe(1); expect(g.wood.piles.length).toBe(0);   // exactly the 6 were used, in all
   });
   it('the bed takes a branch and a frond a step, the ring a stone a step', () => {
-    const g = camp({ fr: 4, br: 4, up: { walls: 1 } }), input = makeInput({ action: 'hold' });
+    const g = camp({ fr: 4, br: 4, up: { walls: 1 } }), input = makeInput({ big: true });
     run(g, input, UP_TIME + 4); const l = g.leantos.list[0];
     expect(l.up.bed).toBe(1); expect(g.wood.piles.length).toBe(0);
-    const r = camp({ st: 9 }), i2 = makeInput({ action: 'hold' }); run(r, i2, UP_TIME + 4);
+    const r = camp({ st: 9 }), i2 = makeInput({ big: true }); run(r, i2, UP_TIME + 4);
     expect(r.leantos.list[0].up.ring).toBe(1); expect(r.wood.piles.map(p => p.logs.length)).toEqual([1]);
   });
   it('works with F too', () => {
@@ -228,7 +229,7 @@ describe('building an upgrade', () => {
     expect(g.player.work).toMatchObject({ kind: 'upgrade' }); expect(g.leantos.list[0].up.ring).toBeGreaterThan(0);
   });
   it('is stopped when the materials are taken away', () => {
-    const g = camp({ fr: 6 }), input = makeInput({ action: 'hold' });
+    const g = camp({ fr: 6 }), input = makeInput({ big: true });
     run(g, input, 8); g.wood.piles.length = 0; run(g, input, 8);
     expect(g.player.work).toBeNull(); expect(g.leantos.list[0].up.walls).toBeLessThan(1);
   });

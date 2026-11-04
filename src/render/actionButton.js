@@ -1,59 +1,65 @@
 /**
  * render/actionButton — the action button: an ink ring, drawn like the
- * thumb stick, with an ink icon of what a press would do. Readable on any
- * ground (0.13.3): a soft glow in the opposite colour behind ring and icon
- * (`--halo` in index.html, a drop-shadow of `--ink-glow`), a faint paper disc
- * inside the ring (fill `--ink-glow` at 0.29, pale by day, dark at night),
- * icon strokes of 2.2 px that keep their width at any icon scale
- * (non-scaling-stroke).
+ * thumb stick, with an ink icon of what a press would do, and (0.27.4
+ * "Choices") a small arc of up to three smaller icons above it for the other
+ * things that can be done. Readable on any ground (0.13.3): a soft glow in the
+ * opposite colour behind ring and icon (`--halo` in index.html, a drop-shadow
+ * of `--ink-glow`), a faint paper disc inside the ring (fill `--ink-glow` at
+ * 0.29, pale by day, dark at night), icon strokes of 2.2 px that keep their
+ * width at any icon scale (non-scaling-stroke).
  *
- * Space on the keyboard does the same (game/input). On touch-only devices
- * (the thumb stick's test, render/thumbStick `touchOnly`) it sits bottom
+ * Space on the keyboard does the same as the ring (game/input). On touch-only
+ * devices (the thumb stick's test, render/thumbStick `touchOnly`) it sits bottom
  * right just above the thumb stick, inside the safe area; on a desktop it
  * sits in the bottom right corner and can also be clicked (positions in
  * index.html). In the ink of the other marks (`--ink`, pale at night, render/ink).
- * Faint (0.45) and empty when there is nothing to do, clear (0.95) with an icon
- * when there is, fully opaque under a finger. Beside something he
- * could light or when a hold is the only thing to do, a ring round the icon
- * fills while the button is held (game/input HOLD_MS).
+ * Faint (0.45) and empty when there is no small action to do, clear (0.95) with an icon
+ * when there is, fully opaque under a finger. There is no long press: the ring only
+ * ever does the small actions (pick up, lay down, eat, drink, feed the fire ...); the big
+ * ones (light a pile, build, upgrade, sleep) are icons of the arc.
  *
- * A short press and a hold: when both do something the icon of the short
- * press is large and that of the hold small beside it; when only a hold does
- * something, its icon is large. The icons (strokes like the moon and the
- * drop): wood with an arrow up (pickup), wood with an arrow down (lay), the
- * half coconut (husk), a flame over a piece of wood (feed), a torch (torch), a
- * torch with a stroke of ground (plant), the drop (drink), a flame (light, hold)
- * a small lean-to (build, hold), the crescent moon (sleep, hold) and, since 0.22, a hand with claws over a
+ * The arc: the other options of game.action() (`options`, at most 3) as smaller ink
+ * icons (same ink, stroke and glow as the ring, no frame, no text), left to right in the
+ * order of the keys 1, 2, 3 (small actions nearest first, then big ones). Faint (0.75), clear under the
+ * pointer; a click or tap (on release) on one calls input.choose(i). Each has a hit area of
+ * OPT_SIZE (44) px and an aria-label with plain words (LABEL_OF). On a desktop the fan leans to
+ * the left (the button sits in the corner), on touch it is centred above the ring (clear of the
+ * thumb stick below and the screen edge). A press on an icon never reaches the world.
+ *
+ * The icons (strokes like the moon and the drop): wood with an arrow up (pickup), wood with an arrow down
+ * (lay), the half coconut (husk), a flame over a piece of wood (feed), a torch (torch), a
+ * torch with a stroke of ground (plant), the drop (drink), a flame (light), a small lean-to (build), the
+ * crescent moon (sleep) and, since 0.22, a hand with claws over a
  * hole (dig) and a crab over a flame (roast), and since 0.25 a half shell with a drop over it
- * (fill) and a tilted half shell with water in it (sip). Eating a carried nut uses the half coconut (husk). Since 0.26 (game/forage) a cluster of berries with an arrow up (berries: picks them, or eats them on the spot when he is hungry), a bunch with an arrow up (bananas), and the plain cluster or bunch for eating a carried one (eatBerries, eatBanana). Since 0.27 "Home" (game/leanto): the hold of an upgrade (kind 'upgrade', `what`) shows what will be built: a roof with fronds hanging down its side (walls), a low frame with a frond laid on it (bed) or a ring of stones round a small flame (ring).
+ * (fill) and a tilted half shell with water in it (sip). Eating a carried nut uses the half coconut (husk). Since 0.26 (game/forage) a cluster of berries with an arrow up (berries: picks them, or eats them on the spot when he is hungry), a bunch with an arrow up (bananas), and the plain cluster or bunch for eating a carried one (eatBerries, eatBanana). Since 0.27 "Home" (game/leanto): an upgrade (kind 'upgrade', `what`) shows what will be built: a roof with fronds hanging down its side (walls), a low frame with a frond laid on it (bed) or a ring of stones round a small flame (ring).
  *
  * The pointer handling is the button's own: a finger or the mouse on it goes
  * to input.actionStart/actionEnd and never reaches the world (no walk tap, no
  * steering, no part of a two-finger gesture) nor the thumb stick.
  *
- * MAIN_ALONE, MAIN_WITH_SIDE, SIDE   the icon scales (1.8, 1.25, 0.6)
+ * MAIN_ALONE       the icon scale of the ring (1.8)
+ * OPT_SIZE, ARC_R, ARC_STEP, ARC_LEAN, ARC_BOX   the arc's geometry (px, px, degrees, degrees, px)
  * ICONS            { key: inner SVG } in a -12..12 box, stroked with the ink
  * ICON_OF          the icon key of each action kind of game/game `action`
- * buttonIcons(action) -> { main, side }   the icon keys (null when empty) for what
- *   game.action() returned: { tap, hold }. Pure.
+ * LABEL_OF         the plain words (aria-label) of each action kind (and of the upgrades' `what`)
+ * buttonIcons(action) -> { main, options: [{ key, label }] }   the icon key of the ring (null when empty) and
+ *   the icons of the arc for what game.action() returned: { tap, options }. Pure.
  * buttonOpacity(icons, down) -> 0.45 | 0.95 | 1   Pure.
- * ringOffset(fill) -> stroke-dashoffset of the filling ring, fill 0..1 in steps of 1/FILL_STEPS. Pure.
- * createActionButton(el, input) -> { update(action, fill), dispose() }
- *   el: the #action element (index.html), holding an <svg> with .fill, .main
- *   and .side groups; null when el is missing. update(action, fill) is
- *   called each frame (fill from input.actionFill()) and touches the DOM only
- *   when something changed.
+ * arcSpots(n, touch) -> [{ x, y }]   where the n icons of the arc sit, in px from the ring's middle (y down). Pure.
+ * createActionButton(el, input, arc?, touch?) -> { update(action), dispose() }
+ *   el: the #action element (index.html), holding an <svg> with a .main group; null when el is
+ *   missing. arc: the #arc element (an empty box over the ring, pointer events off) the icons are put in.
+ *   update(action) is called each frame and touches the DOM only when something changed.
  *
- * Depends on: render/carryMark, render/thirstMark
+ * Depends on: render/carryMark, render/thirstMark, render/hungerMark
  */
 import { DRAWINGS, CRAB_PATHS } from './carryMark.js';
 import { DROP_PATH } from './thirstMark.js';
 import { SHELL_PATH, RIM_PATH } from './hungerMark.js';
 
-export const FILL_STEPS = 40;
-export const RING_R = 36, CIRC = +(2 * Math.PI * RING_R).toFixed(2);   // the filling ring round the icon
 export const FAINT = 0.45, CLEAR = 0.95, HELD = 1;
-export const MAIN_ALONE = 1.8, MAIN_WITH_SIDE = 1.25, SIDE = 0.6;   // icon scales (icons are drawn in a -12..12 box)
+export const MAIN_ALONE = 1.8;   // the icon scale of the ring (icons are drawn in a -12..12 box)
+export const OPT_SIZE = 44, ARC_R = 70, ARC_STEP = 42, ARC_LEAN = -18, ARC_BOX = 84;   // px, px, degrees, degrees, px (the arc's box is as large as the ring's)
 
 const LOG = '<path d="M-9.56 7.08L7.44 2.08A2 2 0 0 1 8.56 5.92L-8.44 10.92A2 2 0 0 1 -9.56 7.08Z"/>';
 const FLAME = '<path d="M0 -11C1 -7 5 -5 5 -0.5A5 5 0 0 1 -5 -0.5C-5 -3 -3 -4.5 -2 -7C-1 -5.5 -0.5 -4 0 -4C1 -6 1 -8.5 0 -11Z"/>';
@@ -84,24 +90,32 @@ export const ICONS = {
   moon: '<path d="M3 -10.5A10 10 0 1 0 10.5 3A7.5 7.5 0 0 1 3 -10.5Z"/>',
 };
 export const ICON_OF = { pickup: 'pickup', lay: 'lay', fill: 'fill', sip: 'sip', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon', dig: 'dig', roast: 'roast', berries: 'berries', bananas: 'bananas', eatBerries: 'eatBerries', eatBanana: 'eatBanana' };
+export const LABEL_OF = { pickup: 'Pick up', lay: 'Lay down', fill: 'Fill the shell', sip: 'Sip water', husk: 'Husk and eat the coconut', feed: 'Feed the fire', torch: 'Take the torch', plant: 'Plant the torch', drink: 'Drink', light: 'Light the fire', build: 'Build a lean-to', sleep: 'Sleep', dig: 'Dig for the crab', roast: 'Roast the crab', berries: 'Pick berries', bananas: 'Pick bananas', eatBerries: 'Eat berries', eatBanana: 'Eat the banana', walls: 'Build the side walls', bed: 'Build a bed', ring: 'Build a stone ring' };
 
 const iconKey = a => a ? (a.kind === 'upgrade' ? a.what : ICON_OF[a.kind]) || null : null;   // an upgrade shows what it builds
+const labelOf = a => LABEL_OF[a.kind === 'upgrade' ? a.what : a.kind] || '';
 
 export function buttonIcons(action) {
-  const tap = action ? iconKey(action.tap) : null, hold = action ? iconKey(action.hold) : null;
-  return tap ? { main: tap, side: hold } : { main: hold, side: null };
+  const options = action && action.options ? action.options.map(o => ({ key: iconKey(o), label: labelOf(o) })).filter(o => o.key) : [];
+  return { main: action ? iconKey(action.tap) : null, options };
 }
 
 export const buttonOpacity = (icons, down = false) => icons.main ? (down ? HELD : CLEAR) : FAINT;
 
-export const ringOffset = fill => +(CIRC * (1 - Math.round(Math.min(1, Math.max(0, fill)) * FILL_STEPS) / FILL_STEPS)).toFixed(2);
+/** Where the n icons of the arc sit, in px from the middle of the ring (y down): on a circle of ARC_R, ARC_STEP degrees apart, leaning left on a desktop. */
+export function arcSpots(n, touch = false) {
+  return Array.from({ length: n }, (_, i) => {
+    const a = ((i - (n - 1) / 2) * ARC_STEP + (touch ? 0 : ARC_LEAN)) * Math.PI / 180;
+    return { x: +(ARC_R * Math.sin(a)).toFixed(1), y: +(-ARC_R * Math.cos(a)).toFixed(1) };
+  });
+}
 
 const placed = (key, x, y, s) => key ? `<g transform="translate(${x} ${y}) scale(${s})">${ICONS[key]}</g>` : '';
 
-export function createActionButton(el, input) {
+export function createActionButton(el, input, arc = null, touch = false) {
   if (!el) return null;
-  const main = el.querySelector('.main'), side = el.querySelector('.side'), ring = el.querySelector('.fill');
-  let id = null, key = '', down = false, shownFill = null, shownOpacity = '';
+  const main = el.querySelector('.main');
+  let id = null, key = '', down = false, shownOpacity = '', arcKey = '', picking = null;
   const dn = e => {
     e.preventDefault(); e.stopPropagation();
     if (id !== null) return;
@@ -115,18 +129,35 @@ export function createActionButton(el, input) {
   const menu = e => e.preventDefault();
   el.addEventListener('pointerdown', dn); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
   el.addEventListener('contextmenu', menu);
-  function update(action, fill = 0) {
-    const icons = buttonIcons(action), k = (icons.main || '') + '|' + (icons.side || '');
-    if (k !== key) {
-      key = k;
-      main.innerHTML = icons.side ? placed(icons.main, -6, -3, MAIN_WITH_SIDE) : placed(icons.main, 0, 0, MAIN_ALONE);
-      side.innerHTML = placed(icons.side, 16, 13, SIDE);
+  // the icons of the arc: one listener on the box; a press on an icon is its own and never reaches the world
+  const optOf = e => { const o = e.target && e.target.closest ? e.target.closest('.opt') : null; return o ? Number(o.dataset.i) : -1; };
+  const adn = e => { const i = optOf(e); if (i < 0) return; e.preventDefault(); e.stopPropagation(); if (!picking) picking = { id: e.pointerId, i }; };
+  const aup = e => {
+    if (!picking || e.pointerId !== picking.id) return;
+    e.stopPropagation(); const p = picking; picking = null;
+    if (e.type === 'pointerup') input.choose(p.i);
+  };
+  if (arc) { arc.addEventListener('pointerdown', adn); arc.addEventListener('pointerup', aup); arc.addEventListener('pointercancel', aup); arc.addEventListener('contextmenu', menu); }
+  function update(action) {
+    const icons = buttonIcons(action);
+    if ((icons.main || '') !== key) {
+      key = icons.main || '';
+      main.innerHTML = placed(icons.main, 0, 0, MAIN_ALONE);
       el.classList.toggle('on', !!icons.main);
     }
-    const f = action && action.hold ? ringOffset(fill) : ringOffset(0);
-    if (f !== shownFill) { shownFill = f; ring.setAttribute('stroke-dashoffset', f); }
     const o = buttonOpacity(icons, down || (input.pressing && input.pressing())).toFixed(2);
     if (o !== shownOpacity) { shownOpacity = o; el.style.opacity = o; }
+    if (arc) {
+      const k = icons.options.map(x => x.key).join('|');
+      if (k !== arcKey) {
+        arcKey = k;
+        const spots = arcSpots(icons.options.length, touch), c = ARC_BOX / 2 - OPT_SIZE / 2;
+        arc.innerHTML = icons.options.map((x, i) => `<div class="opt" role="button" aria-label="${x.label}" data-i="${i}" style="left:${(c + spots[i].x).toFixed(1)}px;top:${(c + spots[i].y).toFixed(1)}px"><svg viewBox="-13.5 -13.5 27 27">${ICONS[x.key]}</svg></div>`).join('');
+      }
+    }
   }
-  return { update, dispose() { el.removeEventListener('pointerdown', dn); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); el.removeEventListener('lostpointercapture', up); el.removeEventListener('contextmenu', menu); } };
+  return { update, dispose() {
+    el.removeEventListener('pointerdown', dn); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); el.removeEventListener('lostpointercapture', up); el.removeEventListener('contextmenu', menu);
+    if (arc) { arc.removeEventListener('pointerdown', adn); arc.removeEventListener('pointerup', aup); arc.removeEventListener('pointercancel', aup); arc.removeEventListener('contextmenu', menu); }
+  } };
 }

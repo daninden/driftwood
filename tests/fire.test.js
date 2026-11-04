@@ -25,12 +25,13 @@ beforeAll(async () => {
 const makeInput = (o = {}) => {
   const i = { up: false, down: false, left: false, right: false, run: false, target: null, hold: null, action: null, ...o };
   i.clearTarget = () => { i.target = null; };
-  i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
+  i.takeLight = () => { const h = i.hold; i.hold = null; return h; };
   i.takeAction = () => { const a = i.action; i.action = null; return a; };
   i.pressing = () => false;
   return i;
 };
-const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
+const bigOf = g => g.action().options.find(o => o.big) || null;   // the big option (light, build, upgrade, sleep) the arc would show
+const run = (g, input, s, dt = 1 / 30) => { if (input.big) { input.big = false; g.act(bigOf(g)); } for (let t = 0; t < s; t += dt) g.update(input, dt); };
 const at = (x, z) => ({ x, z, y: w.H(x, z) });
 // a game standing next to a pile of n dry pieces (the first beach logs), carrying fibre
 const withPile = (n = FIRE_MIN, o = {}) => {
@@ -115,7 +116,7 @@ describe('the chance that it catches', () => {
 
 describe('lighting a fire', () => {
   it('kneels by the pile, drills, uses up the fibre and costs rest; the pile becomes a fire', () => {
-    const g = withPile(FIRE_MIN, { fire: { attempts: attemptsFor(true) } }), input = makeInput({ action: 'hold' });
+    const g = withPile(FIRE_MIN, { fire: { attempts: attemptsFor(true) } }), input = makeInput({ big: true });
     const awake = g.sleep.awake;
     run(g, input, 1);
     expect(g.player.work.kind).toBe('drill');
@@ -158,14 +159,14 @@ describe('lighting a fire', () => {
     run(g, input, DRILL_TIME + 1.5);
     expect(g.fire.fires.length).toBe(1);
   });
-  it('picks a pile up with a short press, and with a hold but without fibre does not light it (he lies down instead)', () => {
+  it('picks a pile up with a short press, and the arc without fibre does not offer to light it (only sleep)', () => {
     const a = withPile(), ia = makeInput({ action: 'tap' });
     run(a, ia, 1); expect(a.wood.carried.length).toBe(3);
-    const b = withPile(FIRE_MIN, { fibre: { carried: 0 } }), ib = makeInput({ action: 'hold' });
+    const b = withPile(FIRE_MIN, { fibre: { carried: 0 } }), ib = makeInput({ big: true });
     run(b, ib, 1);
     expect(b.wood.carried.length).toBe(0); expect(b.player.work).toBeNull(); expect(b.sleep.asleep).toBe(true);
   });
-  it('is not lit by clicking, tapping or holding the pile itself', () => {
+  it('is not lit by clicking or tapping the pile itself', () => {
     const g = withPile(), p = g.wood.piles[0], input = makeInput({ target: { x: p.x, z: p.z, tap: true } });
     run(g, input, DRILL_TIME + 1);
     expect(g.player.work).toBeNull(); expect(g.fire.attempts).toBe(0); expect(g.wood.carried.length).toBe(0);
@@ -223,7 +224,7 @@ describe('fire input', () => {
   it('lights with F', () => {
     const { input } = setup();
     fire(window, 'keydown', { code: 'KeyF' });
-    expect(input.takeHold()).toEqual({ key: true }); expect(input.takeHold()).toBeNull();
+    expect(input.takeLight()).toBe(true); expect(input.takeLight()).toBe(false);
     input.dispose();
   });
 });
@@ -315,9 +316,9 @@ describe('lighting a pile with a torch', () => {
     if (!dry) for (const l of g.wood.piles[0].logs) l.t = g.clock.total;   // as if just washed up
     return g;
   };
-  it('catches with a hold beside a dry pile, without fibre; the torch goes into the fire', () => {
+  it('catches with the flame icon beside a dry pile, without fibre; the torch goes into the fire', () => {
     const g = torchAndPile();
-    run(g, makeInput({ action: 'hold' }), 2);
+    run(g, makeInput({ big: true }), 2);
     expect(g.fire.fires.length).toBe(1); expect(g.wood.piles.length).toBe(0); expect(g.fire.torch).toBeNull();
     expect(g.wood.carried.length).toBe(0);
   });
@@ -328,7 +329,7 @@ describe('lighting a pile with a torch', () => {
   });
   it('only smokes on wet wood, and the torch is kept', () => {
     const g = torchAndPile(false);
-    run(g, makeInput({ action: 'hold' }), 2);
+    run(g, makeInput({ big: true }), 2);
     expect(g.fire.fires.length).toBe(0); expect(g.fire.puffs.length).toBe(1); expect(g.fire.torch).not.toBeNull();
     expect(g.wood.piles[0].logs.length).toBe(FIRE_MIN);
     for (const l of logs.slice(0, FIRE_MIN)) delete l.t;   // the world's logs are shared between tests

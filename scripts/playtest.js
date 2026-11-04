@@ -2,7 +2,7 @@
 // Run `npm run build` first. Usage: npm run playtest [-- --seed N] [--days D] [--out DIR] [--shots=0]
 //   no --seed: seeds 1337, 2024 and 7 one after the other; --days: game days per seed (default 10; a day is 20 minutes of play)
 // Tooling only (feature freeze): it changes no game code. The bot (scripts/playtest-bot.js, runs inside the page) walks with
-// input.target and Shift, presses the action button with input.actionStart/actionEnd, uses the F and Z keys and the row
+// input.target and Shift, presses the action button with input.actionStart/actionEnd, clicks the icons of the arc with input.choose, and uses the row
 // (game.use), and steps time itself with game.update in 0.1 s ticks while drawing is paused. Path finding uses the game's
 // own movement rules (scripts/playtest-lib.js, bundled with esbuild and injected). A few game methods are wrapped in the page
 // to log events exactly (hunger.eat, thirst.drink, fire.attempt, ...); they still call the originals.

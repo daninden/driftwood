@@ -32,7 +32,7 @@ const makeInput = (o = {}) => {
   const i = { up: false, down: false, left: false, right: false, run: false, target: null, action: null, hold: null, sleep: false, ...o };
   i.clearTarget = () => { i.target = null; };
   i.takeAction = () => { const a = i.action; i.action = null; return a; };
-  i.takeHold = () => { const h = i.hold; i.hold = null; return h; };
+  i.takeLight = () => { const h = i.hold; i.hold = null; return h; };
   i.takeSleep = () => { const s = i.sleep; i.sleep = false; return s; };
   i.pressing = () => false;
   return i;
@@ -212,8 +212,8 @@ describe('drawings', () => {
   });
   it('the button has an icon for each new action', () => {
     for (const k of ['berries', 'bananas', 'eatBerries', 'eatBanana']) { expect(ICON_OF[k]).toBeTruthy(); expect(ICONS[ICON_OF[k]]).toBeTruthy(); }
-    expect(buttonIcons({ tap: { kind: 'berries' }, hold: null })).toEqual({ main: 'berries', side: null });
-    expect(buttonIcons({ tap: { kind: 'bananas' }, hold: { kind: 'sleep' } })).toEqual({ main: 'bananas', side: 'moon' });
+    expect(buttonIcons({ tap: { kind: 'berries' }, options: [] })).toEqual({ main: 'berries', options: [] });
+    expect(buttonIcons({ tap: { kind: 'bananas' }, options: [{ kind: 'sleep', big: true }] })).toEqual({ main: 'bananas', options: [{ key: 'moon', label: 'Sleep' }] });
   });
   it('the berries and the banana plant are fixed by the plant and use the palette', () => {
     const a = berryParts(B0), b = berryParts(B0);

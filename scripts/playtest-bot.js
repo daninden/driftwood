@@ -1,8 +1,8 @@
 // Playtest bot, the part that runs inside the page (injected by scripts/playtest.js after the game is ready and
 // after scripts/playtest-lib.js, which provides window.DWLib: the game's own movement rules for path finding).
 // Tooling only; no game code is changed. It plays through the real inputs: input.target (a click on the ground or on a
-// thing), input.run (Shift), the action button (input.actionStart/actionEnd, the same calls the button makes), the F and Z
-// keys (as key events on window) and game.use(kind) for the drawings in the row (what a click on the row calls).
+// thing), input.run (Shift), the action button (input.actionStart/actionEnd, the same calls the button makes), a click on an icon of
+// the arc above it (input.choose(i), what the click calls; for light, build, upgrade and sleep) and game.use(kind) for the drawings in the row (what a click on the row calls).
 // Only a few game methods are wrapped, to log events exactly (hunger.eat, thirst.drink, ...); they still call the original.
 //
 // window.makeBot(opts, imported) -> bot
@@ -241,7 +241,9 @@
 
     // ---------- the buttons ----------
     const press = () => { input.actionStart('bot'); input.actionEnd('bot'); };
-    const key = code => { for (const type of ['keydown', 'keyup']) window.dispatchEvent(new KeyboardEvent(type, { code })); };
+    const option = kinds => { const o = game.action().options, i = o.findIndex(x => kinds.includes(x.kind)); return i < 0 ? null : { i, kind: o[i].kind }; };   // an icon of the arc
+    const choose = kinds => { const f = option(kinds); if (!f) return null; input.choose(f.i); return f.kind; };   // a click on it
+    const arcKinds = () => game.action().options.map(o => o.kind).join();
     function* act(kinds) {   // a short press of the action button if it would do one of kinds; returns the kind or null
       const a = game.action().tap; if (!a || (kinds && !kinds.includes(a.kind))) return null;
       lastKind = a.kind; press(); yield; return a.kind;
@@ -359,11 +361,11 @@
         yield* goTo(dpile.x + (bpile.x - dpile.x) * 0.5, dpile.z + (bpile.z - dpile.z) * 0.5, { stop: 0.5, run: false });
       } else yield* goTo(l0.x, l0.z + 0.8, { stop: 0.5, run: false });
       for (let i = 0; i < 4; i++) {
-        const a = game.action(); if (!a.hold || a.hold.kind !== 'build') { yield; if (i) break; continue; }
-        key('KeyF'); yield* waitHoldAct(); while (busy()) yield; yield;
+        if (!option(['build'])) { yield; if (i) break; continue; }
+        choose(['build']); yield* waitHoldAct(); while (busy()) yield; yield;
         if (home()) break;
       }
-      if (!home()) ev('build-failed', { piles: W.piles.map(q => q.kind + ':' + q.logs.length + '@' + q.x.toFixed(1) + ',' + q.z.toFixed(1)).join(' '), hold: (game.action().hold || {}).kind, half: !!half() });
+      if (!home()) ev('build-failed', { piles: W.piles.map(q => q.kind + ':' + q.logs.length + '@' + q.x.toFixed(1) + ',' + q.z.toFixed(1)).join(' '), arc: arcKinds(), half: !!half() });
       else shot('leanto-built', 'lean-to finished');
     }
 
@@ -371,8 +373,8 @@
       const l = home(); if (!l) return;
       yield* goTo(l.x + Math.sin(l.heading) * 1.4, l.z + Math.cos(l.heading) * 1.4, { stop: 0.5, run: false });
       for (let i = 0; i < 6; i++) {
-        const a = game.action(); if (!a.hold || a.hold.kind !== 'upgrade') { if (i) break; yield; continue; }
-        key('KeyF'); yield* waitHoldAct(60); while (busy()) yield; yield;
+        if (!option(['upgrade'])) { if (i) break; yield; continue; }
+        choose(['upgrade']); yield* waitHoldAct(60); while (busy()) yield; yield;
       }
     }
 
@@ -384,12 +386,12 @@
       const mean = pile.logs.reduce((s, l) => s + L.dryness(l, clock.total), 0) / pile.logs.length;
       if (mean < 0.55) { ev('fire-skipped-wet', { mean: +mean.toFixed(2) }); return; }
       for (let k = 0; k < 3 && game.fibre.carried && !game.fire.fires.some(f => Math.hypot(f.x - fs.x, f.z - fs.z) < 3); k++) {
-        // stand on the side away from the lean-to, so F lights rather than builds an upgrade
+        // stand on the side away from the lean-to, so the arc offers to light rather than to build an upgrade
         const l = home(), sx = pile.x + (l ? FWD.x * 0.9 : 0.9), sz = pile.z + (l ? FWD.z * 0.9 : 0);
         yield* goTo(sx, sz, { stop: 0.5, run: false });
         const a = game.action();
-        if (!a.hold || a.hold.kind !== 'light') { ev('light-not-offered', { hold: (a.hold || {}).kind, tap: (a.tap || {}).kind, piles: W.piles.map(q => q.kind[0] + q.logs.length).join() }); noLightUntil = gt() + 400; return; }
-        key('KeyF'); yield* waitHoldAct(30); while (busy()) yield; yield;
+        if (!option(['light'])) { ev('light-not-offered', { arc: arcKinds(), tap: (a.tap || {}).kind, piles: W.piles.map(q => q.kind[0] + q.logs.length).join() }); noLightUntil = gt() + 400; return; }
+        choose(['light']); yield* waitHoldAct(30); while (busy()) yield; yield;
         if (game.fire.fires.length && !pilesNear('driftwood', fs.x, fs.z, 1.6).length) { shot('night-fire', 'fire lit'); break; }
       }
     }
@@ -405,11 +407,11 @@
       yield* goTo(s.x, s.z, { stop: 0.5, run: false });
       for (let i = 0; i < 3; i++) {
         if (!game.sleep.canLie()) { ev('cannot-lie', { awake: +game.sleep.awake.toFixed(2) }); return; }
-        botSleep = true; key('KeyZ'); yield; yield;
+        botSleep = true; choose(['sleep']); yield; yield;
         if (game.sleep.asleep || p.lie > 0) return;
         botSleep = false; const ang = i * 2.1 + 0.5; yield* goTo(s.x + Math.sin(ang) * (1 + i), s.z + Math.cos(ang) * (1 + i), { stop: 0.3, run: false });
       }
-      botSleep = false; ev('sleep-refused', { hold: (game.action().hold || {}).kind }); noSleepUntil = gt() + 300;
+      botSleep = false; ev('sleep-refused', { arc: arcKinds() }); noSleepUntil = gt() + 300;
     }
 
     let noSleepUntil = 0;
@@ -444,7 +446,7 @@
       const needFronds = (done('walls') ? 0 : 6) + (done('bed') ? 0 : 4), haveFronds = countNear('frond', l.x, l.z, 3);
       const needBr = done('bed') ? 0 : 4, haveBr = countNear('branch', l.x, l.z, 3);
       const needSt = done('ring') ? 0 : 8, haveSt = countNear('stone', l.x, l.z, 3);
-      if (L.UPGRADES && l && game.action().hold && game.action().hold.kind === 'upgrade') return yield* upgradeGoal();
+      if (L.UPGRADES && l && option(['upgrade'])) return yield* upgradeGoal();
       if (haveFronds < needFronds) return yield* gatherGoal('frond', destHome('frond'), needFronds - haveFronds);
       if (haveBr < needBr) return yield* gatherGoal('branch', destHome('branch'), needBr - haveBr);
       if (haveSt < needSt) return yield* gatherGoal('stone', destHome('stone'), needSt - haveSt);

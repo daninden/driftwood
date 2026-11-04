@@ -15,7 +15,7 @@
 // smoke-11 the fire at night, smoke-12 walking away from it with a torch,
 // smoke-13 tally marks beside the fire at night, smoke-14 the same by day,
 // smoke-15 beside a pile of twelve, smoke-16 the action button beside a pile with fibre (by day),
-// smoke-17 beside the fire with dry wood (at night), smoke-18 its ring filling while held,
+// smoke-17 beside the fire with dry wood (at night), smoke-18 the arc with three icons beside a brook (0.27.4, also in the quick run; a click on the flame icon lights),
 // smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night),
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
 // smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
@@ -36,7 +36,7 @@
 // full Chromium not installed) it falls back to the headless shell with software drawing (SwiftShader),
 // which costs time in proportion to pixels. The renderer in use is logged once at the start.
 // Two sizes are used to keep that fallback bearable. The quick run
-// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16 and 17 (action button), 23 (the lean-to), 26 (the flock), 27 (many lights), 29 (fireflies), 32 and 33 (rain) and 19 (on a phone) at 640x400 (the phone at scale 1).
+// (default) takes only smoke-0, 1 (start by day), 11 (night), 13 (tally marks), 16, 17 and 18 (action button and its arc), 23 (the lean-to), 26 (the flock), 27 (many lights), 29 (fireflies), 32 and 33 (rain) and 19 (on a phone) at 640x400 (the phone at scale 1).
 // The full run (--full) takes every shot; those a person looks at are 1280x800 (the phone at
 // scale 2), the ones that only check something (smoke-0, 2, 3, 4, 7, 18) stay at 640x400.
 // All the checks on the game state run in both. Pixels are checked without a PNG: right
@@ -341,15 +341,45 @@ await page.evaluate(() => {
   const pile = w.piles.reduce((a, b) => b.logs.length > a.logs.length ? b : a); p.x = pile.x + 0.9; p.z = pile.z + 0.3; step(0.1);
 });
 await shot('smoke-15.png');
-// The action button (0.13): what it shows beside a pile with fibre by day (the pick-up
-// icon large, the flame of a hold small), beside a fire with dry wood at night (feed,
-// and the moon), and its ring filling while the button is held.
-const iconOf = () => page.evaluate(() => { const a = document.getElementById('action'); return { opacity: a.style.opacity, main: a.querySelector('.main').innerHTML.length, side: a.querySelector('.side').innerHTML.length, on: a.classList.contains('on') }; });
+// The action button (0.13, the arc of 0.27.4): what it shows beside a pile with fibre by day (the pick-up
+// icon in the ring, the flame in the arc above it), beside a fire with dry wood at night (feed,
+// and the moon), and the arc with three icons (smoke-18): a pile, a brook and fibre, a click on an icon does it.
+const iconOf = () => page.evaluate(() => { const a = document.getElementById('action'); return { opacity: a.style.opacity, main: a.querySelector('.main').innerHTML.length, arc: document.querySelectorAll('#arc .opt').length, on: a.classList.contains('on') }; });
 await page.evaluate(() => { const { game, step } = window.__driftwood; game.clock.time = 0.5; game.fibre.carried = 1; step(0.1); });
 await shot('smoke-16.png', { quick: true, settle: 800 });
 const dayIcon = await iconOf();   // read after the frame is drawn: the button is updated while drawing
 console.log('action button by the pile', JSON.stringify(dayIcon));
-if (!dayIcon.on || !dayIcon.main || !dayIcon.side) errors.push('the action button shows no pick-up and hold icons beside a pile with fibre');
+if (!dayIcon.on || !dayIcon.main || !dayIcon.arc) errors.push('the action button shows no pick-up icon in the ring and no light icon in the arc beside a pile with fibre');
+// Three icons in the arc (smoke-18): beside a brook with a pile of 12 and fibre the ring picks up, the arc offers drink, light and sleep.
+// A real click on the flame icon walks to the pile and kneels to drill (the click never reaches the world); then he walks off, the fibre is kept.
+const arcScene = await page.evaluate(() => {
+  const { world, game, step } = window.__driftwood, p = game.player, pile = game.wood.piles.reduce((a, b) => b.logs.length > a.logs.length ? b : a);
+  window.__arcBack = { x: p.x, z: p.z, pile: { x: pile.x, z: pile.z }, thirst: game.thirst.days, awake: game.sleep.awake, pileRef: pile };
+  game.thirst.days = 1; game.sleep.awake = 0.8;
+  pile.x = -75.8; pile.z = 180.3; game.wood.version++;
+  p.x = -76.3; p.z = 180; p.y = world.H(p.x, p.z); step(0.2); window.__driftwood.draw();
+  const a = game.action();
+  return { tap: a.tap && a.tap.kind, options: a.options.map(o => o.kind) };
+});
+console.log('arc scene', JSON.stringify(arcScene));
+if (arcScene.tap !== 'pickup' || arcScene.options.join() !== 'drink,light,sleep') errors.push('beside a brook with a pile and fibre the ring should pick up and the arc offer drink, light, sleep: ' + JSON.stringify(arcScene));
+await shot('smoke-18.png', { quick: true, settle: 800 });
+const arcBoxes = await page.evaluate(() => [...document.querySelectorAll('#arc .opt')].map(o => { const r = o.getBoundingClientRect(), a = document.getElementById('action').getBoundingClientRect(); return { w: r.width, h: r.height, onscreen: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, clear: Math.hypot(r.x + r.width / 2 - a.x - a.width / 2, r.y + r.height / 2 - a.y - a.height / 2) >= 55, label: o.getAttribute('aria-label') }; }));
+console.log('arc icons', JSON.stringify(arcBoxes));
+if (arcBoxes.length !== 3 || arcBoxes.some(b => b.w < 40 || b.h < 40 || !b.onscreen || !b.clear || !b.label)) errors.push('the arc icons are too small, off the screen, on the ring or without a label: ' + JSON.stringify(arcBoxes));
+await page.click('#arc .opt[data-i="1"]');   // the flame
+const arcClick = await page.evaluate(() => {
+  const { game, input, step } = window.__driftwood, p = game.player, fibre = game.fibre.carried;
+  step(0.1); const tg = input.target ? (input.target.act && input.target.act.kind) || 'walk' : null;
+  step(6, () => p.work && p.work.kind === 'drill');
+  const out = { target: tg, work: p.work && p.work.kind, fibre };
+  input.up = true; step(0.2); input.up = false; step(0.2); out.fibreKept = game.fibre.carried === fibre; out.stopped = !p.work;
+  const b = window.__arcBack; b.pileRef.x = b.pile.x; b.pileRef.z = b.pile.z; game.wood.version++;
+  game.thirst.days = b.thirst; game.sleep.awake = b.awake; p.x = b.x; p.z = b.z; p.y = window.__driftwood.world.H(p.x, p.z); input.target = null; step(0.2);
+  return out;
+});
+console.log('arc click', JSON.stringify(arcClick));
+if (arcClick.target === 'walk' || arcClick.work !== 'drill' || !arcClick.fibreKept || !arcClick.stopped) errors.push('a click on the flame icon of the arc did not light the pile: ' + JSON.stringify(arcClick));
 await page.evaluate(() => {
   const { world, game, step } = window.__driftwood, p = game.player, f = game.fire.fires[0], w = game.wood;
   game.clock.time = 0.95; p.x = f.x + 1.0; p.z = f.z + 0.4; p.y = world.H(p.x, p.z);
@@ -359,20 +389,6 @@ await shot('smoke-17.png', { quick: true, settle: 800 });
 const feedIcon = await iconOf();
 console.log('action button by the fire', JSON.stringify(feedIcon));
 if (!feedIcon.on) errors.push('the action button is empty beside a fire with dry wood in his arm');
-// Held for 250 ms of a frozen clock (drawing time is uneven here, so real time could run past the hold): the ring is part full.
-await setSize(SMALL);   // only checked: small
-const ring = await page.evaluate(() => {
-  const { input } = window.__driftwood, real = performance.now.bind(performance), t0 = real();
-  input.actionStart('smoke'); performance.now = () => t0 + 250;
-  window.__driftwood.draw();
-  const off = +document.querySelector('#action .fill').getAttribute('stroke-dashoffset');
-  window.__ringClock = real; return off;
-});
-if (full) await page.screenshot({ path: 'smoke-18.png' });
-await page.evaluate(() => { const { input } = window.__driftwood; performance.now = window.__ringClock; input.cancelAction(); input.actionEnd('smoke'); });
-console.log('ring while held', ring);
-if (!(ring > 0 && ring < 226)) errors.push('the ring does not fill while the button is held: ' + ring);
-
 // Branches and the lean-to (0.16): branches under the nearest tree (smoke-21), picked up and
 // carried (the row shows a twig each), two piles of six, the action button's lean-to icon
 // (smoke-24), F builds it (smoke-22 half built, smoke-23 finished, by day), and a cold sleep
@@ -413,9 +429,9 @@ const piled = await page.evaluate(start => {
 console.log('piles', JSON.stringify(piled));
 if (piled.join() !== 'driftwood:6,branch:6') errors.push('piles are ' + piled.join());
 await shot('smoke-24.png', { settle: 800 });
-const buildIcon = await iconOf();
-console.log('action button by the two piles', JSON.stringify(buildIcon));
-if (!buildIcon.on || !buildIcon.main) errors.push('the action button shows no lean-to icon beside the two piles');
+const buildIcon = await page.evaluate(() => window.__driftwood.game.action().options.map(o => o.kind));   // (the DOM is only redrawn by the shots of the quick run)
+console.log('options by the two piles', JSON.stringify(buildIcon));
+if (!buildIcon.includes('build')) errors.push('the arc offers no lean-to icon beside the two piles: ' + buildIcon);
 await pressF();
 const half = await page.evaluate(() => { const { game, step } = window.__driftwood; step(30, () => game.leantos.list[0] && game.leantos.list[0].progress >= 0.5); return { n: game.leantos.list.length, progress: game.leantos.list[0] && game.leantos.list[0].progress, work: game.player.work && game.player.work.kind, piles: game.wood.piles.length }; });
 console.log('half built', JSON.stringify(half));
@@ -453,14 +469,13 @@ const homeSet = await page.evaluate(() => {
   const at = (kind, logs, r, f) => w.piles.push({ x: l.x + R.x * r + F.x * f, z: l.z + R.z * r + F.z * f, kind, logs });
   at('frond', fr, -1.9, 0.1); at('branch', br, -1.7, 1.0); at('stone', st, 1.9, 0.5); w.version++;
   p.x = l.x + F.x * 1.5; p.z = l.z + F.z * 1.5; p.y = world.H(p.x, p.z); step(0.1); window.__driftwood.draw();
-  const a = game.action();
-  return { frondsFound: fr.length, stonesFound: st.length, branchesFound: br.length, hold: a.hold && a.hold.kind + ':' + a.hold.what, tap: a.tap && a.tap.kind };
+  const a = game.action(), big = a.options.find(o => o.kind === 'upgrade');
+  return { frondsFound: fr.length, stonesFound: st.length, branchesFound: br.length, big: big && big.kind + ':' + big.what, tap: a.tap && a.tap.kind };
 });
 console.log('upgrade site', JSON.stringify(homeSet));
 if (homeSet.frondsFound < 12 || homeSet.stonesFound < 9 || homeSet.branchesFound < 4) errors.push('not enough fronds, stones or branches for the upgrades: ' + JSON.stringify(homeSet));
-if (homeSet.hold !== 'upgrade:walls') errors.push('beside the lean-to and the piles the hold should build the side walls: ' + homeSet.hold);
-const upIcon = await iconOf();
-if (!upIcon.on || !upIcon.main) errors.push('the action button shows no icon for the upgrade');
+if (homeSet.big !== 'upgrade:walls') errors.push('beside the lean-to and the piles the arc should offer to build the side walls: ' + homeSet.big);
+if (!homeSet.big) errors.push('the arc shows no icon for the upgrade');
 for (const what of ['walls', 'bed', 'ring']) {
   await pressF();
   await page.evaluate(() => window.__driftwood.step(3));
@@ -775,6 +790,19 @@ const phoneShot = async (name, time) => {
   await phone.screenshot({ path: name });
 };
 await phoneShot('smoke-19.png', 0.5);
+// The arc on the phone: icons at least 40 px, on the screen, clear of the thumb stick and the ring; a tap on one does it and is no walk tap.
+const phoneArc = await phone.evaluate(() => {
+  const st = document.getElementById('stick').getBoundingClientRect(), ac = document.getElementById('action').getBoundingClientRect();
+  return [...document.querySelectorAll('#arc .opt')].map(o => { const r = o.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height, onscreen: r.left >= 8 && r.top >= 0 && r.right <= innerWidth - 8, clearOfStick: r.bottom <= st.top && r.bottom <= ac.top + 22 }; });
+});
+console.log('phone arc', JSON.stringify(phoneArc));
+if (!phoneArc.length || phoneArc.some(b => b.w < 40 || b.h < 40 || !b.onscreen || !b.clearOfStick)) errors.push('the arc icons on the phone are too small, off the screen or on the stick: ' + JSON.stringify(phoneArc));
+if (phoneArc.length) {
+  await phone.touchscreen.tap(phoneArc[0].x, phoneArc[0].y);
+  const tapped = await phone.evaluate(() => { const { game, input, step } = window.__driftwood; step(0.1); const walk = !!(input.target && !input.target.act); step(6, () => game.player.work); return { work: game.player.work && game.player.work.kind, walk }; });
+  console.log('phone arc tap', JSON.stringify(tapped));
+  if (tapped.work !== 'drill' || tapped.walk) errors.push('a tap on the arc icon on the phone did not light the pile: ' + JSON.stringify(tapped));
+}
 await phoneShot('smoke-20.png', 0.95);
 await phone.close();
 await browser.close();

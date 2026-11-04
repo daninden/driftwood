@@ -4,7 +4,7 @@
  * Rules
  *   - The condition for building is a pile with at least NEED (6) driftwood and a
  *     pile with at least NEED branches whose centres are within NEAR (2 m) of each
- *     other (`siteFor`). Holding the action button (or F) beside either builds
+ *     other (`siteFor`). The lean-to icon of the arc (or F) beside either builds
  *     instead of lighting (game/game). Building takes NEED pieces of each kind out
  *     of those two piles (the rest stays); the lean-to stands midway between them.
  *   - It takes BUILD_TIME seconds of work (an hour of game time, about a minute of
@@ -23,7 +23,7 @@
  *     roof; he rests 1.25 times as fast, game/sleep BED_REST) and `ring` (8 stones: a ring of stones RING_AT (2.2 m) in front of the open side; a fire
  *     within RING_R (1 m) of its middle burns longer and the rain does not put it out, game/fire). Built like the lean-to itself: he stands
  *     within UP_REACH (2.2 m) of a finished lean-to's centre and the materials lie in piles within UP_NEAR (3 m) of that centre (`upgradeFor`);
- *     a hold of the action button builds it in `steps` steps (UP_TIME seconds of work in all, UP_COST days of rest). Each step takes one
+ *     an icon of the arc builds it in `steps` steps (UP_TIME seconds of work in all, UP_COST days of rest). Each step takes one
  *     of each material out of the piles as it begins (`paidSteps`), so walking off keeps the progress and what was used, and building on
  *     needs only the rest. The first upgrade whose materials are all there is built (walls, bed, ring).
  *   - The flood takes a lean-to, also a half-built one, whose ground is below the sea.

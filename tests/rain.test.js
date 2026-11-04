@@ -22,7 +22,7 @@ beforeAll(async () => {
 }, 120000);
 afterEach(() => { for (const t of w.tiles) { for (const l of t.drift) delete l.t; if (t.trees.length) for (const b of branchesOfTile(w, t)) delete b.t; } });   // the world is shared: wood the rain wet is dry again
 
-const input = () => { const i = { up: false, down: false, left: false, right: false, run: false, target: null }; i.clearTarget = () => { i.target = null; }; i.takeHold = () => null; i.takeSleep = () => false; i.takeAction = () => null; i.takeWake = () => false; i.pressing = () => false; return i; };
+const input = () => { const i = { up: false, down: false, left: false, right: false, run: false, target: null }; i.clearTarget = () => { i.target = null; }; i.takeLight = () => null; i.takeSleep = () => false; i.takeAction = () => null; i.takeWake = () => false; i.pressing = () => false; return i; };
 const run = (g, s, dt = 1 / 30) => { const i = input(); for (let t = 0; t < s; t += dt) g.update(i, dt); };
 const piece = (id, x, z, extra = {}) => ({ id, x, y: 1, z, len: 1, a: 0, rad: 0.1, ...extra });
 

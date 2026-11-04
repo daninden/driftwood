@@ -8,12 +8,14 @@
  *                          of driftwood, a pile, a coconut, a fire or a torch: walk
  *                          to beside it and stand there. Clicking and tapping
  *                          never do anything else; that is the action button's job
- *   Space, action button   (render/actionButton) a short press does the obvious
- *                          thing for what he stands beside, holding it (about
- *                          HOLD_MS) lights a pile or lies down to sleep (the game
- *                          decides, see game/game `action`)
+ *   Space, action button   (render/actionButton) a press does the obvious small
+ *                          thing for what he stands beside (the game decides,
+ *                          see game/game `action`); there is no long press (0.27.4)
+ *   1, 2, 3                do the first, second or third icon of the arc above the
+ *                          action button (left to right; the icons are clicked or
+ *                          tapped as well, render/actionButton)
  *   Z                      lie down to sleep
- *   F                      light the pile beside the castaway
+ *   F                      light the pile beside the castaway (or build)
  *   left click, tap, WASD, the action button   while asleep: wake up (the game
  *                          decides); turning, tilting or zooming the view does not wake him
  *   double tap             run to that spot (touch: hold and drag to steer
@@ -61,17 +63,17 @@
  *     key repeating), or the left mouse button or a finger was pressed on the
  *     world, or the action button went down, since the last call (not the
  *     right mouse button, a second finger or the view keys)
- *   input.takeHold() -> { key: true } once when F was pressed, otherwise null
+ *   input.takeLight() -> true once when F was pressed
  *   input.takeAction() -> 'tap' once when the action button (or Space) was
- *     released within HOLD_MS, 'hold' once when it has been held HOLD_MS (while
- *     still down), otherwise null
+ *     released, otherwise null (however long it was held)
+ *   input.takeChoice() -> 0, 1 or 2 once when key 1, 2 or 3 was pressed or choose(i) was
+ *     called (a click on an icon of the arc), otherwise null; the game looks it up in game.action().options
+ *   input.choose(i)   called by render/actionButton for an icon of the arc
  *   input.pressing() -> true while the action button is held
- *   input.actionFill() -> 0..1 how far the held press is towards a hold (the
- *     ring round the icon); 1 once it has become one, 0 when not held
  *   input.actionStart(id), actionEnd(id)   called by render/actionButton for the
  *     finger or mouse `id` on the button (Space does the same with the id 'key')
  *   input.cancelAction()   called by the game when the press woke him: that
- *     press then becomes neither a tap nor a hold
+ *     press then does nothing
  *   input.stickStart(id), stickMove(id, dx, dy, radius), stickEnd(id)   called
  *     by render/thumbStick for the finger `id` on the stick
  *   input.clearTarget()   called by the game when the target is reached
@@ -84,7 +86,7 @@ import { YAW, basis } from '../core/view.js';
 
 const TURN_RATE = 1.0, DRAG_YAW = 0.005, DRAG_PITCH = 0.002;   // rad/s for Q/E, rad per pixel for dragging
 const PINCH = 1 / Math.log(1.1);   // zoom steps per e-fold of finger distance (render/camera zooms 1.1x per step)
-export const HOLD_MS = 550;   // holding the action button this long is a hold (light a pile, sleep)
+const CHOICE_KEYS = { Digit1: 0, Numpad1: 0, Digit2: 1, Numpad2: 1, Digit3: 2, Numpad3: 2 };   // the icons of the arc, left to right
 const DOUBLE_TAP_MS = 300, DOUBLE_TAP_PX = 40, STEER_PX = 12;   // a finger that moves less than STEER_PX still taps
 export const STICK_DEAD = 0.12, STICK_RUN = 0.85;
 const ZOOM_KEYS = { Equal: -1, NumpadAdd: -1, Minus: 1, NumpadSubtract: 1 };
@@ -100,8 +102,8 @@ export function stickIntent(dx, dy, radius, yaw = YAW) {
 export function createInput(element, pickGround, now = () => performance.now()) {
   const touches = new Map();   // pointerId -> { x, y } for fingers on the screen
   let pinch = null, lastTap = null, running = false, downAt = null, steering = false;
-  let sleepKey = false, lightKey = false, woke = false;
-  let press = null, pressed = null;   // press: { id, t, fired, cancelled } while the action button is held; pressed: 'tap' | 'hold' waiting to be taken
+  let sleepKey = false, lightKey = false, woke = false, choice = null;
+  let press = null, pressed = null;   // press: { id, cancelled } while the action button is held; pressed: 'tap' waiting to be taken
   let pointerDown = false, dragging = false, zoom = 0, dragYaw = 0, dragPitch = 0, turnL = false, turnR = false;
   let stickId = null, stickVec = null, keyRun = false;   // stickVec: { dx, dy, radius } of the thumb on the stick
   const takeZoom = () => { const z = zoom; zoom = 0; return z; };
@@ -110,13 +112,10 @@ export function createInput(element, pickGround, now = () => performance.now()) 
     dragYaw = dragPitch = 0; return t;
   };
   const takeSleep = () => { const k = sleepKey; sleepKey = false; return k; };
-  const takeHold = () => { if (lightKey) { lightKey = false; return { key: true }; } return null; };
-  const takeAction = () => {
-    if (press && !press.fired && !press.cancelled && now() - press.t >= HOLD_MS) { press.fired = true; return 'hold'; }
-    const k = pressed; pressed = null; return k;
-  };
+  const takeLight = () => { const k = lightKey; lightKey = false; return k; };
+  const takeAction = () => { const k = pressed; pressed = null; return k; };
+  const takeChoice = () => { const k = choice; choice = null; return k; };
   const pressing = () => !!press;
-  const actionFill = () => !press || press.cancelled ? 0 : press.fired ? 1 : Math.min(1, Math.max(0, (now() - press.t) / HOLD_MS));
   const takeWake = () => { const k = woke; woke = false; return k; };
   const stickNow = () => stickVec && stickIntent(stickVec.dx, stickVec.dy, stickVec.radius, input.yaw);
   const input = { up: false, down: false, left: false, right: false, target: null, yaw: undefined,
@@ -130,20 +129,22 @@ export function createInput(element, pickGround, now = () => performance.now()) 
       if (stickNow()) { input.target = null; if (!was) woke = true; }
     },
     stickEnd(id) { if (id === stickId) { stickId = null; stickVec = null; } },
-    actionStart(id) { if (!press) { press = { id, t: now(), fired: false, cancelled: false }; woke = true; } },
+    actionStart(id) { if (!press) { press = { id, cancelled: false }; woke = true; } },
     actionEnd(id) {
       if (!press || press.id !== id) return;
-      if (!press.fired && !press.cancelled) pressed = now() - press.t >= HOLD_MS ? 'hold' : 'tap';
+      if (!press.cancelled) pressed = 'tap';
       press = null;
     },
     cancelAction() { if (press) press.cancelled = true; pressed = null; },
-    clearTarget() { input.target = null; }, takeZoom, takeTurn, takeSleep, takeWake, takeHold, takeAction, pressing, actionFill, dispose };
+    choose(i) { if (Number.isInteger(i) && i >= 0 && i < 3) choice = i; },
+    clearTarget() { input.target = null; }, takeZoom, takeTurn, takeSleep, takeWake, takeLight, takeAction, takeChoice, pressing, dispose };
 
   const onKey = down => e => {
     const k = KEYS[e.code];
     if (down && !e.repeat && k) woke = true;
     if (down && !e.repeat && e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey) sleepKey = true;
     if (down && !e.repeat && e.code === 'KeyF' && !e.ctrlKey && !e.metaKey) lightKey = true;
+    if (down && !e.repeat && e.code in CHOICE_KEYS && !e.ctrlKey && !e.metaKey && !e.altKey && !(e.target && e.target.tagName === 'INPUT')) choice = CHOICE_KEYS[e.code];
     if (e.code === 'Space' && !e.ctrlKey && !e.metaKey) { if (down && !e.repeat) input.actionStart('key'); else if (!down) input.actionEnd('key'); e.preventDefault(); }
     if (k) { input[k] = down; if (down) input.target = null; e.preventDefault(); }
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keyRun = down;
@@ -156,7 +157,7 @@ export function createInput(element, pickGround, now = () => performance.now()) 
     zoom += e.deltaY / (e.deltaMode === 1 ? 3 : e.deltaMode === 2 ? 1 : 100); e.preventDefault();
   };
   const keydown = onKey(true), keyup = onKey(false);
-  const blur = () => { press = null; input.up = input.down = input.left = input.right = keyRun = turnL = turnR = dragging = pointerDown = false; touches.clear(); pinch = null; stickId = null; stickVec = null; };
+  const blur = () => { press = null; choice = null; input.up = input.down = input.left = input.right = keyRun = turnL = turnR = dragging = pointerDown = false; touches.clear(); pinch = null; stickId = null; stickVec = null; };
   const setTarget = (e, tap) => {
     const touch = e.pointerType === 'touch', g = pickGround(e.clientX, e.clientY, touch); if (!g) return;
     const t = { x: g.x, z: g.z }; if (running) t.run = true;

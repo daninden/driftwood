@@ -41,10 +41,15 @@
   #action.on { cursor: pointer; }
   #action svg { width: 100%; height: 100%; display: block; pointer-events: none; overflow: visible; filter: var(--halo); }
   #action .ring { fill: var(--ink-glow); fill-opacity: 0.29; stroke: var(--ink); stroke-width: 2.2; }
-  #action .fill { fill: none; stroke: var(--ink); stroke-width: 2.8; stroke-linecap: round; }
-  #action .main, #action .side { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-  #action .side { stroke-width: 2.4; }
-  #action .main *, #action .side * { vector-effect: non-scaling-stroke; }
+  #action .main { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  #action .main * { vector-effect: non-scaling-stroke; }
+  #arc { position: fixed; right: calc(18px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); width: 84px; height: 84px; pointer-events: none; visibility: hidden; }   /* the icons of the other things to do, in an arc above the ring (render/actionButton) */
+  @media (pointer: coarse) and (not (any-pointer: fine)) { #arc { right: calc(47px + env(safe-area-inset-right)); bottom: calc(150px + env(safe-area-inset-bottom)); } }
+  body.ready #arc { visibility: visible; }
+  #arc .opt { position: absolute; width: 44px; height: 44px; opacity: 0.75; transition: opacity 0.25s ease; pointer-events: auto; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  #arc .opt:hover, #arc .opt:active { opacity: 1; }
+  #arc .opt svg { width: 100%; height: 100%; display: block; pointer-events: none; overflow: visible; fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; filter: var(--halo); }
+  #arc .opt svg * { vector-effect: non-scaling-stroke; }
   #row { position: fixed; left: calc(18px + 26px + 14px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); height: 26px; display: flex; align-items: flex-end; gap: 16px; pointer-events: none; }
   #sound { position: fixed; left: calc(18px + env(safe-area-inset-left)); bottom: calc(18px + 26px + 14px + env(safe-area-inset-bottom)); width: 26px; height: 26px; opacity: 0.5; filter: var(--halo); visibility: hidden; transition: opacity 0.5s ease; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   #sound[hidden] { display: none; }
@@ -83,7 +88,8 @@
 <svg id="rest" viewBox="-1 -1 26 26" aria-hidden="true"><circle class="rim" cx="12" cy="12" r="12"/><path class="lit"/></svg>
 <div id="sound" hidden aria-hidden="true"><svg viewBox="0 0 26 26"><path class="rim" d="M3 10H8L14 5V21L8 16H3Z"/><g class="waves"><path class="rim" d="M17.5 9.5Q20 13 17.5 16.5"/><path class="rim" d="M20.5 6.5Q25 13 20.5 19.5"/></g><path class="rim cross" d="M18 9L25 17M25 9L18 17"/></svg></div>
 <div id="stick" aria-hidden="true"><svg viewBox="-75 -75 150 150"><circle class="ring" cx="0" cy="0" r="55"/><circle class="knob" cx="0" cy="0" r="6"/></svg></div>
-<div id="action" aria-hidden="true"><svg viewBox="-42 -42 84 84"><circle class="ring" cx="0" cy="0" r="30"/><circle class="fill" cx="0" cy="0" r="36" transform="rotate(-90)" stroke-dasharray="226.19" stroke-dashoffset="226.19"/><g class="main"></g><g class="side"></g></svg></div>
+<div id="action" aria-hidden="true"><svg viewBox="-42 -42 84 84"><circle class="ring" cx="0" cy="0" r="30"/><g class="main"></g></svg></div>
+<div id="arc" role="group" aria-label="Other things to do"></div>
 <div id="row" aria-hidden="true"><div id="needs"><svg id="thirst" viewBox="0 0 16 24"><clipPath id="thirst-clip"><rect x="0" y="0" width="16" height="24"/></clipPath><path class="lit" clip-path="url(#thirst-clip)" d="M8 1C10 5 14 10 14 15.5A6 6 0 0 1 2 15.5C2 10 6 5 8 1Z"/><path class="rim" d="M8 1C10 5 14 10 14 15.5A6 6 0 0 1 2 15.5C2 10 6 5 8 1Z"/></svg><svg id="hunger" viewBox="0 0 24 24"><clipPath id="hunger-clip"><rect x="0" y="8" width="24" height="14"/></clipPath><path class="lit" clip-path="url(#hunger-clip)" d="M2 8C2 16.5 6.5 22 12 22C17.5 22 22 16.5 22 8Z"/><path class="rim" d="M2 8C2 16.5 6.5 22 12 22C17.5 22 22 16.5 22 8"/><path class="rim" d="M2 8A10 3 0 1 1 22 8A10 3 0 1 1 2 8Z"/></svg></div><div id="carry"></div></div>
 <div id="dev" aria-hidden="true"></div>
 <div id="who" aria-hidden="true"></div>

@@ -6,7 +6,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createSleep, AWAKE_MAX, TIRED_AT, TIRED_SLOW, SLEEP_DAYS, SPEED, LIE, SLEEP_AFTER, COLD_SLEEP, SHELTER_SLEEP } from '../src/game/sleep.js';
 import { createGame } from '../src/game/game.js';
-import { createInput, HOLD_MS } from '../src/game/input.js';
+import { createInput } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { FIRST_HIGH, PERIOD, RANGE } from '../src/game/tide.js';
 import { WALK_SPEED } from '../src/game/movement.js';
@@ -136,12 +136,12 @@ describe('sleeping only after a while awake (0.17.3)', () => {
     expect(createSleep({ awake: 0.49 }).canLie()).toBe(false);
     const s = createSleep({ awake: SLEEP_AFTER }); expect(s.canLie()).toBe(true); expect(s.rest()).toBeCloseTo(0.75, 6);
   });
-  it('offers no sleep hold and ignores Z before that, but allows both after', () => {
+  it('offers no sleep icon and ignores Z before that, but allows both after', () => {
     const g = createGame(w, spawn, { sleep: { awake: 0.3 } });
-    expect(g.action().hold).toBeNull();
+    expect(g.action().options).toEqual([]);
     g.update(makeInput({ sleep: true }), 1 / 30); expect(g.sleep.asleep).toBe(false);
     const h = createGame(w, spawn, { sleep: { awake: 0.6 } });
-    expect(h.action().hold).toEqual({ kind: 'sleep' });
+    expect(h.action().options).toEqual([{ kind: 'sleep', big: true }]);
     h.update(makeInput({ sleep: true }), 1 / 30); expect(h.sleep.asleep).toBe(true);
   });
   it('collapsing from exhaustion or thirst still puts him to sleep, at any time awake', () => {
@@ -175,11 +175,11 @@ describe('sleep input', () => {
   const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
   const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t); return { el, input, later: ms => { t += ms; } }; };
 
-  for (const pointerType of ['touch', 'mouse']) it(`does not lie down after holding the castaway or anywhere else (${pointerType}); sleeping is Z or the held action button`, () => {
+  for (const pointerType of ['touch', 'mouse']) it(`does not lie down after pressing on the castaway or anywhere else (${pointerType}); sleeping is Z or the moon icon of the arc`, () => {
     const { el, input, later } = setup();
     fire(el, 'pointerdown', { button: 0, pointerType, pointerId: 1, clientX: 10, clientY: 10 });
     expect(input.target).toEqual(pointerType === 'touch' ? { x: 10, z: 10, tap: true, touch: true } : { x: 10, z: 10, tap: true });
-    later(HOLD_MS * 2); expect(input.takeSleep()).toBe(false); expect(input.takeHold()).toBeNull(); expect(input.takeAction()).toBeNull();
+    later(1100); expect(input.takeSleep()).toBe(false); expect(input.takeLight()).toBe(false); expect(input.takeAction()).toBeNull();
     fire(window, 'pointerup', { button: 0, pointerType, pointerId: 1 });
     input.dispose();
   });

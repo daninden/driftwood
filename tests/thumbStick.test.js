@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { createInput, stickIntent, STICK_DEAD, STICK_RUN, HOLD_MS } from '../src/game/input.js';
+import { createInput, stickIntent, STICK_DEAD, STICK_RUN } from '../src/game/input.js';
 import { moveIntent } from '../src/game/movement.js';
 import { touchOnly, knobOffset } from '../src/render/thumbStick.js';
 import { basis, CAMDIR, RIGHT } from '../src/core/view.js';
@@ -72,7 +72,7 @@ describe('thumb stick input', () => {
     const { el, input, later } = setup();
     input.stickStart(9); input.stickMove(9, 0, -R / 2, R);
     expect(input.target).toBeNull(); expect(input.pressing()).toBe(false);
-    later(HOLD_MS * 2); expect(input.takeHold()).toBeNull(); expect(input.takeSleep()).toBe(false); expect(input.takeAction()).toBeNull();
+    later(1100); expect(input.takeLight()).toBe(false); expect(input.takeSleep()).toBe(false); expect(input.takeAction()).toBeNull();
     fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 1, clientX: 200, clientY: 10 });   // a finger on the world
     expect(input.target).not.toBeNull();
     fire(window, 'pointerup', { pointerType: 'touch', pointerId: 9 });   // the stick finger lifts

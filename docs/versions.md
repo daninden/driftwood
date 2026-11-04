@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.27.4 "Choices" — 2026-11-04
+
+- When more than one thing can be done, up to 3 smaller ink icons appear in an arc above the action ring (no frames or text, 44 px hit area, faint until under the pointer); a click or tap on one, or the keys 1 to 3 (left to right), does it at once. Order: the other small actions nearest first, then the big ones. On a desktop the arc leans left of the ring; on touch it sits centred above the ring, clear of the thumb stick.
+- The ring and Space only ever do small actions (pick up, lay down, eat, drink, fill, sip, feed the fire, take or plant a torch, dig, roast, pick). The big ones (light a pile, build the lean-to or an upgrade, sleep) appear only in the arc; F and Z stay as shortcuts. The long press is gone, with its filling ring.
+- Fixes the playtest finding that a pile or coconut nearer than the water took the drink press: water in reach is now a normal candidate, so drinking shows in the arc.
+- Structure: pure `game.actions()` (everything possible now, small first), `game.action()` -> `{ tap, options }` (`OPTIONS` 3), `game.act(option)`; `input.takeChoice()` and `input.choose(i)`; `HOLD_MS`, `actionFill`, `takeHold` removed (`takeLight` for F); `buttonIcons` returns `{ main, options }`, `arcSpots`, `LABEL_OF` (aria-labels) in `render/actionButton`; `#arc` in `index.html`.
+- Tests and tools: `tests/action.test.js` gets the arc; the other tests, the smoke test (clicks and taps an arc icon, desktop and phone, smoke-18 and smoke-19) and the playtest bot use the arc instead of holds. 845 tests in all. Not seen on a real touch device.
+
 ## 0.27.3 "Fixes" — 2026-11-04
 
 Fixes from the first playtest-bot run (5 seeds x 10 game days, 2 x 40 days, on 0.27.2).

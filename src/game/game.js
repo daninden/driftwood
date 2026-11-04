@@ -18,7 +18,7 @@
  *   a pending tap are not saved.
  *   wantsToMove(input) -> true while keys, the thumb stick or a target ask to walk;
  *   it stops kneeling work and drops a queued action (a resting stick is null)
- *   REACH (0.55), BESIDE (1.2), AIM, HUSK_TIME, NUT_DRINK, DRINK_TIME, STOOP: reaches, times and what a nut gives
+ *   REACH (0.55), BESIDE (1.2), OPTIONS (3), AIM, HUSK_TIME, NUT_DRINK, DRINK_TIME, STOOP: reaches, times and what a nut gives
  *   game.player                 { x, y, z, heading, moving, speed, phase, stoop, lie, tired, work }
  *     stoop: 1..0 while bending down to pick up or lay down wood (counts
  *     down over STOOP seconds); the castaway stands still meanwhile
@@ -63,7 +63,7 @@
  *     the castaway walks to beside it and stands there, doing nothing; river
  *     water, its bank and the castaway himself are just ground.
  *     Everything he does goes through the action button (input.takeAction(),
- *     Space or render/actionButton): game.action() says what it would do now.
+ *     Space or render/actionButton) or the icons above it (input.takeChoice(), keys 1 to 3): game.action() says what they would do now.
  *   0.25 "Shell": tap kinds 'husk' (a coconut within REACH: always husked, HUSK_TIME, a tuft of fibre when there is room; when it is done he eats it if hunger is above EAT_AT or he
  *   carries two already, else he carries the husked nut, 0.27.1 "Husk"; or, with `carried: true` and no `thing`, a carried nut eaten anywhere when hunger is above EAT_AT: EAT_TIME, no tuft, he keeps the shell), 'fill' (river water within 0.8 m,
  *   thirst not above DRINK_AT, an empty shell: kneels FILL_TIME and fills it; otherwise the water offers 'drink') and 'sip' (a full shell drunk
@@ -77,10 +77,9 @@
  *     'water' (a full shell drunk, SIP_TIME), 'berries' / 'banana' (the oldest eaten at once) and 'crab' (roasted and eaten, only beside a fire with flames): all also
  *     when not hungry or thirsty (never below 0). false and nothing changes when asleep or lying down, already kneeling or stooping, with a torch in hand, in water, with
  *     nothing of that kind, or a crab without a fire. Wood under his arm stays where it is (eating and drinking need no free hands, unlike the action button's sip).
- *   game.action() -> { tap, hold }   pure: what a short press and what a hold
- *     of the button would do for what he stands beside (the renderer draws the
- *     icon from it). Each is null or { kind, ... }. tap kinds, in the order of
- *     priority: 'feed' (dry wood in his arm beside a fire that is not full:
+ *   game.actions() -> [option]   pure (0.27.4 "Choices"): everything he could do now, each { kind, ... }; the small actions first, nearest first (one of each kind), then the
+ *     big ones marked `big: true`. Empty while he sleeps, lies down or kneels. The first, when it is not big, is the main action. Small kinds, in the order
+ *     of priority for the main one: 'feed' (dry wood in his arm beside a fire that is not full:
  *     lays one piece on it, also on embers; wet wood stays with him), then the
  *     nearest of 'dig' (0.22: a crab hiding in a hole within DIG_REACH that it fled into, fewer than 2 crabs carried, no torch in hand, not in water: kneels
  *     DIG_TIME, about half the time he catches it, game/crabs), 'roast' (0.22: a crab carried, a fire with flames within BESIDE, no torch in hand: kneels
@@ -91,16 +90,19 @@
  *     embers, or a torch in the ground within REACH) and 'drink' (fresh river
  *     water within 0.8 m, game/water; wood is laid down and a torch stuck in
  *     the ground first, then he kneels DRINK_TIME and is no longer thirsty),
- *     and last 'plant' (a torch in his hand is stuck in the ground in front of
+ *     and only when none of those is near 'plant' (a torch in his hand is stuck in the ground in front of
  *     him) or 'lay' (everything carried goes down at his feet, on a pile close
- *     by or as a new pile; not in water). A full fire (game/fire FUEL_MAX) takes
- *     no more wood: nothing is offered to lay on it. hold kinds: 'light' (a
+ *     by or as a new pile; not in water) or the carried bites. A full fire (game/fire FUEL_MAX) takes
+ *     no more wood: nothing is offered to lay on it. Big kinds, never the main one: 'light' (a
  *     pile of at least FIRE_MIN beside him, on dry ground, with a torch in
  *     his hand or fibre carried: he walks to its side and kneels to drill fire,
  *     costing rest and the fibre, or pushes the torch in, game/fire kindle) and
- *     otherwise 'sleep' (on dry, walkable ground, and only once he has been awake half a day, sleep.canLie()). F lights the pile beside
- *     him the same way, Z lies down to sleep (same rule). Both are null while he sleeps,
- *     lies down or kneels.
+ *     'sleep' (on dry, walkable ground, and only once he has been awake half a day, sleep.canLie()). F lights the pile beside
+ *     him the same way (or builds), Z lies down to sleep (same rule).
+ *   game.action() -> { tap, options }   pure: the main small action (or null: the ring and Space do it) and up to OPTIONS (3) others for the arc above the ring and the keys 1 to 3: the
+ *     other small actions nearest first, then the big ones (a big one is never dropped for a small one). Nothing at all while he sleeps, lies down or kneels.
+ *   game.act(option) -> bool   do one of them at the next update (looked up again by kind among what can be done then, so a stale one does nothing). input.takeChoice() (keys 1 to 3,
+ *     a click on an icon of the arc) picks options[i] the same way. The big actions are never done by the ring or Space.
  *     Thirst makes him a
  *     little slower, very thirsty makes rest run out twice as fast, and after
  *     two days he collapses and sleeps like exhaustion (game/thirst). Hunger
@@ -120,7 +122,7 @@
  *
  *   Branches (0.16) are picked up, carried and laid down like driftwood (wood and branches
  *   together at most CARRY_MAX), feed a fire for half a piece (game/fire BRANCH_BURN), and
- *   hold kind 'build' (a pile of 6 driftwood and a pile of 6 branches within 2 m of each
+ *   big kind 'build' (a pile of 6 driftwood and a pile of 6 branches within 2 m of each
  *   other beside him, or a half-built lean-to within LEANTO_REACH of him) wins over
  *   'light': he walks to beside the spot, kneels BUILD_TIME seconds (the work kind
  *   'build'; the progress of the lean-to rises as he works, so walking off keeps it, and
@@ -130,7 +132,7 @@
  *   for 'husk'; the tuft comes only when there is room for it (game/fibre husk).
  *
  *   0.27 "Home": fronds (under the arm with the wood, never fuel) and stones (in his hands, at most 2, apart from the wood) are picked up and
- *   laid down like wood, each piece slows him (wood.load()). hold kind 'upgrade' (`what`: 'walls', 'bed' or 'ring', game/leanto UPGRADES): beside a finished lean-to
+ *   laid down like wood, each piece slows him (wood.load()). big kind 'upgrade' (`what`: 'walls', 'bed' or 'ring', game/leanto UPGRADES): beside a finished lean-to
  *   (UP_REACH) whose materials lie in piles within UP_NEAR of it; it wins over 'light' but not over 'build'. He kneels UP_TIME seconds in all (work kind
  *   'upgrade'), one step of materials is taken from the piles as each step begins and the progress is kept (lean-to `up`) when he walks off.
  *   In the sleep a lean-to's upgrades count (walls: a longer cold sleep, bed: faster rest, game/sleep); the walls widen where wood and fires stay dry
@@ -164,7 +166,7 @@ import { createFire, full, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH, TORCH_
 
 export const STOOP = 0.55;         // seconds to bend down and up again
 export const REACH = 0.55;         // a piece of wood, a coconut or a torch in the ground within this distance of the feet can be reached
-export const BESIDE = 1.2;         // a pile or a fire within this distance (from its edge) is beside him: F and the hold of the action button reach it
+export const BESIDE = 1.2;         // a pile or a fire within this distance (from its edge) is beside him: F and the icons above the action button reach it
 const RAIN_EVERY = 0.4 / DAY_SECONDS;   // the rain wets wood about every 0.4 s of game time
 export const AIM = { mouse: 0.4, touch: 0.8 };   // how close to a piece a click or tap has to be to walk to it
 export const HUSK_TIME = 4;        // seconds of kneeling to tear the husk off a coconut and eat it
@@ -172,6 +174,7 @@ export const NUT_DRINK = 0.25;     // days of thirst the milk of a coconut takes
 export const DRINK_TIME = 4;       // seconds of kneeling to drink
 const DIG_REACH = 0.8;             // a crab hole this close to the feet can be dug at
 const DRINK_REACH = 0.8;           // fresh water this close to the feet can be drunk (the bank of a brook counts)
+export const OPTIONS = 3;          // at most this many icons in the arc above the ring
 const SIDE = 0.75;                 // kneeling this far from the middle of a pile or a fire
 
 // true while the input asks to walk: keys, the thumb stick (null at rest, see game/input) or a target
@@ -185,9 +188,9 @@ export function createGame(world, spawn, opts = {}) {
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, shells, berries, bananas, wildlife, fireflies, weather, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, use };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, shells, berries, bananas, wildlife, fireflies, weather, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, act, use };
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
-  let blockedFor = 0, work = null, slept = sleep.asleep, queued = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
+  let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
   wood.tideUpdate(game.sea, clock.total);
   const here = () => terrainAt(world, player.x, player.z, game.sea);
@@ -245,62 +248,76 @@ export function createGame(world, spawn, opts = {}) {
   }
   const sleepable = () => { const t = here(); return !wet(t) && t.climb <= 0.25; };
 
-  /** What the action button would do now: { tap, hold }, each null or { kind, ... } (see the header). Changes nothing. */
-  function action() {
-    const none = { tap: null, hold: null };
-    if (sleep.asleep || sleep.lie > 0 || work) return none;
+  /** Everything he could do now, as a flat list (pure, changes nothing): the small actions first, nearest first (the first is the main one the ring
+   *  and Space do), then the big ones, each marked `big: true` (build, upgrade, light, sleep). See the header for the kinds. */
+  function actions() {
+    if (sleep.asleep || sleep.lie > 0 || work) return [];
     const px = player.x, pz = player.z, load = wood.load(), torch = !!fire.torch, swim = wet(here());
-    let tap = null;
+    const small = [];
     const blaze = load ? fire.find(px, pz, BESIDE, 'fire') : null;
-    if (blaze && dryPiece() && !full(blaze.fire)) tap = { kind: 'feed', fire: blaze.fire, thing: blaze };   // dry wood beside a fire feeds it, whatever else is near
-    else {
-      const cands = [];   // what he could do; the nearest wins
-      if (!torch) {   // stones go in his hands (at most STONE_MAX), everything else under his arm (at most CARRY_MAX)
-        const room = l => l.stone ? wood.stones.length < STONE_MAX : wood.carried.length < CARRY_MAX;
-        const log = wood.find(px, pz, REACH, 'log', room), pile = load ? null : wood.find(px, pz, BESIDE, 'pile');   // with wood in his arm a pile is laid on, not taken from
-        if (log) cands.push({ d: log.d, a: { kind: 'pickup', thing: log } });
-        if (pile) cands.push({ d: pile.d, a: { kind: 'pickup', thing: pile } });
-      }
-      const coco = fibre.find(px, pz, REACH);   // 0.27.1: always husked (a tuft when there is room); at the end he eats it when hungry (or with two carried already), else carries it
-      if (coco) cands.push({ d: coco.d, a: { kind: 'husk', thing: coco } });
-      for (const [f, kind] of [[berries, 'berries'], [bananas, 'bananas']]) {   // 0.26: berry bushes and banana plants; hungry he eats on the spot, else the pick is carried (if there is room)
-        const p = f.find(px, pz, REACH), eat = hunger.days > EAT_AT;
-        if (p && (eat || !f.full())) cands.push({ d: p.d, a: { kind, eat, thing: p } });
-      }
-      if (!torch && !swim) {   // 0.22: crabs; the roast comes before the torch at the same fire (equal distances keep their order)
-        const f = crabs.carried.length ? fire.find(px, pz, BESIDE, 'fire') : null;
-        if (f && fire.strength(f.fire) > 0) cands.push({ d: f.d, a: { kind: 'roast', fire: f.fire, thing: f } });
-        const h = crabs.full() ? null : wildlife.hiding(px, pz, DIG_REACH);
-        if (h) cands.push({ d: h.d, a: { kind: 'dig', thing: h } });
-      }
-      if (!load && !torch) {
-        const f = fire.find(px, pz, BESIDE, 'fire'), t = fire.find(px, pz, REACH, 'torch');
-        if (f && f.fire.fuel > TORCH_COST) cands.push({ d: f.d, a: { kind: 'torch', fire: f.fire, thing: f } });   // flames, not embers
-        if (t) cands.push({ d: t.d, a: { kind: 'torch', torch: t.torch, thing: t } });
-      }
-      const wp = findWater(world, px, pz, DRINK_REACH, game.sea);
-      if (wp && (load ? !swim : torch ? !!plantBesideSpot() : true)) cands.push({ d: Math.hypot(wp.x - px, wp.z - pz), a: { kind: thirst.days <= DRINK_AT && shells.empty() ? 'fill' : 'drink', thing: wp } });   // wood is laid down and a torch stuck in the ground first
-      cands.sort((p, q) => p.d - q.d);
-      if (cands.length) tap = cands[0].a;
-      else if (torch) tap = plantSpot() ? { kind: 'plant' } : null;
-      else if (load) tap = swim ? null : { kind: 'lay' };
-      else if (!swim) {   // empty hands, nothing near to do: a full shell when thirsty, else a carried nut when hungry
-        if (shells.full() && thirst.days > SIP_AT) tap = { kind: 'sip' };
-        else if (hunger.days > EAT_AT && berries.carried.length) tap = { kind: 'eatBerries' };   // 0.26: what spoils first is eaten first
-        else if (hunger.days > EAT_AT && bananas.carried.length) tap = { kind: 'eatBanana' };
-        else if (shells.nuts && hunger.days > EAT_AT) tap = { kind: 'husk', carried: true };
+    if (blaze && dryPiece() && !full(blaze.fire)) small.push({ kind: 'feed', fire: blaze.fire, thing: blaze });   // dry wood beside a fire feeds it, whatever else is near
+    const cands = [];   // what else he could do; the nearest first
+    if (!torch) {   // stones go in his hands (at most STONE_MAX), everything else under his arm (at most CARRY_MAX)
+      const room = l => l.stone ? wood.stones.length < STONE_MAX : wood.carried.length < CARRY_MAX;
+      const log = wood.find(px, pz, REACH, 'log', room), pile = load ? null : wood.find(px, pz, BESIDE, 'pile');   // with wood in his arm a pile is laid on, not taken from
+      if (log) cands.push({ d: log.d, a: { kind: 'pickup', thing: log } });
+      if (pile) cands.push({ d: pile.d, a: { kind: 'pickup', thing: pile } });
+    }
+    const coco = fibre.find(px, pz, REACH);   // 0.27.1: always husked (a tuft when there is room); at the end he eats it when hungry (or with two carried already), else carries it
+    if (coco) cands.push({ d: coco.d, a: { kind: 'husk', thing: coco } });
+    for (const [f, kind] of [[berries, 'berries'], [bananas, 'bananas']]) {   // 0.26: berry bushes and banana plants; hungry he eats on the spot, else the pick is carried (if there is room)
+      const p = f.find(px, pz, REACH), eat = hunger.days > EAT_AT;
+      if (p && (eat || !f.full())) cands.push({ d: p.d, a: { kind, eat, thing: p } });
+    }
+    if (!torch && !swim) {   // 0.22: crabs; the roast comes before the torch at the same fire (equal distances keep their order)
+      const f = crabs.carried.length ? fire.find(px, pz, BESIDE, 'fire') : null;
+      if (f && fire.strength(f.fire) > 0) cands.push({ d: f.d, a: { kind: 'roast', fire: f.fire, thing: f } });
+      const h = crabs.full() ? null : wildlife.hiding(px, pz, DIG_REACH);
+      if (h) cands.push({ d: h.d, a: { kind: 'dig', thing: h } });
+    }
+    if (!load && !torch) {
+      const f = fire.find(px, pz, BESIDE, 'fire'), t = fire.find(px, pz, REACH, 'torch');
+      if (f && f.fire.fuel > TORCH_COST) cands.push({ d: f.d, a: { kind: 'torch', fire: f.fire, thing: f } });   // flames, not embers
+      if (t) cands.push({ d: t.d, a: { kind: 'torch', torch: t.torch, thing: t } });
+    }
+    const wp = findWater(world, px, pz, DRINK_REACH, game.sea);
+    if (wp && (load ? !swim : torch ? !!plantBesideSpot() : true)) cands.push({ d: Math.hypot(wp.x - px, wp.z - pz), a: { kind: thirst.days <= DRINK_AT && shells.empty() ? 'fill' : 'drink', thing: wp } });   // wood is laid down and a torch stuck in the ground first
+    cands.sort((p, q) => p.d - q.d);
+    for (const c of cands) if (!small.some(x => x.kind === c.a.kind)) small.push(c.a);   // one of each kind (the nearest): two icons alike would say nothing
+    if (!small.length) {   // nothing near to do: what is in his hands, then a carried bite
+      if (torch) { if (plantSpot()) small.push({ kind: 'plant' }); }
+      else if (load) { if (!swim) small.push({ kind: 'lay' }); }
+      else if (!swim) {   // empty hands: a full shell when thirsty, else something carried when hungry
+        if (shells.full() && thirst.days > SIP_AT) small.push({ kind: 'sip' });
+        else if (hunger.days > EAT_AT && berries.carried.length) small.push({ kind: 'eatBerries' });   // 0.26: what spoils first is eaten first
+        else if (hunger.days > EAT_AT && bananas.carried.length) small.push({ kind: 'eatBanana' });
+        else if (shells.nuts && hunger.days > EAT_AT) small.push({ kind: 'husk', carried: true });
       }
     }
-    const b = buildable(), u = b ? null : upgradable(), l = b || u ? null : lightable();
-    return { tap, hold: b || u || l || (sleepable() && sleep.canLie() ? { kind: 'sleep' } : null) };
+    const b = buildable(), u = b ? null : upgradable(), l = b || u ? null : lightable(), big = b || u || l;
+    if (big) small.push({ ...big, big: true });
+    if (sleepable() && sleep.canLie()) small.push({ kind: 'sleep', big: true });
+    return small;
   }
 
-  function startLight(l, input) {   // walk to the pile's side, kneel there and light it (F or the held button)
+  /** What the action button offers now: { tap, options } (pure). tap: the main small action (the ring and Space do it) or null. options: up to
+   *  OPTIONS (3) others in this order: the other small actions nearest first, then the big ones (never dropped for a small one). Keys 1 to 3 and the arc's icons pick from it. */
+  function action() {
+    const list = actions(), tap = list.length && !list[0].big ? list[0] : null, rest = tap ? list.slice(1) : list;
+    const bigs = rest.filter(o => o.big), smalls = rest.filter(o => !o.big);
+    return { tap, options: [...smalls.slice(0, Math.max(0, OPTIONS - bigs.length)), ...bigs].slice(0, OPTIONS) };
+  }
+
+  /** Do an option of action() (or its tap) at the next update: it is looked up again among what can be done then (same kind), so a stale one does nothing. */
+  function act(o) { if (!o || !o.kind) return false; chosen = o; return true; }
+  const same = (a, b) => a.kind === b.kind && a.what === b.what && (a.thing && a.thing.kind) === (b.thing && b.thing.kind);
+
+  function startLight(l, input) {   // walk to the pile's side, kneel there and light it (F or its icon)
     const side = beside(l.pile.x, l.pile.z);
     input.target = { x: side.x, z: side.z, tap: true, seen: true, act: { kind: l.torch ? 'kindle' : 'light', pile: l.pile, x: l.pile.x, z: l.pile.z } };
   }
 
-  function startBuild(b, input) {   // walk to beside the spot, kneel there and build a lean-to or an upgrade (F or the held button)
+  function startBuild(b, input) {   // walk to beside the spot, kneel there and build a lean-to or an upgrade (F or its icon)
     const side = beside(b.x, b.z), heading = b.leanto ? b.leanto.heading : Number.isFinite(input.yaw) ? input.yaw : YAW;
     input.target = { x: side.x, z: side.z, tap: true, seen: true, act: { kind: b.kind === 'upgrade' ? 'upgrade' : 'build', leanto: b.leanto, site: b.site, what: b.what, heading, x: b.x, z: b.z } };
   }
@@ -363,7 +380,7 @@ export function createGame(world, spawn, opts = {}) {
 
   function drink(wp, kind = 'drink') { work = { kind, t: 0, dur: kind === 'fill' ? FILL_TIME : DRINK_TIME, thing: null }; face(wp); }
 
-  function act(a) {   // at the spot he walked to: light the pile, or build
+  function arrive(a) {   // at the spot he walked to: light the pile, or build
     if (a.kind === 'upgrade') {
       const lt = a.leanto, what = lt && leantos.list.includes(lt) && !wet(here()) ? upgradeFor(lt, wood.piles) : null;
       if (what) { const p0 = (lt.up && lt.up[what]) || 0; work = { kind: 'upgrade', t: 0, dur: Math.max(0.01, UP_TIME * (1 - p0)), thing: lt, what, p0, paid: paidSteps(what, p0) }; face(a); }
@@ -420,10 +437,16 @@ export function createGame(world, spawn, opts = {}) {
   function canSleep() { return sleepable() && !player.stoop && sleep.canLie(); }   // collapsing (sleep.update) needs neither
 
   function update(input, dt) {
-    const wantWake = input.takeWake ? input.takeWake() : false, held = input.takeHold ? input.takeHold() : null;
-    const pressed = input.takeAction ? input.takeAction() : null, doing = pressed ? action() : null;   // doing: what the button would do, before anything changes
+    const wantWake = input.takeWake ? input.takeWake() : false, light = input.takeLight ? input.takeLight() : false;
+    const pressed = input.takeAction ? input.takeAction() : null, idx = input.takeChoice ? input.takeChoice() : null;
+    let pick = null;   // what the button, a key 1 to 3, an icon of the arc or act() chose, looked at before anything changes
+    if (pressed || chosen || Number.isInteger(idx)) {
+      const doing = action(), all = [doing.tap, ...doing.options].filter(Boolean);
+      pick = (chosen && all.find(o => same(o, chosen))) || (Number.isInteger(idx) ? doing.options[idx] : null) || (pressed ? doing.tap : null) || null;
+      chosen = null;
+    }
     let wantSleep = input.takeSleep ? input.takeSleep() : false;
-    if (pressed === 'hold' && doing.hold && doing.hold.kind === 'sleep') wantSleep = true;
+    if (pick && pick.kind === 'sleep') wantSleep = true;
     if (sleep.asleep) { if (wantWake && sleep.lie > 0.5) { sleep.wake(); if (input.cancelAction) input.cancelAction(); } }   // the press that woke him does nothing more
     else if (wantSleep && canSleep()) { work = null; queued = null; sleep.start(); }
     if (sleep.asleep && fire.torch && !plantTorch()) fire.douse();   // he sticks the torch in the ground before he lies down
@@ -458,10 +481,10 @@ export function createGame(world, spawn, opts = {}) {
       if (work && work.t >= work.dur) { const wk = work; work = null; finish(wk); }
       res = stepPlayer(world, player, null, dt);
     } else {
-      if (held && held.key) { const b = buildable() || upgradable(); if (b) startBuild(b, input); else { const l = lightable(); if (l) startLight(l, input); } }   // F
-      else if (pressed === 'hold' && doing.hold && (doing.hold.kind === 'build' || doing.hold.kind === 'upgrade')) startBuild(doing.hold, input);
-      else if (pressed === 'hold' && doing.hold && doing.hold.kind === 'light') startLight(doing.hold, input);
-      else if (pressed === 'tap' && doing.tap && !player.stoop && !queued) press(doing.tap, input);
+      if (light) { const b = buildable() || upgradable(); if (b) startBuild(b, input); else { const l = lightable(); if (l) startLight(l, input); } }   // F
+      else if (pick && (pick.kind === 'build' || pick.kind === 'upgrade')) startBuild(pick, input);
+      else if (pick && pick.kind === 'light') startLight(pick, input);
+      else if (pick && pick.kind !== 'sleep' && !player.stoop && !queued) press(pick, input);
       const tg = input.target;
       if (tg && tg.tap && !tg.seen) look(tg);
       const a = input.target && input.target.act;
@@ -474,7 +497,7 @@ export function createGame(world, spawn, opts = {}) {
         if (wp && !wood.load() && !fire.torch) drink(wp, q);
         res = stepPlayer(world, player, null, dt);
       } else if (a && Math.hypot(input.target.x - player.x, input.target.z - player.z) < (a.kind === 'light' || a.kind === 'kindle' || a.kind === 'build' || a.kind === 'upgrade' || a.close ? 0.15 : REACH)) {
-        input.clearTarget(); if (a.kind !== 'stand') act(a);   // arrived: stand there, or light the pile
+        input.clearTarget(); if (a.kind !== 'stand') arrive(a);   // arrived: stand there, or light the pile
         res = stepPlayer(world, player, null, dt);
       } else {
         const dir = moveIntent(input, player);
