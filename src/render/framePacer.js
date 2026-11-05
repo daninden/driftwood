@@ -23,7 +23,7 @@
  *   poke: something happened at `now` (ms); idle: nothing has for `after` ms.
  *   It counts from `start` (ms, default 0) as if something had happened then.
  * isBusy({ player, asleep, settling, input }) -> bool   whether the scene is
- *   moving: player.moving, work, stoop, lie; asleep; the camera settling; held
+ *   moving: player.moving, work, stoop, lie, sitting down or getting up (0 < sitting < 1, 0.29.2); asleep; the camera settling; held
  *   keys, stick, a walking target or the action button held (its ring is filling).
  * maxDt(idle) -> MAX_DT or MAX_DT_IDLE
  *
@@ -49,6 +49,6 @@ export function createIdleTracker(after = IDLE_AFTER_MS, start = 0) {
 }
 
 export function isBusy({ player: p, asleep, settling, input: i }) {
-  return !!(asleep || settling || p.moving || p.work || p.stoop > 0 || p.lie > 0
+  return !!(asleep || settling || p.moving || p.work || p.stoop > 0 || p.lie > 0 || (p.sitting > 0 && p.sitting < 1)
     || i.up || i.down || i.left || i.right || i.stick || i.target || i.pressing());
 }
