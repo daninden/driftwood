@@ -19,7 +19,8 @@
  *   wantsToMove(input) -> true while keys, the thumb stick or a target ask to walk;
  *   it stops kneeling work and drops a queued action (a resting stick is null)
  *   REACH (0.55), BESIDE (1.2), OPTIONS (3), AIM, HUSK_TIME, NUT_DRINK, DRINK_TIME, STOOP: reaches, times and what a nut gives
- *   game.player                 { x, y, z, heading, moving, speed, phase, stoop, lie, tired, work }
+ *   game.player                 { x, y, z, heading, moving, speed, phase, stoop, sitting, lie, tired, work }
+ *     sitting: 0..1 sitting on the ground (0.29.2 "Amble"), eased by render/hero; goes up over SIT_TIME while input.sit holds and down again when it stops. Not saved
  *     stoop: 1..0 while bending down to pick up or lay down wood (counts
  *     down over STOOP seconds); the castaway stands still meanwhile
  *     lie: 0..1 lying down to sleep (game/sleep); tired: 0..1;
@@ -53,6 +54,11 @@
  *   game.weather                the schedule of showers (game/weather); game.rain: the intensity of the rain now, 0..1 (0.21:
  *                               wet wood in the open, fires and torches burning down faster, see game/wood rain and game/fire update)
  *   game.sea                    the current sea level (game/tide)
+ *   0.29.2 "Amble": two fields only game/mind sets on its input (the player's input has neither). input.pace (0.3..1, movement paceOf): the share of his walking speed, and, shortened
+ *   by paceStride, of his step, at which he walks (a run is never slowed; needs and load still multiply on top). input.sit (true, or a look point { x, z }): he sits down on the ground
+ *   and looks that way, and stays down while it holds. It does nothing, and he gets up (SIT_TIME), when he sleeps or lies, kneels, stoops, holds a torch, carries wood, a frond or
+ *   a stone, stands in water, on steep ground (SIT_SLOPE) or a climbing route, when a key, the stick or a target asks to walk, or on any press of the action button, an icon,
+ *   a row drawing, F or Z; a walk starts at once while he is still getting up (the get-up takes half the time then). Sitting is only resting: no rule, no faster recovery.
  *   game.update(input, dt) -> { distance, terrain, time, sea, rest }
  *     dt is real time. Moves the player from the input (game/input; Shift
  *     or a double-tapped target runs, a load and tiredness slow down),
@@ -144,7 +150,7 @@
  * Depends on: game/known, game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
  *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/water, game/wildlife, game/fireflies, game/weather
  */
-import { createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, nearestStandable, weariStride } from './movement.js';
+import { createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, nearestStandable, weariStride, paceOf, paceStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
 import { createKnown } from './known.js';
 import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, dryness } from './wood.js';
@@ -169,6 +175,8 @@ import { createWeather, FALLING } from './weather.js';
 import { createFire, full, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH, TORCH_DRY, TORCH_COST, BRANCH_BURN } from './fire.js';
 
 export const STOOP = 0.55;         // seconds to bend down and up again
+export const SIT_TIME = 0.5;       // 0.29.2 "Amble": seconds to sit down or get up (a get-up that makes way for a walk takes SIT_TIME / 2)
+export const SIT_SLOPE = 0.45;     // the ground he sits on is no steeper than this (the walking limit is 0.85)
 export const REACH = 0.55;         // a piece of wood, a coconut or a torch in the ground within this distance of the feet can be reached
 export const BESIDE = 1.2;         // a pile or a fire within this distance (from its edge) is beside him: F and the icons above the action button reach it
 const RAIN_EVERY = 0.4 / DAY_SECONDS;   // the rain wets wood about every 0.4 s of game time
@@ -252,6 +260,7 @@ export function createGame(world, spawn, opts = {}) {
     return what ? { kind: 'upgrade', leanto: lt, what, x: lt.x, z: lt.z } : null;
   }
   const sleepable = () => { const t = here(); return !wet(t) && t.climb <= 0.25; };
+  const sitOk = () => { const t = here(); return !wet(t) && t.depth <= 0.05 && t.climb <= 0.25 && t.s < SIT_SLOPE; };   // 0.29.2: level dry ground, no climbing route
 
   /** Everything he could do now, as a flat list (pure, changes nothing): the small actions first, nearest first (the first is the main one the ring
    *  and Space do), then the big ones, each marked `big: true` (build, upgrade, light, sleep). See the header for the kinds. */
@@ -462,6 +471,11 @@ export function createGame(world, spawn, opts = {}) {
     if (work && (sleep.asleep || wantsToMove(input))) work = null;   // stopped early
     if (queued && (sleep.asleep || wantsToMove(input))) queued = null;
 
+    // 0.29.2 "Amble": sitting on the ground, only when the mind asks (input.sit); anything he does or the player asks for gets him up
+    const sitWant = !!input.sit && !sleep.asleep && !(sleep.lie > 0) && !work && !queued && !(player.stoop > 0) && !fire.torch && !wood.load() && !wantsToMove(input) && !pick && !light && !wantSleep && sitOk();
+    if (sitWant) { const lk = input.sit; if (lk && Number.isFinite(lk.x) && Number.isFinite(lk.z) && Math.hypot(lk.x - player.x, lk.z - player.z) > 0.2) { let d = Math.atan2(lk.x - player.x, lk.z - player.z) - player.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); player.heading += d * Math.min(1, dt * 6); } }
+    const sitDown = dt / SIT_TIME;
+    player.sitting = sitWant ? Math.min(1, player.sitting + sitDown) : Math.max(0, player.sitting - (wantsToMove(input) || pick || light ? 2 : 1) * sitDown);
     let res, ran = false, strain = 1;   // ran: he ran this frame (game/breath)
     if (sleep.asleep || sleep.lie > 0) {
       queued = null;
@@ -508,9 +522,10 @@ export function createGame(world, spawn, opts = {}) {
         const dir = moveIntent(input, player);
         if (!dir && input.target) input.clearTarget();
         const needs = sleep.speed() * thirst.speed() * hunger.speed();
-        const load = (1 - CARRY_SLOW * wood.load()) * needs;
         const wantRun = !!dir && (input.run || !!(input.target && input.target.run)), run = wantRun && breath.canRun();   // out of breath he walks
-        res = stepPlayer(world, player, dir, dt, run, load, game.sea, (1 - CARRY_STRIDE * wood.load()) * weariStride(needs) * (run ? breath.stride() : 1));
+        const pace = run ? 1 : paceOf(input);   // 0.29.2: the habit's amble (the player's input has no pace); a run is never slowed
+        const load = (1 - CARRY_SLOW * wood.load()) * needs * pace;
+        res = stepPlayer(world, player, dir, dt, run, load, game.sea, (1 - CARRY_STRIDE * wood.load()) * weariStride(needs) * paceStride(pace) * (run ? breath.stride() : 1));
         ran = run && res.moved; strain = load;
         if (res.blocked && input.target) { blockedFor += dt; if (blockedFor > 0.5) input.clearTarget(); } else blockedFor = 0;
       }
