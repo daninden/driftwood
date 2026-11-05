@@ -490,7 +490,7 @@
           if (wantShot) return 'shot';
           if (rtPending) return 'roundtrip';
         }
-        if (mind) M.mind = { goals: mind.stats.goals, stuck: mind.stats.stuck, nopath: mind.stats.nopath, idleSecs: +mind.stats.idleSecs.toFixed(0), lightRefused: mind.stats.lightRefused, gazes: mind.stats.gazes };
+        if (mind) M.mind = { goals: mind.stats.goals, stuck: mind.stats.stuck, nopath: mind.stats.nopath, idleSecs: +mind.stats.idleSecs.toFixed(0), lightRefused: mind.stats.lightRefused, gazes: mind.stats.gazes, explores: mind.stats.explores, exploreSecs: +mind.stats.exploreSecs.toFixed(0) };
         return 'time';
       },
       settle() { idleInput(); cur = null; if (!game.sleep.asleep) for (let i = 0; i < 20; i++) { game.update(mind ? mind.input : input, TICK); } },

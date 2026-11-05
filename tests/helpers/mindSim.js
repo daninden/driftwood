@@ -3,13 +3,14 @@
 // 0.29: also reports the food he ate (r.mix, r.mealsPerDay in meals of half a day of hunger, r.hungryShare of the waking time), nights slept and naps; beachOnly takes the berries and bananas away.
 // 0.29.1: also counts the crabs that spoiled uneaten (r.crabsSpoiled), the crabs caught (r.crabsCaught) and the digs (r.digs).
 // 0.29.3: also the day each piece of his home was finished (r.homeDay: leanto, walls, ring, bed: the day number, or undefined).
+// 0.29.4: also the exploring trips (r.explores, r.exploreTicks, r.exploreRoute: ticks on a climbing route while exploring, must be 0) and the cells known at the start of day 1, 5 and 10 (r.knownAt).
 // Not a test itself. runMind(world, spawn, { days, know, dt, beachOnly }) -> report
 import { createGame } from '../../src/game/game.js';
 import { createMind } from '../../src/game/mind.js';
 import { HALF, T, NT } from '../../src/world/constants.js';
 import { DAY_SECONDS } from '../../src/game/clock.js';
 import { freshWater } from '../../src/game/water.js';
-import { canStand } from '../../src/game/movement.js';
+import { canStand, terrainAt } from '../../src/game/movement.js';
 import { createPath } from '../../src/game/path.js';
 import { NUT_FOOD, HUNGRY_AT } from '../../src/game/hunger.js';
 import { THIRSTY_AT } from '../../src/game/thirst.js';
@@ -44,7 +45,7 @@ export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state
   const mind = createMind(world, game, { stream });
   mind.engage();
   const p = game.player, clock = game.clock;
-  const r = { seed: world.seed, days, walked, known0: known0.size, maxThirst: 0, maxHunger: 0, minRest: 1, collapses: 0, sleeps: [], idleSecs: 0, errors: [], outside: 0, outsideMax: 0, lean: game.leantos.list.length, homeDay: {}, builds: 0, searchTicks: 0, stuckSelf: 0, stuckMax: 0, nopath: 0, wakes: 0, thirstyTicks: 0, hungryTicks: 0, ticks: 0, fires: 0, firesFail: 0, eaten: 0, foods: [], hungerBeforeMeal: [], crabsEaten: 0, crabsSpoiled: 0, crabsCaught: 0, digs: 0, hungrySecs: 0, thirstySecs: 0, drinks: 0, sips: 0, fills: 0, lightRefused: 0, dropped: {}, events: null };
+  const r = { seed: world.seed, days, walked, known0: known0.size, maxThirst: 0, maxHunger: 0, minRest: 1, collapses: 0, sleeps: [], idleSecs: 0, errors: [], exploreTicks: 0, exploreRoute: 0, knownAt: { 1: 0, 5: 0, 10: 0 }, outside: 0, outsideMax: 0, lean: game.leantos.list.length, homeDay: {}, builds: 0, searchTicks: 0, stuckSelf: 0, stuckMax: 0, nopath: 0, wakes: 0, thirstyTicks: 0, hungryTicks: 0, ticks: 0, fires: 0, firesFail: 0, eaten: 0, foods: [], hungerBeforeMeal: [], crabsEaten: 0, crabsSpoiled: 0, crabsCaught: 0, digs: 0, hungrySecs: 0, thirstySecs: 0, drinks: 0, sips: 0, fills: 0, lightRefused: 0, dropped: {}, events: null };
   const sl = game.sleep, so = sl.start.bind(sl), wo = sl.wake.bind(sl);
   sl.start = (...a) => { const was = sl.asleep; so(...a); if (!was && sl.asleep) r.sleeps.push({ nap: sl.nap, faint: game.thirst.faint(), day: clock.day, time: +clock.time.toFixed(3), x: p.x, z: p.z, chosen: mind.chose(), warm: game.fire.warm(p.x, p.z), shelter: game.leantos.shelter(p.x, p.z), thirst: game.thirst.days, hunger: game.hunger.days, awake: sl.awake, t0: clock.total }); };
   sl.wake = () => { const was = sl.asleep; wo(); if (was && !sl.asleep) { const s = r.sleeps[r.sleeps.length - 1]; if (s) { s.hours = +((clock.total - s.t0) * 24).toFixed(1); s.restAfter = sl.rest(); } } };
@@ -54,7 +55,7 @@ export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state
   game.shells.fill = () => { const ok = fo(); if (ok) r.fills++; return ok; };
   game.fire.attempt = (...a) => { const f = ao(...a); if (f) r.fires++; else r.firesFail++; return f; };
   const end = clock.total + days;
-  let still = 0, awakeSecs = 0, standSecs = 0, lastX = p.x, lastZ = p.z, wasAsleep = sl.asleep;
+  let lastDay = clock.day, still = 0, awakeSecs = 0, standSecs = 0, lastX = p.x, lastZ = p.z, wasAsleep = sl.asleep;
   const input = mind.input;
   while (clock.total < end) {
     const carried0 = game.crabs.carried.length, eaten0 = r.crabsEaten, digs0 = game.crabs.digs;
@@ -64,7 +65,8 @@ export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state
     r.maxThirst = Math.max(r.maxThirst, game.thirst.days); r.maxHunger = Math.max(r.maxHunger, game.hunger.days); r.minRest = Math.min(r.minRest, sl.rest());
     if (game.thirst.days >= THIRSTY_AT) r.thirstyTicks++; if (game.hunger.days >= HUNGRY_AT) r.hungryTicks++;
     if (!sl.asleep && !(p.lie > 0)) { if (game.hunger.days >= HUNGRY_AT) r.hungrySecs += dt; if (game.thirst.days >= THIRSTY_AT) r.thirstySecs += dt; }
-    if (mind.searching) r.searchTicks++; else if (!game.known.has(p.x, p.z)) r.outside++;   // outside a search he is always on ground he knows
+    if (mind.searching) r.searchTicks++; else if (mind.exploring) { r.exploreTicks++; if (terrainAt(world, p.x, p.z, 0).climb > 0.25) r.exploreRoute++; } else if (!game.known.has(p.x, p.z)) r.outside++;   // outside a search or an exploring trip he is always on ground he knows; 0.29.4: and exploring never takes him onto a climbing route
+    if (clock.day !== lastDay) { lastDay = clock.day; if (clock.day in r.knownAt) r.knownAt[clock.day] = game.known.count; }
     for (const l of game.leantos.list) { if (l.progress >= 1 && r.homeDay.leanto === undefined) r.homeDay.leanto = clock.day; for (const k of ['walls', 'ring', 'bed']) if (l.up && l.up[k] >= 1 && r.homeDay[k] === undefined) r.homeDay[k] = clock.day; }
     if (game.leantos.list.length > r.lean) { r.builds += game.leantos.list.length - r.lean; r.lean = game.leantos.list.length; }
     if (!sl.asleep && !(p.lie > 0)) { awakeSecs += dt; if (!p.moving && !p.work && !(p.stoop > 0)) standSecs += dt; }   // standing still: awake, not walking, not kneeling or bending
@@ -81,7 +83,7 @@ export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state
   const kinds = { berries: BERRY_FOOD, banana: BANANA_FOOD }; r.mix = { coconut: 0, crab: r.crabsEaten, berries: 0, banana: 0 }; for (const f of r.foods) { if (Math.abs(f - BERRY_FOOD) < 0.01) r.mix.berries++; else if (Math.abs(f - BANANA_FOOD) < 0.01) r.mix.banana++; else r.mix.coconut++; } r.mix.coconut -= r.crabsEaten; r.mealsPerDay = r.foods.reduce((a, f) => a + f, 0) / 0.5 / days; r.eatsPerDay = r.foods.length / days; r.foodPerDay = r.foods.reduce((a, f) => a + f, 0) / days; r.hungryShare = awakeSecs ? r.hungrySecs / awakeSecs : 0; r.thirstyShare = awakeSecs ? r.thirstySecs / awakeSecs : 0;
   r.chosenSleeps = r.sleeps.filter(s => s.chosen).length;
   r.warmSleeps = r.sleeps.filter(s => s.warm).length; r.coldSleeps = r.sleeps.length - r.warmSleeps;
-  r.idleSecs = mind.stats.idleSecs; r.stuck = mind.stats.stuck; r.nopath = mind.stats.nopath; r.lightRefused = mind.stats.lightRefused; r.gazes = mind.stats.gazes; r.searches = mind.stats.searches; r.goals = mind.stats.goals; r.crabTrips = mind.stats.crabTrips; r.crabTripDigsMax = mind.stats.crabTripDigsMax; r.events = mind.stats.events;
+  r.idleSecs = mind.stats.idleSecs; r.stuck = mind.stats.stuck; r.nopath = mind.stats.nopath; r.lightRefused = mind.stats.lightRefused; r.gazes = mind.stats.gazes; r.searches = mind.stats.searches; r.goals = mind.stats.goals; r.explores = mind.stats.explores; r.exploreSecs = mind.stats.exploreSecs; r.crabTrips = mind.stats.crabTrips; r.crabTripDigsMax = mind.stats.crabTripDigsMax; r.events = mind.stats.events;
   r.awakeSecs = awakeSecs; r.standSecs = standSecs; r.idleShare = awakeSecs ? standSecs / awakeSecs : 0;
   r.simSeconds = r.ticks * dt; r.days = days;
   r.final = { thirst: game.thirst.days, hunger: game.hunger.days, time: clock.time, day: clock.day, x: p.x, z: p.z, known: game.known.count, leantos: game.leantos.list.length, piles: game.wood.piles.map(q => q.kind + q.logs.length), nuts: game.shells.nuts, fibre: game.fibre.carried };

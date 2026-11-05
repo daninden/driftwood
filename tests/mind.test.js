@@ -4,14 +4,14 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { canStand } from '../src/game/movement.js';
 import { seaLevel } from '../src/game/tide.js';
 import { FUEL_MAX } from '../src/game/fire.js';
 import { NEED, UPGRADES, ringCentre } from '../src/game/leanto.js';
-import { terrainAt } from '../src/game/movement.js';
+import { terrainAt, PACE } from '../src/game/movement.js';
 
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
@@ -135,7 +135,7 @@ describe('pastimes (0.28.2 "Pastime")', () => {
   });
   it('leaves a failed goal alone only a third as long as before, and a failed light waits longer when one tuft is left', async () => {
     const src = (await import('node:fs')).readFileSync(new URL('../src/game/mind.js', import.meta.url), 'utf8');
-    expect(src).toMatch(/const COOL = \{ crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300 \}/);
+    expect(src).toMatch(/const COOL = \{ crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600 \}/);
     expect(src).toMatch(/cool\('light', game\.fibre\.carried <= 1 \? COOL\.light \* 3 : COOL\.light\)/);
   });
   it('chooses stroll places only on known ground, 1.5 m inside its edge, and standable', () => {
@@ -331,7 +331,7 @@ describe('his home: when and what (homeNext, pure)', () => {
     expect(homeNext(snap({ day: 0 }))).toBeNull(); expect(homeNext(snap({ day: 1 }))).toBeNull(); expect(homeNext(snap({ day: 2 }))).toBe('leanto'); expect(homeNext(snap({ day: 7 }))).toBe('leanto');
     expect(homeNext(snap({ fire: false }))).toBeNull();   // no camp (no fire of his, nowhere he sleeps): nothing to build beside
     expect(homeNext(snap({ time: HOME_FROM - 0.01 }))).toBeNull(); expect(homeNext(snap({ time: HOME_FROM }))).toBe('leanto'); expect(homeNext(snap({ time: HOME_TO - 0.01 }))).toBe('leanto'); expect(homeNext(snap({ time: HOME_TO }))).toBeNull();
-    expect(HOME_TO).toBeLessThanOrEqual(CRAB_FROM);   // the afternoon belongs to the tide, the evening to the fire
+    expect(HOME_TO).toBeLessThan(CRAB_TO);   // 0.29.4: the morning reaches into the crab window (a crab trip, when one is possible, comes first: idleGoal), the evening belongs to the fire
   });
   it('builds one piece a day, leaves a failed day alone for a while, and builds on a half-built lean-to', () => {
     expect(homeNext(snap({ builtDay: HOME_DAY }))).toBeNull(); expect(homeNext(snap({ builtDay: HOME_DAY - 1 }))).toBe('leanto');
@@ -423,5 +423,108 @@ describe('his home: the project (0.29.3)', () => {
     const g = camp({ know: false, leantos: LT() }); const m = createMind(w, g); m.engage();
     let out = 0; for (let t = 0; t < 600; t += 0.1) { m.step(0.1); g.update(m.input, 0.1); if (!g.known.has(g.player.x, g.player.z)) out++; }
     expect(out).toBe(0); expect(g.wood.load()).toBe(0);
+  });
+});
+
+// ---------- exploring (0.29.4 "Wander") ----------
+const ex = (o = {}) => ({ time: 0.3, day: 4, thirst: 0.1, hunger: 0.1, last: 3, missing: 0, cool: {}, crab: false, ...o });
+describe('exploring: when he goes out (exploreChance, pure)', () => {
+  it('only by day (EXPLORE_FROM to EXPLORE_TO), never at night or in the evening', () => {
+    expect([EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK]).toEqual([0.2, 0.52, 0.6]);
+    for (const t of [0, 0.1, EXPLORE_FROM - 0.01, EXPLORE_TO, 0.7, 0.9]) expect(exploreChance(ex({ time: t, missing: 2, last: -9 }))).toBe(0);
+    for (const t of [EXPLORE_FROM, 0.3, EXPLORE_TO - 0.01]) expect(exploreChance(ex({ time: t, last: -9 }))).toBeGreaterThan(0);
+  });
+  it('only when nothing presses: not thirsty, not hungry, no crab trip to make, no recent failure', () => {
+    expect(exploreChance(ex({ last: -9 }))).toBeGreaterThan(0);
+    expect(exploreChance(ex({ last: -9, thirst: EXPLORE_THIRST }))).toBe(0);
+    expect(exploreChance(ex({ last: -9, hunger: EXPLORE_HUNGER }))).toBe(0);
+    expect(exploreChance(ex({ last: -9, crab: true }))).toBe(0);
+    expect(exploreChance(ex({ last: -9, cool: { explore: true } }))).toBe(0);
+  });
+  it('now and then when nothing is missing, much more often (and daily) when something is', () => {
+    expect(exploreChance(ex({ last: 4 - EXPLORE_GAP + 1 }))).toBe(0);   // too soon
+    expect(exploreChance(ex({ last: 4 - EXPLORE_GAP }))).toBe(EXPLORE_CHANCE);
+    expect(exploreChance(ex({ last: 3, missing: 1 }))).toBe(EXPLORE_MISSING_CHANCE);   // yesterday: again, because wood is short
+    expect(exploreChance(ex({ last: 4, missing: 3 }))).toBe(0);   // but once a day at most
+    expect(EXPLORE_MISSING_CHANCE).toBeGreaterThan(2 * EXPLORE_CHANCE);
+  });
+  it('goes a little further each day, up to a limit', () => {
+    expect(exploreReach(0)).toBe(EXPLORE_REACH0);
+    for (let d = 1; d < 30; d++) expect(exploreReach(d)).toBeGreaterThanOrEqual(exploreReach(d - 1));
+    expect(exploreReach(5)).toBeGreaterThan(exploreReach(1)); expect(exploreReach(100)).toBe(EXPLORE_REACH_MAX);
+  });
+  it('looks for what is missing where he expects it: coast for wood and nuts, forest for branches, the two in turn when all is well', () => {
+    expect(exploreWhere(['wood'], 0)).toBe('coast'); expect(exploreWhere(['nuts'], 1)).toBe('coast'); expect(exploreWhere(['branches'], 0)).toBe('forest');
+    expect(exploreWhere(['wood', 'branches'], 0)).toBe('coast'); expect(exploreWhere(['wood', 'branches'], 1)).toBe('forest');
+    expect(exploreWhere([], 0)).toBe('coast'); expect(exploreWhere([], 1)).toBe('forest');
+  });
+  it('turns back in time: from the walk home (seconds) and the time of day, with a margin', () => {
+    expect(exploreLate(0.3, 100)).toBe(false);
+    expect(exploreLate(0.55, 100)).toBe(true);                    // 100 s of walking is 0.083 of a day: 0.55 + 0.09 is past the evening
+    expect(exploreLate(EXPLORE_BACK, 0)).toBe(true);
+    expect(exploreLate(0.45, 100)).toBe(false); expect(exploreLate(0.45, 100, PACE)).toBe(true);   // at the amble the way takes longer, so it is late sooner
+    // never later than the walk takes: the last moment to turn is when time + walk + margin = EXPLORE_BACK
+    const secs = 150, last = EXPLORE_BACK - secs * 1.1 / 1200 - 0.012; expect(exploreLate(last - 0.001, secs)).toBe(false); expect(exploreLate(last + 0.001, secs)).toBe(true);
+  });
+});
+
+describe('exploring: the trip (with a game)', () => {
+  const trip = (know, { day = 1, time = 0.25, stream = 0 } = {}, seed = w, sp = spawn) => {
+    const g = camp({ day, time, know });   // his camp, nuts, fibre and wood in stock: the morning is free
+    g.known.visit(sp.x, sp.z);
+    const m = createMind(seed, g, { stream }); m.engage();
+    const r = { known0: g.known.count, outside: 0, route: 0, paces: new Set(), lateAt: null, started: null, maxDist: 0, homeAt: null, back: null };
+    const home = () => m.home();
+    for (let i = 0, end = g.clock.total + 0.5; g.clock.total < end && i < 40000; i++) {
+      m.step(0.1); g.update(m.input, 0.1);
+      if (m.exploring) {
+        if (r.started === null) r.started = g.clock.time;
+        r.paces.add(m.input.pace); if (!g.known.has(g.player.x, g.player.z)) r.outside++;
+        if (terrainAt(seed, g.player.x, g.player.z, 0).climb > 0.25) r.route++;
+        r.maxDist = Math.max(r.maxDist, Math.hypot(g.player.x - home().x, g.player.z - home().z)); r.lastExploring = g.clock.time;
+      }
+    }
+    r.m = m; r.g = g; r.known1 = g.known.count; r.reachedHome = Math.hypot(g.player.x - m.home().x, g.player.z - m.home().z);
+    return r;
+  };
+  // whether he sets out is a matter of chance (the PRNG of his stream): the first of a few streams on which he does
+  const tripAny = (know, o = {}) => { let r; for (let st = 0; st < 12; st++) { r = trip(know, { ...o, stream: st }); if (r.m.stats.explores > 0) return r; } return r; };
+  it('goes out by day to the edge of what he knows, learns what he walks past, and strolls and explores at the amble', () => {
+    const r = tripAny(true);
+    expect(r.m.stats.explores).toBeGreaterThanOrEqual(1);
+    expect(r.known1).toBeGreaterThan(r.known0);          // he knows more ground than before
+    expect(r.started).toBeGreaterThanOrEqual(EXPLORE_FROM); expect(r.started).toBeLessThan(EXPLORE_TO);
+    expect(r.paces.has(PACE)).toBe(true);                  // ambling while he explores
+    expect(r.maxDist).toBeGreaterThan(30);                 // and really out of the home
+    expect(r.maxDist).toBeLessThanOrEqual(exploreReach(1) + 60);   // within his reach for the day (and the margin of the last steps)
+    expect(r.m.stats.errors || 0).toBe(0);
+  });
+  it('is home well before dark: the trip is over before EXPLORE_BACK (and long before dusk)', () => {
+    for (const sp of [{ day: 1, time: 0.25 }, { day: 1, time: 0.4 }]) {
+      const r = tripAny(true, sp);
+      if (r.started === null) continue;
+      expect(r.lastExploring).toBeLessThan(EXPLORE_BACK + 0.01);
+      expect(r.lastExploring).toBeLessThan(0.7);
+    }
+    const late = tripAny(true, { day: 1, time: 0.5 });   // a late start has little time: either no trip, or a short one that is back in time
+    if (late.started !== null) expect(late.lastExploring).toBeLessThan(EXPLORE_BACK + 0.01);
+  });
+  it('never takes a climbing route and keeps to ordinary ground', () => {
+    for (const know of [true, false]) { const r = tripAny(know); expect(r.route).toBe(0); expect(r.m.stats.explores).toBeGreaterThanOrEqual(know ? 1 : 0); }
+  });
+  it('is on ground he knows except while he explores (the trip is the only exception, with a search)', () => {
+    const r = tripAny(true); expect(r.m.stats.explores).toBeGreaterThanOrEqual(1);
+    // outside is counted only while exploring: the ground he walked into is known by the next step
+    expect(r.outside).toBe(0);
+    expect(r.m.exploring).toBe(false);
+  });
+  it('does not go when it is thirst or hunger time, or the crabs call, or too late in the day', () => {
+    const g1 = createGame(w, spawn, { day: 3, time: 0.25, thirst: { days: 0.3 }, hunger: { days: 0.05 }, sleep: { awake: 0.1 } }); walkFirstDay(w, g1, spawn);
+    const g2 = createGame(w, spawn, { day: 3, time: 0.56, thirst: { days: 0.05 }, hunger: { days: 0.05 }, sleep: { awake: 0.1 } }); walkFirstDay(w, g2, spawn);
+    for (const g of [g1, g2]) { const m = createMind(w, g); m.engage(); for (let i = 0; i < 300; i++) { m.step(0.1); g.update(m.input, 0.1); } expect(m.stats.explores).toBe(0); }
+  });
+  it('is repeatable: the same island and the same start give the same trips', () => {
+    const a = trip(true, { stream: 2 }), b = trip(true, { stream: 2 });
+    expect(a.m.stats.explores).toBe(b.m.stats.explores); expect(a.known1).toBe(b.known1);
   });
 });

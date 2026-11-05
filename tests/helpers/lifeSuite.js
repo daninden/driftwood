@@ -1,4 +1,5 @@
 // Dave alone for ten game days (game/mind, 0.28 "Habit", rhythm of 0.29 "Daily bread"): the same checks for each island, used by tests/mindLife<seed>.test.js.
+// 0.29.4 "Wander": he also goes exploring now and then (r.explores); on a fresh start his known ground grows (r.knownAt: cells known at day 1, 5, 10).
 // Two starts (since 0.28 the fresh one is meant to work too: he searches for water and food when he knows none): `walked` (the ground a player would have walked in a first day: the start, the nearest water, a few nuts, driftwood, branches and a berry bush,
 // mindSim walkFirstDay) and `fresh` (only the 20 m round the start are known). The numbers are measured, not wished for; see docs/design.md "Habit".
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -15,7 +16,9 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
     const d = r.homeDay;                            // the day each piece of his home was finished: from day 2, the lean-to first, then walls, ring, bed in that order, never two pieces on one day
     if (d.leanto !== undefined) expect(d.leanto).toBeGreaterThanOrEqual(2);
     for (const [a, b] of [['leanto', 'walls'], ['walls', 'ring'], ['ring', 'bed']]) if (d[b] !== undefined) { expect(d[a]).toBeDefined(); expect(d[b]).toBeGreaterThan(d[a]); }
-    expect(r.outside).toBe(0);                      // outside a search for water or food, never a step on ground he does not know
+    expect(r.outside).toBe(0);                      // outside a search for water or food or an exploring trip (0.29.4), never a step on ground he does not know
+    expect(r.exploreRoute).toBe(0);                 // 0.29.4: and exploring never takes him onto a climbing route
+    expect(r.knownAt[1]).toBeGreaterThan(0);        // (the cells known at the start of day 1, 5 and 10 are in the report)
     expect(r.wakes).toBe(0);
     expect(r.final.day).toBeGreaterThanOrEqual(r.days);   // the days really were played
   };
@@ -28,7 +31,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
     expect(r.maxThirst).toBeLessThan(1); expect(r.maxHunger).toBeLessThan(1);   // never very thirsty, never more than a day without food
     expect(r.hungryShare).toBeLessThan(c.hungry ?? 0.2); expect(r.thirstyShare).toBeLessThan(0.15);
     expect(r.mealsPerDay).toBeGreaterThan(1.7); expect(r.mealsPerDay).toBeLessThan(3);   // meals of half a day of hunger (a handful of berries is a third of one)
-    const drinksPerDay = (r.drinks + r.sips) / r.days; expect(drinksPerDay).toBeGreaterThan(2); expect(drinksPerDay).toBeLessThan(5);
+    const drinksPerDay = (r.drinks + r.sips) / r.days; expect(drinksPerDay).toBeGreaterThan(c.drinksMin ?? 2);   // (0.29.4: island 7 fresh, a long way to the water, measured exactly 2.0)
+    expect(drinksPerDay).toBeLessThan(5);
     expect(r.mix.berries + r.mix.banana).toBeGreaterThanOrEqual(c.inland ?? 0);   // some of the food is from inland
     // 0.29.1 "Low water": at low water he digs for crabs at colonies he knows and roasts them at the evening fire; a trip is at most CRAB_DIGS (4) digs, and a crab seldom spoils uneaten (0.29.3: at most 3, was 2; whether the evening fire catches on the first tries is luck of the drill, fixed by the attempt count, and two bad evenings in a row spoil two crabs whatever he does)
     expect(r.crabTripDigsMax).toBeLessThanOrEqual(4); expect(r.crabsSpoiled).toBeLessThanOrEqual(3); expect(r.crabsEaten).toBeGreaterThanOrEqual(c.crabs ?? 0);
@@ -46,6 +50,7 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
       expect(r.idleSecs).toBeGreaterThan(0);
       if (c.leanto !== undefined) { expect(r.homeDay.leanto).toBeDefined(); expect(r.homeDay.leanto).toBeLessThanOrEqual(c.leanto); }   // 0.29.3: his lean-to stands by this day (measured +2); upgrades follow
       if (c.upgrades !== undefined) expect(['walls', 'ring', 'bed'].filter(k => r.homeDay[k] !== undefined).length).toBeGreaterThanOrEqual(c.upgrades);
+      if (c.explores !== undefined) { expect(r.explores).toBeGreaterThanOrEqual(c.explores); expect(r.final.known).toBeGreaterThan(r.known0 + (c.grow ?? 40)); }   // 0.29.4 "Wander": now and then he goes exploring, and so knows more of the island
       expect(mind.stats.strolls).toBeGreaterThan(20);   // he really goes about (shore, river, palms, forest)
       expect(Object.keys(mind.stats.strollKinds).length).toBeGreaterThanOrEqual(3);   // and varies it
       if (c.idle !== undefined) expect(r.idleShare).toBeLessThan(c.idle);   // 0.28.2: he strolls and gathers instead of standing about (share of the waking time spent standing still)
@@ -63,6 +68,7 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
       expect(r.stuckMax).toBeLessThan(c.stuckMax);
       if (c.idle !== undefined) expect(r.idleShare).toBeLessThan(c.idle);
       if (c.searches) expect(r.searches).toBeGreaterThanOrEqual(c.searches);
+      if (c.explores !== undefined) { expect(r.explores).toBeGreaterThanOrEqual(c.explores); expect(r.final.known).toBeGreaterThan(r.known0 + c.grow); }   // 0.29.4: he explores, and his known ground grows well beyond the start
       if (c.leanto !== undefined) { expect(r.homeDay.leanto).toBeDefined(); expect(r.homeDay.leanto).toBeLessThanOrEqual(c.leanto); }
     });
     for (const e of extra) it(e.name, () => e.run(w, spawn));

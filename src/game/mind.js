@@ -1,11 +1,11 @@
 /**
- * game/mind — Dave's head (0.28 "Habit", 0.28.2 "Pastime", the rhythm of 0.29 "Daily bread", crab trips of 0.29.1 "Low water", the amble and the sitting of 0.29.2 "Amble", his home of 0.29.3 "Homestead"): what the castaway does by himself when the player leaves him alone.
+ * game/mind — Dave's head (0.28 "Habit", 0.28.2 "Pastime", the rhythm of 0.29 "Daily bread", crab trips of 0.29.1 "Low water", the amble and the sitting of 0.29.2 "Amble", his home of 0.29.3 "Homestead", his exploring trips of 0.29.4 "Wander"): what the castaway does by himself when the player leaves him alone.
  *
  * After QUIET (30 s, game/input `createTakeover`) without any input main hands the game this mind's input instead of the player's;
  * any input of the player takes it back at once (`release`). The mind adds NO game rule: it fills an input object like the player's
  * (a walk target, a press of the action button, a click on an icon of the arc, Z, a click on the row) and so can do only what a
  * player could do. It looks at the island only where the castaway has been (game/known): its targets and its paths stay inside the
- * known cells and 1.5 m away from their edge (`inside`), so he never explores. It never wakes him from sleep and never starts a sleep before he could choose to.
+ * known cells and 1.5 m away from their edge (`inside`), so he does not wander off into land he has not seen, except on a search (below) and on an exploring trip (0.29.4). It never wakes him from sleep and never starts a sleep before he could choose to.
  * It builds only one thing: his home (0.29.3 "Homestead", below); every other kind of the arc it never chooses.
  *
  * What he does, in this order of priority (`chooseGoal`, pure, on a plain snapshot of the needs and the time of day):
@@ -36,12 +36,17 @@
  *   Any task but idling (and a walk) first gets him up (game/game: half a second). The game refuses a seat in water, on steep ground or a climbing route, with a torch or wood: he then stands. At night, once he may lie down, no rest comes first.
  * 0.29.3 "Homestead": HOME, a project that takes the morning's idle moments (`homeNext`, pure; part of the idle goal, at the amble): from the third day (HOME_DAY 2, two nights lived) with a camp (a fire of his, lit or burnt out, or the place he sleeps) he builds ONE lean-to and then
  *   its upgrades, walls (6 fronds), stone ring (8 stones), bed (4 branches and 4 fronds), through the very actions a player has (the arc's build / upgrade icon). A step of the project (a trip for up to three pieces,
- *   or the building) is what he does at an idle moment of the morning, between HOME_FROM 0.21 and HOME_TO 0.38 (mornings are for the house, the afternoon belongs to the tide and the crabs, the evening to the fire; every need
+ *   or the building) is what he does at an idle moment of the morning, between HOME_FROM 0.21 and HOME_TO 0.44 (0.29.4, was 0.38: mornings are for the house, a crab trip at low water comes first, the afternoon belongs to the tide and the crabs, the evening to the fire; every need
  *   and every errand comes first), and at most one piece of the home is finished a day (`builtDay`). The site (`leantoSites`, chosen once and kept): on known, dry, level ground at least SITE_HIGH (0.8 m) above the high-water line, 5 to 7.5 m from his home fire, the open side across
  *   from the fire (so the stone ring comes to stand about 5 m from it, not on it), preferring ground near fresh water he knows; the piles for the building (6 driftwood and 6 branches, within 2 m of each other) are laid there.
  *   Never a second lean-to: with one (also a player's) the project only adds the upgrades to it, and a half-built one is built on. Materials only from known ground, within HOME_MAX_COST of walking; piles for the upgrades lie
  *   beside the lean-to (fronds on one side, stones on the other, branches behind).
- * The one exception to staying on known ground (0.28, decided later the same day): SEARCH. Thirsty with no fresh water known, or hungry with no food known and none
+ * 0.29.4 "Wander": EXPLORING, a pastime of the idle goal. Now and then (`exploreChance`, pure: by day, EXPLORE_FROM 0.2 to EXPLORE_TO 0.52, thirst and hunger well below the point where he goes for them, no crab trip to make; at most one trip a day, one in
+ *   EXPLORE_GAP 2 days when nothing is missing, every day with chance 0.8 when wood (fewer than 6 loose logs known within 70 m of home), branches (fewer than 4) or nuts (fewer than 2) are short, or a lately failed search for them left a mark (`lack`)) he walks to the edge of what he knows
+ *   (`exploreTarget`: the farthest unknown spot within `exploreReach(day)` of home (80 m on day 0, 15 m more a day, at most 220 m) that borders known ground, which he can reach and be home from before EXPLORE_BACK 0.6, preferably on the coast (wood and coconuts) or at a forest edge (branches, berries),
+ *   `exploreWhere`; the PRNG of its own, `rngEx`), at the amble, learning what he walks past (`input.learns` true; `mind.exploring`, not `mind.searching`), looks about, picks up what is within reach of the far end (the arrive kinds shore, palms, forest), (also straight from the stores goal, `exploreForLack`: wood or a nut he went for and could not find on known ground sends him out at once when a trip is allowed, without waiting for an idle moment that the stores and the fire may never leave him) and turns back in time (`exploreLate`: the walk home, measured by the finder every 10 m,
+ *   and the margin, against EXPLORE_BACK; at the normal pace when it is late) to lay down what he carries at home. His own terrace and ordinary ground only: the finder `pathExplore` closes climbing routes (climb above EXPLORE_ROUTE) and steep ground (slope 0.45 and more), and a trip is only made from a place from which home can be reached that way.
+ * The other exception to staying on known ground (0.28, decided later the same day): SEARCH. Thirsty with no fresh water known, or hungry with no food known and none
  * carried, he walks out from home into the unknown, ring after ring, to the nearest unknown spot that borders what he knows (downhill for water, the low coast for
  * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water he can walk to over known ground, or food, is known; then he is back on known ground only (0.29: water that is known but out of reach does not end a search).
  * A higher need breaks into a lower goal (checked every CHECK seconds); a goal keeps going otherwise and a failing one is left alone for a while (`cool`; 0.28.2: 10 to 40 s, a failed
@@ -52,6 +57,7 @@
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
  * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now (s.pileLogs: pieces in the biggest pile there)
+ * exploreChance(s), exploreReach(day), exploreWhere(missing, trips), exploreLate(time, secs, speed?)   pure (0.29.4): whether, how far, where to and when to turn back, tested in tests/mind.test.js
  * crabTripOk(s), crabFoodOk(s)   pure (0.29.1): may he go for crabs now (s.sea, time, crabs carried, flames, canLight, fibre, pileDry, cool)
  * huskWanted(s), restSeconds(r1, r2), strollKind(avail, last, r), strollNow(s, r)   pure; the choices of the pastimes (0.28.2), tested in tests/mind.test.js
  * sitKind(s) -> 'gaze' | 'fire' | 'rest' | null   pure (0.29.2): whether he sits while he rests (s: time, long, fireNear, gazing)
@@ -64,8 +70,8 @@
  *   mind.engage()     the mind takes over (remembers where he stands as the last home); mind.release() the player takes over: the goal is dropped, the input cleared.
  *                     A kneeling job already begun is left to finish (the player's own input stops it as usual)
  *   mind.step(dt)     once per game.update while in charge, before it: decides and fills mind.input
- *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set)
- *   mind.stats        { goals: {name: n}, home, stuck, nopath, idleSecs, sitSecs (seconds he sat), sits: {gaze, fire, rest: how often he sat down}, lightRefused, gazes, strolls, strollKinds: {kind: n}, crabTrips, crabDigs, crabTripDigsMax, crabsCaught, events: [..] } for tests and the playtest bot (searches: how many searches he began)
+ *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set), mind.searching (learning on a search for water or food), mind.exploring (on an exploring trip, 0.29.4)
+ *   mind.stats        { goals: {name: n}, home, stuck, nopath, idleSecs, sitSecs (seconds he sat), sits: {gaze, fire, rest: how often he sat down}, lightRefused, gazes, strolls, strollKinds: {kind: n}, explores (trips made), exploreSecs, crabTrips, crabDigs, crabTripDigsMax, crabsCaught, events: [..] } for tests and the playtest bot (searches: how many searches he began)
  *   mind.chose()      true while a sleep he chose himself is being started (the tests tell it from a collapse); mind.lastKind() the kind of the last button he used; mind.path the path finder
  *   opts.stream       a number to vary the chance (default 0)
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
@@ -75,12 +81,13 @@
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
  *
- * Depends on: game/path, game/movement, game/wildlife and game/crabs (through game), game/water, game/wood, game/fire, game/leanto (siteFor, UPGRADES), game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
+ * Depends on: game/path, game/movement, game/clock (DAY_SECONDS), game/wildlife and game/crabs (through game), game/water, game/wood, game/fire, game/leanto (siteFor, UPGRADES), game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 import { createPath } from './path.js';
-import { canStand, terrainAt, PACE } from './movement.js';
+import { canStand, terrainAt, PACE, WALK_SPEED } from './movement.js';
+import { DAY_SECONDS } from './clock.js';
 import { freshWater } from './water.js';
 import { dryness, logTop, kindOf, CARRY_MAX, STONE_MAX } from './wood.js';
 import { FIRE_MIN, FUEL_MAX } from './fire.js';
@@ -101,11 +108,15 @@ export const SIT_FIRE = 3.5, SIT_AT_FIRE = 1.8;   // 0.29.2 "Amble": he sits at 
 export const LINGER_MIN = 5, LINGER_MAX = 12, PAUSE_CHANCE = 0.45, PAUSE_MIN = 2, PAUSE_MAX = 6;
 export const STROLL_KINDS = ['shore', 'river', 'palms', 'forest', 'crabs'], STROLL_WEIGHT = { shore: 3, river: 2, palms: 2, forest: 2, crabs: 12 };   // 0.29.1: crabs, only at low water in the afternoon, so when it is possible it is the usual choice (0.29.2: weight 12, was 6, and the window opens at 0.38, was 0.42: at the amble each stroll takes half as long again, so fewer fitted into the window)
 export const CRAB_TIDE = -0.2, CRAB_FROM = 0.38, CRAB_TO = 0.66, CRAB_FOOD_TO = 0.8, CRAB_DIGS = 4, CRAB_WANT = 1, CRAB_ROAST_HUNGER = 0.2, CRAB_SEEK = 10, NUT_FAR = 50, CRAB_LIMIT = 420;   // 0.29.1 "Low water": crab trips
-export const HOME_DAY = 2, HOME_FROM = 0.21, HOME_TO = 0.38, HOME_LIMIT = 480, HOME_MAX_COST = 50, HOME_ORDER = ['walls', 'ring', 'bed'];   // 0.29.3 "Homestead": he builds his home from day 2 (the third day), in the morning (until the crab window opens at 0.38), one piece a day
+export const HOME_DAY = 2, HOME_FROM = 0.21, HOME_TO = 0.44, HOME_LIMIT = 480, HOME_MAX_COST = 50, HOME_ORDER = ['walls', 'ring', 'bed'];   // 0.29.3 "Homestead": he builds his home from day 2 (the third day), in the morning (0.29.4: until 0.44, was 0.38; a crab trip comes first), one piece a day
 export const SITE_RINGS = [5, 6.2, 7.5], SITE_HIGH = 0.8, SITE_LEVEL = 0.3, SITE_SLOPE = 0.25;   // the lean-to's site: 4 to 7 m from the home fire, 0.8 m above the high-water line (the sea stands at 0 at high water), the footprint level within 0.3 m
+// 0.29.4 "Wander": now and then, by day and when nothing presses, he goes exploring to the edge of what he knows, on his own terrace, and is home well before dark
+export const EXPLORE_FROM = 0.2, EXPLORE_TO = 0.52, EXPLORE_BACK = 0.6, EXPLORE_MARGIN = 0.012, EXPLORE_DETOUR = 1.5, EXPLORE_SPARE = 45, EXPLORE_LIMIT = 900, EXPLORE_ROUTE = 0.12;   // starts between FROM and TO, is home by BACK (where the evening's chores begin), with a margin; ground with a climbing route of more than EXPLORE_ROUTE is closed
+export const EXPLORE_THIRST = 0.25, EXPLORE_HUNGER = 0.3, EXPLORE_GAP = 2, EXPLORE_CHANCE = 0.3, EXPLORE_MISSING_CHANCE = 0.8, LACK_DAYS = 2;   // nothing urgent; every EXPLORE_GAP-th day, or every day when something is missing at home
+export const EXPLORE_REACH0 = 80, EXPLORE_REACH_DAY = 15, EXPLORE_REACH_MAX = 220, EXPLORE_EDGE = 18, EXPLORE_SLOPE = 0.45;   // how far from home a trip may go: 80 m on the first day, 15 m more each day, at most 220 m
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
-const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
+const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
 const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light', 'build', 'upgrade'];   // the kinds of the arc / ring he ever chooses (never the torch); build and upgrade only in the home project (0.29.3)
 
 export function fireStep(s) {
@@ -143,6 +154,24 @@ export function homeNext(s) {
   if (s.lean !== 'done') return null;
   return HOME_ORDER.find(k => !(s.up && s.up[k] >= 1)) || null;
 }
+
+/** 0.29.4 "Wander": the chance, at an idle moment, that he sets out exploring now (pure). s: { time, day, thirst, hunger, last (the day of the last trip), missing (how many of wood, branches, nuts are short at home), cool, crab (a crab trip is possible now) }.
+ *  Never when a need is coming up (thirst, hunger), a crab trip is on, or outside EXPLORE_FROM to EXPLORE_TO; at most one trip a day, one in EXPLORE_GAP days when nothing is missing, every day when something is. */
+export function exploreChance(s) {
+  if (!(s.time >= EXPLORE_FROM && s.time < EXPLORE_TO) || (s.cool && s.cool.explore) || s.crab) return 0;
+  if (s.thirst >= EXPLORE_THIRST || s.hunger >= EXPLORE_HUNGER) return 0;
+  if (s.day - s.last < (s.missing > 0 ? 1 : EXPLORE_GAP)) return 0;
+  return s.missing > 0 ? EXPLORE_MISSING_CHANCE : EXPLORE_CHANCE;
+}
+/** How far from home a trip may go on this day (metres): grows a little each day. */
+export function exploreReach(day) { return Math.min(EXPLORE_REACH_MAX, EXPLORE_REACH0 + EXPLORE_REACH_DAY * Math.max(0, day)); }
+/** Where he expects what is missing: 'coast' (driftwood and coconuts wash up and grow there) or 'forest' (branches, berries); nothing missing: the coast and the forest in turn (trips = trips so far). */
+export function exploreWhere(missing, trips) {
+  if (missing && missing.length) return missing.includes('wood') || missing.includes('nuts') ? (missing.includes('branches') && trips % 2 ? 'forest' : 'coast') : 'forest';
+  return trips % 2 ? 'forest' : 'coast';
+}
+/** Whether it is time to turn back: the walk home (`secs` seconds at full pace; at `speed`, the share of it that he walks) would end after EXPLORE_BACK less the margin (a tenth more for the way). */
+export function exploreLate(time, secs, speed = 1) { return time + secs * 1.1 / speed / DAY_SECONDS + EXPLORE_MARGIN >= EXPLORE_BACK; }
 
 export function storesStep(s) {
   const t = s.time;
@@ -191,15 +220,15 @@ export function chooseGoal(s) {
 
 export function createMind(world, game, opts = {}) {
   const p = game.player, clock = game.clock, W = game.wood, known = game.known;
-  const rng = mulberry32(hashInt(world.seed + 28, opts.stream || 0, 1));
+  const rng = mulberry32(hashInt(world.seed + 28, opts.stream || 0, 1)), rngEx = mulberry32(hashInt(world.seed + 29, opts.stream || 0, 2));   // exploring (0.29.4) draws from a stream of its own, so that the days without a trip stay as they were
   // ground he may be taken over: known all round, MARGIN (1.5 m) inside the edge of what he knows, so that sliding past a trunk or a bush never carries him into a cell he has not been to
   const MARGIN = 1.5, DIAG = MARGIN * 0.75;
   const inside = (x, z) => known.has(x, z) && known.has(x + MARGIN, z) && known.has(x - MARGIN, z) && known.has(x, z + MARGIN) && known.has(x, z - MARGIN)
     && known.has(x + DIAG, z + DIAG) && known.has(x - DIAG, z - DIAG) && known.has(x + DIAG, z - DIAG) && known.has(x - DIAG, z + DIAG);
   const path = createPath(world, { allow: inside }), pathFree = createPath(world);   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
-  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, events: [] };
-  const mind = { input: null, active: false, get searching() { return inp.learns === true; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
-  let now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
+  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, events: [] };
+  const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
+  let exploring = false, exploredDay = -9, fullPace = false, now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
   let pressed = null, choice = null, sleepKey = false, sinceCheck = 0, builtDay = -1, headingWanted = null;   // headingWanted: the way a lean-to being started should face (a player turns the view)
   const proj = { site: null };   // 0.29.3: the lean-to's site, chosen once and kept
   const coolUntil = {}, bad = new Map();
@@ -326,7 +355,7 @@ export function createMind(world, game, opts = {}) {
 
   // ---------- walking ----------
   function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground (o.free: anywhere, for a search)
-    const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.free ? pathFree : path;
+    const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : path), roam = o.free || !!o.finder;
     let plan = null, pi = 0, finalSet = false, replans = 0, chk = { x: p.x, z: p.z, t: now }, stuckN = 0, seen = now;
     for (;;) {
       if (o.until && o.until()) { idleInput(); return true; }
@@ -361,7 +390,7 @@ export function createMind(world, game, opts = {}) {
             const gx = x - p.x, gz = z - p.z, gl = Math.hypot(gx, gz) || 1; let bu = null, bs = -2;
             for (let a = 0; a < 24; a++) {
               const ang = a * Math.PI / 12, ux = Math.sin(ang), uz = Math.cos(ang);
-              if ((!o.free && !inside(p.x + ux * 1.5, p.z + uz * 1.5)) || !canStand(world, p.x + ux * 0.6, p.z + uz * 0.6, game.sea)) continue;
+              if ((!roam && !inside(p.x + ux * 1.5, p.z + uz * 1.5)) || !canStand(world, p.x + ux * 0.6, p.z + uz * 0.6, game.sea) || (o.finder && o.finder.allow && !o.finder.allow(p.x + ux * 1.5, p.z + uz * 1.5))) continue;
               const sc = (ux * gx + uz * gz) / gl; if (sc > bs) { bs = sc; bu = { ux, uz }; }
             }
             inp.target = bu ? { x: p.x + bu.ux * 2.5, z: p.z + bu.uz * 2.5 } : null; yield;
@@ -529,7 +558,7 @@ export function createMind(world, game, opts = {}) {
   }
 
   function* huskGoal() {   // a nut for fibre and to carry
-    const c = nearestBy('coco', 60); if (!c) { cool('husk'); return false; }
+    const c = nearestBy('coco', 60); if (!c) { cool('husk'); lack.nuts = clock.day; return false; }
     const near = () => { const a = game.action().tap; return !!a && a.kind === 'husk' && !a.carried; };
     yield* walk(c.x, c.z, { tap: true, stop: 0.4, until: near });
     let k = pressKind(['husk']); if (k) yield* waitIdle();
@@ -736,7 +765,8 @@ export function createMind(world, game, opts = {}) {
         s = siteFor(W.piles, d);
         if (!s) { ev('home-site-bad'); cool('home', 600); return null; }
       }
-      return { build: true, run: () => { const pile = bigPile('driftwood', s.x, s.z, 3) || s.drift; return doBuild('build', pile, 0.9, Math.atan2(h.x - s.x, h.z - s.z)); } };   // the open side towards the fire
+      // 0.29.4: he builds at the pile that has its partner within 2 m (a second pile of 6 nearby, with no partner, offered 'light' only); the open side towards the fire
+      return { build: true, run: () => doBuild('build', s.drift || bigPile('driftwood', s.x, s.z, 3), 0.9, Math.atan2(h.x - s.x, h.z - s.z)) };
     }
     if (h.kind !== 'leanto') return null;
     const lt = h.lt, per = UPGRADES[what].per, p0 = (lt.up && lt.up[what]) || 0, left = UPGRADES[what].steps - paidSteps(what, p0), hx = Math.sin(lt.heading), hz = Math.cos(lt.heading);
@@ -754,7 +784,7 @@ export function createMind(world, game, opts = {}) {
     const n0 = homeCount(); stats.home.units++;
     ev('home', { what, need: need.kind || 'build' });
     let ok;
-    if (need.kind) { stats.home.trips++; ok = yield* gather(need.kind, need.dest, need.want, HOME_MAX_COST, need.src || need.kind); if (!ok) { stats.home.noMaterial++; ev('home-no-material', { kind: need.kind }); cool('home', 600); } }
+    if (need.kind) { stats.home.trips++; ok = yield* gather(need.kind, need.dest, need.want, HOME_MAX_COST, need.src || need.kind); if (!ok) { stats.home.noMaterial++; lack[need.kind === 'drift' ? 'wood' : need.kind === 'branch' ? 'branches' : need.kind === 'stone' ? 'wood' : 'nuts'] = clock.day; ev('home-no-material', { kind: need.kind }); cool('home', 600); } }
     else ok = yield* need.run();
     if (homeCount() > n0) { builtDay = clock.day; ev('home-built', { what }); }
     return ok;
@@ -850,6 +880,75 @@ export function createMind(world, game, opts = {}) {
     return true;
   }
 
+  // ---------- exploring (0.29.4 "Wander") ----------
+  // Now and then, by day, when nothing presses, he walks to the edge of what he knows (the farthest edge within `exploreReach(day)` of home that he can do and be home from before EXPLORE_BACK), preferring
+  // the coast (driftwood, coconuts) or the forest (branches, berries) as `exploreWhere` says, learning what he walks past (inp.learns). His own terrace and ordinary ground only: a climbing route and steep ground are
+  // closed to the finder (`pathExplore`). He turns back in time (exploreLate), at the normal pace when it is late.
+  const exo = { x: 0, z: 0, reach: 0 }, okMemo = new Map(), lack = {};   // lack[kind] = the day something he looked for (wood, branches, nuts) was not to be had on ground he knows
+  const ordinary = (x, z) => { const k = Math.round(x * 2) * 100003 + Math.round(z * 2); let v = okMemo.get(k); if (v === undefined) { const t = terrainAt(world, x, z, 0); v = t.climb <= EXPLORE_ROUTE && t.s < EXPLORE_SLOPE; okMemo.set(k, v); } return v; };
+  const pathExplore = createPath(world, { allow: (x, z) => ordinary(x, z) && Math.hypot(x - exo.x, z - exo.z) <= exo.reach + 20 });
+  const exploreMissing = h => {   // what is short at home: wood (loose driftwood known within 70 m of home: fewer than 6), branches (fewer than 4), nuts (fewer than 2, for fibre and for food)
+    const out = [];
+    if (scan('timber', h.x, h.z, 70).length < 6) out.push('wood');
+    if (scan('branch', h.x, h.z, 70).length < 4) out.push('branches');
+    if (scan('coco', h.x, h.z, 70).length < 2) out.push('nuts');
+    for (const k of ['wood', 'branches', 'nuts']) if (!out.includes(k) && clock.day - (lack[k] ?? -9) <= LACK_DAYS) out.push(k);   // also what he went for lately and could not get
+    return out;
+  };
+  const exploredPts = [];
+  function exploreTarget(home, reach, where, avail) {
+    const cands = [];
+    for (let r = 24; r <= reach; r += 12) for (let i = 0; i < 24; i++) {
+      const a = i * Math.PI / 12 + (r / 12 % 2) * Math.PI / 24, x = home.x + Math.sin(a) * r, z = home.z + Math.cos(a) * r;
+      if (!(Math.abs(x) < HALF - 8 && Math.abs(z) < HALF - 8) || known.has(x, z) || !known.near(x, z, EXPLORE_EDGE) || !canStand(world, x, z, 0) || !ordinary(x, z)) continue;
+      if (exploredPts.some(q => Math.hypot(q.x - x, q.z - z) < 14)) continue;
+      const y = world.H(x, z);
+      let bias = 0;
+      if (where === 'coast') { if (y < 3) for (let k = 0; k < 8; k++) if (world.H(x + Math.sin(k * Math.PI / 4) * 15, z + Math.cos(k * Math.PI / 4) * 15) < 0.2) { bias = 30; break; } }
+      else if (y >= 1 && world.forestB(x, z) >= 0.55) bias = 30;
+      cands.push({ x, z, score: r + bias + 8 * rngEx() });
+    }
+    cands.sort((u, v) => v.score - u.score);
+    const cheap = c => { const t = dist(p, c) * EXPLORE_DETOUR / WALK_SPEED; return t / PACE + t + EXPLORE_SPARE <= avail; };   // a first look at the straight line, then the way itself for the best few
+    for (const c of cands.filter(cheap).slice(0, 12)) {
+      const f = pathExplore.find(p, c, 30000, false);
+      if (f && f.cost / PACE + f.cost + EXPLORE_SPARE <= avail) return c;
+    }
+    return null;
+  }
+  function* exploreTrip(missing) {
+    const h = homeSpot(), home = fireSpot(h), reach = exploreReach(clock.day), where = exploreWhere(missing, stats.explores);
+    const avail = (EXPLORE_BACK - clock.time) * DAY_SECONDS;
+    exo.x = home.x; exo.z = home.z; exo.reach = Math.max(reach, dist(p, home) + 20);
+    if (!pathExplore.find(p, home, 20000, false)) { cool('explore', 300); ev('explore-none', { why: 'terrace' }); return true; }   // he stands where home cannot be reached without a climbing route (another terrace): no trip from here
+    const c = exploreTarget(home, reach, where, avail);
+    if (!c) { cool('explore', 600); ev('explore-none', { why: 'no-target', reach, where }); return true; }
+    if (cur) cur.limit = EXPLORE_LIMIT;
+    exploredDay = clock.day; exploredPts.push(c); stats.explores++; ev('explore', { where, to: [+c.x.toFixed(1), +c.z.toFixed(1)], reach, missing: missing.join('+') });
+    const t0 = now;
+    exploring = true; inp.learns = true; fullPace = false;
+    let hc = null;   // the way home in seconds, looked at again after every 10 m
+    const homeSecs = () => { if (!hc || dist(p, hc.at) > 10) { exo.reach = Math.max(exo.reach, dist(home, p) + 20); const f = pathExplore.find(p, home, 20000, false); hc = { at: { x: p.x, z: p.z }, secs: f ? f.cost : dist(p, home) * EXPLORE_DETOUR * 2 / WALK_SPEED }; } return hc.secs; };
+    const late = () => exploreLate(clock.time, homeSecs());
+    try {
+      const there = yield* walk(c.x, c.z, { stop: 2, finder: pathExplore, until: late });
+      if (there && !late()) {
+        yield* pauseHere(0.7);
+        yield* arrive('shore', c); yield* arrive('palms', c); yield* arrive('forest', c);   // what is within reach of the far end: driftwood, a nut to husk, a handful of berries
+      }
+      fullPace = exploreLate(clock.time, homeSecs(), PACE);
+      exo.reach = Math.max(exo.reach, dist(home, p) + 20);
+      if (!(yield* walk(home.x, home.z, { stop: 3, finder: pathExplore }))) yield* walk(home.x, home.z, { stop: 3 });
+      yield* deliver();
+    } finally { exploring = false; fullPace = false; inp.learns = false; stats.exploreSecs += now - t0; idleInput(); }
+    return true;
+  }
+
+  // 0.29.4: what he went for by day and could not find on ground he knows (wood, a nut to husk) sends him exploring at once, when a trip is allowed (exploreChance > 0), without waiting for an idle moment (which the stores and the fire may never leave him)
+  function* exploreForLack() {
+    const missing = exploreMissing(homeSpot());
+    if (missing.length && exploreChance({ time: clock.time, day: clock.day, thirst: game.thirst.days, hunger: game.hunger.days, last: exploredDay, missing: missing.length, cool: { explore: isCool('explore') }, crab: crabTripOk(senses()) }) > 0) yield* exploreTrip(missing);
+  }
   let lastStroll = null;
   function* idleGoal() {
     const h = homeSpot(), t = clock.time;
@@ -861,6 +960,10 @@ export function createMind(world, game, opts = {}) {
     }
     const s = senses();
     if (need && !crabTripOk(s)) return yield* homeGoal(step, need);
+    if (clock.day > exploredDay && clock.time >= EXPLORE_FROM && clock.time < EXPLORE_TO) {   // 0.29.4: now and then he goes exploring
+      const missing = exploreMissing(h), chance = exploreChance({ time: clock.time, day: clock.day, thirst: s.thirst, hunger: s.hunger, last: exploredDay, missing: missing.length, cool: s.cool, crab: crabTripOk(s) });
+      if (chance > 0 && rngEx() < chance) return yield* exploreTrip(missing);
+    }
     if (strollNow(s, rand())) {
       const cands = strollCands(h), kind = strollKind({ shore: cands.shore.length > 0, river: cands.river.length > 0, palms: cands.palms.length > 0, forest: cands.forest.length > 0, crabs: cands.crabs.length > 0 && crabTripOk(s) }, lastStroll, rand());
       if (kind) { lastStroll = kind; stats.strolls = (stats.strolls || 0) + 1; stats.strollKinds[kind] = (stats.strollKinds[kind] || 0) + 1; return yield* stroll(kind, cands); }
@@ -883,11 +986,11 @@ export function createMind(world, game, opts = {}) {
     if (kind === 'fire') {
       if (plan === 'light') return yield* lightFire();
       if (plan === 'feed') { const ok = yield* feedFire(); if (!ok) cool('gather'); return ok; }
-      if (plan === 'gather') { const ok = yield* gatherWood(); if (!ok) cool('gather'); return ok; }
+      if (plan === 'gather') { const ok = yield* gatherWood(); if (!ok) { cool('gather'); lack.wood = clock.day; } return ok; }
       return true;
     }
-    if (plan === 'husk') return yield* huskGoal();
-    if (plan === 'wood') { const ok = yield* gatherWood(); if (!ok) cool('gather'); return ok; }
+    if (plan === 'husk') { const ok = yield* huskGoal(); if (!ok) yield* exploreForLack(); return ok; }
+    if (plan === 'wood') { const ok = yield* gatherWood(); if (!ok) { cool('gather'); lack.wood = clock.day; yield* exploreForLack(); } return ok; }
     return true;
   }
 
@@ -903,7 +1006,7 @@ export function createMind(world, game, opts = {}) {
     if (cur && why) { ev('goal-dropped', { goal: cur.name, why }); }
     if (cur && (failed || why === 'timeout') && cur.name !== 'idle') cool(cur.name);
     try { if (cur) cur.it.return(); } catch (e) { /* the generator is gone anyway */ }
-    cur = null; mind.goal = null; idleInput(); chose = false;
+    cur = null; mind.goal = null; idleInput(); chose = false; fullPace = false;
   }
 
   function engage() {
@@ -943,7 +1046,7 @@ export function createMind(world, game, opts = {}) {
       startGoal(name);
       if (p.sitting > 0 && !inp.sit) return;   // 0.29.2: he gets up first
     }
-    inp.pace = cur && cur.name === 'idle' ? PACE : 1;   // 0.29.2 "Amble": strolls and idling at an amble, errands at the normal walking pace
+    inp.pace = cur && (cur.name === 'idle' || exploring) && !fullPace ? PACE : 1;   // 0.29.2 "Amble": strolls and idling at an amble, errands at the normal walking pace
     if (cur) {
       if (cur.name === 'idle' && !p.moving) stats.idleSecs += dt;
       let r; try { r = cur.it.next(); } catch (e) { ev('error', { goal: cur.name, msg: String(e && e.stack || e).slice(0, 300) }); stats.errors = (stats.errors || 0) + 1; r = { done: true, value: false }; }

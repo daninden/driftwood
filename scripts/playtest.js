@@ -154,7 +154,7 @@ function seedReport(r) {
   for (const s of m.sleeps) o.push(`| ${s.day} | ${s.t0} | ${s.x}, ${s.z} | ${s.reason} | ${s.hours ?? '?'} | ${s.restBefore} -> ${s.restAfter ?? '?'} | ${s.leanto} | ${s.fire} | ${(s.upgrades || []).join(',') || '-'} |`);
   o.push('', '## Save and load round trips', '', `${m.roundtrips.filter(x => x.ok).length} of ${m.roundtrips.length} matched.`);
   for (const rt of m.roundtrips.filter(x => !x.ok)) o.push(`- (${rt.kind}) day ${rt.day} t ${rt.time} at ${rt.x}, ${rt.z}: ${rt.diffs.join(' | ')}`);
-  if (m.mind) o.push('', '## Mind (--mind: the bot did nothing, Dave looked after himself)', '', `Goals started: ${JSON.stringify(m.mind.goals)}; stuck detections ${m.mind.stuck}; no path ${m.mind.nopath}; standing still ${m.mind.idleSecs} s; fire not offered to light ${m.mind.lightRefused}; evenings spent looking out ${m.mind.gazes}.`);
+  if (m.mind) o.push('', '## Mind (--mind: the bot did nothing, Dave looked after himself)', '', `Goals started: ${JSON.stringify(m.mind.goals)}; stuck detections ${m.mind.stuck}; no path ${m.mind.nopath}; standing still ${m.mind.idleSecs} s; fire not offered to light ${m.mind.lightRefused}; evenings spent looking out ${m.mind.gazes}; exploring trips ${m.mind.explores} (${m.mind.exploreSecs} s).`);
   o.push('', '## Stuck', '', m.stucks.length ? '' : 'none');
   for (const s of m.stucks.slice(0, 30)) o.push(`- day ${s.day} t ${s.time} at (${s.x}, ${s.z}, y ${s.y}) goal ${s.goal} -> ${s.target} (${s.dist} m away) n ${s.n}, slope ${s.slope}, river ${s.river} depth ${s.depth}, sea ${s.sea}, load ${s.load}`);
   o.push('', '## Errors', '', `Page errors and warnings: ${r.pageErrors.length}`); for (const e of [...new Set(r.pageErrors)].slice(0, 15)) o.push('- ' + e);
