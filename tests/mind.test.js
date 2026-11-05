@@ -4,12 +4,14 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { canStand } from '../src/game/movement.js';
 import { seaLevel } from '../src/game/tide.js';
 import { FUEL_MAX } from '../src/game/fire.js';
+import { NEED, UPGRADES, ringCentre } from '../src/game/leanto.js';
+import { terrainAt } from '../src/game/movement.js';
 
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
@@ -133,7 +135,7 @@ describe('pastimes (0.28.2 "Pastime")', () => {
   });
   it('leaves a failed goal alone only a third as long as before, and a failed light waits longer when one tuft is left', async () => {
     const src = (await import('node:fs')).readFileSync(new URL('../src/game/mind.js', import.meta.url), 'utf8');
-    expect(src).toMatch(/const COOL = \{ crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10 \}/);
+    expect(src).toMatch(/const COOL = \{ crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300 \}/);
     expect(src).toMatch(/cool\('light', game\.fibre\.carried <= 1 \? COOL\.light \* 3 : COOL\.light\)/);
   });
   it('chooses stroll places only on known ground, 1.5 m inside its edge, and standable', () => {
@@ -307,5 +309,119 @@ describe('crab trips (0.29.1 "Low water")', () => {
     expect(a.m.stats.crabDigs).toBeGreaterThan(0); expect(a.m.stats.crabTripDigsMax).toBeLessThanOrEqual(CRAB_DIGS);
     expect(a.g.crabs.digs).toBeLessThanOrEqual(a.m.stats.crabTrips * CRAB_DIGS);
     if (a.m.stats.crabsCaught > 0) expect(a.eaten + a.g.crabs.carried.length).toBeGreaterThan(0);   // what he caught he roasts at the fire (or still carries)
+  });
+});
+
+// ---------- his home (0.29.3 "Homestead") ----------
+const snap = (o = {}) => ({ day: HOME_DAY, time: 0.3, fire: true, lean: 'none', up: null, builtDay: -1, cool: {}, ...o });
+// a game on day `day` at `time` with his camp at the start (a burnt fire place), the ground of a first day known, and optionally lean-tos
+const camp = ({ day = HOME_DAY, time = 0.22, leantos = null, know = true, piles = [], stocked = true } = {}) => {   // stocked: nuts, fibre and a full pile of wood at the fire, so that the morning is free for the house
+  const g = createGame(w, spawn, { day, time, sleep: { awake: 0.1 }, ...(stocked ? { shells: { full: [], nuts: 2 }, fibre: { carried: 3 } } : {}), fire: { fires: [], burnt: [{ id: 0, x: spawn.x, z: spawn.z, left: 2, n: 3 }], attempts: 0, nextId: 1 }, ...(leantos ? { leantos } : {}) });
+  if (know) walkFirstDay(w, g, spawn);
+  const log = (kind, i, x, z) => ({ id: 900000 + i, x, y: w.H(x, z), z, len: 2, a: 0, rad: 0.1, ...(kind === 'branch' ? { branch: true } : {}) });
+  const rc = leantos && leantos.list[0].progress >= 1 ? ringCentre(leantos.list[0]) : { x: spawn.x, z: spawn.z };   // the fire's place: where the lean-to's ring is, else the old fire
+  for (const q of stocked ? [{ id: 9, kind: 'driftwood', n: 12, x: rc.x + 0.4, z: rc.z }, ...piles] : piles) g.wood.piles.push({ x: q.x, z: q.z, kind: q.kind, logs: Array.from({ length: q.n }, (_, i) => log(q.kind, q.id * 20 + i, q.x, q.z)) });
+  return g;
+};
+const LT = (o = {}) => ({ list: [{ id: 0, x: spawn.x + 6, z: spawn.z + 2, heading: 0, progress: 1, ...o }], nextId: 1 });
+
+describe('his home: when and what (homeNext, pure)', () => {
+  it('starts on the third day (two nights lived) and only with a camp, by day in the morning', () => {
+    expect(HOME_DAY).toBe(2);
+    expect(homeNext(snap({ day: 0 }))).toBeNull(); expect(homeNext(snap({ day: 1 }))).toBeNull(); expect(homeNext(snap({ day: 2 }))).toBe('leanto'); expect(homeNext(snap({ day: 7 }))).toBe('leanto');
+    expect(homeNext(snap({ fire: false }))).toBeNull();   // no camp (no fire of his, nowhere he sleeps): nothing to build beside
+    expect(homeNext(snap({ time: HOME_FROM - 0.01 }))).toBeNull(); expect(homeNext(snap({ time: HOME_FROM }))).toBe('leanto'); expect(homeNext(snap({ time: HOME_TO - 0.01 }))).toBe('leanto'); expect(homeNext(snap({ time: HOME_TO }))).toBeNull();
+    expect(HOME_TO).toBeLessThanOrEqual(CRAB_FROM);   // the afternoon belongs to the tide, the evening to the fire
+  });
+  it('builds one piece a day, leaves a failed day alone for a while, and builds on a half-built lean-to', () => {
+    expect(homeNext(snap({ builtDay: HOME_DAY }))).toBeNull(); expect(homeNext(snap({ builtDay: HOME_DAY - 1 }))).toBe('leanto');
+    expect(homeNext(snap({ cool: { home: true } }))).toBeNull();
+    expect(homeNext(snap({ lean: 'half', fire: false }))).toBe('leanto');   // a half-built lean-to is built on whatever
+    expect(homeNext(snap({ lean: 'other' }))).toBeNull();   // one exists he cannot use: never a second
+  });
+  it('adds the upgrades in the order walls, ring, bed, one by one, to a finished lean-to (his or the player\'s)', () => {
+    expect(HOME_ORDER).toEqual(['walls', 'ring', 'bed']);
+    expect(UPGRADES.walls.per).toEqual({ frond: 1 }); expect(UPGRADES.walls.steps).toBe(6); expect(UPGRADES.ring.steps).toBe(8); expect(UPGRADES.bed.per).toEqual({ branch: 1, frond: 1 }); expect(UPGRADES.bed.steps).toBe(4);
+    const done = up => homeNext(snap({ lean: 'done', up }));
+    expect(done(null)).toBe('walls'); expect(done({})).toBe('walls'); expect(done({ walls: 0.5 })).toBe('walls');
+    expect(done({ walls: 1 })).toBe('ring'); expect(done({ walls: 1, ring: 0.3 })).toBe('ring');
+    expect(done({ walls: 1, ring: 1 })).toBe('bed'); expect(done({ ring: 1 })).toBe('walls');   // the order holds whatever the player built
+    expect(done({ walls: 1, ring: 1, bed: 1 })).toBeNull();
+  });
+});
+
+describe('his home: the site (0.29.3)', () => {
+  it('is dry, level, above the high-water line, on known ground, 5 to 7.5 m from the fire with the opening across from it, nearer fresh water the better', () => {
+    const g = camp(), m = createMind(w, g), f = { x: spawn.x, z: spawn.z }, sites = m.leantoSites(f);
+    expect(sites.length).toBeGreaterThan(3);
+    for (const c of sites) {
+      expect(SITE_RINGS.includes(c.r)).toBe(true);
+      expect(Math.hypot(c.x - f.x, c.z - f.z)).toBeCloseTo(c.r, 3);
+      expect(w.H(c.x, c.z)).toBeGreaterThanOrEqual(SITE_HIGH); expect(terrainAt(w, c.x, c.z, 0).s).toBeLessThan(SITE_SLOPE);
+      const sx = Math.sin(c.heading), sz = Math.cos(c.heading), along = ((f.x - c.x) * sx + (f.z - c.z) * sz) / c.r;
+      expect(Math.abs(along)).toBeLessThan(1e-6);   // the opening is a quarter turn from the line to the fire: the ring stands 4 m or more from the old fire
+      const rc = ringCentre({ x: c.x, z: c.z, heading: c.heading }); expect(Math.hypot(rc.x - f.x, rc.z - f.z)).toBeGreaterThan(5);
+      for (const [u, v] of [[0, 0], [1, 0.75], [-1, -0.75], [1.7, 0], [-1.7, 0], [0, -1.7], [0, 2.2]]) {   // the footprint, the piles of the upgrades, the ring: all on ground he knows
+        const qx = c.x + sz * u + sx * v, qz = c.z - sx * u + sz * v;
+        expect(g.known.has(qx, qz)).toBe(true); expect(canStand(w, qx, qz, 0)).toBe(true); expect(w.H(qx, qz)).toBeGreaterThanOrEqual(SITE_HIGH); expect(Math.abs(w.H(qx, qz) - w.H(c.x, c.z))).toBeLessThan(0.31);
+      }
+    }
+    for (let i = 1; i < sites.length; i++) expect(sites[i].score).toBeGreaterThanOrEqual(sites[i - 1].score);   // best first: near the fire, near the water, level
+    const mean = sites.reduce((n, c) => n + c.water, 0) / sites.length; expect(sites[0].water).toBeLessThanOrEqual(mean);
+  });
+  it('is chosen on known ground only: knowing only the spot he stands on, there is none', () => {
+    const g = camp({ know: false }), m = createMind(w, g);
+    expect(m.leantoSites({ x: spawn.x, z: spawn.z }).length).toBeLessThanOrEqual(m.leantoSites({ x: spawn.x, z: spawn.z }).filter(c => g.known.has(c.x, c.z)).length);
+    for (const c of m.leantoSites({ x: spawn.x, z: spawn.z })) expect(g.known.has(c.x, c.z)).toBe(true);
+    const bare = createGame(w, spawn, { known: { cell: 10, cells: [] } }), mb = createMind(w, bare);
+    for (const c of mb.leantoSites({ x: spawn.x + 300, z: spawn.z })) expect(bare.known.has(c.x, c.z)).toBe(true);   // far from anything he knows: none
+    expect(mb.leantoSites({ x: spawn.x + 300, z: spawn.z })).toEqual([]);
+  });
+  it('is kept once chosen (the fire stays), and the piles for the building are not the fire\'s', () => {
+    const g = camp(), m = createMind(w, g); m.engage();
+    const a = m.homePlan(), b = m.homePlan();
+    expect(a.step).toBe('leanto'); expect(a.site).not.toBeNull(); expect(b.site).toBe(a.site);
+    expect(a.need.kind).toBe('drift');   // 6 driftwood first, then 6 branches
+  });
+});
+
+describe('his home: the project (0.29.3)', () => {
+  it('never builds before the third day, and not at all without a camp', () => {
+    const { r } = runMind(w, spawn, { days: 2, know: true });
+    expect(r.builds).toBe(0); expect(r.final.leantos).toBe(0); expect(r.homeDay).toEqual({});
+    const g = createGame(w, spawn, { day: 3, time: 0.25 }); walkFirstDay(w, g, spawn); const m = createMind(w, g); m.engage();
+    expect(m.home().kind).toBe('here'); expect(m.homePlan().step).toBeNull();   // never slept, no fire: no camp yet
+  });
+  it('adopts a lean-to the player built as his home and only adds the upgrades to it, never a second lean-to', () => {
+    const g = camp({ leantos: LT(), piles: [{ id: 1, kind: 'driftwood', n: 6, x: spawn.x - 4, z: spawn.z }, { id: 2, kind: 'branch', n: 6, x: spawn.x - 4, z: spawn.z + 1.2 }] }), m = createMind(w, g); m.engage();
+    expect(m.home().kind).toBe('leanto'); const plan = m.homePlan();
+    expect(plan.step).toBe('walls'); expect(plan.need.kind).toBe('frond'); expect(plan.need.want).toBe(6);
+    for (let t = 0; t < 400; t += 0.1) { m.step(0.1); g.update(m.input, 0.1); }
+    expect(g.leantos.list.length).toBe(1);   // piles of 6 and 6 lay there the whole time: he never builds a second lean-to
+    expect(g.wood.piles.some(q => q.kind === 'driftwood' && q.logs.length >= NEED)).toBe(true);
+  });
+  it('builds on a half-built lean-to and finishes it, without a second one', () => {
+    const g = camp({ leantos: LT({ progress: 0.4 }) }), m = createMind(w, g); m.engage();
+    expect(m.homePlan().step).toBe('leanto');
+    let t = 0; while (t < 500 && g.leantos.list[0].progress < 1) { m.step(0.1); g.update(m.input, 0.1); t += 0.1; }
+    expect(g.leantos.list.length).toBe(1); expect(g.leantos.list[0].progress).toBe(1); expect(m.stats.home.builds).toBeGreaterThanOrEqual(1);
+  });
+  it('asks for the upgrades in order: the ring only after the walls, the bed after the ring', () => {
+    const need = up => { const g = camp({ leantos: LT({ up }) }), m = createMind(w, g); m.engage(); return m.homePlan(); };
+    let p = need({}); expect(p.step).toBe('walls'); expect(p.need).toMatchObject({ kind: 'frond', want: 6 });
+    p = need({ walls: 1 }); expect(p.step).toBe('ring'); expect(p.need).toMatchObject({ kind: 'stone', want: 8 });
+    p = need({ walls: 1, ring: 1 }); expect(p.step).toBe('bed'); expect(p.need.kind).toBe('branch'); expect(p.need.want).toBe(4);
+    p = need({ walls: 0.5 }); expect(p.need).toMatchObject({ kind: 'frond', want: 2 });   // what a step has used is not fetched again (four of the six steps have begun at half way)
+  });
+  it('builds an upgrade with the materials in piles beside the lean-to, through the arc, and keeps the progress', () => {
+    const lt = LT().list[0], frondAt = { id: 3, kind: 'frond', n: 6, x: lt.x + 1.7, z: lt.z };
+    const g = camp({ leantos: LT(), piles: [frondAt] }), m = createMind(w, g); m.engage();
+    let t = 0; const d0 = g.clock.day; while (t < 600 && !(g.leantos.list[0].up && g.leantos.list[0].up.walls >= 1)) { m.step(0.1); g.update(m.input, 0.1); t += 0.1; }
+    expect(g.leantos.has(g.leantos.list[0], 'walls')).toBe(true); expect(g.clock.day).toBe(d0); expect(g.wood.piles.filter(q => q.kind === 'frond').length).toBe(0);   // the six fronds were used
+  });
+  it('fetches nothing from ground he does not know: with only the start known and no material in reach he comes home with nothing and stays on known ground', () => {
+    const g = camp({ know: false, leantos: LT() }); const m = createMind(w, g); m.engage();
+    let out = 0; for (let t = 0; t < 600; t += 0.1) { m.step(0.1); g.update(m.input, 0.1); if (!g.known.has(g.player.x, g.player.z)) out++; }
+    expect(out).toBe(0); expect(g.wood.load()).toBe(0);
   });
 });

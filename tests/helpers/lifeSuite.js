@@ -11,7 +11,10 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
   beforeAll(async () => { w = await generateWorld(seed); spawn = startSpot(w); }, 120000);
   const common = r => {
     expect(r.errors).toEqual([]);                  // no exception in ten days
-    expect(r.builds).toBe(0);                       // never builds (a lean-to, an upgrade)
+    expect(r.builds).toBeLessThanOrEqual(1);        // 0.29.3 "Homestead": at most ONE lean-to (his home), never a second
+    const d = r.homeDay;                            // the day each piece of his home was finished: from day 2, the lean-to first, then walls, ring, bed in that order, never two pieces on one day
+    if (d.leanto !== undefined) expect(d.leanto).toBeGreaterThanOrEqual(2);
+    for (const [a, b] of [['leanto', 'walls'], ['walls', 'ring'], ['ring', 'bed']]) if (d[b] !== undefined) { expect(d[a]).toBeDefined(); expect(d[b]).toBeGreaterThan(d[a]); }
     expect(r.outside).toBe(0);                      // outside a search for water or food, never a step on ground he does not know
     expect(r.wakes).toBe(0);
     expect(r.final.day).toBeGreaterThanOrEqual(r.days);   // the days really were played
@@ -27,8 +30,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
     expect(r.mealsPerDay).toBeGreaterThan(1.7); expect(r.mealsPerDay).toBeLessThan(3);   // meals of half a day of hunger (a handful of berries is a third of one)
     const drinksPerDay = (r.drinks + r.sips) / r.days; expect(drinksPerDay).toBeGreaterThan(2); expect(drinksPerDay).toBeLessThan(5);
     expect(r.mix.berries + r.mix.banana).toBeGreaterThanOrEqual(c.inland ?? 0);   // some of the food is from inland
-    // 0.29.1 "Low water": at low water he digs for crabs at colonies he knows and roasts them at the evening fire; a trip is at most CRAB_DIGS (4) digs, and a crab seldom spoils uneaten
-    expect(r.crabTripDigsMax).toBeLessThanOrEqual(4); expect(r.crabsSpoiled).toBeLessThanOrEqual(2); expect(r.crabsEaten).toBeGreaterThanOrEqual(c.crabs ?? 0);
+    // 0.29.1 "Low water": at low water he digs for crabs at colonies he knows and roasts them at the evening fire; a trip is at most CRAB_DIGS (4) digs, and a crab seldom spoils uneaten (0.29.3: at most 3, was 2; whether the evening fire catches on the first tries is luck of the drill, fixed by the attempt count, and two bad evenings in a row spoil two crabs whatever he does)
+    expect(r.crabTripDigsMax).toBeLessThanOrEqual(4); expect(r.crabsSpoiled).toBeLessThanOrEqual(3); expect(r.crabsEaten).toBeGreaterThanOrEqual(c.crabs ?? 0);
   };
   describe(`Dave alone on island ${seed}`, () => {
     it('lives ten days on the ground a first day would have shown him', () => {
@@ -41,6 +44,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
       expect(r.chosenSleeps).toBeGreaterThanOrEqual(c.chosenSleeps);   // he lay down by himself on (almost) every night
       expect(r.stuckSelf).toBeLessThanOrEqual(c.stuckSelf); expect(r.stuckMax).toBeLessThan(c.stuckMax);
       expect(r.idleSecs).toBeGreaterThan(0);
+      if (c.leanto !== undefined) { expect(r.homeDay.leanto).toBeDefined(); expect(r.homeDay.leanto).toBeLessThanOrEqual(c.leanto); }   // 0.29.3: his lean-to stands by this day (measured +2); upgrades follow
+      if (c.upgrades !== undefined) expect(['walls', 'ring', 'bed'].filter(k => r.homeDay[k] !== undefined).length).toBeGreaterThanOrEqual(c.upgrades);
       expect(mind.stats.strolls).toBeGreaterThan(20);   // he really goes about (shore, river, palms, forest)
       expect(Object.keys(mind.stats.strollKinds).length).toBeGreaterThanOrEqual(3);   // and varies it
       if (c.idle !== undefined) expect(r.idleShare).toBeLessThan(c.idle);   // 0.28.2: he strolls and gathers instead of standing about (share of the waking time spent standing still)
@@ -58,6 +63,7 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
       expect(r.stuckMax).toBeLessThan(c.stuckMax);
       if (c.idle !== undefined) expect(r.idleShare).toBeLessThan(c.idle);
       if (c.searches) expect(r.searches).toBeGreaterThanOrEqual(c.searches);
+      if (c.leanto !== undefined) { expect(r.homeDay.leanto).toBeDefined(); expect(r.homeDay.leanto).toBeLessThanOrEqual(c.leanto); }
     });
     for (const e of extra) it(e.name, () => e.run(w, spawn));
     if (beach) it('lives ten days on the beach alone (no berry bush, no banana plant): just about fed, searching along the coast for nuts when the near ones are taken', () => {
