@@ -199,7 +199,7 @@ if (sea > -0.35) errors.push('the sea did not fall at low water: ' + sea);
 await shot('smoke-5.png');
 
 // Sleep: Z lies down, time runs fast, the next high water brings wood. Since 0.17.3 he can only choose to
-// sleep after half a day awake, so the walk so far is topped up to 0.6 day first (Z is ignored before that).
+// sleep after half a day awake, so the walk so far is topped up to 0.6 day first (Z is ignored before that). By day (0.29) it is a nap: two hours, resting half as fast.
 await page.evaluate(() => { window.__driftwood.game.sleep.awake = 0.6; });
 await page.keyboard.press('z');
 const asleep = await page.evaluate(() => { const { game, step } = window.__driftwood; step(4); return { asleep: game.sleep.asleep, lie: game.player.lie, washes: game.wood.washes }; });
@@ -208,13 +208,13 @@ if (!asleep.asleep || asleep.lie < 1) errors.push('did not lie down to sleep');
 await shot('smoke-6.png');
 const woke = await page.evaluate(() => {
   const { game, step } = window.__driftwood, t = step(60, () => !game.sleep.asleep && game.player.lie === 0);
-  const slept = game.sleep.slept;
+  const slept = game.sleep.slept, restNow = game.sleep.rest();
   step(600, () => game.wood.washes > 0);   // awake again, until the next high water brings wood
-  return { t, slept, rest: game.sleep.rest(), washes: game.wood.washes, fresh: game.wood.fresh.length, time: game.clock.time };
+  return { t, slept, restNow, rest: game.sleep.rest(), washes: game.wood.washes, fresh: game.wood.fresh.length, time: game.clock.time };
 });
 console.log('woke', JSON.stringify(woke));
-if (woke.slept < 0.11 || woke.slept > 0.14) errors.push('a cold sleep without a fire lasted ' + (woke.slept * 24).toFixed(1) + ' h instead of 3');
-if (woke.rest < 0.8) errors.push('not rested after sleeping: ' + woke.rest);
+if (woke.slept < 0.075 || woke.slept > 0.095) errors.push('a nap by day lasted ' + (woke.slept * 24).toFixed(1) + ' h instead of 2');
+if (woke.restNow < 0.65) errors.push('not rested after the nap: ' + woke.restNow);
 if (woke.washes < 1 || woke.fresh < 1) errors.push('no wood washed up at the next high water');
 await page.evaluate(() => { const { game } = window.__driftwood, l = game.wood.fresh[0]; console.log('fresh wood at', l.x.toFixed(1), l.z.toFixed(1)); });
 await shot('smoke-7.png', { look: false });
@@ -234,7 +234,7 @@ await shot('smoke-8.png');
 const fibre = await page.evaluate(() => { const { game, step } = window.__driftwood; step(5, () => !game.player.work); return game.fibre.carried; });
 console.log('fibre', fibre);
 const hunger = await page.evaluate(() => window.__driftwood.game.hunger.days);
-if (hunger > 2.1) errors.push('hunger ' + hunger.toFixed(2) + ' after eating the nut, expected about 2');
+if (hunger > 2.6) errors.push('hunger ' + hunger.toFixed(2) + ' after eating the nut, expected about 2.5');
 if (fibre !== 1) errors.push('carries ' + fibre + ' tufts of fibre instead of 1');
 // Shells (0.25): after eating the nut he keeps its empty half shell; with a filled shell and a carried nut added the row
 // shows them next to the fibre tuft (smoke-36, also in the quick run); the stores are emptied again afterwards.
@@ -255,7 +255,7 @@ await shot('smoke-36b.png', { quick: true, settle: 400 });
 await page.click('#carry svg[data-kind="water"]');
 const row = await page.evaluate(() => { const { game, step } = window.__driftwood; step(0.2); const mid = game.player.work && game.player.work.kind; step(2.5); return { mid, full: game.shells.full(), thirst: game.thirst.days, moved: Math.hypot(game.player.x - window.__rowAt.x, game.player.z - window.__rowAt.z), target: !!window.__driftwood.input.target, before: window.__rowAt.full }; });
 console.log('row click', JSON.stringify(row));
-if (row.before !== 1 || row.mid !== 'sip' || row.full !== 0 || row.thirst > 0.4) errors.push('a click on the full shell in the row did not drink it: ' + JSON.stringify(row));
+if (row.before !== 1 || row.mid !== 'sip' || row.full !== 0 || row.thirst > 0.55) errors.push('a click on the full shell in the row did not drink it: ' + JSON.stringify(row));
 if (row.moved > 0.05 || row.target) errors.push('a click on the row moved him or set a target: ' + JSON.stringify(row));
 await page.evaluate(() => { const s = window.__driftwood.game.shells; s.list.length = 0; s.nuts = 0; });
 
@@ -598,7 +598,7 @@ else {
   console.log('roasted', JSON.stringify(ate));
   if (ate.kneel !== 'roast') errors.push('did not kneel to roast');
   if (ate.seconds < 7.8 || ate.seconds > 8.6) errors.push('the roast took ' + ate.seconds + ' s instead of 8');
-  if (ate.carried !== 0 || Math.abs(ate.hunger - (2.5 - 2 / 3)) > 0.03) errors.push('eating the crab went wrong: ' + JSON.stringify(ate));
+  if (ate.carried !== 0 || Math.abs(ate.hunger - (2.5 - 0.5)) > 0.03) errors.push('eating the crab went wrong: ' + JSON.stringify(ate));
 }
 // Low water finds (0.18): wood that washed up in the strip between low and high water. At low water it lies out on the
 // wet sand (smoke-30) and can be picked up; at high water its spot is under the sea, it shows faintly through the

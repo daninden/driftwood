@@ -43,8 +43,8 @@ import { hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 
 export const FIBRE_MAX = 3;
-export const REGROW = 10, REGROW_SPREAD = 4;   // days before a palm drops a new nut
-export const NUT_SHARE = 1 / 6;               // share of the palms with nuts that keep their (one) nut
+export const REGROW = 8, REGROW_SPREAD = 4;   // days before a palm drops a new nut
+export const NUT_SHARE = 1 / 5;               // share of the palms with nuts that keep their (one) nut
 
 const nutCache = new WeakMap();
 export function nutsOfTile(w, tile) {

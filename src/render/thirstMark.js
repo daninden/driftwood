@@ -6,7 +6,7 @@
  * render/ink). Its filling empties as he gets thirsty: full just after a
  * drink, empty when he is about to collapse (game/thirst `fill`). Always
  * shown, faint like the moon (REST_OPACITY) while he is not thirsty, clearer
- * as thirst grows from the half of the way to a day on, and clear for a few
+ * as thirst grows from the half of the way to thirsty (a quarter of a day) on, and clear for a few
  * seconds after drinking (the curve of render/carryMark). No numbers. Rim 2 px with the glow `--halo` (index.html, 0.13.3). It
  * sits in #needs (index.html) between the moon and the row of what he
  * carries; the half coconut of hunger (render/hungerMark) comes right after it.
@@ -29,7 +29,7 @@ import { carryOpacity, REST_OPACITY, PEAK_OPACITY } from './carryMark.js';
 import { COLLAPSE_AT } from '../game/thirst.js';
 
 export const FILL_STEPS = 48;
-export const CLEAR_FROM = 0.5, CLEAR_TO = COLLAPSE_AT;   // days of thirst: starts getting clearer, fully clear
+export const CLEAR_FROM = 0.25, CLEAR_TO = COLLAPSE_AT;   // days of thirst: starts getting clearer (half of the way to thirsty), fully clear
 const H = 24;
 export const DROP_PATH = 'M8 1C10 5 14 10 14 15.5A6 6 0 0 1 2 15.5C2 10 6 5 8 1Z';   // the drop in a 0 0 16 24 box (the action button reuses it)
 

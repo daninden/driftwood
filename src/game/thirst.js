@@ -5,14 +5,14 @@
  *   - Thirst is counted in days of game time since he last drank (0 = not
  *     thirsty). It keeps running while he sleeps, at the same rate as the
  *     clock (a night of sleep is a third of a day), but never beyond
- *     COLLAPSE_AT.
- *   - From THIRSTY_AT (one day, 20 minutes of play) he is thirsty: he walks
+ *     COLLAPSE_AT. (0.29 "Daily bread": he drinks three or four times a day.)
+ *   - From THIRSTY_AT (half a day, 10 minutes of play) he is thirsty: he walks
  *     slower, down to THIRST_SLOW at COLLAPSE_AT (65 %, clearly slower;
  *     game/game combines it with the load, game/sleep's and game/hunger's speed,
  *     and shortens his steps with the combined factor, see game/movement).
- *   - From VERY_AT (a day and a half) he is very thirsty: his rest
+ *   - From VERY_AT (a day) he is very thirsty: his rest
  *     (game/sleep) runs out DRAIN times as fast.
- *   - At COLLAPSE_AT (two days) he collapses and sleeps like exhaustion
+ *   - At COLLAPSE_AT (a day and a half) he collapses and sleeps like exhaustion
  *     (game/sleep, on dry ground only; game/game starts it). He wakes still
  *     thirsty: `revive` puts him back to REVIVE_AT, so another collapse is
  *     a quarter of a day away, not at once. He never dies.
@@ -40,7 +40,7 @@
  *
  * Depends on: nothing
  */
-export const THIRSTY_AT = 1, VERY_AT = 1.5, COLLAPSE_AT = 2, REVIVE_AT = 1.75;
+export const THIRSTY_AT = 0.5, VERY_AT = 1, COLLAPSE_AT = 1.5, REVIVE_AT = 1.25;
 export const THIRST_SLOW = 0.65;   // walking speed at the point of collapse
 export const DRAIN = 2;            // rest runs out twice as fast when very thirsty
 

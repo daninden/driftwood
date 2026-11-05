@@ -8,7 +8,7 @@
  *     (game/fire), so a dig cannot be repeated for luck; a failed dig counts too.
  *   - He carries at most CARRY_CRABS (2) crabs; they are not wood and do not slow him.
  *   - A crab is eaten roasted, never raw: beside a fire with flames a short press kneels
- *     ROAST_TIME (8 s) and eats the crab carried longest (hunger.eat(CRAB_FOOD), 2/3 day).
+ *     ROAST_TIME (8 s) and eats the crab carried longest (hunger.eat(CRAB_FOOD), half a day: a meal, 0.29).
  *   - A raw crab carried SPOIL_AFTER (one game day) goes bad and is gone.
  *   - A crab that was caught is gone from its colony and comes back REGROW (5 to 8) days
  *     later, so a colony caught empty grows back, one crab at a time.
@@ -35,7 +35,7 @@ import { mulberry32, hashInt } from '../core/noise.js';
 export const DIG_TIME = 5, ROAST_TIME = 8;
 export const DIG_CHANCE = 0.5;
 export const CARRY_CRABS = 2;
-export const CRAB_FOOD = 2 / 3;   // days of hunger one roasted crab takes away (two thirds of a coconut)
+export const CRAB_FOOD = 0.5;     // days of hunger one roasted crab takes away (a meal, like a coconut)
 export const SPOIL_AFTER = 1;     // a raw crab goes bad after this many game days
 export const REGROW = [5, 8];     // a caught crab is back in its colony after this many days
 

@@ -260,21 +260,21 @@ describe('what the upgrades do', () => {
     delete logs0[0].t;
   });
   it('walls: a cold sleep under it lasts seven hours and he wakes 87 % rested, a bare lean-to six hours, none three', () => {
-    const cold = shelter => { const s = createSleep({ awake: 2 }); s.start(); let n = 0; while ((s.asleep || s.lie < 1) && n++ < 40000) s.update(1 / 30, true, false, {}, shelter); return s; };
+    const cold = shelter => { const s = createSleep({ awake: 1.5 }); s.start(); let n = 0; while ((s.asleep || s.lie < 1) && n++ < 40000) s.update(1 / 30, true, false, {}, shelter); return s; };
     const a = cold(false), b = cold(true), c = cold({ walls: true, bed: false });
     expect(a.slept).toBeCloseTo(COLD_SLEEP, 1); expect(b.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(c.slept).toBeCloseTo(WALLS_SLEEP, 1);
     expect(WALLS_SLEEP * 24).toBe(7);
     expect(c.rest()).toBeGreaterThan(0.85); expect(c.rest()).toBeLessThan(0.9); expect(b.rest()).toBeLessThan(c.rest());
   });
   it('bed: he rests 25 % faster, warm or cold', () => {
-    const rested = (warm, shelter) => { const s = createSleep({ awake: 2 }); s.start(); let days = 0; while (days < 2 / 24) days += s.update(1 / 30, true, warm, {}, shelter) / DAY_SECONDS; return 2 - s.awake; };
+    const rested = (warm, shelter) => { const s = createSleep({ awake: 1.5 }); s.start(); let days = 0; while (days < 2 / 24) days += s.update(1 / 30, true, warm, {}, shelter) / DAY_SECONDS; return 1.5 - s.awake; };
     expect(BED_REST).toBe(1.25);
     expect(rested(false, { bed: true }) / rested(false, true)).toBeCloseTo(1.25, 1);
     expect(rested(true, { bed: true }) / rested(true, true)).toBeCloseTo(1.25, 1);
     expect(rested(true, true) / rested(true, false)).toBeCloseTo(SHELTER_REST, 1);
   });
   it('sleeping in the game uses the upgrades of the lean-to he lies under', () => {
-    const sleepOut = o => { const g = createGame(w, spawn, { sleep: { awake: 2 }, leantos: { list: [{ ...LT(), x: spawn.x + 0.5, up: o }], nextId: 1 } }); const i = makeInput(); run(g, i, 3); let n = 0; while ((g.sleep.asleep || g.sleep.lie > 0) && n++ < 9000) g.update(i, 1 / 30); return g; };
+    const sleepOut = o => { const g = createGame(w, spawn, { sleep: { awake: 1.5 }, leantos: { list: [{ ...LT(), x: spawn.x + 0.5, up: o }], nextId: 1 } }); const i = makeInput(); run(g, i, 3); let n = 0; while ((g.sleep.asleep || g.sleep.lie > 0) && n++ < 9000) g.update(i, 1 / 30); return g; };
     expect(sleepOut(undefined).sleep.slept).toBeCloseTo(SHELTER_SLEEP, 1);
     expect(sleepOut({ walls: 1 }).sleep.slept).toBeCloseTo(WALLS_SLEEP, 1);
     expect(sleepOut({ bed: 1 }).sleep.rest()).toBeGreaterThan(sleepOut(undefined).sleep.rest() + 0.05);

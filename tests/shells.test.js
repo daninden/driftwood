@@ -65,7 +65,7 @@ describe('game/shells', () => {
     expect(createShells(null).state()).toEqual({ full: [], nuts: 0 });
   });
   it('has the thresholds of the design', () => {
-    expect([DRINK_AT, SIP_AT, EAT_AT, SIP_DRINK, FILL_TIME, SIP_TIME]).toEqual([0.1, 0.25, 0.5, 0.5, 2, 1.5]);
+    expect([DRINK_AT, SIP_AT, EAT_AT, SIP_DRINK, FILL_TIME, SIP_TIME]).toEqual([0.05, 0.15, 1 / 3, 1 / 3, 2, 1.5]);   // 0.29: a full shell takes a third of a day off the thirst; a meal is coming up at a third of a day of hunger
   });
 });
 
@@ -134,20 +134,20 @@ describe('at the water: drink first, else fill', () => {
 });
 
 describe('drinking a full shell away from the water', () => {
-  it('takes half a day of thirst off in 1.5 s and empties the shell', () => {
+  it('takes a third of a day of thirst off in 1.5 s and empties the shell', () => {
     const g = atE({ shells: { full: [true, true], nuts: 0 }, thirst: { days: 0.9 } });
     expect(kind(g)).toBe('sip');
     press(g); expect(g.player.work.kind).toBe('sip');
     run(g, makeInput(), SIP_TIME * 0.5); expect(g.thirst.days).toBeGreaterThan(0.85);
     run(g, makeInput(), SIP_TIME); expect(g.player.work).toBeNull();
-    expect(g.thirst.days).toBeCloseTo(0.4, 1); expect(g.shells.list).toEqual([false, true]);
+    expect(g.thirst.days).toBeCloseTo(0.9 - SIP_DRINK, 1); expect(g.shells.list).toEqual([false, true]);
   });
-  it('never goes below 0, and is only offered when thirsty (more than a quarter day)', () => {
+  it('never goes below 0, and is only offered when thirsty (more than 0.15 day)', () => {
     const g = atE({ shells: { full: [true], nuts: 0 }, thirst: { days: 0.3 } });
     press(g); run(g, makeInput(), SIP_TIME + 0.3); expect(g.thirst.days).toBeLessThan(0.01); expect(g.shells.list).toEqual([false]);
     const fresh = atE({ shells: { full: [true], nuts: 0 }, thirst: { days: SIP_AT } });
-    expect(kind(fresh)).toBeNull();   // a quarter day exactly: not yet
-    const none = atE({ shells: { full: [false], nuts: 0 }, thirst: { days: 1.5 } });
+    expect(kind(fresh)).toBeNull();   // exactly SIP_AT: not yet
+    const none = atE({ shells: { full: [false], nuts: 0 }, thirst: { days: 1.2 } });
     expect(kind(none)).toBeNull();    // an empty shell gives nothing
   });
   it('does not keep spoiling: the water is still there a day later', () => {
@@ -167,7 +167,7 @@ describe('drinking a full shell away from the water', () => {
 });
 
 describe('carrying a coconut', () => {
-  it('not hungry (half a day or less) he husks the nut, gets a tuft and carries it: no meal, no shell', () => {
+  it('not hungry (a third of a day or less) he husks the nut, gets a tuft and carries it: no meal, no shell', () => {
     const g = atNut({ hunger: { days: 0.3 } });
     expect(kind(g)).toBe('husk');
     press(g, 0.3); expect(g.player.work.kind).toBe('husk');
@@ -185,26 +185,26 @@ describe('carrying a coconut', () => {
     press(g, 0.3); run(g, makeInput(), HUSK_TIME + 0.3);
     expect(g.shells.nuts).toBe(NUT_MAX); expect(g.fibre.carried).toBe(1); expect(g.shells.list).toEqual([false]);
   });
-  it('hungry (more than half a day) he eats it at once: food, drink, a tuft and the shell', () => {
-    const g = atNut({ hunger: { days: 2 }, thirst: { days: 1 } });
+  it('hungry (more than a third of a day) he eats it at once: food, drink, a tuft and the shell', () => {
+    const g = atNut({ hunger: { days: 0.9 }, thirst: { days: 1 } });
     expect(kind(g)).toBe('husk');
     press(g, 0.3); run(g, makeInput(), HUSK_TIME + 0.3);
     expect(g.shells.nuts).toBe(0); expect(g.fibre.carried).toBe(1); expect(g.shells.list).toEqual([false]);
-    expect(g.hunger.days).toBeCloseTo(2 - NUT_FOOD, 1); expect(g.thirst.days).toBeCloseTo(1 - NUT_DRINK, 1);
+    expect(g.hunger.days).toBeCloseTo(0.9 - NUT_FOOD, 1); expect(g.thirst.days).toBeCloseTo(1 - NUT_DRINK, 1);
   });
   it('a carried nut grows back like a husked one', () => {
     const g = atNut({ hunger: { days: 0 } }); press(g, 0.3); run(g, makeInput(), HUSK_TIME + 0.3);
     expect(g.fibre.onGround(cocos[0])).toBe(false);
     g.fibre.update(g.clock.total + 15); expect(g.fibre.onGround(cocos[0])).toBe(true);
   });
-  it('eats a carried nut anywhere when hungry: EAT_TIME, food, a quarter day of drink, no tuft, and the shell', () => {
-    const g = atE({ shells: { full: [], nuts: 2 }, hunger: { days: 2 }, thirst: { days: 1 } });
+  it('eats a carried nut anywhere when hungry: EAT_TIME, food, a little drink, no tuft, and the shell', () => {
+    const g = atE({ shells: { full: [], nuts: 2 }, hunger: { days: 0.9 }, thirst: { days: 1 } });
     expect(g.action().tap).toMatchObject({ kind: 'husk', carried: true });
     press(g); expect(g.player.work.kind).toBe('husk');
     run(g, makeInput(), EAT_TIME - 0.5); expect(g.shells.nuts).toBe(2);
     run(g, makeInput(), 1);
     expect(g.player.work).toBeNull(); expect(g.shells.nuts).toBe(1); expect(g.fibre.carried).toBe(0); expect(g.shells.list).toEqual([false]);
-    expect(g.hunger.days).toBeCloseTo(2 - NUT_FOOD, 1); expect(g.thirst.days).toBeCloseTo(1 - NUT_DRINK, 1);
+    expect(g.hunger.days).toBeCloseTo(0.9 - NUT_FOOD, 1); expect(g.thirst.days).toBeCloseTo(1 - NUT_DRINK, 1);
   });
   it('is not offered when he is not hungry (even with no fibre), and a carried nut does not spoil', () => {
     const g = atE({ shells: { full: [], nuts: 1 }, hunger: { days: EAT_AT } });
@@ -278,7 +278,7 @@ describe('using a drawing of the row (0.27.2 "Row": game.use)', () => {
     run(g, makeInput(), SIP_TIME + 0.3);
     expect(g.shells.list).toEqual([false]); expect(g.thirst.days).toBeGreaterThanOrEqual(0); expect(g.thirst.days).toBeLessThan(0.01);
   });
-  it('drinks a full shell while thirsty: half a day less', () => {
+  it('drinks a full shell while thirsty: a third of a day less', () => {
     const g = atE({ thirst: { days: 0.9 }, shells: full });
     g.use('water'); run(g, makeInput(), SIP_TIME + 0.3);
     expect(g.thirst.days).toBeCloseTo(0.9 - SIP_DRINK + 0, 1);
