@@ -25,6 +25,9 @@
  * hang and his arms swing less; thirsty (player.thirsty, 0..1) his head hangs a
  * little forward on its own joint (HANG radians at most, 0.11).
  *
+ * To rest, by himself (0.29.2 "Amble", player.sitting 0..1, eased by sitEase over half a second; game/game, set only by game/mind), he sits on the ground: knees drawn up, feet flat, the
+ * body leaning forward a little over them, his arms forward and resting, the head up to look out, the hat on and the staff laid down on the ground beside him (SIT, sitPose).
+ *
  * Kneeling work (player.work): to husk a coconut he kneels, bent over, his
  * hands tearing at it in turn; to drink (and, since 0.25, to fill a shell or sip from one) he kneels low over the water and brings his cupped hands to his mouth now and then; to make fire he kneels and twirls his staff
  * upright between his palms as a fire drill, the hands rubbing back and
@@ -32,6 +35,7 @@
  * left hand.
  *
  * SIL_OPACITY   opacity of the silhouette (0..1)
+ * SIT, sitEase(f), sitPose(f)   the sitting pose at full, its easing and the angles at a transition value f (pure; tests/hero.test.js)
  * createHero(scene) -> { group, update(player, wadeDepth, load?), flame(out) }
  *   update copies position and heading from the player state
  *   (game/movement) and animates the walk cycle from player.phase. In water
@@ -58,6 +62,7 @@ import { makeTorch, flameWorld } from './fire.js';
 // the figure, which then covers it.
 export const SIL_OPACITY = 0.8;
 export const HANG = 0.3;   // his head hangs forward this much (radians) when he is about to collapse from thirst
+export const SIT = { hip: -2.0, knee: 1.05, lean: 0.14, drop: 0.25, arm: -0.95, head: -0.2, spread: 0.16 };   // 0.29.2: the sitting pose at full: thighs forward and up (hip), shins back down (knee), body forward over the knees, seat down on the ground (metres), arms forward, head up to look out, knees a little apart (spread)
 export const LEAN = 0.10;   // forward lean per carried piece, radians (three pieces: about 17 degrees), from the hips
 const silMat = new THREE.MeshBasicMaterial({
   color: HERO.silhouette, opacity: SIL_OPACITY, depthFunc: THREE.GreaterDepth, depthWrite: false,
@@ -65,6 +70,14 @@ const silMat = new THREE.MeshBasicMaterial({
   blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
   stencilWrite: true, stencilFunc: THREE.NotEqualStencilFunc, stencilRef: 1, stencilZPass: THREE.ReplaceStencilOp,
 });
+
+/** The easing of sitting down and getting up (player.sitting 0..1, linear in time, game/game SIT_TIME): no popping at either end. */
+export const sitEase = f => { const x = Math.min(1, Math.max(0, f)); return x * x * (3 - 2 * x); };
+/** The sitting pose (radians; drop in metres) at a transition value f of player.sitting: all zero standing, SIT when seated, eased in between. */
+export function sitPose(f) {
+  const e = sitEase(f);
+  return { e, hip: SIT.hip * e, knee: SIT.knee * e, ankle: -(SIT.hip + SIT.knee) * e, lean: SIT.lean * e, drop: SIT.drop * e, arm: SIT.arm * e, head: SIT.head * e };
+}
 
 export function createHero(scene) {
   const group = new THREE.Group(), body = new THREE.Group(); group.add(body); body.scale.setScalar(0.62);
@@ -75,13 +88,15 @@ export function createHero(scene) {
   const joint = (x, y, z, parent = body) => { const j = new THREE.Group(); j.position.set(x, y, z); parent.add(j); return j; };
   const hipL = joint(-0.08, HIP, 0), hipR = joint(0.08, HIP, 0), shL = joint(-0.21, 0.88 - HIP, 0, upper), shR = joint(0.21, 0.88 - HIP, 0, upper), torso = joint(0, -HIP, 0, upper);
 
-  // Legs: frayed shorts to just above the knee, bare lower leg, bare foot.
+  // Legs: frayed shorts to just above the knee, bare lower leg, bare foot. The knee is a joint (0.29.2: he sits with his knees drawn up); walking leaves it straight.
+  const knees = [];
   for (const [hip, s] of [[hipL, -1], [hipR, 1]]) {
     box(hip, 0.135, 0.2, 0.145, shorts, 0, -0.1, 0);
     box(hip, 0.04, 0.035, 0.03, shorts, 0.03 * s, -0.21, 0.055);                // frayed hem
     box(hip, 0.035, 0.03, 0.03, shorts, -0.035 * s, -0.205, -0.05);
-    box(hip, 0.085, 0.27, 0.09, skin, 0, -0.335, 0);
-    box(hip, 0.09, 0.04, 0.16, skin, 0, -0.46, 0.035);                          // bare foot
+    const knee = joint(0, -0.2, 0, hip), ankle = joint(0, -0.255, 0, knee); knees.push({ knee, ankle });   // the ankle keeps the foot flat on the ground when he sits
+    box(knee, 0.085, 0.27, 0.09, skin, 0, -0.135, 0);
+    box(ankle, 0.09, 0.04, 0.16, skin, 0, -0.005, 0.035);                       // bare foot
   }
   box(torso, 0.3, 0.09, 0.19, shorts, 0, 0.47, 0);                              // seat of the shorts
 
@@ -115,6 +130,7 @@ export function createHero(scene) {
   part(hat, new THREE.CylinderGeometry(0.24, 0.24, 0.025, 18), hatM, 0, 0, 0);
   part(hat, new THREE.CylinderGeometry(0.12, 0.14, 0.13, 16), hatM, 0, 0.07, 0);
 
+  const wp = new THREE.Vector3(), wt = new THREE.Vector3(), wq = new THREE.Quaternion(), wr = new THREE.Quaternion(), LAID = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0.12, 0));   // for laying the staff down when he sits
   const staffGeo = new THREE.CylinderGeometry(0.018, 0.022, 1.35, 6), staffMat = toon(HERO.staff);
   const staff = part(shR, staffGeo, staffMat, 0.06, -0.3, 0.1);
   const drill = joint(0, 0.2, 0.34, body);   // the staff upright as a fire drill, its foot on the hearth in front of his knees
@@ -166,11 +182,14 @@ export function createHero(scene) {
     const sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) * (1 - 0.35 * tired) * (1 - CARRY_STRIDE * load.length) : 0, carry = load.length > 0;
     const bend = Math.sin(Math.PI * Math.min(1, p.stoop || 0));   // down and up again
     const sit = Math.sin(Math.PI * Math.min(1, ly * 1.6)) * (ly < 0.62 ? 1 : 0);   // knees bend on the way down and up
+    const sp = sitPose((p.sitting || 0) * (1 - ly));   // sitting on the ground (0.29.2)
     const kn = kneel * kneel * (3 - 2 * kneel), rub = wk ? Math.sin(clock * (drilling ? 16 : 9)) : 0, sip = drinking ? Math.max(0, Math.sin(clock * 2.2)) : 0;   // cupped hands up to the mouth, now and then
-    hipL.rotation.x += (sw + bend * 0.5 + sit * 0.9 + kn * 0.75 - hipL.rotation.x) * 0.4; hipR.rotation.x += (-sw + bend * 0.5 + sit * 0.9 + kn * 0.55 - hipR.rotation.x) * 0.4;   // squatting
+    hipL.rotation.x += (sw * (1 - sp.e) + bend * 0.5 + sit * 0.9 + kn * 0.75 + sp.hip - hipL.rotation.x) * 0.4; hipR.rotation.x += (-sw * (1 - sp.e) + bend * 0.5 + sit * 0.9 + kn * 0.55 + sp.hip - hipR.rotation.x) * 0.4;   // squatting
+    for (const k of knees) { k.knee.rotation.x = sp.knee; k.ankle.rotation.x = sp.ankle; }
+    hipL.rotation.z = -SIT.spread * sp.e; hipR.rotation.z = SIT.spread * sp.e;   // the knees a little apart
     lean += (LEAN * load.length - lean) * 0.12;   // the weight pulls him forward a little
-    upper.rotation.x = lean * (1 - ly) + bend * 0.9 + tired * 0.18 * (1 - ly) + kn * (drilling ? 0.3 : drinking ? 0.9 - 0.35 * sip : 0.6);
-    neck.rotation.x += (HANG * thirsty * (1 - ly) + (drinking ? -0.5 * kn * (1 - sip) + 0.3 * kn * sip : 0) - neck.rotation.x) * 0.2;   // head down with thirst; looks ahead at the water
+    upper.rotation.x = lean * (1 - ly) + sp.lean + bend * 0.9 + tired * 0.18 * (1 - ly) + kn * (drilling ? 0.3 : drinking ? 0.9 - 0.35 * sip : 0.6);
+    neck.rotation.x += (HANG * thirsty * (1 - ly) + sp.head + (drinking ? -0.5 * kn * (1 - sip) + 0.3 * kn * sip : 0) - neck.rotation.x) * 0.2;   // head down with thirst; looks ahead at the water
     body.rotation.x = -Math.PI / 2 * ly;   // on his back, face up, head away from where he faced
     hat.position.set(0, 1.13 - NECK - 0.1 * ly, 0.13 * ly); hat.rotation.x = Math.PI / 2 * ly;
     if (kn > 0) {   // both hands forward, working: tearing the husk, or rubbing the drill between the palms
@@ -180,12 +199,21 @@ export function createHero(scene) {
       shL.rotation.x += (fw * kn + sh - shL.rotation.x) * 0.5; shR.rotation.x += (fw * kn - sh - shR.rotation.x) * 0.5;
     } else {
       shR.rotation.z = 0;
-      shL.rotation.z = carry ? -0.35 : lit ? -0.15 : 0;
-      shL.rotation.x += ((carry ? -0.35 : lit ? -1.0 - sw * 0.1 : -sw * 0.8) - bend * 0.5 - shL.rotation.x) * 0.4;   // the left arm holds the bundle, or the torch up in front
-      shR.rotation.x += (sw * 0.5 - 0.15 - bend * 0.6 - shR.rotation.x) * 0.4;
+      shR.rotation.z = -0.2 * sp.e;
+      shL.rotation.z = (carry ? -0.35 : lit ? -0.15 : 0) * (1 - sp.e) + 0.2 * sp.e;
+      shL.rotation.x += (((carry ? -0.35 : lit ? -1.0 - sw * 0.1 : -sw * 0.8) - bend * 0.5) * (1 - sp.e) + sp.arm - shL.rotation.x) * 0.4;   // the left arm holds the bundle, or the torch up in front
+      shR.rotation.x += ((sw * 0.5 - 0.15 - bend * 0.6) * (1 - sp.e) + sp.arm - shR.rotation.x) * 0.4;
     }
     drill.rotation.y = clock * 22;   // spinning
-    body.position.y = (p.moving ? Math.abs(Math.cos(p.phase)) * 0.03 : 0) - bend * 0.12 + ly * 0.07 - kn * 0.13;
+    body.position.y = (p.moving ? Math.abs(Math.cos(p.phase)) * 0.03 : 0) - bend * 0.12 + ly * 0.07 - kn * 0.13 - sp.drop;
+    // sitting, he lays the staff down on the ground beside him (right side, pointing forward): it travels from his hand to the ground as he sits down, and back as he gets up
+    staff.position.set(0.06, -0.3, 0.1); staff.quaternion.identity();
+    if (sp.e > 0.001 && staff.visible) {
+      group.updateMatrixWorld(true);
+      staff.getWorldPosition(wp); staff.getWorldQuaternion(wq); wt.set(0.2, 0.03, 0.12); group.localToWorld(wt); group.getWorldQuaternion(wr); wr.multiply(LAID);
+      wp.lerp(wt, sp.e); wq.slerp(wr, sp.e);
+      staff.parent.worldToLocal(wp); staff.parent.getWorldQuaternion(wr); wq.premultiply(wr.invert()); staff.position.copy(wp); staff.quaternion.copy(wq);
+    }
   }
   const flame = out => (torch.visible ? flameWorld(torch, out) : null);
   return { group, update, flame };

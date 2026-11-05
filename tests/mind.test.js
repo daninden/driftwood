@@ -254,7 +254,7 @@ describe('what takes the game back from his habit (0.29.1 "Low water")', () => {
 describe('crab trips (0.29.1 "Low water")', () => {
   const low = (o = {}) => calm({ sea: -0.35, time: 0.55, crabs: 0, flames: false, fibre: 3, canLight: true, ...o });
   it('is a pastime only at low water, in the afternoon or early evening, with a fire to roast on, and none carried yet', () => {
-    expect([CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_DIGS]).toEqual([-0.2, 0.42, 0.66, 4]);
+    expect([CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_DIGS]).toEqual([-0.2, 0.38, 0.66, 4]);
     expect(crabTripOk(low())).toBe(true);
     expect(crabTripOk(low({ sea: CRAB_TIDE }))).toBe(true); expect(crabTripOk(low({ sea: CRAB_TIDE + 0.05 }))).toBe(false); expect(crabTripOk(low({ sea: 0 }))).toBe(false);   // high water: the crabs are in their holes
     expect(crabTripOk(low({ time: CRAB_FROM - 0.01 }))).toBe(false); expect(crabTripOk(low({ time: CRAB_FROM }))).toBe(true);
