@@ -29,6 +29,7 @@
 // smoke-28 fish by day on the start beach at the default zoom (0.17.3, also in the quick run).
 // smoke-32 rain by day on the start beach, smoke-33 rain at dusk by a lean-to with a fire put out in the open (0.21, both also in the quick run).
 // smoke-29 fireflies at night among a group by a lowland river (0.17.4, also in the quick run).
+// smoke-43 and 44 the castaway sitting (0.29.2 "Amble"): by a fire at dusk, looking into it, and on the beach by day, looking out to sea; both close, at three times the pixel density, cut to the figure (both also in the quick run).
 // Sound (0.20): after the first key the audio context exists and M turns sound off and on again (checked right after loading; no picture, nothing audible is judged).
 //
 // The browser is the full Chromium (channel 'chromium', new headless mode), which uses the real graphics
@@ -751,6 +752,57 @@ if (rainShelter.fires.join() !== '910' || !rainShelter.burnt.some(b => b.id === 
 if (rainShelter.pileDryness[0] !== 'dry' || rainShelter.pileDryness[1] === 'dry') errors.push('the pile under the roof should be dry and the one outside wet: ' + JSON.stringify(rainShelter.pileDryness));
 await shot('smoke-33.png', { quick: true });
 await page.evaluate(() => { window.__driftwood.game.weather.intensity = window.__realRain; });
+
+// Sitting (0.29.2 "Amble"): only the mind asks for it (input.sit; here set on the player's input object, which the game reads the same way). He sits down on the beach in half a second,
+// stays down while it holds, never sits with a torch in hand or wood under his arm, and a walking key gets him up at once (the walk starts while he is still getting up).
+// smoke-43: sitting by a fire at dusk, looking into it; smoke-44: sitting on the beach by day, looking out to sea. Both are also in the quick run. They are taken on a page of their own at
+// three times the pixel density (the closest zoom), cut to the figure, so that the pose reads.
+const closeup = await browser.newPage({ viewport: { width: 640, height: 400 }, deviceScaleFactor: 3 });
+closeup.on('pageerror', e => errors.push('closeup: ' + e.message));
+await closeup.goto('file://' + file + '?spawn=' + start.x.toFixed(1) + ',' + start.z.toFixed(1) + (qualityQuery ? '&' + qualityQuery : ''), { waitUntil: 'commit', timeout: 0 });
+await closeup.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
+await closeup.evaluate(() => window.__driftwood.pause(true));
+await closeup.waitForTimeout(1500);
+const sitting = await closeup.evaluate(() => {
+  const { world, game, input, step, view } = window.__driftwood, p = game.player, c = game.clock, f = game.fire, out = {};
+  game.weather.intensity = () => 0; game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0; c.time = 0.8; p.y = world.H(p.x, p.z); step(0.3);
+  const fire = { id: 930, x: p.x + 1.8, z: p.z, fuel: 0.14, embers: 0.06, lit: c.total, fed: 5 }; f.fires.push(fire); f.version++;
+  const look = { x: fire.x, z: fire.z }, pose = view.pose; view.setPose({ yaw: pose.yaw, tilt: pose.tilt, zoom: 5 });
+  input.sit = look; step(0.25); out.half = p.sitting; step(0.4); out.down = p.sitting;
+  out.facing = Math.abs(Math.atan2(Math.sin(p.heading - Math.atan2(look.x - p.x, look.z - p.z)), Math.cos(p.heading - Math.atan2(look.x - p.x, look.z - p.z))));
+  return out;
+});
+console.log('sitting by the fire', JSON.stringify(sitting));
+if (!(sitting.half > 0.3 && sitting.half < 0.7) || sitting.down !== 1 || sitting.facing > 0.3) errors.push('he did not sit down in half a second, looking at the fire: ' + JSON.stringify(sitting));
+const portrait = async name => {   // the figure on the page of its own, cut out of the view
+  const seated = await closeup.evaluate(() => { const d = window.__driftwood; for (let i = 0; i < 3; i++) d.draw(); return d.game.player.sitting; });   // three draws of four frames, so that the pose has eased all the way
+  if (seated !== 1) errors.push(name + ': not seated when drawn (' + seated + ')');
+  await closeup.waitForTimeout(400);
+  await closeup.screenshot({ path: name, clip: { x: 240, y: 130, width: 160, height: 120 } });
+  console.log('  shot', name, 'at', secs());
+};
+await portrait('smoke-43.png');
+const sitRefused = await closeup.evaluate(() => {
+  const { game, input, step } = window.__driftwood, p = game.player, f = game.fire, w = game.wood, out = {};
+  f.torch = { left: 0.04 }; step(0.8); out.torch = p.sitting; f.torch = null; step(0.8); out.again = p.sitting;
+  w.carried.push({ id: 99001, x: p.x, y: 0, z: p.z, len: 1, a: 0, rad: 0.1 }); step(0.8); out.wood = p.sitting; w.carried.length = 0; step(0.8); out.laid = p.sitting;
+  input.up = true; step(0.1); out.up = [p.sitting, p.moving]; input.up = false; step(0.5); input.target = null;
+  return out;
+});
+console.log('sitting refused', JSON.stringify(sitRefused));
+if (sitRefused.torch !== 0 || sitRefused.again !== 1 || sitRefused.wood !== 0 || sitRefused.laid !== 1) errors.push('he sat with a torch or wood, or did not sit again without: ' + JSON.stringify(sitRefused));
+if (!(sitRefused.up[0] < 0.7 && sitRefused.up[1] === true)) errors.push('a walking key did not get him up and walking at once: ' + JSON.stringify(sitRefused));
+const sitDay = await closeup.evaluate(() => {
+  const { world, game, input, step } = window.__driftwood, p = game.player, c = game.clock, f = game.fire;
+  input.sit = false; step(1); f.fires.length = 0; f.version++; c.time = 0.5; step(0.3);
+  let best = null; for (let i = 0; i < 32; i++) { const a = i * Math.PI / 16, d = world.H(p.x + Math.sin(a) * 12, p.z + Math.cos(a) * 12); if (!best || d < best.d) best = { d, a }; }   // the way the ground falls away most: towards the sea
+  input.sit = { x: p.x + Math.sin(best.a) * 10, z: p.z + Math.cos(best.a) * 10 }; step(1.5);
+  return { sitting: p.sitting, low: best.d };
+});
+console.log('sitting by day', JSON.stringify(sitDay));
+if (sitDay.sitting !== 1) errors.push('he did not sit on the beach by day: ' + JSON.stringify(sitDay));
+await portrait('smoke-44.png');
+await closeup.close();
 
 // The same on a phone: a touch-only screen with the thumb stick, the button just above it (day and night).
 const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: full ? 2 : 1, hasTouch: true, isMobile: true });
