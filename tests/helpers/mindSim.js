@@ -34,13 +34,13 @@ export function walkFirstDay(world, game, spawn, o = {}) {
   return { points: pts.length, reached, cells: k.count };
 }
 
-export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state = null, knowOpts = {}, onTick = null, beachOnly = false } = {}) {
+export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state = null, knowOpts = {}, onTick = null, beachOnly = false, stream = 0 } = {}) {
   const game = createGame(world, spawn, state || {});
   if (beachOnly) { for (const f of [game.berries, game.bananas]) { f.bearingIn = f.plantsIn = () => []; f.find = () => null; } knowOpts = { ...knowOpts, berries: 0 }; }   // the beach alone: no berry bush or banana plant exists for him
   const walked = know ? walkFirstDay(world, game, spawn, knowOpts) : { points: 0, cells: game.known.count };
   game.known.visit(spawn.x, spawn.z);
   const known0 = new Set(game.known.state().cells);
-  const mind = createMind(world, game);
+  const mind = createMind(world, game, { stream });
   mind.engage();
   const p = game.player, clock = game.clock;
   const r = { seed: world.seed, days, walked, known0: known0.size, maxThirst: 0, maxHunger: 0, minRest: 1, collapses: 0, sleeps: [], idleSecs: 0, errors: [], outside: 0, outsideMax: 0, lean: game.leantos.list.length, builds: 0, searchTicks: 0, stuckSelf: 0, stuckMax: 0, nopath: 0, wakes: 0, thirstyTicks: 0, hungryTicks: 0, ticks: 0, fires: 0, firesFail: 0, eaten: 0, foods: [], hungerBeforeMeal: [], crabsEaten: 0, crabsSpoiled: 0, crabsCaught: 0, digs: 0, hungrySecs: 0, thirstySecs: 0, drinks: 0, sips: 0, fills: 0, lightRefused: 0, dropped: {}, events: null };
