@@ -3,6 +3,6 @@
 import { lifeSuite } from './helpers/lifeSuite.js';
 
 lifeSuite(2024, {
-  walked: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 5, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 0, crabs: 3, leanto: 8, upgrades: 1, explores: 2 },
-  fresh: { idle: 0.65, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, stuckMax: 3, nights: 7, inland: 0, crabs: 3, leanto: 9, explores: 2, grow: 100 },
+  walked: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 5, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 0, crabs: 3, leanto: 8, upgrades: 1, explores: 2, evenings: 3, dried: 1 },
+  fresh: { idle: 0.65, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, stuckMax: 3, nights: 7, inland: 0, crabs: 3, leanto: 9, explores: 2, grow: 100, evenings: 3, dried: 2 },
 });

@@ -4,7 +4,7 @@
 import { lifeSuite } from './helpers/lifeSuite.js';
 
 lifeSuite(1337, {
-  walked: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 1, crabs: 1, leanto: 9, upgrades: 1, explores: 2 },
-  fresh: { idle: 0.65, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, stuckMax: 3, nights: 7, inland: 5, leanto: 9, explores: 2, grow: 100 },
+  walked: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 1, crabs: 1, leanto: 9, upgrades: 1, explores: 2, evenings: 4, dried: 2 },
+  fresh: { idle: 0.65, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, stuckMax: 3, nights: 7, inland: 3, leanto: 9, explores: 2, grow: 100, evenings: 5, dried: 3 },   // 0.29.5: inland 3, was 5 (the same run draws other forest strolls now that he spends time on the shore: 3 handfuls of berries in ten days, 5 before)
   beach: { nights: 7, maxHunger: 1.2, hungry: 0.2 },
 });

@@ -1,5 +1,6 @@
 // Dave alone for ten game days (game/mind, 0.28 "Habit", rhythm of 0.29 "Daily bread"): the same checks for each island, used by tests/mindLife<seed>.test.js.
 // 0.29.4 "Wander": he also goes exploring now and then (r.explores); on a fresh start his known ground grows (r.knownAt: cells known at day 1, 5, 10).
+// 0.29.5 "Drying": he also takes wet wood from the strip to a drying pile and moves it to the fire's pile once it is dry (r.drying: wet pieces taken, laid, moved), and a fire burns in the evening of most days (r.noFireEvenings).
 // Two starts (since 0.28 the fresh one is meant to work too: he searches for water and food when he knows none): `walked` (the ground a player would have walked in a first day: the start, the nearest water, a few nuts, driftwood, branches and a berry bush,
 // mindSim walkFirstDay) and `fresh` (only the 20 m round the start are known). The numbers are measured, not wished for; see docs/design.md "Habit".
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -19,6 +20,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
     expect(r.outside).toBe(0);                      // outside a search for water or food or an exploring trip (0.29.4), never a step on ground he does not know
     expect(r.exploreRoute).toBe(0);                 // 0.29.4: and exploring never takes him onto a climbing route
     expect(r.knownAt[1]).toBeGreaterThan(0);        // (the cells known at the start of day 1, 5 and 10 are in the report)
+    expect(r.drying.moved).toBeLessThanOrEqual(r.drying.laid);   // 0.29.5: only what lay on the drying pile is moved from it to the fire's pile (and only once it is dry enough: the unit tests watch each piece)
+    expect(r.drying.sites).toBeLessThanOrEqual(6);                // a camp that moves gets a new site now and then, not one every day
     expect(r.wakes).toBe(0);
     expect(r.final.day).toBeGreaterThanOrEqual(r.days);   // the days really were played
   };
@@ -54,6 +57,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
       expect(mind.stats.strolls).toBeGreaterThan(20);   // he really goes about (shore, river, palms, forest)
       expect(Object.keys(mind.stats.strollKinds).length).toBeGreaterThanOrEqual(3);   // and varies it
       if (c.idle !== undefined) expect(r.idleShare).toBeLessThan(c.idle);   // 0.28.2: he strolls and gathers instead of standing about (share of the waking time spent standing still)
+      if (c.evenings !== undefined) expect(r.noFireEvenings).toBeLessThanOrEqual(c.evenings);   // 0.29.5: evenings without a fire (measured +1: the first tries of the drill are luck, fixed by the attempt count)
+      if (c.dried !== undefined) expect(r.drying.moved).toBeGreaterThanOrEqual(c.dried);        // 0.29.5: wood that dried on the drying pile and went to the fire's pile
       if (c.warm !== undefined) expect(r.warmSleeps).toBeGreaterThanOrEqual(c.warm);
     });
     it('lives ten days from a new game, with only the ground round the start known: he searches for water and food himself', () => {
@@ -70,6 +75,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
       if (c.searches) expect(r.searches).toBeGreaterThanOrEqual(c.searches);
       if (c.explores !== undefined) { expect(r.explores).toBeGreaterThanOrEqual(c.explores); expect(r.final.known).toBeGreaterThan(r.known0 + c.grow); }   // 0.29.4: he explores, and his known ground grows well beyond the start
       if (c.leanto !== undefined) { expect(r.homeDay.leanto).toBeDefined(); expect(r.homeDay.leanto).toBeLessThanOrEqual(c.leanto); }
+      if (c.evenings !== undefined) expect(r.noFireEvenings).toBeLessThanOrEqual(c.evenings);
+      if (c.dried !== undefined) expect(r.drying.moved).toBeGreaterThanOrEqual(c.dried);
     });
     for (const e of extra) it(e.name, () => e.run(w, spawn));
     if (beach) it('lives ten days on the beach alone (no berry bush, no banana plant): just about fed, searching along the coast for nuts when the near ones are taken', () => {

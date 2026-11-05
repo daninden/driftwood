@@ -107,6 +107,7 @@
  *   saved: such a state, to start from
  * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, WASH_MAX, DRY_DAYS, BRANCH_DRY_DAYS, RAIN_REACH
  * TOP_K, logTop(log) -> the height of a log's top (log.y + TOP_K * log.rad, TOP_K 1.7); under the sea while that is below the sea level
+ * inStripY(y) -> true when ground at height y lies in the strip between low and high water (0.29.5)
  * kindOf(log) -> 'branch', 'frond', 'stone' or else 'driftwood' (the kind of pile a piece goes on)
  *   An older save may hold a pile of more than PILE_MAX: it is loaded as it is
  *   (it takes no more wood, and can be picked up from as usual).
@@ -142,6 +143,7 @@ export const RAIN_REACH = 40;     // rain wets loose wood this close to him (wha
 
 export const TOP_K = 1.7;         // the axis lies 0.7 radii over the ground (render/driftwood) and the log is one radius thick above it
 export const logTop = log => log.y + TOP_K * log.rad;
+export const inStripY = y => y > LOW + 0.02 && y < -0.03;   // 0.29.5: the ground height of the strip between low and high water (where new wood washes up and never dries); game/mind takes wet wood from there
 
 export const kindOf = log => log && log.branch ? 'branch' : log && log.frond ? 'frond' : log && log.stone ? 'stone' : 'driftwood';
 const PILE_KINDS = ['driftwood', 'branch', 'frond', 'stone'];
@@ -341,7 +343,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     }
     return cells;
   }
-  const inStrip = (x, y, z) => y > LOW + 0.02 && y < -0.03 && w.slope(x, z) < 0.35 && !w.riverAt(x, z);
+  const inStrip = (x, y, z) => inStripY(y) && w.slope(x, z) < 0.35 && !w.riverAt(x, z);
 
   // the latest moment between t0 (high water) and total that the sea stood over height y (t0 when it never did again)
   function lastCovered(y, t0, total) {

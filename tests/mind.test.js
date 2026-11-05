@@ -4,12 +4,13 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, DRY_AT, DRY_MAX, DRY_NEAR, DRY_FIRE, DRY_LT, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { canStand } from '../src/game/movement.js';
 import { seaLevel } from '../src/game/tide.js';
-import { FUEL_MAX } from '../src/game/fire.js';
+import { FUEL_MAX, TORCH_DRY } from '../src/game/fire.js';
+import { dryness, inStripY, PILE_MAX } from '../src/game/wood.js';
 import { NEED, UPGRADES, ringCentre } from '../src/game/leanto.js';
 import { terrainAt, PACE } from '../src/game/movement.js';
 
@@ -315,8 +316,8 @@ describe('crab trips (0.29.1 "Low water")', () => {
 // ---------- his home (0.29.3 "Homestead") ----------
 const snap = (o = {}) => ({ day: HOME_DAY, time: 0.3, fire: true, lean: 'none', up: null, builtDay: -1, cool: {}, ...o });
 // a game on day `day` at `time` with his camp at the start (a burnt fire place), the ground of a first day known, and optionally lean-tos
-const camp = ({ day = HOME_DAY, time = 0.22, leantos = null, know = true, piles = [], stocked = true } = {}) => {   // stocked: nuts, fibre and a full pile of wood at the fire, so that the morning is free for the house
-  const g = createGame(w, spawn, { day, time, sleep: { awake: 0.1 }, ...(stocked ? { shells: { full: [], nuts: 2 }, fibre: { carried: 3 } } : {}), fire: { fires: [], burnt: [{ id: 0, x: spawn.x, z: spawn.z, left: 2, n: 3 }], attempts: 0, nextId: 1 }, ...(leantos ? { leantos } : {}) });
+const camp = ({ day = HOME_DAY, time = 0.22, leantos = null, know = true, piles = [], stocked = true, extra = {} } = {}) => {   // stocked: nuts, fibre and a full pile of wood at the fire, so that the morning is free for the house
+  const g = createGame(w, spawn, { day, time, sleep: { awake: 0.1 }, ...(stocked ? { shells: { full: [], nuts: 2 }, fibre: { carried: 3 } } : {}), fire: { fires: [], burnt: [{ id: 0, x: spawn.x, z: spawn.z, left: 2, n: 3 }], attempts: 0, nextId: 1 }, ...(leantos ? { leantos } : {}), ...extra });
   if (know) walkFirstDay(w, g, spawn);
   const log = (kind, i, x, z) => ({ id: 900000 + i, x, y: w.H(x, z), z, len: 2, a: 0, rad: 0.1, ...(kind === 'branch' ? { branch: true } : {}) });
   const rc = leantos && leantos.list[0].progress >= 1 ? ringCentre(leantos.list[0]) : { x: spawn.x, z: spawn.z };   // the fire's place: where the lean-to's ring is, else the old fire
@@ -526,5 +527,124 @@ describe('exploring: the trip (with a game)', () => {
   it('is repeatable: the same island and the same start give the same trips', () => {
     const a = trip(true, { stream: 2 }), b = trip(true, { stream: 2 });
     expect(a.m.stats.explores).toBe(b.m.stats.explores); expect(a.known1).toBe(b.known1);
+  });
+});
+
+// ---------- drying wood (0.29.5 "Drying") ----------
+describe('drying wood: the site (0.29.5)', () => {
+  it('is above the high-water line, on known dry ground, clear of the fire\'s pile and of the lean-to\'s site, and the same every time', () => {
+    expect(DRY_AT).toBe(TORCH_DRY); expect(DRY_MAX).toBe(NEED - 1);   // the dryness the fire asks for; never a pile of 6 (a pair of 6 and 6 makes the arc offer to build)
+    const g = camp(), m = createMind(w, g), s = m.dryingSite();
+    expect(s).not.toBeNull(); expect(s.lean).toBe(false);
+    expect(w.H(s.x, s.z)).toBeGreaterThanOrEqual(SITE_HIGH); expect(g.known.has(s.x, s.z)).toBe(true); expect(canStand(w, s.x, s.z, 0)).toBe(true); expect(terrainAt(w, s.x, s.z, 0).inRiver).toBe(false);
+    const fire = m.home(); expect(Math.hypot(s.x - fire.x, s.z - fire.z)).toBeGreaterThanOrEqual(DRY_FIRE);   // clear of the fire's pile (it lies within 2.4 m of the fire place)
+    for (const q of g.wood.piles) expect(Math.hypot(s.x - q.x, s.z - q.z)).toBeGreaterThan(2.4);
+    expect(m.dryingSite()).toBe(s);   // kept
+    const again = createMind(w, camp()).dryingSite(); expect(again.x).toBe(s.x); expect(again.z).toBe(s.z);   // and repeatable: nothing of it is saved, it is worked out again
+    const home = m.homePlan(); if (home.site) expect(Math.hypot(home.site.x - s.x, home.site.z - s.z)).toBeGreaterThanOrEqual(4.5);   // the lean-to's site keeps clear of it
+  });
+  it('is at the back of the lean-to once there is one, within the 1.5 m where the rain does not reach, and clear of the stone ring and the fire', () => {
+    const g = camp({ leantos: LT() }), m = createMind(w, g), s = m.dryingSite(), lt = g.leantos.list[0];
+    expect(s).not.toBeNull(); expect(s.lean).toBe(true);
+    expect(Math.hypot(s.x - lt.x, s.z - lt.z)).toBeCloseTo(DRY_LT, 3);
+    expect(g.leantos.dry(s.x, s.z, 'wood')).toBe(true);   // wood there stays dry in the rain
+    const rc = ringCentre(lt); expect(Math.hypot(s.x - rc.x, s.z - rc.z)).toBeGreaterThanOrEqual(DRY_FIRE);
+    expect(w.H(s.x, s.z)).toBeGreaterThanOrEqual(SITE_HIGH);
+  });
+  it('moves with the camp: a finished lean-to gets a new site, and the old pile is let be', () => {
+    const g = camp(), m = createMind(w, g), a = m.dryingSite();
+    g.leantos.list.push({ id: 0, x: spawn.x + 6, z: spawn.z + 2, heading: 0, progress: 1 }); g.leantos.version++;
+    const b = m.dryingSite(); expect(b.lean).toBe(true); expect(b).not.toBe(a);
+  });
+});
+
+// a game on day 1 at low water with wet wood in the strip close to each place a shore stroll may go to (ids from 800000)
+const stripGame = ({ high, ...o } = {}) => {
+  const time = 0.42, probe = camp({ day: 1, time, ...o }), shore = createMind(w, probe).strollCands().shore, washed = [], taken = [];
+  const t = probe.clock.total - 0.1;   // washed up a tenth of a day ago: wet
+  for (const c of shore) for (let r = 1, k = 0; r <= 7 && k < 3; r++) {   // up to three pieces round each place
+    let hit = null;
+    for (let i = 0; i < 16 && !hit; i++) { const a = i * Math.PI / 8, x = c.x + Math.sin(a) * r, z = c.z + Math.cos(a) * r, y = w.H(x, z); if (inStripY(y) && w.slope(x, z) < 0.3 && !w.riverAt(x, z) && probe.known.has(x, z) && !taken.some(q => Math.hypot(q.x - x, q.z - z) < 2)) hit = { x, y, z }; }
+    if (hit) { k++; taken.push(hit); washed.push({ id: 800000 + washed.length, x: hit.x, y: hit.y, z: hit.z, len: 1.4, a: 0.3, rad: 0.1, t }); }
+  }
+  if (high) for (const c of shore) for (let r = 2, k = 0; r <= 8 && k < 2; r++) {   // wet logs above the strip (rain-soaked on the beach): not his to take
+    for (let i = 0; i < 16 && k < 2; i++) { const a = i * Math.PI / 8, x = c.x + Math.sin(a) * r, z = c.z + Math.cos(a) * r, y = w.H(x, z); if (y > 0.25 && y < 1.5 && w.slope(x, z) < 0.3 && !w.riverAt(x, z) && probe.known.has(x, z)) { k++; washed.push({ id: 890000 + washed.length, x, y, z, len: 1.4, a: 0.3, rad: 0.1, t }); break; } }
+  }
+  const g = camp({ day: 1, time, ...o, extra: { wood: { washed, nextId: 800000 + washed.length + 1, carried: [], piles: [], lost: [], tide: null } } });
+  return { g, ids: new Set(washed.map(l => l.id)), n: washed.length };
+};
+
+describe('drying wood: the habit (0.29.5)', () => {
+  it('on a shore stroll he takes wet wood from the strip with an arm free and lays it on the drying pile, never on the fire\'s pile', () => {
+    let done = null;
+    for (let stream = 0; stream < 8 && !done; stream++) {
+      const { g, ids, n } = stripGame(); if (n < 2) continue;
+      const m = createMind(w, g, { stream }); m.engage();
+      const site = m.dryingSite(), fireAt = m.home(), log = { maxCarriedWet: 0, mixed: 0, wetOnFire: 0, wetDry: 0, over: 0, strollsDone: 0 };
+      for (let i = 0; i < 6000 && g.clock.time < 0.62; i++) {
+        m.step(0.1); g.update(m.input, 0.1);
+        const wetMine = g.wood.carried.filter(l => ids.has(l.id) && dryness(l, g.clock.total) < DRY_AT);
+        log.maxCarriedWet = Math.max(log.maxCarriedWet, wetMine.length);
+        if (wetMine.length && wetMine.length < g.wood.carried.length) log.mixed++;   // wet and dry wood never together in his arms
+        for (const q of g.wood.piles) {
+          const drying = Math.hypot(q.x - site.x, q.z - site.z) <= DRY_NEAR;
+          if (drying && q.logs.length > DRY_MAX) log.over++;
+          if (!drying && q.logs.some(l => ids.has(l.id) && dryness(l, g.clock.total) < DRY_AT)) log.wetOnFire++;   // wet strip wood on any pile but the drying one
+        }
+      }
+      if (m.stats.drying.wetTaken > 0) done = { m, g, ids, site, log };
+    }
+    expect(done).not.toBeNull();   // on one of the first streams a stroll to the shore finds wet wood
+    const { m, g, site, log } = done;
+    expect(m.stats.drying.wetTaken).toBeGreaterThan(0); expect(m.stats.drying.laid).toBeGreaterThan(0);
+    expect(log.maxCarriedWet).toBeLessThanOrEqual(2); expect(log.mixed).toBe(0); expect(log.wetOnFire).toBe(0); expect(log.over).toBe(0);
+    const pile = g.wood.piles.find(q => Math.hypot(q.x - site.x, q.z - site.z) <= DRY_NEAR);
+    expect(pile).toBeDefined(); expect(pile.kind).toBe('driftwood'); expect(pile.logs.length).toBeGreaterThan(0); expect(pile.logs.length).toBeLessThanOrEqual(DRY_MAX);
+    expect(m.dryPiles()).toContain(pile);
+    for (const q of g.wood.piles) if (q !== pile) expect(q.logs.some(l => l.id >= 800000 && l.id < 900000 && dryness(l, g.clock.total) < DRY_AT)).toBe(false);
+  });
+  it('takes wet wood only from the strip: a wet log that lies above it (rained on) is left alone, and wet and dry wood never mix in his arms', () => {
+    let g, ids, m;
+    for (let stream = 0; stream < 12; stream++) {   // the first stream on which a stroll to the shore finds wet wood
+      ({ g, ids } = stripGame({ high: true })); m = createMind(w, g, { stream }); m.engage();
+      for (let i = 0; i < 4800 && g.clock.time < 0.62; i++) { m.step(0.1); g.update(m.input, 0.1); if (m.stats.drying.wetTaken > 0) break; }
+      if (m.stats.drying.wetTaken > 0) break;
+    }
+    expect(m.stats.drying.wetTaken).toBeGreaterThan(0);
+    const high = w.tiles.flatMap(t => g.wood.beachLogs(t)).filter(l => l.id >= 890000 && l.id < 900000);
+    expect(high.length).toBeGreaterThan(0); expect(high.every(l => !inStripY(l.y))).toBe(true);
+    let wetCarried = 0, mixed = 0;
+    for (let i = 0; i < 4800 && g.clock.time < 0.62; i++) {
+      m.step(0.1); g.update(m.input, 0.1);
+      for (const l of g.wood.carried) if (l.id >= 890000 && l.id < 900000) wetCarried++;
+      for (const q of g.wood.piles) for (const l of q.logs) if (l.id >= 890000 && l.id < 900000) wetCarried++;
+      const wet = g.wood.carried.filter(l => ids.has(l.id) && dryness(l, g.clock.total) < DRY_AT).length; if (wet && wet < g.wood.carried.length) mixed++;
+    }
+    expect(wetCarried).toBe(0); expect(mixed).toBe(0);
+  });
+  it('moves wood from the drying pile to the fire\'s pile once the top pieces are dry enough, and leaves wet pieces and wet piles alone', () => {
+    const run = (wetBelow, allWet) => {
+      const g = camp({ day: 1, time: 0.3 }), m = createMind(w, g); g.wood.piles.splice(0, 1);   // the stocked pile at the fire goes: the stores want wood
+      const s = m.dryingSite(), now = g.clock.total, mk = (i, dry) => ({ id: 810000 + i, x: s.x, y: w.H(s.x, s.z), z: s.z, len: 1.4, a: 0.3, rad: 0.1, t: dry ? now - 2 : now - 0.1 });
+      const logs = [mk(0, false), ...Array.from({ length: wetBelow }, (_, i) => mk(i + 1, !allWet))].slice(allWet ? 0 : 0);
+      if (allWet) { logs.length = 0; for (let i = 0; i < 4; i++) logs.push(mk(i, false)); }
+      g.wood.piles.push({ x: s.x, z: s.z, kind: 'driftwood', logs });
+      m.engage();
+      const ids = new Set(logs.map(l => l.id)); let onFire = new Set();
+      const fs = () => m.home();
+      for (let i = 0; i < 2400; i++) {
+        m.step(0.1); g.update(m.input, 0.1);
+        for (const q of g.wood.piles) if (Math.hypot(q.x - s.x, q.z - s.z) > DRY_NEAR) for (const l of q.logs) if (ids.has(l.id)) { onFire.add(l.id); expect(dryness(l, g.clock.total)).toBeGreaterThanOrEqual(DRY_AT); }
+      }
+      return { m, g, onFire, logs, s };
+    };
+    const a = run(3, false);   // [wet, dry, dry, dry]: the top three are dry
+    expect(a.m.stats.drying.moved).toBe(3); expect(a.onFire.size).toBe(3); expect(a.onFire.has(810000)).toBe(false);   // the wet piece at the bottom stays
+    const b = run(3, true);    // all four wet
+    expect(b.m.stats.drying.moved).toBe(0); expect(b.onFire.size).toBe(0);
+  });
+  it('is repeatable: the same start gives the same drying', () => {
+    const go = () => { const { g } = stripGame(), m = createMind(w, g, { stream: 3 }); m.engage(); for (let i = 0; i < 4000; i++) { m.step(0.1); g.update(m.input, 0.1); } return JSON.stringify([m.stats.drying, g.wood.piles.map(q => [q.kind, q.logs.length, +q.x.toFixed(2)])]); };
+    expect(go()).toBe(go());
   });
 });

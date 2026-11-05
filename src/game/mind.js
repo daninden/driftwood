@@ -1,5 +1,5 @@
 /**
- * game/mind — Dave's head (0.28 "Habit", 0.28.2 "Pastime", the rhythm of 0.29 "Daily bread", crab trips of 0.29.1 "Low water", the amble and the sitting of 0.29.2 "Amble", his home of 0.29.3 "Homestead", his exploring trips of 0.29.4 "Wander"): what the castaway does by himself when the player leaves him alone.
+ * game/mind — Dave's head (0.28 "Habit", 0.28.2 "Pastime", the rhythm of 0.29 "Daily bread", crab trips of 0.29.1 "Low water", the amble and the sitting of 0.29.2 "Amble", his home of 0.29.3 "Homestead", his exploring trips of 0.29.4 "Wander", the drying pile of 0.29.5 "Drying"): what the castaway does by himself when the player leaves him alone.
  *
  * After QUIET (30 s, game/input `createTakeover`) without any input main hands the game this mind's input instead of the player's;
  * any input of the player takes it back at once (`release`). The mind adds NO game rule: it fills an input object like the player's
@@ -46,6 +46,12 @@
  *   (`exploreTarget`: the farthest unknown spot within `exploreReach(day)` of home (80 m on day 0, 15 m more a day, at most 220 m) that borders known ground, which he can reach and be home from before EXPLORE_BACK 0.6, preferably on the coast (wood and coconuts) or at a forest edge (branches, berries),
  *   `exploreWhere`; the PRNG of its own, `rngEx`), at the amble, learning what he walks past (`input.learns` true; `mind.exploring`, not `mind.searching`), looks about, picks up what is within reach of the far end (the arrive kinds shore, palms, forest), (also straight from the stores goal, `exploreForLack`: wood or a nut he went for and could not find on known ground sends him out at once when a trip is allowed, without waiting for an idle moment that the stores and the fire may never leave him) and turns back in time (`exploreLate`: the walk home, measured by the finder every 10 m,
  *   and the margin, against EXPLORE_BACK; at the normal pace when it is late) to lay down what he carries at home. His own terrace and ordinary ground only: the finder `pathExplore` closes climbing routes (climb above EXPLORE_ROUTE) and steep ground (slope 0.45 and more), and a trip is only made from a place from which home can be reached that way.
+ * 0.29.5 "Drying": DRYING WOOD. Wood in the strip between the tides never dries (game/wood: the sea covers it again and again), and the fire and his strolls take dry wood only. On a shore stroll (not at the far end of an exploring trip), with
+ *   nothing but wet driftwood (or nothing) under his arm, he also takes up to two pieces of such wet wood from the strip within 8 m of where the leg ends (`pickUpWet`, `SRC.strip`) and lays them on a DRYING PILE of his own (`deliverWet`, `deliver` for any wood that is not
+ *   dry enough, DRY_AT = the 0.75 the fire and the torch ask for): above the high-water line at his camp (`dryingSite`, worked out again from the fire and the known ground, so nothing is saved), DRY_RINGS (3.6, 4.6) m from the fire place, clear of the fire's pile,
+ *   of other driftwood piles and of the lean-to's site; or, with a finished lean-to, DRY_LT (1) m from its middle at the back, where the rain does not reach. It holds at most DRY_MAX (5) pieces (never a pair of 6 and 6: the arc would offer to build).
+ *   Once the top pieces of a drying pile are dry enough (`readyPile`) the stores and the evening wood goal fetch them for the fire's pile (`fetchDried`, in `gatherWood`) before they go to the beach for more. The fire's piles never count a drying pile (`isDrying`),
+ *   wet wood never goes on the fire's pile, and the lean-to project still takes wet logs as before. The same actions as a player's: pick up, lay down.
  * The other exception to staying on known ground (0.28, decided later the same day): SEARCH. Thirsty with no fresh water known, or hungry with no food known and none
  * carried, he walks out from home into the unknown, ring after ring, to the nearest unknown spot that borders what he knows (downhill for water, the low coast for
  * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water he can walk to over known ground, or food, is known; then he is back on known ground only (0.29: water that is known but out of reach does not end a search).
@@ -61,6 +67,7 @@
  * crabTripOk(s), crabFoodOk(s)   pure (0.29.1): may he go for crabs now (s.sea, time, crabs carried, flames, canLight, fibre, pileDry, cool)
  * huskWanted(s), restSeconds(r1, r2), strollKind(avail, last, r), strollNow(s, r)   pure; the choices of the pastimes (0.28.2), tested in tests/mind.test.js
  * sitKind(s) -> 'gaze' | 'fire' | 'rest' | null   pure (0.29.2): whether he sits while he rests (s: time, long, fireNear, gazing)
+ * DRY_AT, DRY_MAX, DRY_NEAR, DRY_RINGS, DRY_FIRE, DRY_CLEAR, DRY_LT   (0.29.5) the numbers of the drying pile
  * homeNext(s) -> 'leanto' | 'walls' | 'ring' | 'bed' | null   pure (0.29.3): the next piece of his home now (s: day, time, fire (he has a camp), lean ('none' | 'half' | 'done' | 'other'), up {walls, ring, bed: 0..1}, builtDay, cool)
  * RANK   the priority of each goal (lower wins)
  * createMind(world, game, opts?) -> mind
@@ -71,17 +78,18 @@
  *                     A kneeling job already begun is left to finish (the player's own input stops it as usual)
  *   mind.step(dt)     once per game.update while in charge, before it: decides and fills mind.input
  *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set), mind.searching (learning on a search for water or food), mind.exploring (on an exploring trip, 0.29.4)
- *   mind.stats        { goals: {name: n}, home, stuck, nopath, idleSecs, sitSecs (seconds he sat), sits: {gaze, fire, rest: how often he sat down}, lightRefused, gazes, strolls, strollKinds: {kind: n}, explores (trips made), exploreSecs, crabTrips, crabDigs, crabTripDigsMax, crabsCaught, events: [..] } for tests and the playtest bot (searches: how many searches he began)
+ *   mind.stats        { goals: {name: n}, home, stuck, nopath, idleSecs, sitSecs (seconds he sat), sits: {gaze, fire, rest: how often he sat down}, lightRefused, gazes, strolls, strollKinds: {kind: n}, explores (trips made), exploreSecs, drying: { sites, wetTaken, laid, moved } (0.29.5), crabTrips, crabDigs, crabTripDigsMax, crabsCaught, events: [..] } for tests and the playtest bot (searches: how many searches he began)
  *   mind.chose()      true while a sleep he chose himself is being started (the tests tell it from a collapse); mind.lastKind() the kind of the last button he used; mind.path the path finder
  *   opts.stream       a number to vary the chance (default 0)
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
+ *   mind.dryingSite()  the place of the drying pile for his camp as it is (or null), { x, z, ux, uz, lean, of }; mind.dryPiles() the piles of wood on drying sites (for the tests)
  *   mind.strollCands(centre?, range?)  { shore, river, palms, forest, crabs: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
  *   mind.homePlan()   { step (homeNext without the time window), need (what the next unit does: { kind, want } a trip for pieces of that kind, { build } the building, or null), site } for the tests
  *   mind.leantoSites(fire)  the places for the lean-to round a fire, best first: [{ x, z, heading, score, r }]; mind.stats.home { units, trips, builds, refused, noMaterial }
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
  *
- * Depends on: game/path, game/movement, game/clock (DAY_SECONDS), game/wildlife and game/crabs (through game), game/water, game/wood, game/fire, game/leanto (siteFor, UPGRADES), game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
+ * Depends on: game/path, game/movement, game/clock (DAY_SECONDS), game/wildlife and game/crabs (through game), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY), game/leanto (siteFor, UPGRADES), game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -89,8 +97,8 @@ import { createPath } from './path.js';
 import { canStand, terrainAt, PACE, WALK_SPEED } from './movement.js';
 import { DAY_SECONDS } from './clock.js';
 import { freshWater } from './water.js';
-import { dryness, logTop, kindOf, CARRY_MAX, STONE_MAX } from './wood.js';
-import { FIRE_MIN, FUEL_MAX } from './fire.js';
+import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX } from './wood.js';
+import { FIRE_MIN, FUEL_MAX, TORCH_DRY } from './fire.js';
 import { ringCentre, siteFor, UPGRADES, UP_NEAR, NEED, RING_AT, paidSteps } from './leanto.js';
 import { DAWN as SLEEP_DAWN } from './sleep.js';
 import { EAT_AT } from './shells.js';
@@ -114,6 +122,8 @@ export const SITE_RINGS = [5, 6.2, 7.5], SITE_HIGH = 0.8, SITE_LEVEL = 0.3, SITE
 export const EXPLORE_FROM = 0.2, EXPLORE_TO = 0.52, EXPLORE_BACK = 0.6, EXPLORE_MARGIN = 0.012, EXPLORE_DETOUR = 1.5, EXPLORE_SPARE = 45, EXPLORE_LIMIT = 900, EXPLORE_ROUTE = 0.12;   // starts between FROM and TO, is home by BACK (where the evening's chores begin), with a margin; ground with a climbing route of more than EXPLORE_ROUTE is closed
 export const EXPLORE_THIRST = 0.25, EXPLORE_HUNGER = 0.3, EXPLORE_GAP = 2, EXPLORE_CHANCE = 0.3, EXPLORE_MISSING_CHANCE = 0.8, LACK_DAYS = 2;   // nothing urgent; every EXPLORE_GAP-th day, or every day when something is missing at home
 export const EXPLORE_REACH0 = 80, EXPLORE_REACH_DAY = 15, EXPLORE_REACH_MAX = 220, EXPLORE_EDGE = 18, EXPLORE_SLOPE = 0.45;   // how far from home a trip may go: 80 m on the first day, 15 m more each day, at most 220 m
+// 0.29.5 "Drying": wet wood from the strip between the tides is laid on a drying pile of its own above the high-water line at his camp (under or beside the lean-to when there is one), and moved to the fire's pile once it is dry enough to burn
+export const DRY_AT = TORCH_DRY, DRY_MAX = NEED - 1, DRY_NEAR = 1.6, DRY_RINGS = [3.6, 4.6], DRY_FIRE = 2.6, DRY_CLEAR = 4.5, DRY_LT = 1;   // DRY_AT: the dryness the fire and the torch ask for; DRY_MAX: never 6 (a pair of piles of 6 would make the arc offer to build); the pile lies DRY_RINGS m from the fire, or DRY_LT m from the middle of the lean-to, at least DRY_FIRE from the fire's own pile and DRY_CLEAR from the lean-to's site
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
 const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
@@ -226,11 +236,11 @@ export function createMind(world, game, opts = {}) {
   const inside = (x, z) => known.has(x, z) && known.has(x + MARGIN, z) && known.has(x - MARGIN, z) && known.has(x, z + MARGIN) && known.has(x, z - MARGIN)
     && known.has(x + DIAG, z + DIAG) && known.has(x - DIAG, z - DIAG) && known.has(x + DIAG, z - DIAG) && known.has(x - DIAG, z + DIAG);
   const path = createPath(world, { allow: inside }), pathFree = createPath(world);   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
-  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, events: [] };
+  const stats = { drying: { sites: 0, wetTaken: 0, laid: 0, moved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, events: [] };
   const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let exploring = false, exploredDay = -9, fullPace = false, now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
   let pressed = null, choice = null, sleepKey = false, sinceCheck = 0, builtDay = -1, headingWanted = null;   // headingWanted: the way a lean-to being started should face (a player turns the view)
-  const proj = { site: null };   // 0.29.3: the lean-to's site, chosen once and kept
+  const proj = { site: null, dry: [], dryNo: null };   // 0.29.3: the lean-to's site, chosen once and kept; 0.29.5: the sites of his drying piles (newest last)
   const coolUntil = {}, bad = new Map();
   const inp = mind.input = {
     up: false, down: false, left: false, right: false, run: false, stick: null, target: null, yaw: undefined, learns: false, pace: 1, sit: false,
@@ -259,6 +269,7 @@ export function createMind(world, game, opts = {}) {
     banana: t => game.bananas.bearingIn(t),
     drift: t => W.beachLogs(t).filter(l => dryness(l, clock.total) >= 0.95 && logTop(l) > game.sea + 0.02),
     timber: t => W.beachLogs(t).filter(l => logTop(l) > game.sea + 0.02),   // 0.29.3: for building, wet driftwood will do
+    strip: t => W.beachLogs(t).filter(l => inStripY(l.y) && dryness(l, clock.total) < 0.95 && logTop(l) > game.sea + 0.02),   // 0.29.5: wet wood in the strip between the tides (it never dries there)
     branch: t => game.branches.groundBranches(t),
     frond: t => game.fronds.groundFronds(t),   // 0.29.3: the materials of the home
     stone: t => game.stones.groundStones(t),
@@ -306,7 +317,8 @@ export function createMind(world, game, opts = {}) {
   const sleepSpot = h => { h = h || homeSpot(); if (h.kind === 'leanto') return { x: h.x, z: h.z }; if (h.kind === 'fire') { const s = standNear(h.x + 1.4, h.z) || standNear(h.x, h.z - 1.4); return s || { x: h.x, z: h.z }; } return { x: h.x, z: h.z }; };
   const pilesNear = (kind, x, z, r) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - x, q.z - z) <= r);
   const fuelOfPile = q => q.logs.reduce((n, l) => n + (l.branch ? 0.5 : 1), 0);   // in pieces of driftwood (a branch burns half as long)
-  const firePiles = fs => W.piles.filter(q => (q.kind === 'driftwood' || q.kind === 'branch') && Math.hypot(q.x - fs.x, q.z - fs.z) <= 2.4);
+  const isDrying = q => q.kind === 'driftwood' && proj.dry.some(s => Math.hypot(q.x - s.x, q.z - s.z) <= DRY_NEAR);   // 0.29.5: a pile of wet wood drying, never the fire's
+  const firePiles = fs => W.piles.filter(q => (q.kind === 'driftwood' || q.kind === 'branch') && Math.hypot(q.x - fs.x, q.z - fs.z) <= 2.4 && !isDrying(q));
   const bestPile = fs => firePiles(fs).sort((a, b) => fuelOfPile(b) - fuelOfPile(a))[0] || null;
   const fireAt = fs => game.fire.fires.find(f => dist(f, fs) < 3.5 && (f.fuel > 0.005 || f.embers > 0.005)) || null;
 
@@ -604,12 +616,14 @@ export function createMind(world, game, opts = {}) {
     const fs = fireSpot(), best = bestPile(fs), st = best ? fuelOfPile(best) : 0;
     const topUp = !!best && st >= WOOD_WANT;   // the evening's wood is there: only fill the pile up, and only with its own kind (two piles of 6 or more would make the arc offer to build)
     const order = best && best.kind === 'branch' ? ['branch', 'drift'] : ['drift', 'branch'];
+    if (wetCarried()) yield* deliverWet();   // 0.29.5: wet wood from a stroll is not the fire's
     for (const kind of topUp ? order.slice(0, 1) : order) {
-      if (!nearestBy(kind, 45, 4)) continue;
       const pk = kind === 'branch' ? 'branch' : 'driftwood', mine = firePiles(fs).filter(x => x.kind === pk).sort((a, b) => b.logs.length - a.logs.length)[0];
       let want = topUp ? Math.max(1, PILE_FULL - best.logs.length) : Math.max(1, Math.ceil((WOOD_WANT - st) / (kind === 'branch' ? 0.5 : 1)));
       if (pairNear(fs, pk)) { want = Math.min(want, NEED - 1 - (mine ? mine.logs.length : 0)); if (want < 1) continue; }   // 0.29.3: the other kind is already 6 or more: this pile stays below 6, else the arc offers to build and not to light
       const dest = () => { const q = firePiles(fs).filter(x => x.kind === pk && x.logs.length < 12).sort((a, b) => b.logs.length - a.logs.length)[0]; return q ? standNear(q.x, q.z, 1) || fs : fs; };
+      if (kind === 'drift' && (yield* fetchDried(dest, want))) return true;   // 0.29.5: wood that has dried on the drying pile first
+      if (!nearestBy(kind, 45, 4)) continue;
       return yield* gather(kind, dest, want);
     }
     return false;
@@ -652,8 +666,9 @@ export function createMind(world, game, opts = {}) {
 
   function* feedFire() {   // from a pile at home (or what is carried): lay dry wood on the fire until it is full
     const fs = fireSpot(), f = fireAt(fs); if (!f) return false;
+    if (wetCarried()) yield* deliverWet();   // 0.29.5: wet wood from a stroll goes to the drying pile first
     if (!W.load()) {
-      const pile = [...pilesNear('driftwood', fs.x, fs.z, 8), ...pilesNear('branch', fs.x, fs.z, 8)].filter(q => q.logs.length).sort((a, b) => dist(a, f) - dist(b, f))[0];
+      const pile = [...pilesNear('driftwood', fs.x, fs.z, 8), ...pilesNear('branch', fs.x, fs.z, 8)].filter(q => q.logs.length && !isDrying(q)).sort((a, b) => dist(a, f) - dist(b, f))[0];
       if (!pile) return false;
       yield* walk(pile.x, pile.z, { tap: true, stop: 0.4, until: () => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === 'pickup' && o.thing && o.thing.kind === 'pile'); } });
       if (pressKind(['pickup'])) yield* waitIdle();
@@ -719,7 +734,7 @@ export function createMind(world, game, opts = {}) {
         if (!inside(qx, qz) || !canStand(world, qx, qz, 0) || t.inRiver || !world.dryOfRiver(qx, qz, 1.5) || y < SITE_HIGH || Math.abs(y - y0) > SITE_LEVEL) { ok = false; break; }
         rise = Math.max(rise, Math.abs(y - y0));
       }
-      if (!ok) continue;
+      if (!ok || proj.dry.some(q => Math.hypot(q.x - c.x, q.z - c.z) < DRY_CLEAR)) continue;   // (0.29.5: and clear of a drying pile, whose wood would be taken for the building's)
       let wd = 120; for (const q of wp) wd = Math.min(wd, Math.hypot(q.x - c.x, q.z - c.z));
       out.push({ ...c, score: r + 0.05 * wd + 3 * rise, water: wd });
     }
@@ -734,7 +749,7 @@ export function createMind(world, game, opts = {}) {
     for (const q of W.piles) if (q.kind === 'driftwood' && q.logs.length >= NEED && Math.hypot(q.x - h.x, q.z - h.z) <= 30 && inside(q.x, q.z)) { const s = siteFor(W.piles, q); if (s && Math.hypot(s.x - h.x, s.z - h.z) >= 3.5 && inside(s.x, s.z) && canStand(world, s.x, s.z, 0)) return s; }   // (a pair at the fire is its stock, not a site)
     return null;
   };
-  const sitePile = (kind, sp) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - sp.x, q.z - sp.z) <= 2.2 && Math.hypot(q.x - sp.fire.x, q.z - sp.fire.z) > 2.6).sort((a, b) => b.logs.length - a.logs.length)[0] || null;   // the piles for the building: close to the site, and not the fire's stock
+  const sitePile = (kind, sp) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - sp.x, q.z - sp.z) <= 2.2 && Math.hypot(q.x - sp.fire.x, q.z - sp.fire.z) > 2.6 && !isDrying(q)).sort((a, b) => b.logs.length - a.logs.length)[0] || null;   // the piles for the building: close to the site, and not the fire's stock
   const buildOffered = kind => () => game.action().options.some(o => o.kind === kind);
   function* doBuild(kind, at, stop, face) {   // walks to `at`, presses build / upgrade and kneels until it is done (or he is called away); face: the way a new lean-to is to open
     yield* walk(at.x, at.z, { stop, until: buildOffered(kind) });
@@ -790,6 +805,83 @@ export function createMind(world, game, opts = {}) {
     return ok;
   }
 
+  // ---------- drying wood (0.29.5 "Drying") ----------
+  // Wet wood from the strip between the tides never dries there (the sea covers it again and again). On a shore stroll, with an arm free, he takes up to two such pieces to a drying pile of its own: above the high-water line at his camp,
+  // DRY_RINGS m from the fire (clear of the fire's own pile, `isDrying`), or, with a finished lean-to, DRY_LT m from its middle at the back (within the 1.5 m where the rain does not reach). A pile holds at most DRY_MAX pieces (never 6: with a pile
+  // of branches within 2 m the arc would offer to build). When the pieces on top are dry enough to burn (DRY_AT) the stores and the evening wood fetch them for the fire's pile before they go to the beach. Nothing is saved: the site is worked out again
+  // from the fire and the known ground, and the pile is found by its place. The same actions as a player's: pick up, lay down.
+  const wetPiece = l => dryness(l, clock.total) < DRY_AT;
+  const wetCarried = () => carriedKind() === 'drift' && W.carried.some(wetPiece);
+  const dryPileAt = s => W.piles.filter(q => q.kind === 'driftwood' && Math.hypot(q.x - s.x, q.z - s.z) <= DRY_NEAR).sort((a, b) => dist(a, s) - dist(b, s))[0] || null;
+  function dryingSite() {   // the place of the drying pile for his camp as it is now; kept while the camp is the same (a new one when the lean-to is finished), null when there is none
+    const h = homeSpot(), lean = h.kind === 'leanto', fs = fireSpot(h), of = lean ? { x: h.x, z: h.z } : { x: fs.x, z: fs.z };
+    proj.dry = proj.dry.filter(q => dist(q, fs) >= DRY_FIRE + 0.4);   // a site the fire has come near (the camp moved) is let go: its pile is then an ordinary one (never within DRY_NEAR of the fire's pile)
+    const cur = proj.dry.at(-1), clear = (x, z) => !W.piles.some(q => q.kind === 'driftwood' && !isDrying(q) && Math.hypot(q.x - x, q.z - z) < 2.5);   // no other pile of driftwood near: a wet piece laid there would join it
+    if (cur && cur.lean === lean && dist(cur.of, of) < 3 && clear(cur.x, cur.z)) return cur;
+    const no = proj.dryNo; if (no && no.lean === lean && dist(no.of, of) < 1 && no.count === known.count) return null;
+    const okAt = (x, z) => {
+      const st = standNear(x, z, 0.5), t = terrainAt(world, x, z, 0);
+      return !!st && Math.hypot(st.x - x, st.z - z) < 0.6 && inside(x, z) && canStand(world, x, z, 0) && world.H(x, z) >= SITE_HIGH && t.s < 0.3 && !t.inRiver && world.dryOfRiver(x, z, 1.5)
+        && Math.hypot(x - fs.x, z - fs.z) >= DRY_FIRE && clear(x, z) && !game.fire.fires.some(f => Math.hypot(f.x - x, f.z - z) < 3.2) && !(proj.site && Math.hypot(x - proj.site.x, z - proj.site.z) < DRY_CLEAR) && path.cost(fs, { x, z }) < 40;
+    };
+    let found = null;
+    if (lean) for (const sg of [1, -1]) {   // at the back of the lean-to, either side
+      const a = h.lt.heading + sg * Math.PI * 0.75, x = h.x + Math.sin(a) * DRY_LT, z = h.z + Math.cos(a) * DRY_LT;
+      if (!found && okAt(x, z)) found = { x, z, ux: Math.sin(a), uz: Math.cos(a) };
+    }
+    for (const r of DRY_RINGS) for (let i = 0; i < 16 && !found; i++) {   // else beside the camp, nearest ring first
+      const a = (i + (r === DRY_RINGS[1] ? 0.5 : 0)) * Math.PI / 8, x = fs.x + Math.sin(a) * r, z = fs.z + Math.cos(a) * r;
+      if (okAt(x, z)) found = { x, z, ux: Math.sin(a), uz: Math.cos(a) };
+    }
+    if (!found) { proj.dryNo = { lean, of, count: known.count }; return null; }
+    proj.dry.push({ ...found, lean, of }); stats.drying.sites++; ev('dry-site', { at: [+found.x.toFixed(1), +found.z.toFixed(1)], lean });
+    return proj.dry.at(-1);
+  }
+  function* toDrying(s) {   // to the drying pile (beside it), or, with none yet, to where a first pile is laid: he comes from outside and faces the site, so the pile lands on it
+    const q = dryPileAt(s);
+    if (q) { const st = standNear(q.x, q.z, 1) || { x: q.x, z: q.z }; return yield* walk(st.x, st.z, { stop: 0.35 }); }
+    const out = standNear(s.x + s.ux * 1.4, s.z + s.uz * 1.4, 0.5);
+    if (out && Math.hypot(out.x - s.x, out.z - s.z) > 0.8 && !(yield* walk(out.x, out.z, { stop: 0.4 }))) return false;
+    return yield* walk(s.x, s.z, { stop: 0.5 });
+  }
+  function* deliverWet() {   // wood under his arm that is not dry enough to burn goes to the drying pile (never to the fire's); with no site it is laid down where he stands, as wet timber always was
+    const s = dryingSite();
+    if (!s || !(yield* toDrying(s))) { yield* layAt(p); return; }
+    const n = W.carried.length;
+    yield* layAt(s);
+    if (!W.load()) { stats.drying.laid += n; ev('dry-laid', { n }); }
+  }
+  // wet wood in the strip within a few metres of a shore stroll's stopping place: up to two pieces, only with an arm free, only when nothing else is in his arms (dry wood or branches would mix with it), only while the drying pile has room
+  function* pickUpWet() {
+    const s = dryingSite(); if (!s) return;
+    for (let n = 0; n < 2; n++) {
+      const ck = carriedKind(), q = dryPileAt(s);
+      if (W.carried.length >= 2 || (ck && ck !== 'drift') || W.carried.some(l => !wetPiece(l)) || W.carried.length + (q ? q.logs.length : 0) >= DRY_MAX) return;
+      const t = scan('strip', p.x, p.z, 8)[0]; if (!t) return;
+      const before = W.carried.length, wanted = o => !!o.thing && o.thing.kind === 'log' && kindOf(o.thing.log) === 'driftwood' && inStripY(o.thing.log.y) && dryness(o.thing.log, clock.total) < 0.95;
+      yield* walk(t.x, t.z, { tap: true, stop: 0.4, until: () => { const a = game.action().tap; return !!a && a.kind === 'pickup' && wanted(a) && Math.hypot(a.thing.x - t.x, a.thing.z - t.z) < 1.5; } });
+      const k = pressKind(['pickup'], wanted); if (k) yield* waitIdle();
+      yield;
+      if (W.carried.length <= before) { markBad('strip', t.o, 600); return; }
+      stats.drying.wetTaken++;
+    }
+  }
+  // pieces on a drying pile that are dry enough to burn: the top pieces he would pick up (a pile gives its top ones first) must all be
+  const readyPile = () => W.piles.filter(q => isDrying(q) && q.logs.length).find(q => q.logs.slice(-Math.min(CARRY_MAX, q.logs.length)).every(l => !wetPiece(l))) || null;
+  function* fetchDried(dest, want) {   // from the drying pile to the fire's pile; true when he moved something
+    if (W.load()) return false;
+    const q = readyPile(); if (!q || (want < CARRY_MAX && q.logs.length > want)) return false;
+    const mine = o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === q;
+    yield* walk(q.x, q.z, { tap: true, stop: 0.5, until: () => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === 'pickup' && mine(o)); } });
+    if (!pressKind(['pickup'], mine)) return false;
+    yield* waitIdle();
+    const n = W.carried.length; if (!n) return false;
+    const d = dest(); if (proj.dry.some(t => Math.hypot(t.x - d.x, t.z - d.z) <= DRY_NEAR)) { yield* layAt(p); return false; }   // (never back onto a drying pile: the fire's place is clear of them)
+    const ok = yield* walk(d.x, d.z, { stop: 0.35 });
+    if (ok) { yield* layAt(d); if (!W.load()) { stats.drying.moved += n; ev('dry-moved', { n }); return true; } }
+    return false;
+  }
+
   // ---------- pastimes (0.28.2 "Pastime"): strolls on known ground instead of standing about ----------
   // Places for a stroll, all inside the known ground (`inside`), standable, and within STROLL_RANGE of home: shore (the waterline, where wood washes up), river (fresh water),
   // palms (a round past a palm), forest (a berry bush at a forest edge). Lists of { x, z, ... }; computed when a stroll is chosen, the pick is the PRNG's.
@@ -817,7 +909,7 @@ export function createMind(world, game, opts = {}) {
   function* pickUpDrift() {
     for (let n = 0; n < 2; n++) {
       const best = bestPile(fireSpot());
-      if (W.carried.length >= 2 || (carriedKind() && carriedKind() !== 'drift') || (best && best.kind === 'driftwood' && best.logs.length >= PILE_FULL) || (best && best.kind === 'branch' && fuelOfPile(best) >= WOOD_WANT)) return;
+      if (W.carried.length >= 2 || (carriedKind() && carriedKind() !== 'drift') || wetCarried() || (best && best.kind === 'driftwood' && best.logs.length >= PILE_FULL) || (best && best.kind === 'branch' && fuelOfPile(best) >= WOOD_WANT)) return;
       const t = scan('drift', p.x, p.z, 8)[0]; if (!t) return;
       const before = W.carried.length;
       yield* walk(t.x, t.z, { tap: true, stop: 0.4, until: () => { const a = game.action().tap; return !!a && a.kind === 'pickup' && !!a.thing && a.thing.kind === 'log' && Math.hypot(a.thing.x - t.x, a.thing.z - t.z) < 1.5; } });
@@ -828,14 +920,15 @@ export function createMind(world, game, opts = {}) {
   }
   function* deliver() {   // wood under his arm from a stroll goes to the pile at the fire spot (a pile of its own kind within a metre, else a new one there)
     if (!W.carried.length || (carriedKind() !== 'drift' && carriedKind() !== 'branch')) return;
+    if (wetCarried()) { yield* deliverWet(); return; }   // 0.29.5: wood that is not dry enough to burn never goes to the fire's pile
     const fs = fireSpot(), kind = carriedKind() === 'branch' ? 'branch' : 'driftwood';
     const q = firePiles(fs).filter(x => x.kind === kind && x.logs.length < PILE_FULL).sort((a, b) => b.logs.length - a.logs.length)[0], d = q ? standNear(q.x, q.z, 1) || fs : fs;
     if (pairNear(fs, kind) && (q ? q.logs.length : 0) + W.carried.length >= NEED) { yield* layAt(p); return; }   // it would make a second pile of 6 or more at the fire: laid down where he stands
     if (!(yield* walk(d.x, d.z, { stop: 0.35 }))) return;
     for (let n = 0; n < 3 && W.carried.length; n++) { if (!pressKind(['lay'])) break; yield* waitIdle(); }
   }
-  function* arrive(kind, c) {   // what he does at the end of a leg
-    if (kind === 'shore') { yield* pauseHere(); yield* pickUpDrift(); return; }
+  function* arrive(kind, c, stroll = false) {   // what he does at the end of a leg (stroll: on a stroll of his own, not at the far end of an exploring trip)
+    if (kind === 'shore') { yield* pauseHere(); yield* pickUpDrift(); if (stroll) yield* pickUpWet(); return; }
     if (kind === 'river') {
       const empty = game.shells.empty() > 0 || game.thirst.days >= THIRST_TOPUP;
       if (empty) {
@@ -873,7 +966,7 @@ export function createMind(world, game, opts = {}) {
       const near = kind === 'river' ? () => { const a = game.action(); return [a.tap, ...a.options].some(o => o && (o.kind === 'drink' || o.kind === 'fill')); } : null;
       const ok = yield* walk(c.x, c.z, { stop: kind === 'river' ? 0.3 : 1.2, until: near });
       if (!ok) break;
-      yield* arrive(kind, c);
+      yield* arrive(kind, c, true);
       if (leg + 1 < legs) list = list.filter(q => Math.hypot(q.x - p.x, q.z - p.z) < 35);   // the next stretch (of shore, or the next palm or bush) lies near this one
     }
     yield* deliver();
@@ -956,7 +1049,7 @@ export function createMind(world, game, opts = {}) {
     const step = homeNext(homeSnap()), need = step ? homeNeed(step, h) : null;   // 0.29.3: the next piece of his home
     if (W.load() && !(need && need.kind && need.kind === carriedKind())) {   // wood goes to the fire's pile (wet building timber, left over from a trip, to the site, never to the fire: it would not catch); fronds and stones he does not need now are laid down
       const ck = carriedKind(), wet = ck === 'drift' && W.carried.reduce((n, l) => n + dryness(l, clock.total), 0) / W.carried.length < 0.6, d = wet && proj.site && !game.leantos.list.length ? siteDest(proj.site, 'driftwood', 'branch') : null;
-      if (d) { if (yield* walk(d.x, d.z, { stop: 0.35 })) yield* layAt(d); } else if ((ck === 'drift' && !wet) || ck === 'branch') yield* deliver(); else yield* layAt(p);
+      if (d) { if (yield* walk(d.x, d.z, { stop: 0.35 })) yield* layAt(d); } else if (ck === 'drift' || ck === 'branch') yield* deliver(); else yield* layAt(p);   // (0.29.5: deliver lays wet wood on the drying pile)
     }
     const s = senses();
     if (need && !crabTripOk(s)) return yield* homeGoal(step, need);
@@ -1060,7 +1153,7 @@ export function createMind(world, game, opts = {}) {
   }
   mind.chose = () => chose;
   mind.lastKind = () => lastKind;
-  mind.path = path; mind.strollCands = strollCands; mind.leantoSites = leantoSites;
+  mind.path = path; mind.strollCands = strollCands; mind.leantoSites = leantoSites; mind.dryingSite = dryingSite; mind.dryPiles = () => W.piles.filter(isDrying);
   mind.homePlan = () => { const h = homeSpot(), sn = { ...homeSnap(), time: HOME_FROM, day: Math.max(clock.day, HOME_DAY), builtDay: -1, cool: {} }, step = homeNext(sn); return { step, need: step ? homeNeed(step, h) : null, site: proj.site, snap: sn }; };
   return mind;
 }
