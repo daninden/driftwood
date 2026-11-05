@@ -1,5 +1,5 @@
 /**
- * game/mind — Dave's head (0.28 "Habit", 0.28.2 "Pastime", the rhythm of 0.29 "Daily bread"): what the castaway does by himself when the player leaves him alone.
+ * game/mind — Dave's head (0.28 "Habit", 0.28.2 "Pastime", the rhythm of 0.29 "Daily bread", crab trips of 0.29.1 "Low water"): what the castaway does by himself when the player leaves him alone.
  *
  * After QUIET (30 s, game/input `createTakeover`) without any input main hands the game this mind's input instead of the player's;
  * any input of the player takes it back at once (`release`). The mind adds NO game rule: it fills an input object like the player's
@@ -11,7 +11,7 @@
  * What he does, in this order of priority (`chooseGoal`, pure, on a plain snapshot of the needs and the time of day):
  *   1 drink   thirst >= THIRST_GO (0.35 days; BED_THIRST 0.25 from SUPPER_FROM 0.64 to LIGHT_FROM 0.74): a full shell is drunk, else he walks to the nearest known fresh river water and kneels (knowing none, he searches, below);
  *             when empty shells are with him and the river is near (NEAR_WATER 40 m) and thirst >= THIRST_TOPUP (0.2), he goes to fill them too
- *   2 eat     hunger >= HUNGER_GO (0.4 days; BED_HUNGER 0.3 in the supper window; knowing no food and carrying none, he searches, below): berries, a banana bunch, a carried nut (the row), else the nearest known food by the way
+ *   2 eat     (0.29.1: a crab carried is roasted first, at a fire with flames, from hunger CRAB_ROAST_HUNGER 0.2) hunger >= HUNGER_GO (0.4 days; BED_HUNGER 0.3 in the supper window; knowing no food and carrying none, he searches, below): berries, a banana bunch, a carried nut (the row), else the nearest known food by the way
  *             there (nut on the ground, bearing berry bush, banana plant), a carried crab roasted beside a fire, a crab dug for when he happens to stand at a hole it fled into
  *   3 sleep   every night: once he may lie down (game/sleep canLie(time)) and it is night (from BED_FROM 0.87, an hour after dusk and with the fire lit, to DAWN 0.17) or he has been awake TIRED_GO (a whole day: a nap by day):
  *             he walks home (his lean-to; else his fire; else where he last slept; else where he was when the mind took over) and lies down
@@ -28,6 +28,8 @@
  *             within STROLL_RANGE 80 m of home, a way of at most STROLL_MAX_COST), pauses of 2 to 6 s on the way (PAUSE_CHANCE), wood carried is laid on the pile at home (`deliver`).
  *             Otherwise (night, nothing to walk to) he walks back to within IDLE_NEAR (8 m) of home and lingers 5 to 12 s. Once a day around sunset (GAZE_FROM 0.76 to 0.83) he walks
  *             to the shore (or the fire) and stands a while looking out. No pose, no line of text. After each task he stands 3 to 8 s, now and then (1 in 5) 15 to 30 s (`restSeconds`, from the seed)
+ *   0.29.1 a sixth pastime, the CRAB TRIP (`crabTripOk`: a stroll kind 'crabs', and food when hungry with flames and no near nut, `crabFoodOk`): at low water (CRAB_TIDE), CRAB_FROM 0.42 to CRAB_TO 0.66, to a colony he knows
+ *             (`crabCands`), the crabs flee into holes as he nears, he presses dig beside one that hides (at most CRAB_DIGS 4 a trip, until CRAB_WANT 1 crab is carried), and roasts it at the evening fire as supper
  * The one exception to staying on known ground (0.28, decided later the same day): SEARCH. Thirsty with no fresh water known, or hungry with no food known and none
  * carried, he walks out from home into the unknown, ring after ring, to the nearest unknown spot that borders what he knows (downhill for water, the low coast for
  * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water he can walk to over known ground, or food, is known; then he is back on known ground only (0.29: water that is known but out of reach does not end a search).
@@ -39,6 +41,7 @@
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
  * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now (s.pileLogs: pieces in the biggest pile there)
+ * crabTripOk(s), crabFoodOk(s)   pure (0.29.1): may he go for crabs now (s.sea, time, crabs carried, flames, canLight, fibre, pileDry, cool)
  * huskWanted(s), restSeconds(r1, r2), strollKind(avail, last, r), strollNow(s, r)   pure; the choices of the pastimes (0.28.2), tested in tests/mind.test.js
  * RANK   the priority of each goal (lower wins)
  * createMind(world, game, opts?) -> mind
@@ -49,15 +52,15 @@
  *                     A kneeling job already begun is left to finish (the player's own input stops it as usual)
  *   mind.step(dt)     once per game.update while in charge, before it: decides and fills mind.input
  *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set)
- *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, gazes, strolls, strollKinds: {kind: n}, events: [..] } for tests and the playtest bot (searches: how many searches he began)
+ *   mind.stats        { goals: {name: n}, stuck, nopath, idleSecs, lightRefused, gazes, strolls, strollKinds: {kind: n}, crabTrips, crabDigs, crabTripDigsMax, crabsCaught, events: [..] } for tests and the playtest bot (searches: how many searches he began)
  *   mind.chose()      true while a sleep he chose himself is being started (the tests tell it from a collapse); mind.lastKind() the kind of the last button he used; mind.path the path finder
  *   opts.stream       a number to vary the chance (default 0)
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
- *   mind.strollCands(centre?, range?)  { shore, river, palms, forest: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
+ *   mind.strollCands(centre?, range?)  { shore, river, palms, forest, crabs: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
  *
- * Depends on: game/path, game/movement, game/water, game/wood, game/fire, game/leanto, game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
+ * Depends on: game/path, game/movement, game/wildlife and game/crabs (through game), game/water, game/wood, game/fire, game/leanto, game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -79,10 +82,11 @@ export const SEARCH_LIMIT = 900;   // seconds a goal may take while it is search
 export const REST_MIN = 3, REST_MAX = 8, REST_LONG_MIN = 15, REST_LONG_MAX = 30, REST_LONG_CHANCE = 0.2, CHECK = 1.5;   // 0.28.2: mostly a short rest, now and then a long one
 export const STROLL_FROM = 0.19, STROLL_TO = 0.8, STROLL_CHANCE = 0.9, STROLL_LIMIT = 300, STROLL_RANGE = 80, STROLL_MAX_COST = 150;   // pastimes on known ground, by day (0.28.2)
 export const LINGER_MIN = 5, LINGER_MAX = 12, PAUSE_CHANCE = 0.45, PAUSE_MIN = 2, PAUSE_MAX = 6;
-export const STROLL_KINDS = ['shore', 'river', 'palms', 'forest'], STROLL_WEIGHT = { shore: 3, river: 2, palms: 2, forest: 2 };
+export const STROLL_KINDS = ['shore', 'river', 'palms', 'forest', 'crabs'], STROLL_WEIGHT = { shore: 3, river: 2, palms: 2, forest: 2, crabs: 6 };   // 0.29.1: crabs, only at low water in the afternoon, so when it is possible it is the usual choice
+export const CRAB_TIDE = -0.2, CRAB_FROM = 0.42, CRAB_TO = 0.66, CRAB_FOOD_TO = 0.8, CRAB_DIGS = 4, CRAB_WANT = 1, CRAB_ROAST_HUNGER = 0.2, CRAB_SEEK = 10, NUT_FAR = 50, CRAB_LIMIT = 420;   // 0.29.1 "Low water": crab trips
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
-const COOL = { drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
+const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
 const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light'];   // the kinds of the arc / ring he ever chooses (never build, upgrade, torch)
 
 export function fireStep(s) {
@@ -99,6 +103,16 @@ export function fireStep(s) {
 
 // a nut to husk: for the fibre of the first tuft always; to carry up to NUT_WANT; for fibre up to FIBRE_WANT only when he is hungry enough to eat the nut that the husking gives him (with two carried he eats it)
 export function huskWanted(s) { return s.nuts < NUT_WANT || s.fibre < 1 || (s.fibre < FIBRE_WANT && s.hunger >= EAT_AT); }
+
+/** 0.29.1: may he go after crabs now? Low water (all crabs are out), none carried yet, and a crab dug today must be roasted today: as a pastime (food false) in the afternoon or early evening with a fire at home
+ *  that burns or that he can light (dry wood enough and two tufts of fibre: one try may fail; and the wood dry enough to catch, s.pileDry); as food (food true: hungry, no near nut) only with flames now, until CRAB_FOOD_TO. s: { sea, time, crabs (carried), flames, fireLit, canLight, cool } */
+export function crabTripOk(s) { return crabTripWhy(s, false); }
+export function crabFoodOk(s) { return crabTripWhy(s, true); }
+function crabTripWhy(s, food) {
+  if (!(s.sea <= CRAB_TIDE) || (s.crabs || 0) >= CRAB_WANT || (s.cool && s.cool.crabs)) return false;
+  if (food) return !!s.flames && s.time >= DAY_FROM && s.time < CRAB_FOOD_TO;
+  return s.time >= CRAB_FROM && s.time < CRAB_TO && (!!s.flames || (!!s.canLight && s.fibre >= 2 && s.pileDry !== false));
+}
 
 export function storesStep(s) {
   const t = s.time;
@@ -129,7 +143,7 @@ export function chooseGoal(s) {
   const t = s.time, cool = s.cool || {};
   const late = t >= SUPPER_FROM && t < LIGHT_FROM;   // supper and a drink before the night
   if (!cool.drink && (s.thirst >= (late ? BED_THIRST : THIRST_GO) || (s.shellsEmpty > 0 && s.waterNear && s.thirst >= THIRST_TOPUP))) return 'drink';
-  if (!cool.eat && s.hunger >= (late ? BED_HUNGER : HUNGER_GO)) return 'eat';
+  if (!cool.eat && (s.hunger >= (late && !s.crabs ? BED_HUNGER : HUNGER_GO) || (s.crabs > 0 && s.flames && s.hunger >= CRAB_ROAST_HUNGER))) return 'eat';   // 0.29.1: with a crab carried he waits for the fire's flames to have it for supper
   if (!cool.sleep && s.canLie && (t >= BED_FROM || t < DAWN || s.awake >= TIRED_GO)) return 'sleep';
   if (!cool.fire && fireStep({ ...s, cool })) return 'fire';
   if (!cool.stores && storesStep({ ...s, cool })) return 'stores';
@@ -144,7 +158,7 @@ export function createMind(world, game, opts = {}) {
   const inside = (x, z) => known.has(x, z) && known.has(x + MARGIN, z) && known.has(x - MARGIN, z) && known.has(x, z + MARGIN) && known.has(x, z - MARGIN)
     && known.has(x + DIAG, z + DIAG) && known.has(x - DIAG, z - DIAG) && known.has(x + DIAG, z - DIAG) && known.has(x - DIAG, z + DIAG);
   const path = createPath(world, { allow: inside }), pathFree = createPath(world);   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
-  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, searches: 0, strolls: 0, strollKinds: {}, events: [] };
+  const stats = { goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, searches: 0, strolls: 0, strollKinds: {}, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, events: [] };
   const mind = { input: null, active: false, get searching() { return inp.learns === true; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let now = 0, cur = null, restUntil = 0, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
   let pressed = null, choice = null, sleepKey = false, sinceCheck = 0;
@@ -224,15 +238,19 @@ export function createMind(world, game, opts = {}) {
   const bestPile = fs => firePiles(fs).sort((a, b) => fuelOfPile(b) - fuelOfPile(a))[0] || null;
   const fireAt = fs => game.fire.fires.find(f => dist(f, fs) < 3.5 && (f.fuel > 0.005 || f.embers > 0.005)) || null;
 
+  const flameFire = () => game.fire.fires.find(q => game.fire.strength(q) > 0 && inside(q.x, q.z)) || null;   // a fire with flames on known ground (a crab is roasted only at one)
+
   // ---------- what he senses, for chooseGoal ----------
   function senses() {
     const h = homeSpot(), fs = fireSpot(h), f = fireAt(fs), piles = firePiles(fs), best = bestPile(fs), st = best ? fuelOfPile(best) : 0, wp = waterPts();
     let near = false; for (const q of wp) if (Math.hypot(q.x - p.x, q.z - p.z) < NEAR_WATER) { near = true; break; }
     const cool = {}; for (const k of Object.keys(COOL)) cool[k] = isCool(k);
     return {
+      sea: game.sea, crabs: game.crabs.carried.length, flames: !!flameFire(),
       asleep: game.sleep.asleep || p.lie > 0, time: clock.time, thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake, canLie: game.sleep.canLie(clock.time),
       water: wp.length > 0, waterNear: near, shellsEmpty: game.shells.empty(), shellsFull: game.shells.full(), nuts: game.shells.nuts, fibre: game.fibre.carried, torch: !!game.fire.torch,
       fireLit: !!f, fireFuel: f ? f.fuel / FUEL_MAX : 0, stock: st, pileLogs: best ? best.logs.length : 0, spare: piles.reduce((n, q) => n + fuelOfPile(q), 0) - st,
+      pileDry: !best || best.logs.reduce((n, l) => n + dryness(l, clock.total), 0) / best.logs.length >= 0.6,
       canLight: !!best && best.logs.length >= FIRE_MIN && fuelOfPile(best) >= LIGHT_MIN_FUEL && (game.fibre.carried > 0 || !!game.fire.torch), cool,
     };
   }
@@ -372,17 +390,26 @@ export function createMind(world, game, opts = {}) {
 
   function* eatGoal() {
     if (pressKind(['dig'])) { yield* waitIdle(); }   // standing at a hole a crab fled into: dig
-    if (game.hunger.days < (clock.time >= SUPPER_FROM && clock.time < LIGHT_FROM ? BED_HUNGER : HUNGER_GO)) return true;
+    if (game.crabs.carried.length && game.hunger.days >= CRAB_ROAST_HUNGER && flameFire() && (yield* roastCrab())) return true;   // 0.29.1: supper from the crab he dug, before any nut: a raw crab spoils
+    if (game.hunger.days < (clock.time >= SUPPER_FROM && clock.time < LIGHT_FROM && !game.crabs.carried.length ? BED_HUNGER : HUNGER_GO)) return true;
     if (game.berries.carried.length && game.hunger.days > EAT_AT && useRow('berries')) { yield* waitIdle(); return true; }
     if (game.bananas.carried.length && game.hunger.days > EAT_AT && useRow('banana')) { yield* waitIdle(); return true; }
     if (game.shells.nuts > 0 && useRow('nut')) { yield* waitIdle(); return true; }
-    if (game.crabs.carried.length) { const f = game.fire.fires.find(q => game.fire.strength(q) > 0 && inside(q.x, q.z)); if (f) { yield* walk(f.x + 0.8, f.z + 0.4, { stop: 0.7 }); if (useRow('crab')) { yield* waitIdle(); return true; } } }
     const foods = () => {
       const cs = [], c = nearestBy('coco', 60), b = nearestBy('berry', 60), bn = nearestBy('banana', 60, 2);
       if (c) cs.push({ kind: 'coco', t: c, w: c.cost }); if (b) cs.push({ kind: 'berry', t: b, w: b.cost * 3 }); if (bn) cs.push({ kind: 'banana', t: bn, w: bn.cost * 0.8 });
       return cs;
     };
     let cs = foods();
+    // 0.29.1: no near nut (none known, or a far one) and a fire burning at home: a crab trip at low water, then the roast at the fire, before the long walk for a nut
+    if (crabFoodOk(senses())) {
+      const best = crabCands(p, STROLL_RANGE).map(c => ({ c, cost: path.cost(p, c) })).filter(q => q.cost < STROLL_MAX_COST).sort((a, q) => a.cost - q.cost)[0];
+      if (best && (!cs.length || best.cost < Math.min(...cs.map(q => q.t.cost)) && cs.every(q => q.t.cost > NUT_FAR))) {
+        yield* crabTrip(best.c);
+        if (game.crabs.carried.length && flameFire() && (yield* roastCrab())) return true;
+        cs = foods();
+      }
+    }
     if (!cs.length) { if (yield* searchFor('food')) cs = foods(); }   // hungry, nothing carried and no food known: he goes looking
     if (!cs.length) { ev('no-food'); return false; }
     cs.sort((a, q) => a.w - q.w); const pick = cs[0], t = pick.t, want = pick.kind === 'coco' ? ['husk'] : pick.kind === 'berry' ? ['berries'] : ['bananas'];
@@ -391,6 +418,53 @@ export function createMind(world, game, opts = {}) {
     let k = pressKind(want); if (k) yield* waitIdle();
     if (!k) { yield* walk(t.x, t.z, { stop: 0.2 }); k = pressKind(want); if (k) yield* waitIdle(); }
     if (!k) { markBad(pick.kind, t.o, 600); ev('food-not-offered', { kind: pick.kind }); return false; }
+    return true;
+  }
+
+  function* roastCrab() {   // to the fire with flames and the row's crab: kneels ROAST_TIME and eats it
+    const f = flameFire(); if (!f) return false;
+    yield* walk(f.x + 0.8, f.z + 0.4, { stop: 0.7 });
+    if (useRow('crab')) { yield* waitIdle(); return true; }
+    return false;
+  }
+
+  // ---------- crab trips (0.29.1 "Low water") ----------
+  // Colonies he knows (a dry hole on known ground; not one whose crabs are all caught and gone). Walking up scares the crabs into their holes (game/wildlife SCARE 3 m); beside a hole one hides in he presses dig
+  // (the player's own action, half a chance, fixed by the seed and the dig count); a failed dig lets the crab escape. At most CRAB_DIGS digs a trip, until CRAB_WANT crab is carried; then home. Raw crabs go bad after a day: they are roasted at the evening fire.
+  function crabCands(centre, range) {
+    const out = [];
+    for (const col of game.wildlife.coloniesNear(centre.x, centre.z, range)) {
+      if (!col.crabs.some(q => !game.crabs.isGone(q.id))) continue;
+      const hole = col.holes.filter(h => h.y > CRAB_TIDE + 0.1 && inside(h.x, h.z) && canStand(world, h.x, h.z, 0)).sort((a, b) => dist(a, centre) - dist(b, centre))[0];
+      if (hole) out.push({ x: hole.x, z: hole.z, col });
+    }
+    return out;
+  }
+  const digOffered = () => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === 'dig'); };
+  function* crabTrip(c) {
+    if (cur) cur.limit = CRAB_LIMIT;
+    stats.crabTrips++; ev('crab-trip', { to: [+c.x.toFixed(1), +c.z.toFixed(1)] });
+    const hid = () => { const h = game.wildlife.hiding(p.x, p.z, CRAB_SEEK); return h && inside(h.x, h.z) ? h : null; };
+    const got0 = game.crabs.carried.length; let digs = 0;
+    yield* walk(c.x, c.z, { stop: 1, until: () => !!hid() });   // the crabs flee into their holes as he comes near
+    for (let round = 0; round < 12 && digs < CRAB_DIGS && game.crabs.carried.length < CRAB_WANT && game.sea <= CRAB_TIDE + 0.1; round++) {
+      const h = hid();
+      if (!h) {   // a crab still out: walk up to it (it flees), else none is out and the trip is over
+        const out = game.wildlife.crabs().filter(q => inside(q.x, q.z) && Math.hypot(q.x - c.x, q.z - c.z) < 14).sort((a, b) => dist(a, p) - dist(b, p))[0];
+        if (!out) break;
+        yield* walk(out.x, out.z, { stop: 1.6 });
+        for (const t0 = now; now - t0 < 2.5;) yield;   // it runs to its hole
+        continue;
+      }
+      yield* walk(h.x, h.z, { stop: 0.3, until: digOffered });
+      if (!digOffered()) yield* walk(h.x, h.z, { stop: 0.1 });
+      if (!pressKind(['dig'])) break;
+      digs++; stats.crabDigs++; yield* waitIdle(); yield;
+    }
+    stats.crabTripDigsMax = Math.max(stats.crabTripDigsMax, digs);
+    const caught = game.crabs.carried.length - got0; stats.crabsCaught += Math.max(0, caught);
+    ev('crab-trip-end', { digs, caught });
+    if (caught <= 0) cool('crabs');
     return true;
   }
 
@@ -511,7 +585,7 @@ export function createMind(world, game, opts = {}) {
   // Places for a stroll, all inside the known ground (`inside`), standable, and within STROLL_RANGE of home: shore (the waterline, where wood washes up), river (fresh water),
   // palms (a round past a palm), forest (a berry bush at a forest edge). Lists of { x, z, ... }; computed when a stroll is chosen, the pick is the PRNG's.
   function strollCands(centre = homeSpot(), range = STROLL_RANGE) {
-    const out = { shore: [], river: [], palms: [], forest: [] }, tiles = tilesNear(centre.x, centre.z, range);
+    const out = { shore: [], river: [], palms: [], forest: [], crabs: crabCands(centre, range) }, tiles = tilesNear(centre.x, centre.z, range);
     for (let r = 8; r <= range; r += 8) for (let i = 0; i < 24; i++) {
       const a = (i + (r / 8 % 2) * 0.5) * Math.PI / 12, x = centre.x + Math.sin(a) * r, z = centre.z + Math.cos(a) * r, y = world.H(x, z);
       if (y > 0.3 && y < 1.2 && world.H(x + Math.sin(a) * 3, z + Math.cos(a) * 3) < y - 0.15 && inside(x, z) && canStand(world, x, z, 0)) out.shore.push({ x, z });
@@ -576,6 +650,10 @@ export function createMind(world, game, opts = {}) {
     }
   }
   function* stroll(kind, cands) {   // one to three legs (the shore: along the waterline), pauses on the way, then home with what he found
+    if (kind === 'crabs') {   // 0.29.1: a crab trip to a colony he knows
+      const c = pickCand(cands.crabs, p, 0); if (!c) { cool('crabs'); return true; }
+      return yield* crabTrip(c);
+    }
     if (cur) cur.limit = STROLL_LIMIT;
     const legs = 1 + (rand() * (kind === 'shore' ? 3 : 2) | 0);
     let list = cands[kind], from = homeSpot();
@@ -599,7 +677,7 @@ export function createMind(world, game, opts = {}) {
     if (W.carried.length) yield* deliver();
     const s = senses();
     if (strollNow(s, rand())) {
-      const cands = strollCands(h), kind = strollKind({ shore: cands.shore.length > 0, river: cands.river.length > 0, palms: cands.palms.length > 0, forest: cands.forest.length > 0 }, lastStroll, rand());
+      const cands = strollCands(h), kind = strollKind({ shore: cands.shore.length > 0, river: cands.river.length > 0, palms: cands.palms.length > 0, forest: cands.forest.length > 0, crabs: cands.crabs.length > 0 && crabTripOk(s) }, lastStroll, rand());
       if (kind) { lastStroll = kind; stats.strolls = (stats.strolls || 0) + 1; stats.strollKinds[kind] = (stats.strollKinds[kind] || 0) + 1; return yield* stroll(kind, cands); }
     }
     const sp = h.kind === 'leanto' ? fireSpot(h) : { x: h.x, z: h.z };   // else: back to within IDLE_NEAR of home and stands a while
