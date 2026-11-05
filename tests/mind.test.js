@@ -4,10 +4,12 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted } from '../src/game/mind.js';
-import { createTakeover, QUIET } from '../src/game/input.js';
+import { createMind, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createTakeover, createActing, CAMERA_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { canStand } from '../src/game/movement.js';
+import { seaLevel } from '../src/game/tide.js';
+import { FUEL_MAX } from '../src/game/fire.js';
 
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
@@ -107,13 +109,13 @@ describe('pastimes (0.28.2 "Pastime")', () => {
   });
   it('picks a stroll among the places he knows, varied, and none without a place', () => {
     const all = { shore: true, river: true, palms: true, forest: true };
-    expect(STROLL_KINDS).toEqual(['shore', 'river', 'palms', 'forest']);
+    expect(STROLL_KINDS).toEqual(['shore', 'river', 'palms', 'forest', 'crabs']);
     expect(strollKind({ shore: false, river: false, palms: false, forest: false }, null, 0.5)).toBeNull();
     expect(strollKind({ shore: false, river: true, palms: false, forest: false }, 'river', 0.5)).toBe('river');   // the only one he knows
     expect(strollKind({ ...all, shore: false, forest: false }, null, 0.01)).toBe('river');
     const rng = mulberry32(9), seen = {}; let last = null, twice = 0;
     for (let i = 0; i < 400; i++) { const k = strollKind(all, last, rng()); seen[k] = (seen[k] || 0) + 1; if (k === last) twice++; last = k; }
-    expect(Object.keys(seen).sort()).toEqual([...STROLL_KINDS].sort()); expect(twice).toBe(0);   // never the same twice in a row when there is another
+    expect(Object.keys(seen).sort()).toEqual(['forest', 'palms', 'river', 'shore']); expect(twice).toBe(0);   // never the same twice in a row when there is another
   });
   it('strolls by day only, and a stroll is the usual choice when there is nothing else to do', () => {
     expect(strollNow(calm({ time: STROLL_FROM }), 0.1)).toBe(true); expect(strollNow(calm({ time: STROLL_FROM - 0.02 }), 0.1)).toBe(false);
@@ -131,7 +133,7 @@ describe('pastimes (0.28.2 "Pastime")', () => {
   });
   it('leaves a failed goal alone only a third as long as before, and a failed light waits longer when one tuft is left', async () => {
     const src = (await import('node:fs')).readFileSync(new URL('../src/game/mind.js', import.meta.url), 'utf8');
-    expect(src).toMatch(/const COOL = \{ drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10 \}/);
+    expect(src).toMatch(/const COOL = \{ crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10 \}/);
     expect(src).toMatch(/cool\('light', game\.fibre\.carried <= 1 \? COOL\.light \* 3 : COOL\.light\)/);
   });
   it('chooses stroll places only on known ground, 1.5 m inside its edge, and standable', () => {
@@ -217,5 +219,93 @@ describe('what teaches him ground', () => {
     const back = createGame(w, spawn, saved), n1 = back.known.count;
     back.update(still, 0); back.update(still, 0.1);
     expect(back.known.count).toBe(n1);
+  });
+});
+
+describe('what takes the game back from his habit (0.29.1 "Low water")', () => {
+  const ev = (type, o = {}) => ({ type, ...o });
+  it('counts what acts on the castaway: keys, the left button, a single finger, focus; not the camera', () => {
+    const a = createActing();
+    expect(a.event(ev('keydown', { code: 'KeyW' }))).toBe(true); expect(a.event(ev('keyup', { code: 'Space' }))).toBe(true); expect(a.event(ev('keydown', { code: 'KeyZ' }))).toBe(true);
+    for (const code of ['KeyQ', 'KeyE', 'Equal', 'Minus', 'NumpadAdd', 'NumpadSubtract']) { expect(CAMERA_CODES.has(code)).toBe(true); expect(a.event(ev('keydown', { code }))).toBe(false); expect(a.event(ev('keyup', { code }))).toBe(false); }
+    expect(a.event(ev('wheel', { deltaY: 100 }))).toBe(false);
+    expect(a.event(ev('pointerdown', { pointerType: 'mouse', button: 0 }))).toBe(true); expect(a.event(ev('pointerup', { pointerType: 'mouse', button: 0 }))).toBe(true);
+    expect(a.event(ev('pointerdown', { pointerType: 'mouse', button: 2 }))).toBe(false); expect(a.event(ev('pointerup', { pointerType: 'mouse', button: 2 }))).toBe(false);
+    expect(a.event(ev('pointermove', { pointerType: 'mouse', buttons: 2 }))).toBe(false);   // a right-button drag turns and tilts the view
+    expect(a.event(ev('pointermove', { pointerType: 'mouse', buttons: 0 }))).toBe(false); expect(a.event(ev('pointermove', { pointerType: 'mouse', buttons: 1 }))).toBe(true);
+    expect(a.event(ev('focus'))).toBe(true);
+  });
+  it('counts a one-finger tap or drag, and nothing of a two-finger pinch or twist (even when one finger lifts first)', () => {
+    const a = createActing(), f = (type, pointerId) => ev(type, { pointerType: 'touch', pointerId });
+    expect(a.event(f('pointerdown', 1))).toBe(false); expect(a.event(f('pointermove', 1))).toBe(true); expect(a.event(f('pointerup', 1))).toBe(true);   // a tap / a drag
+    expect(a.event(f('pointerdown', 2))).toBe(false); expect(a.event(f('pointerdown', 3))).toBe(false);
+    expect(a.event(f('pointermove', 2))).toBe(false); expect(a.event(f('pointermove', 3))).toBe(false);
+    expect(a.event(f('pointerup', 2))).toBe(false); expect(a.event(f('pointermove', 3))).toBe(false); expect(a.event(f('pointerup', 3))).toBe(false);
+    expect(a.event(f('pointerdown', 4))).toBe(false); expect(a.event(f('pointerup', 4))).toBe(true);   // and a single finger counts again afterwards
+  });
+  it('does not restart the 30 s of quiet for the camera, only for the castaway\'s own input', () => {
+    const t = createTakeover(QUIET, 0), a = createActing();
+    for (let s = 5; s < 30; s += 5) if (a.event(ev('keydown', { code: 'KeyQ' })) || a.event(ev('wheel'))) t.poke(s);
+    expect(t.update(30)).toBe(true);   // turned and zoomed all along: he takes over on time
+    if (a.event(ev('keydown', { code: 'KeyD' }))) t.poke(31); expect(t.update(31)).toBe(false);
+  });
+});
+
+describe('crab trips (0.29.1 "Low water")', () => {
+  const low = (o = {}) => calm({ sea: -0.35, time: 0.55, crabs: 0, flames: false, fibre: 3, canLight: true, ...o });
+  it('is a pastime only at low water, in the afternoon or early evening, with a fire to roast on, and none carried yet', () => {
+    expect([CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_DIGS]).toEqual([-0.2, 0.42, 0.66, 4]);
+    expect(crabTripOk(low())).toBe(true);
+    expect(crabTripOk(low({ sea: CRAB_TIDE }))).toBe(true); expect(crabTripOk(low({ sea: CRAB_TIDE + 0.05 }))).toBe(false); expect(crabTripOk(low({ sea: 0 }))).toBe(false);   // high water: the crabs are in their holes
+    expect(crabTripOk(low({ time: CRAB_FROM - 0.01 }))).toBe(false); expect(crabTripOk(low({ time: CRAB_FROM }))).toBe(true);
+    expect(crabTripOk(low({ time: CRAB_TO }))).toBe(false); expect(crabTripOk(low({ time: 0.9 }))).toBe(false);   // a raw crab must be roasted the same day
+    expect(crabTripOk(low({ canLight: false }))).toBe(false); expect(crabTripOk(low({ fibre: 1 }))).toBe(false);   // no fire to be had
+    expect(crabTripOk(low({ pileDry: false }))).toBe(false); expect(crabTripOk(low({ pileDry: false, flames: true }))).toBe(true);   // wet wood does not catch (he would skip the light)
+    expect(crabTripOk(low({ canLight: false, flames: true }))).toBe(true);   // a fire already burns
+    expect(crabTripOk(low({ crabs: 1 }))).toBe(false); expect(crabTripOk(low({ cool: { crabs: true } }))).toBe(false);
+  });
+  it('is food (hungry, no near nut) only with flames now, by day and until CRAB_FOOD_TO', () => {
+    expect(crabFoodOk(low({ canLight: true }))).toBe(false); expect(crabFoodOk(low({ flames: true, time: 0.76 }))).toBe(true);
+    expect(crabFoodOk(low({ flames: true, time: CRAB_FOOD_TO }))).toBe(false); expect(crabFoodOk(low({ flames: true, sea: 0 }))).toBe(false); expect(crabFoodOk(low({ flames: true, crabs: 1 }))).toBe(false);
+  });
+  it('roasts a crab for supper when the fire has flames, and waits for them instead of eating a nut early', () => {
+    expect(CRAB_ROAST_HUNGER).toBe(0.2);
+    expect(chooseGoal(calm({ crabs: 1, flames: true, hunger: CRAB_ROAST_HUNGER, time: LIGHT_FROM + 0.03 }))).toBe('eat');
+    expect(chooseGoal(calm({ crabs: 1, flames: true, hunger: CRAB_ROAST_HUNGER - 0.02, time: LIGHT_FROM + 0.03 }))).not.toBe('eat');
+    expect(chooseGoal(calm({ crabs: 1, flames: false, hunger: 0.3, time: SUPPER_FROM + 0.02 }))).not.toBe('eat');   // no flames yet: he waits (the usual supper hunger is 0.3)
+    expect(chooseGoal(calm({ crabs: 0, flames: false, hunger: 0.3, time: SUPPER_FROM + 0.02 }))).toBe('eat');
+    expect(chooseGoal(calm({ crabs: 1, flames: false, hunger: HUNGER_GO, time: SUPPER_FROM + 0.02 }))).toBe('eat');   // but a real hunger is fed
+  });
+  it('picks the crab stroll when it is possible, never twice in a row', () => {
+    const all = { shore: true, river: true, palms: true, forest: true, crabs: true };
+    expect(strollKind({ ...all, crabs: false }, null, 0.99)).not.toBe('crabs');
+    const rng = mulberry32(3); let n = 0, last = null, twice = 0;
+    for (let i = 0; i < 600; i++) { const k = strollKind(all, last, rng()); if (k === 'crabs') n++; if (k === last) twice++; last = k; }
+    expect(n).toBeGreaterThan(100); expect(twice).toBe(0);
+  });
+  it('goes to colonies he knows, digs at most CRAB_DIGS times a trip, and roasts what he caught at the burning fire', () => {
+    let day = 0; while (!(seaLevel(day + 0.5) <= -0.34 && seaLevel(day + 0.56) <= -0.3)) day += 0.01;   // a day on which the tide is low in the afternoon
+    const d0 = Math.floor(day), t0 = day - d0 + 0.0;
+    const sim = (know) => {
+      const g = createGame(w, spawn, { day: d0, time: day - d0, hunger: { days: 0.1 } }); if (know) walkFirstDay(w, g, spawn);
+      g.fire.fires.push({ id: 99, x: spawn.x + 3, z: spawn.z + 2, fuel: FUEL_MAX, embers: 1, lit: g.clock.total, fed: 6 });
+      const m = createMind(w, g); m.engage();
+      const cands = m.strollCands().crabs;
+      for (const c of cands) { expect(g.known.has(c.x, c.z)).toBe(true); expect(c.col.crabs.length).toBeGreaterThan(0); }
+      let eaten = 0, outside = 0; const ce = g.crabs.eat.bind(g.crabs); g.crabs.eat = () => { const ok = ce(); if (ok) eaten++; return ok; };
+      const end = g.clock.total + 0.12;
+      while (g.clock.total < end) { m.step(0.1); g.update(m.input, 0.1); if (!g.known.has(g.player.x, g.player.z)) outside++; }
+      return { m, g, cands, eaten, outside };
+    };
+    const fresh = sim(false);
+    for (const c of fresh.cands) expect(fresh.g.known.has(c.x, c.z)).toBe(true);   // never a colony he has not been to
+    expect(fresh.outside).toBe(0);
+    const a = sim(true);
+    expect(a.cands.length).toBeGreaterThan(0);
+    expect(a.outside).toBe(0);
+    expect(a.m.stats.crabTrips).toBeGreaterThanOrEqual(1);   // 0.55 of the day, low water, a fire burns: the crab stroll is the usual choice
+    expect(a.m.stats.crabDigs).toBeGreaterThan(0); expect(a.m.stats.crabTripDigsMax).toBeLessThanOrEqual(CRAB_DIGS);
+    expect(a.g.crabs.digs).toBeLessThanOrEqual(a.m.stats.crabTrips * CRAB_DIGS);
+    if (a.m.stats.crabsCaught > 0) expect(a.eaten + a.g.crabs.carried.length).toBeGreaterThan(0);   // what he caught he roasts at the fire (or still carries)
   });
 });

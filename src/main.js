@@ -53,7 +53,7 @@
  * While it is visible the furthest zoom is 25 (core/view zoomMax), else 10; the
  * panel then shows `zoom N` when the zoom is beyond 10.
  *
- * Habit (0.28, game/mind): after QUIET (30) seconds without any input (a key, a click or tap, the stick, the action button, an icon, the row, the camera: turn,
+ * Habit (0.28, game/mind): after QUIET (30) seconds without any input (a key, a click or tap, the stick, the action button, an icon, the row; 0.29.1: not the camera, turn,
  * tilt, zoom, pinch, twist; a held key or a walk target still being followed counts, a plain mouse move does not) the castaway looks after himself: each frame
  * main hands game.update the mind's input object instead of the player's, and the mind steps first (`mind.step(dt)`). The game and the screen do not show it;
  * the developer panel adds `habit`. Any input of the player takes the game back at once (`mind.release()`), the quiet time starts over, and a tab that comes
@@ -93,7 +93,7 @@ import { generateWorld } from './world/world.js';
 import { startSpot } from './world/spots.js';
 import { createIslandView } from './render/islandView.js';
 import { createGame, wantsToMove } from './game/game.js';
-import { createInput, createTakeover, QUIET } from './game/input.js';
+import { createInput, createTakeover, createActing, QUIET } from './game/input.js';
 import { createMind } from './game/mind.js';
 import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
@@ -187,9 +187,9 @@ async function boot() {
   const input = createInput(view.canvas, view.pickGround);
   input.yaw = view.yaw;
   const mind = createMind(world, game), takeover = createTakeover(QUIET, performance.now() / 1000);   // 0.28 "Habit"
-  const poke = () => takeover.poke(performance.now() / 1000);   // the player did something
-  for (const type of ['pointerdown', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove', 'visibilitychange', 'focus']) window.addEventListener(type, poke, { capture: true, passive: true });
-  window.addEventListener('pointermove', e => { if (e.buttons > 0 || e.pointerType === 'touch') poke(); }, { capture: true, passive: true });   // a drag or a finger, not a mouse that only moves
+  const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
+  const poke = e => { if (acting.event(e)) takeover.poke(performance.now() / 1000); };   // the player did something
+  for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'keydown', 'keyup', 'visibilitychange', 'focus']) window.addEventListener(type, poke, { capture: true, passive: true });
 
   createThumbStick(document.getElementById('stick'), input);
   button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
@@ -233,7 +233,7 @@ async function boot() {
     view.zoomBy(zoomed);
     view.turn(turned);
     input.yaw = view.yaw;
-    if (zoomed || turned.yaw || turned.pitch || wantsToMove(input) || input.pressing()) takeover.poke(nowS);   // camera input, a held key or a walk still going
+    if (wantsToMove(input) || input.pressing()) takeover.poke(nowS);   // a held key or a walk still going (not the camera, 0.29.1)
     const driving = takeover.update(nowS);
     if (driving !== mind.active) { if (driving) mind.engage(); else mind.release(); dev.setHabit(driving); }
     if (driving) { mind.input.yaw = view.yaw; mind.step(dt); }

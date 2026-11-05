@@ -3,7 +3,7 @@
 import { lifeSuite } from './helpers/lifeSuite.js';
 
 lifeSuite(1337, {
-  walked: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 5 },
+  walked: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 5, crabs: 1 },
   fresh: { idle: 0.65, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, stuckMax: 3, searches: 1, nights: 7, inland: 5 },
   beach: { nights: 7, maxHunger: 1.2, hungry: 0.2 },
 });

@@ -27,6 +27,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
     expect(r.mealsPerDay).toBeGreaterThan(1.7); expect(r.mealsPerDay).toBeLessThan(3);   // meals of half a day of hunger (a handful of berries is a third of one)
     const drinksPerDay = (r.drinks + r.sips) / r.days; expect(drinksPerDay).toBeGreaterThan(2); expect(drinksPerDay).toBeLessThan(5);
     expect(r.mix.berries + r.mix.banana).toBeGreaterThanOrEqual(c.inland ?? 0);   // some of the food is from inland
+    // 0.29.1 "Low water": at low water he digs for crabs at colonies he knows and roasts them at the evening fire; a trip is at most CRAB_DIGS (4) digs, and a crab seldom spoils uneaten
+    expect(r.crabTripDigsMax).toBeLessThanOrEqual(4); expect(r.crabsSpoiled).toBeLessThanOrEqual(2); expect(r.crabsEaten).toBeGreaterThanOrEqual(c.crabs ?? 0);
   };
   describe(`Dave alone on island ${seed}`, () => {
     it('lives ten days on the ground a first day would have shown him', () => {
