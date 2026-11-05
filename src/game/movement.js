@@ -45,8 +45,7 @@
  * nearestStandable(world, x, z, sea?, maxR?) -> { x, z } | null   (x, z) itself
  *   when he can stand there, else the nearest such spot on rings of 0.5 m
  *   steps out to maxR (15 m), or null
- * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase, stoop, sitting } (sitting: 0..1, game/game)
- * PACE (0.65), PACE_STRIDE (0.5), paceOf(input) -> 0.3..1 (1 without input.pace), paceStride(pace): the slower amble of the habit (0.29.2 "Amble"); the player's input has no pace
+ * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase, stoop }
  * moveIntent(input, player) -> unit direction { x, z } or null, from the thumb
  *   stick (input.stick, already a direction on the island), keys or target;
  *   keys walk relative to the screen, so they use input.yaw (the current
@@ -72,17 +71,10 @@ export const STONE_MIN = 0.35;  // smaller stones are stepped over
 export const WADE_MAX = 0.35;   // rivers deeper than this (waist deep) cannot be waded
 export const WEARY_STRIDE = 0.4;  // his step shortens by this share of what needs take off his speed
 export const BUSH_SLOW = 0.45;  // in the middle of a bush you go at 55 %
-export const PACE = 0.65;       // 0.29.2 "Amble": the share of his walking speed (and of the length of his step: PACE_STRIDE) at which the habit strolls and idles; only game/mind asks for it (input.pace)
-export const PACE_STRIDE = 0.5; // his step shortens by this share of what the pace takes off his speed (the cadence slows too, but less than the speed)
 
 /** Stride factor from the needs' combined walking speed (sleep x thirst x hunger):
  *  1 - WEARY_STRIDE * (1 - needsSpeed); at the worst (0.29) about 0.72. */
 export function weariStride(needsSpeed) { return 1 - WEARY_STRIDE * (1 - Math.min(1, Math.max(0, needsSpeed))); }
-
-/** 0.29.2: the pace the mind asks for (input.pace) as a speed factor: only 0.3..1 counts, anything else (the player's input has none) is full pace. */
-export function paceOf(input) { const v = input && input.pace; return typeof v === 'number' && v > 0 && v < 1 ? Math.max(0.3, v) : 1; }
-/** The stride factor of a pace: 1 - PACE_STRIDE * (1 - pace); 0.825 at PACE. */
-export function paceStride(pace) { return 1 - PACE_STRIDE * (1 - Math.min(1, Math.max(0, pace))); }
 
 // A step is judged at two points ahead (stepFactor) but he lands somewhere between, and sliding round a trunk moves him
 // again: the slope where he ends can be a good deal steeper than at the points judged (the ground is rough), and a flood
@@ -225,7 +217,7 @@ export function nearestStandable(w, x, z, sea = 0, maxR = 15) {
 }
 
 export function createPlayer(spot) {
-  return { x: spot.x, y: spot.y, z: spot.z, heading: 2.6, moving: false, speed: 0, phase: 0, stoop: 0, sitting: 0 };
+  return { x: spot.x, y: spot.y, z: spot.z, heading: 2.6, moving: false, speed: 0, phase: 0, stoop: 0 };
 }
 
 /**
