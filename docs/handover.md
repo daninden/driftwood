@@ -146,12 +146,13 @@ Agreed with the user on 2026-11-04, in this order (the user calls the castaway "
 
 **Next, not yet agreed (ideas to discuss, nothing is decided):**
 
-- **Installable app (PWA), proposed on 2026-11-05, waiting for the user's choices; maybe 0.29.7 "Ashore":** make the game installable as an app of its own on phones and desktops. Small: the game is already a static https site with one bundle, a viewport with `viewport-fit=cover` and safe-area insets, and saves in `localStorage`. The work: a `public/manifest.webmanifest` (name, `display`, paper colour `#efe0c2` as background and theme, `start_url: "/"`), icons (192 and 512 px, a maskable one, an `apple-touch-icon`), a few tags in `index.html` (manifest link, `theme-color`, the iOS meta tags), and optionally a small service worker for offline play: network first for the HTML so every push to `main` still reaches players, the cache named after `src/version.js`. Tests (manifest valid, service worker cache tied to the version) and docs (`architecture.md`, a line in `design.md`, how to install in `README.md`). No install button of our own: the browser offers it, and the game keeps its empty screen. To know: on iOS the installed app has storage of its own, apart from Safari's, so an island played in the browser does not appear in the app; the app has no address bar, so the `#seed-…` and `#new` hashes cannot be typed there (the reset key still works). *Open for the user:* (a) the icon (proposal: an ink drawing in the style of the marks, the half coconut or a piece of driftwood, on paper colour); (b) `fullscreen` (also hides the phone's status bar; proposed) or `standalone`; (c) offline play, yes or no; (d) the version number and name, and where it goes in the order.
 - **Later (not agreed):** maybe short journal lines (the sitting pose is built, 0.29.2; exploring by himself is built, 0.29.4). Exploring over climbing routes (terraces) is not agreed yet; it needs the path follower to be reliable on routes.
 
 ## Open, not decided
 
 See *Open questions* in `docs/design.md`: loneliness without a fire (to be thought through with the user, without a meter), what a fire means for the strangers.
+
+The user may drop mobile (phone) support altogether (said on 2026-11-05; not decided). The installable app (PWA, proposed as 0.29.7 "Ashore") is dropped for that reason.
 
 ## Bugs, later
 
