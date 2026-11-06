@@ -2,6 +2,16 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30.1 "Thoughts" — 2026-11-06
+
+Dave's written voice now explains a need before its errand rather than narrating each hand movement: wood, hunger, thirst, rest, low flames, an unlit fire, food or fibre reserves and wood drying each get a brief situational thought. Material thoughts wait until there is something to fetch. Autonomous pickups, deliveries and repeated attempts stay quiet; the mind's decisions and gameplay remain unchanged. Displayed thoughts leave at least eight seconds of quiet between them, and the same kind is suppressed for a minute, without queuing stale lines.
+
+The **L** log now prefixes each displayed thought with **HH:mm island time**, captured as it appears, without a date. The floating island text stays timestamp-free. The log still clears on reload and never takes control from Dave.
+
+- **Release approval:** the user explicitly requested the push after the full-suite timeout and failures below were disclosed. Unrelated working-copy test changes and screenshots are excluded.
+
+- **Verification:** 39 focused Voice, mind-Voice, Hands and developer-panel tests pass, including identical gameplay state and mind statistics with and without the notification listener. Build, quick smoke, full smoke and the targeted real-browser Voice smoke pass. The inspected day/night captures show the time prefix only in the log; an actual autonomous husk does not add action narration, log interactions remain passive and reload clears the history. The one serial full-suite attempt exceeded its 600-second cap. Before timing out it reported the previously documented mind home-upgrade failure, two seed-1337 life-test failures (a missing expected home result and inland food count 2 versus minimum 3), and an incomplete seed-7 suite. Dry stock and both path-follow tests passed. The seed-1337 failures were not baseline-compared or repaired in this voice-only change; no all-green full-suite claim.
+
 ## 0.30 "Voice" — 2026-11-06
 
 Dave now leaves one short, fading handwritten English thought when he deliberately begins ordinary work: collecting and placing wood, drinking, food, fire, shelter work, digging, roasting and sleep. The fixed phrases vary through a presentation-only counter and never use the island seed, the mind's chance stream, audio or an online service. **L** opens a small scroll of every line actually shown since this game opened; it is in memory only, starts closed, clears on reload and does not pause Dave. The log captures pointer and wheel events, while L itself is passive, so reading it cannot make a world walk, release Computer/Auto or zoom the camera.

@@ -62,8 +62,9 @@
  * The developer panel shows both the selected mode and `habit`; headless
  * step/draw hooks use the player's input only.
  *
- * Voice (render/voice): accepted game actions and new mind intents show one
- * short fixed phrase above Dave. L opens the in-memory session log; its own
+ * Voice (render/voice): player actions and situation-led mind intents show one
+ * short fixed thought above Dave, not every autonomous step. L opens the
+ * in-memory session log with island HH:mm timestamps (no dates); its own
  * capture guard keeps all log interaction passive to Hands and the camera.
  *
  * Frame pacing (render/framePacer): the loop runs at the screen's rate but
@@ -199,9 +200,9 @@ async function boot() {
   };
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
-  game.onAction(({ kind }) => voice.announce(kind));
   input.yaw = view.yaw;
-  const mind = createMind(world, game, { onIntent: ({ kind }) => voice.announce(kind) }), takeover = createTakeover(QUIET, performance.now() / 1000);   // 0.28 "Habit"
+  const mind = createMind(world, game, { onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);   // 0.28 "Habit"
+  game.onAction(({ kind }) => { if (!mind.active) voice.announce(kind, game.clock.time); });   // the habit's thought precedes its errand, not each pickup or retry
   const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
   const poke = e => {
     if (isVoiceLogEvent(e)) return;

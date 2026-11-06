@@ -111,9 +111,11 @@ The first weather, and the only one: a shower now and then. It is atmosphere fir
 
 ## The castaway
 
-### Voice (0.30, built)
+### Voice (0.30; situation-led thoughts in 0.30.1)
 
-When Dave deliberately begins an ordinary action, one short written English line appears near him in the island's ink hand and fades after a few seconds. It is a small set of varied, fixed computer phrases about what he is about to do, never speech or audio, an AI service, a bubble, a menu or a claim that work has already succeeded. **L** opens and closes a quiet, scrollable chronological record of the lines shown since the current game opened. It is in memory only and clears on reload; opening or reading it does not stop Dave or take him out of Computer or Auto.
+Before Dave acts on a need, one short written English thought appears near him in the island's ink hand and fades after a few seconds. The thought gives the reason, not a running commentary: "I need some wood." before collecting, "I'm hungry." before eating or searching for food, "I need a drink." before seeking water, and "The fire's getting low." before fetching fuel for a low fire. An unlit pile instead gets "I need a fire." Wood and supply thoughts begin only once he has found the material; pickup, delivery and retry steps of an autonomous errand stay silent. Player-started actions retain brief, reflective fixed lines. There is at least eight seconds between displayed thoughts, and the same kind waits at least a minute; suppressed thoughts are never queued for later. This changes no decisions or need thresholds. It is fixed computer text, never speech or audio, an AI service, a bubble, a menu or a claim that work has already succeeded.
+
+**L** opens and closes a quiet, scrollable chronological record of the lines actually shown since the current game opened. Each log entry starts with **HH:mm island time**, without a date, captured when the thought appeared; the floating thought has no time prefix. The log is in memory only and clears on reload; opening or reading it does not stop Dave or take him out of Computer or Auto.
 
 A small blocky figure with outlines, dressed for a tropical island after a long time alone: a straw hat, shaggy dark hair and a long, unkempt beard, a yellowed shirt with ripped short sleeves, holes and a ragged hem, frayed short trousers, bare sun-tanned legs and bare feet, and a staff. Because the figure is small on screen, the detail lives in the silhouette and in flat colour areas (skin against cloth), not in small parts.
 
