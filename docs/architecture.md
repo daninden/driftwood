@@ -23,6 +23,8 @@ Rules:
 
 ## Modules
 
+**Hands (0.29.13):** `game/hands` is a pure, browser-local preference and controller for `self`, `computer` and `auto`: safe `driftwood-hands` storage, H key guard and the decision whether the mind drives. It is never part of an island save. `main` combines Auto with `game/input`'s 30-second timer; Computer drives immediately, and a real player walk/action changes it to Self. `KeyH`, camera, sound, quality and developer controls remain passive.
+
 | Module | Job |
 |---|---|
 | `core/noise` | Seeded noise (`vnoise`, `fbm`), PRNG and tile hash. The formulas are frozen. |

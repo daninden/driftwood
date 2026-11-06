@@ -269,17 +269,17 @@ describe('what teaches him ground', () => {
 
 describe('what takes the game back from his habit (0.29.1 "Low water")', () => {
   const ev = (type, o = {}) => ({ type, ...o });
-  it('counts what acts on the castaway: keys, the left button, a single finger, focus; not the camera', () => {
+  it('counts only a walk or action on the castaway, not passive browser or camera events', () => {
     const a = createActing();
     expect(a.event(ev('keydown', { code: 'KeyW' }))).toBe(true); expect(a.event(ev('keyup', { code: 'Space' }))).toBe(true); expect(a.event(ev('keydown', { code: 'KeyZ' }))).toBe(true);
     for (const code of ['KeyQ', 'KeyE', 'Equal', 'Minus', 'NumpadAdd', 'NumpadSubtract']) { expect(CAMERA_CODES.has(code)).toBe(true); expect(a.event(ev('keydown', { code }))).toBe(false); expect(a.event(ev('keyup', { code }))).toBe(false); }
-    for (const code of ['Backquote', 'KeyG']) { expect(PASSIVE_CODES.has(code)).toBe(true); expect(a.event(ev('keydown', { code }))).toBe(false); expect(a.event(ev('keyup', { code }))).toBe(false); }
+     for (const code of ['Backquote', 'KeyG', 'KeyH']) { expect(PASSIVE_CODES.has(code)).toBe(true); expect(a.event(ev('keydown', { code }))).toBe(false); expect(a.event(ev('keyup', { code }))).toBe(false); }
     expect(a.event(ev('wheel', { deltaY: 100 }))).toBe(false);
     expect(a.event(ev('pointerdown', { pointerType: 'mouse', button: 0 }))).toBe(true); expect(a.event(ev('pointerup', { pointerType: 'mouse', button: 0 }))).toBe(true);
     expect(a.event(ev('pointerdown', { pointerType: 'mouse', button: 2 }))).toBe(false); expect(a.event(ev('pointerup', { pointerType: 'mouse', button: 2 }))).toBe(false);
     expect(a.event(ev('pointermove', { pointerType: 'mouse', buttons: 2 }))).toBe(false);   // a right-button drag turns and tilts the view
     expect(a.event(ev('pointermove', { pointerType: 'mouse', buttons: 0 }))).toBe(false); expect(a.event(ev('pointermove', { pointerType: 'mouse', buttons: 1 }))).toBe(true);
-    expect(a.event(ev('focus'))).toBe(true);
+     expect(a.event(ev('focus'))).toBe(false); expect(a.event(ev('keydown', { code: 'KeyM' }))).toBe(false);
   });
   it('counts a one-finger tap or drag, and nothing of a two-finger pinch or twist (even when one finger lifts first)', () => {
     const a = createActing(), f = (type, pointerId) => ev(type, { pointerType: 'touch', pointerId });

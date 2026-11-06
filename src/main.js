@@ -53,12 +53,14 @@
  * While it is visible the furthest zoom is 25 (core/view zoomMax), else 10; the
  * panel then shows `zoom N` when the zoom is beyond 10.
  *
- * Habit (0.28, game/mind): after QUIET (30) seconds without any input (a key, a click or tap, the stick, the action button, an icon, the row; 0.29.1: not the camera, turn,
- * tilt, zoom, pinch, twist; a held key or a walk target still being followed counts, a plain mouse move does not) the castaway looks after himself: each frame
- * main hands game.update the mind's input object instead of the player's, and the mind steps first (`mind.step(dt)`). The game and the screen do not show it;
- * the developer panel adds `habit`. Any input of the player takes the game back at once (`mind.release()`), the quiet time starts over, and a tab that comes
- * back to the front starts it over too. The pacer counts his walking and working as something happening like the player's (isBusy gets the input in use).
- * Test parameters do not switch it off. The headless hooks step/draw use the player's input only.
+ * Habit and Hands (game/mind, game/input, game/hands): Auto hands the game to
+ * the mind after QUIET (30) seconds; Self never does, and Computer does at
+ * once. H cycles the browser-only saved mode, never an island save. A real
+ * walk or action releases the mind; it changes Computer to saved Self while
+ * Auto remains saved. View, quality and developer controls are passive. Each
+ * driven frame hands game.update the mind's input object and steps it first.
+ * The developer panel shows both the selected mode and `habit`; headless
+ * step/draw hooks use the player's input only.
  *
  * Frame pacing (render/framePacer): the loop runs at the screen's rate but
  * only updates and draws a frame when it is due: at most 30 a second on
@@ -80,7 +82,7 @@
  * While loading, the bar in #loader (index.html) shows how far it is
  * (core/loading); it fades out with the class `ready` on <body>.
  *
- * window.__driftwood exposes { world, game, view, input, mind, takeover, ready, quality, sound, soundSwitch } for the smoke
+ * window.__driftwood exposes { world, game, view, input, mind, takeover, hands, ready, quality, sound, soundSwitch } for the smoke
  * test (and `frames`, a read-only count of drawn frames, for checking the pacing), plus three hooks so it does not have to play in real time (a
  * headless browser without a GPU draws only a few frames per second):
  *   pause(on)              stop or restart drawing in the frame loop
@@ -95,6 +97,7 @@ import { startSpot } from './world/spots.js';
 import { createIslandView } from './render/islandView.js';
 import { createGame, wantsToMove } from './game/game.js';
 import { createInput, createTakeover, createActing, QUIET } from './game/input.js';
+import { createHands, loadHands, saveHands, isHandsKey } from './game/hands.js';
 import { createMind } from './game/mind.js';
 import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
@@ -157,6 +160,8 @@ async function boot() {
   const carry = createCarryMark(document.getElementById('carry'), kind => game.use(kind, input));   // a click on a drawing uses it (0.27.2)
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
   dev.setQuality({ level: start.level, adapt: start.adapt });
+  const hands = createHands(loadHands() || 'auto');
+  dev.setHands(hands.mode);
   const who = createDayLine(document.getElementById('who')), wakes = createWakeLine(document.getElementById('wake'));
   const ink = createInk(document.documentElement);
   const store0 = (() => { try { return window.localStorage; } catch (e) { return null; } })();
@@ -191,7 +196,11 @@ async function boot() {
   input.yaw = view.yaw;
   const mind = createMind(world, game), takeover = createTakeover(QUIET, performance.now() / 1000);   // 0.28 "Habit"
   const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
-  const poke = e => { if (acting.event(e)) takeover.poke(performance.now() / 1000); };   // the player did something
+  const poke = e => {
+    if (!acting.event(e)) return;
+    hands.playerAction(); saveHands(hands.mode); dev.setHands(hands.mode);
+    takeover.poke(performance.now() / 1000); mind.release(); dev.setHabit(false);
+  };   // a walk or action takes the castaway back
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'keydown', 'keyup', 'visibilitychange', 'focus']) window.addEventListener(type, poke, { capture: true, passive: true });
 
   createThumbStick(document.getElementById('stick'), input);
@@ -231,7 +240,12 @@ async function boot() {
     dev.setQuality({ level: next.level, adapt: next.adapt });
     savePreference(qualityPreference);
   });
-  window.__driftwood = { world, game, view, input, mind, takeover, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
+  window.addEventListener('keydown', e => {
+    if (!isHandsKey(e)) return;
+    hands.cycle(); saveHands(hands.mode); dev.setHands(hands.mode);
+  });
+  if (hands.mode === 'computer') { mind.engage(); dev.setHabit(true); }   // Computer has no quiet wait, even on the ready frame
+  window.__driftwood = { world, game, view, input, mind, takeover, hands, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     requestAnimationFrame(frame);
     if (paused) { last = now; return; }
@@ -246,7 +260,8 @@ async function boot() {
     view.turn(turned);
     input.yaw = view.yaw;
     if (wantsToMove(input) || input.pressing()) takeover.poke(nowS);   // a held key or a walk still going (not the camera, 0.29.1)
-    const driving = takeover.update(nowS);
+    takeover.update(nowS);
+    const driving = hands.driving(takeover.active());
     if (driving !== mind.active) { if (driving) mind.engage(); else mind.release(); dev.setHabit(driving); }
     if (driving) { mind.input.yaw = view.yaw; mind.step(dt); }
     const use = driving ? mind.input : input;   // whose hands the castaway has this frame

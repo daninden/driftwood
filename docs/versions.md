@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.13 "Hands" — 2026-11-06
+
+Desktop **H** now cycles the browser-local choice of whose hands guide Dave: **Self → Computer → Auto → Self**. It adds no menu or game mark; the existing developer line quietly says `self`, `computer` or `auto`, while its existing `habit` marker still says when Dave is actually acting.
+
+- **Self** never begins automatic habits. **Computer** gives Dave control immediately after the island is ready. **Auto**, the default, preserves the existing 30-second quiet delay.
+- A real walk, world click/tap or action takes over. In Computer it also changes and stores the choice as Self; in Auto it only takes control for now and keeps Auto for the next quiet spell. Camera movement, quality (**G**), the developer backtick and **H** itself remain passive.
+- The preference is stored safely as `driftwood-hands`; malformed or unavailable browser storage simply starts Auto. It is not in an island save and contains no future AI or account setting.
+- **Verification:** `npm.cmd test -- --maxWorkers=1 --minWorkers=1 --no-file-parallelism tests/hands.test.js tests/devPanel.test.js tests/quality.test.js` passed 52 tests in 3 files; the focused takeover assertion passed 1 test (68 skipped). `npm.cmd run build`, `npm.cmd run smoke`, and `npm.cmd run smoke:hands` passed. The required serial full-suite attempt exceeded its 600-second cap in established mind-life suites, so this release makes no all-green full-suite claim.
+
 ## 0.29.12 "Embers" — 2026-11-06
 
 A fire that has burned down now holds a small living glow for about twelve game hours, rather than only an hour and a half. It starts warm and visibly fades to a few red points. Dry wood laid on it brings back real flames through the ordinary feed action, so a night fire can be woken in the morning without drilling again.

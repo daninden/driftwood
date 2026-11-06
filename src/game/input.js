@@ -45,7 +45,7 @@
  * createTakeover(after?) -> takeover   pure: the timer that hands the game to game/mind and back. main calls poke(t) for every input that acts on the castaway (a key, a
  *   click, a tap, the stick, the action button, an icon, a drawing of the row; also a held key or a walk target he is still following), NOT for the camera (0.29.1: turn,
  *   tilt, zoom, pinch, twist leave him to his habit; see createActing)
- * createActing() -> { event(e) -> boolean }   pure: whether a DOM event of the player counts as acting on the castaway (CAMERA_CODES: Q, E, + and - do not) and update(t, blocked?) once per frame; t is in seconds (any clock that only goes forward)
+ * createActing() -> { event(e) -> boolean }   pure: whether a DOM event is a walk or action on the castaway (camera, sound, developer and Hands controls do not) and update(t, blocked?) once per frame; t is in seconds (any clock that only goes forward)
  *   takeover.poke(t)           the player did something at t: the mind lets go at once
  *   takeover.update(t, blocked?) -> true while the mind is in charge: no poke for `after` seconds and not `blocked` (the name question is open)
  *   takeover.active()          the last answer of update
@@ -122,22 +122,22 @@ export function createTakeover(after = QUIET, start = 0) {
 }
 
 export const CAMERA_CODES = new Set(['KeyQ', 'KeyE', ...Object.keys(ZOOM_KEYS)]);
-export const PASSIVE_CODES = new Set([...CAMERA_CODES, 'Backquote', 'KeyG']);   // view and developer controls leave the habit alone
+export const PASSIVE_CODES = new Set([...CAMERA_CODES, 'Backquote', 'KeyG', 'KeyH']);   // view, developer and Hands controls leave the habit alone
+const ACTING_CODES = new Set([...Object.keys(KEYS), 'ShiftLeft', 'ShiftRight', 'Space', 'KeyZ', 'KeyF', ...Object.keys(CHOICE_KEYS)]);
 
 /**
  * 0.29.1: which events of the player are for the castaway and so take the game back from his habit (a poke of the takeover); turning, tilting and zooming the view are not.
  * event(e) takes a DOM-like event ({ type, code?, button?, buttons?, pointerType?, pointerId? }) in order and answers true when it counts.
- * Keys count except the camera keys (Q, E, + and -); the left mouse button and a single finger count; the right button (a drag turns and tilts the view), the wheel,
- * and everything of a two-finger gesture (pinch, twist) do not; a finger counts when it is released or moves, if it was alone on the screen all along (a tap or a walk);
- * focus coming back counts.
+ * Walking and action keys count; the left mouse button and a single finger count; the right button (a drag turns and tilts the view), the wheel,
+ * and everything of a two-finger gesture (pinch, twist) do not; a finger counts when it is released or moves, if it was alone on the screen all along (a tap or a walk).
  */
 export function createActing() {
   const down = new Set(); let multi = false;
   return {
     event(e) {
       const type = e.type, touch = e.pointerType === 'touch';
-      if (type === 'keydown' || type === 'keyup') return !PASSIVE_CODES.has(e.code);
-      if (type === 'visibilitychange' || type === 'focus') return true;
+      if (type === 'keydown' || type === 'keyup') return ACTING_CODES.has(e.code) && !PASSIVE_CODES.has(e.code);
+      if (type === 'visibilitychange' || type === 'focus') return false;
       if (!touch) {
         if (type === 'pointerdown' || type === 'pointerup') return e.button === 0;
         if (type === 'pointermove') return (e.buttons & 1) === 1;
