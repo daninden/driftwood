@@ -51,6 +51,7 @@
  *                               without a saved memory starts with the area round where he stands known
  *   game.wildlife               crabs, fish and birds within 30 m of him: atmosphere only, not saved (game/wildlife)
  *   game.fireflies              the fireflies within 30 m of him, from dusk to an hour before sunrise: atmosphere only, not saved (game/fireflies)
+ *   game.onAction(listener)     optional presentation notification when a deliberate action is accepted; listeners receive { kind, x, z }, alter no game state and are not saved
  *   game.weather                the schedule of showers (game/weather); game.rain: the intensity of the rain now, 0..1 (0.21:
  *                               wet wood in the open, fires and torches burning down faster, see game/wood rain and game/fire update)
  *   game.sea                    the current sea level (game/tide)
@@ -203,7 +204,9 @@ export function createGame(world, spawn, opts = {}) {
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, act, use };
+  const voiceListeners = new Set();
+  const notifyAction = kind => { for (const listener of voiceListeners) listener({ kind, x: player.x, z: player.z }); };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
@@ -365,41 +368,41 @@ export function createGame(world, spawn, opts = {}) {
       if (!f || !(fire.strength(f.fire) > 0)) return false;
       work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: f.fire }; face(f);
     } else return false;
-    if (input && input.clearTarget) input.clearTarget();
+    notifyAction(kind === 'nut' ? 'eatNut' : kind === 'water' ? 'sip' : kind === 'banana' ? 'eatBanana' : kind === 'berries' ? 'eatBerries' : 'roast'); if (input && input.clearTarget) input.clearTarget();
     return true;
   }
 
   function press(a, input) {   // a short press of the action button
     input.clearTarget();
     if (a.thing && a.kind !== 'drink' && a.kind !== 'fill') face(a.thing);
-    if (a.kind === 'pickup') { if (wood.take(a.thing, clock.total)) stoop(); }
-    else if (a.kind === 'husk') work = { kind: 'husk', t: 0, dur: a.thing ? HUSK_TIME : EAT_TIME, thing: a.thing ? a.thing.coco : null };   // no thing: a carried nut (already husked: EAT_TIME)
+    if (a.kind === 'pickup') { if (wood.take(a.thing, clock.total)) { stoop(); notifyAction('pickup'); } }
+    else if (a.kind === 'husk') { work = { kind: 'husk', t: 0, dur: a.thing ? HUSK_TIME : EAT_TIME, thing: a.thing ? a.thing.coco : null }; notifyAction(a.thing ? 'husk' : 'eatNut'); }   // no thing: a carried nut (already husked: EAT_TIME)
     else if (a.kind === 'berries' || a.kind === 'bananas') {
       const f = a.kind === 'berries' ? berries : bananas;
-      if ((a.eat || !f.full()) && f.pick(a.thing.plant, clock.total)) { if (a.eat) hunger.eat(a.kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); else f.stow(clock.total); stoop(); }
+      if ((a.eat || !f.full()) && f.pick(a.thing.plant, clock.total)) { if (a.eat) hunger.eat(a.kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); else f.stow(clock.total); stoop(); notifyAction(a.kind); }
     } else if (a.kind === 'eatBerries' || a.kind === 'eatBanana') {
-      if ((a.kind === 'eatBerries' ? berries : bananas).eat()) { hunger.eat(a.kind === 'eatBerries' ? BERRY_FOOD : BANANA_FOOD); stoop(); }
+      if ((a.kind === 'eatBerries' ? berries : bananas).eat()) { hunger.eat(a.kind === 'eatBerries' ? BERRY_FOOD : BANANA_FOOD); stoop(); notifyAction(a.kind); }
     }
-    else if (a.kind === 'sip') work = { kind: 'sip', t: 0, dur: SIP_TIME, thing: null };
-    else if (a.kind === 'dig') work = { kind: 'dig', t: 0, dur: DIG_TIME, thing: a.thing.id };
-    else if (a.kind === 'roast') work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: a.fire };
+    else if (a.kind === 'sip') { work = { kind: 'sip', t: 0, dur: SIP_TIME, thing: null }; notifyAction('sip'); }
+    else if (a.kind === 'dig') { work = { kind: 'dig', t: 0, dur: DIG_TIME, thing: a.thing.id }; notifyAction('dig'); }
+    else if (a.kind === 'roast') { work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: a.fire }; notifyAction('roast'); }
     else if (a.kind === 'feed') {   // only a piece dry enough to burn goes on; wet wood stays in his arm
       const l = wood.giveOne(fuel);
-      if (l) { fire.feed(a.fire, dryness(l, clock.total), l.branch ? BRANCH_BURN : 1); stoop(); }
-    } else if (a.kind === 'torch') { if (a.fire ? fire.takeTorch(a.fire) : fire.pickTorch(a.torch)) stoop(); }
+      if (l) { fire.feed(a.fire, dryness(l, clock.total), l.branch ? BRANCH_BURN : 1); stoop(); notifyAction('feed'); }
+    } else if (a.kind === 'torch') { if (a.fire ? fire.takeTorch(a.fire) : fire.pickTorch(a.torch)) { stoop(); notifyAction('torch'); } }
     else if (a.kind === 'drink' || a.kind === 'fill') {
       if (wood.load() || fire.torch) { if (fire.torch ? plantBeside() : lay(player.heading + Math.PI)) { stoop(); queued = a.kind; } }   // hands first, then drink or fill
       else drink(a.thing, a.kind);
-    } else if (a.kind === 'lay') { if (lay(player.heading)) stoop(); }
-    else if (a.kind === 'plant') { if (plantTorch()) stoop(); }
+    } else if (a.kind === 'lay') { if (lay(player.heading)) { stoop(); notifyAction('lay'); } }
+    else if (a.kind === 'plant') { if (plantTorch()) { stoop(); notifyAction('plant'); } }
   }
 
-  function drink(wp, kind = 'drink') { work = { kind, t: 0, dur: kind === 'fill' ? FILL_TIME : DRINK_TIME, thing: null }; face(wp); }
+  function drink(wp, kind = 'drink') { work = { kind, t: 0, dur: kind === 'fill' ? FILL_TIME : DRINK_TIME, thing: null }; face(wp); notifyAction(kind); }
 
   function arrive(a) {   // at the spot he walked to: light the pile, or build
     if (a.kind === 'upgrade') {
       const lt = a.leanto, what = lt && leantos.list.includes(lt) && !wet(here()) ? upgradeFor(lt, wood.piles) : null;
-      if (what) { const p0 = (lt.up && lt.up[what]) || 0; work = { kind: 'upgrade', t: 0, dur: Math.max(0.01, UP_TIME * (1 - p0)), thing: lt, what, p0, paid: paidSteps(what, p0) }; face(a); }
+      if (what) { const p0 = (lt.up && lt.up[what]) || 0; work = { kind: 'upgrade', t: 0, dur: Math.max(0.01, UP_TIME * (1 - p0)), thing: lt, what, p0, paid: paidSteps(what, p0) }; face(a); notifyAction('upgrade'); }
       else stoop();
       return;
     }
@@ -411,16 +414,16 @@ export function createGame(world, spawn, opts = {}) {
           wood.consume(s.drift, NEED); wood.consume(s.branch, NEED); lt = leantos.start(s.x, s.z, a.heading);
         }
       }
-      if (lt && !wet(here())) work = { kind: 'build', t: 0, dur: Math.max(0.01, BUILD_TIME * (1 - lt.progress)), thing: lt, p0: lt.progress };
+      if (lt && !wet(here())) { work = { kind: 'build', t: 0, dur: Math.max(0.01, BUILD_TIME * (1 - lt.progress)), thing: lt, p0: lt.progress }; notifyAction('build'); }
       else stoop();
       if (work) face(a);
       return;
     }
     if (a.kind === 'kindle') {
-      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && !wet(here()) && fire.kindle(a.pile.x, a.pile.z, a.pile.logs, meanDry(a.pile.logs), clock.total)) wood.takePile(a.pile);
+      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && !wet(here()) && fire.kindle(a.pile.x, a.pile.z, a.pile.logs, meanDry(a.pile.logs), clock.total)) { wood.takePile(a.pile); notifyAction('kindle'); }
       stoop();
     } else if (a.kind === 'light') {
-      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && fibre.carried && !wet(here())) work = { kind: 'drill', t: 0, dur: DRILL_TIME, thing: a.pile };
+      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && fibre.carried && !wet(here())) { work = { kind: 'drill', t: 0, dur: DRILL_TIME, thing: a.pile }; notifyAction('light'); }
     }
     if (work) face(a);
   }
@@ -464,7 +467,7 @@ export function createGame(world, spawn, opts = {}) {
     let wantSleep = input.takeSleep ? input.takeSleep() : false;
     if (pick && pick.kind === 'sleep') wantSleep = true;
     if (sleep.asleep) { if (wantWake && sleep.lie > 0.5) { sleep.wake(); if (input.cancelAction) input.cancelAction(); } }   // the press that woke him does nothing more
-    else if (wantSleep && canSleep()) { work = null; queued = null; sleep.start(isNight(clock.time)); }   // by day only a nap
+    else if (wantSleep && canSleep()) { work = null; queued = null; sleep.start(isNight(clock.time)); notifyAction('sleep'); }   // by day only a nap
     if (sleep.asleep && fire.torch && !plantTorch()) fire.douse();   // he sticks the torch in the ground before he lies down
     settle();
     const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z), { drain: thirst.drain() * hunger.drain(), faint: thirst.faint() }, (lt => lt ? { walls: leantos.has(lt, 'walls'), bed: leantos.has(lt, 'bed') } : false)(leantos.home(player.x, player.z)));

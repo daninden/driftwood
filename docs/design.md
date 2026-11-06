@@ -111,6 +111,10 @@ The first weather, and the only one: a shower now and then. It is atmosphere fir
 
 ## The castaway
 
+### Voice (0.30, built)
+
+When Dave deliberately begins an ordinary action, one short written English line appears near him in the island's ink hand and fades after a few seconds. It is a small set of varied, fixed computer phrases about what he is about to do, never speech or audio, an AI service, a bubble, a menu or a claim that work has already succeeded. **L** opens and closes a quiet, scrollable chronological record of the lines shown since the current game opened. It is in memory only and clears on reload; opening or reading it does not stop Dave or take him out of Computer or Auto.
+
 A small blocky figure with outlines, dressed for a tropical island after a long time alone: a straw hat, shaggy dark hair and a long, unkempt beard, a yellowed shirt with ripped short sleeves, holes and a ragged hem, frayed short trousers, bare sun-tanned legs and bare feet, and a staff. Because the figure is small on screen, the detail lives in the silhouette and in flat colour areas (skin against cloth), not in small parts.
 
 The castaway walks unhurried (2.9 per second) and with Shift (on a touch screen: a double tap) breaks into a run (5.5, almost twice walking), but not for long. **Breath (0.23, no meter):** rested and unloaded he can run about 12 s in a row. Load, tiredness, thirst and hunger make it run out sooner (the drain is divided by the same combined speed factor that slows him, but not below 0.4, so at the worst about 5 s). Breath out, he drops to walking by himself, whatever is asked (Shift, a double tap, the rim of the thumb stick), and cannot run until it is back to 40 %, so it does not flicker. It comes back while he walks (a full breath in 8 s) and faster standing still (5 s). Signs: in the last 30 % of the breath his running stride gets shorter (down to 75 %, the stride scaling of load and needs), and while he is winded he pants softly (see *Sound*). Not saved: he starts with a full breath. Walking, kneeling work and sleep are unaffected.

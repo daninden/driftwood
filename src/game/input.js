@@ -122,7 +122,7 @@ export function createTakeover(after = QUIET, start = 0) {
 }
 
 export const CAMERA_CODES = new Set(['KeyQ', 'KeyE', ...Object.keys(ZOOM_KEYS)]);
-export const PASSIVE_CODES = new Set([...CAMERA_CODES, 'Backquote', 'KeyG', 'KeyH']);   // view, developer and Hands controls leave the habit alone
+export const PASSIVE_CODES = new Set([...CAMERA_CODES, 'Backquote', 'KeyG', 'KeyH', 'KeyL']);   // view, developer and Hands controls leave the habit alone
 const ACTING_CODES = new Set([...Object.keys(KEYS), 'ShiftLeft', 'ShiftRight', 'Space', 'KeyZ', 'KeyF', ...Object.keys(CHOICE_KEYS)]);
 
 /**

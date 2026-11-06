@@ -27,6 +27,8 @@ Rules:
 
 **Dry stock (0.29.15):** `game/mind` keeps drying-pile sites in its live plan and classifies them apart from fire stock as the camp moves. Its low-priority daytime stock errand uses the ordinary path, pickup and lay actions: it verifies the exact dry log IDs reach a non-drying fire pile before recording a transfer, then fetches at most two known, above-water wet strip logs only if both the fire stock and five-piece drying reserve have room. Those identity sets are trace-only, not saved game state.
 
+**Voice (0.30):** `game/game` offers an optional action notification subscription, emitted at an accepted deliberate action; it has no DOM and does not affect game state. `render/voice` owns fixed phrase selection with its own counter, the in-memory history and the projected fading DOM line. `main` wires the listener and L key; the log is not saved or stored.
+
 | Module | Job |
 |---|---|
 | `core/noise` | Seeded noise (`vnoise`, `fbm`), PRNG and tile hash. The formulas are frozen. |

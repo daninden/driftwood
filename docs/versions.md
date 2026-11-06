@@ -2,6 +2,12 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30 "Voice" — 2026-11-06
+
+Dave now leaves one short, fading handwritten English thought when he deliberately begins ordinary work: collecting and placing wood, drinking, food, fire, shelter work, digging, roasting and sleep. The fixed phrases vary through a presentation-only counter and never use the island seed, the mind's chance stream, audio or an online service. **L** opens a small scroll of every line actually shown since this game opened; it is in memory only, starts closed, clears on reload and does not pause Dave. The log captures pointer and wheel events, while L itself is passive, so reading it cannot make a world walk, release Computer/Auto or zoom the camera.
+
+- **Review verification:** the built Chromium Voice check runs saved Computer mode through a real accepted action, then opens, clicks and wheels the log without changing its mode, active habit or camera zoom. Reloading clears the session history and leaves the log closed while the existing Hands preference remains. The normal serial suite was not rerun after its earlier documented 600-second timeout in known mind-life work.
+
 ## 0.29.15 "Dry stock" — 2026-11-06
 
 Dave now treats wet shoreline wood as a small reserve rather than an endless shore-cleanup chance. In his ordinary daytime rhythm, after needs, evening fire, stores and home work, he first moves dry top logs from the drying pile into the firewood pile when that pile has room. Only then does he fetch up to two wet, visible logs from the known tidal strip to refill the drying pile, which still holds at most five. A full firewood pile or full drying pile makes him wait.

@@ -82,6 +82,7 @@
  *   mind.stats        { goals: {name: n}, home, stuck, nopath, idleSecs, sitSecs (seconds he sat), sits: {gaze, fire, rest: how often he sat down}, lightRefused, gazes, strolls, strollKinds: {kind: n}, explores (trips made), exploreSecs, drying: { sites, wetTaken, laid, moved } (0.29.5), crabTrips, crabDigs, crabTripDigsMax, crabsCaught, events: [..] } for tests and the playtest bot (searches: how many searches he began)
  *   mind.chose()      true while a sleep he chose himself is being started (the tests tell it from a collapse); mind.lastKind() the kind of the last button he used; mind.path the path finder
  *   opts.stream       a number to vary the chance (default 0)
+ *   opts.onIntent     optional presentation callback, called once when a new purpose begins; it changes no mind or game state
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
  *   mind.dryingSite()  the place of the drying pile for his camp as it is (or null), { x, z, ux, uz, lean, of }; mind.dryPiles() the piles of wood on drying sites (for the tests)
  *   mind.strollCands(centre?, range?)  { shore, river, palms, forest, crabs: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
@@ -244,6 +245,7 @@ export function exactPileDrop(from, to) {
 }
 
 export function createMind(world, game, opts = {}) {
+  const onIntent = typeof opts.onIntent === 'function' ? opts.onIntent : null;
   const p = game.player, clock = game.clock, W = game.wood, known = game.known;
   const rng = mulberry32(hashInt(world.seed + 28, opts.stream || 0, 1)), rngEx = mulberry32(hashInt(world.seed + 29, opts.stream || 0, 2));   // exploring (0.29.4) draws from a stream of its own, so that the days without a trip stay as they were
   // ground he may be taken over: known all round, MARGIN (1.5 m) inside the edge of what he knows, so that sliding past a trunk or a bush never carries him into a cell he has not been to
@@ -930,6 +932,7 @@ export function createMind(world, game, opts = {}) {
       if (W.carried.length >= 2 || (ck && ck !== 'drift') || W.carried.some(l => !wetPiece(l)) || W.carried.length + (q ? q.logs.length : 0) >= DRY_MAX) return;
       const t = scan('strip', p.x, p.z, 8)[0]; if (!t) return;
       const before = W.carried.length, wanted = o => !!o.thing && o.thing.kind === 'log' && kindOf(o.thing.log) === 'driftwood' && inStripY(o.thing.log.y) && dryness(o.thing.log, clock.total) < 0.95;
+      if (onIntent) onIntent({ kind: 'wetwood' });
       yield* walk(t.x, t.z, { tap: true, stop: 0.4, until: () => { const a = game.action().tap; return !!a && a.kind === 'pickup' && wanted(a) && Math.hypot(a.thing.x - t.x, a.thing.z - t.z) < 1.5; } });
       const k = pressKind(['pickup'], wanted); if (k) yield* waitIdle();
       yield;
@@ -945,6 +948,7 @@ export function createMind(world, game, opts = {}) {
     const d0 = dest(), q = readyPile(); if (!d0 || !q) return false;
     const take = Math.min(CARRY_MAX, q.logs.length);
     if (want < take || d0.room < take || isDrying(d0.pile)) return false;
+    if (onIntent) onIntent({ kind: 'drytransfer' });
     const mine = o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === q;
     yield* walk(q.x, q.z, { tap: true, stop: 0.5, until: () => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === 'pickup' && mine(o)); } });
     if (!pressKind(['pickup'], mine)) return false;
@@ -1124,7 +1128,7 @@ export function createMind(world, game, opts = {}) {
     const c = exploreTarget(home, reach, where, avail);
     if (!c) { cool('explore', 600); ev('explore-none', { why: 'no-target', reach, where }); return true; }
     if (cur) cur.limit = EXPLORE_LIMIT;
-    exploredDay = clock.day; exploredPts.push(c); stats.explores++; ev('explore', { where, to: [+c.x.toFixed(1), +c.z.toFixed(1)], reach, missing: missing.join('+') });
+    exploredDay = clock.day; exploredPts.push(c); stats.explores++; ev('explore', { where, to: [+c.x.toFixed(1), +c.z.toFixed(1)], reach, missing: missing.join('+') }); if (onIntent) onIntent({ kind: 'explore', where });
     const t0 = now;
     exploring = true; inp.learns = true; fullPace = false;
     let hc = null;   // the way home in seconds, looked at again after every 10 m
@@ -1209,6 +1213,8 @@ export function createMind(world, game, opts = {}) {
   function startGoal(name) {
     if (name !== 'idle') inp.sit = false;   // 0.29.2: any task but idling needs him on his feet
     cur = { name, t0: now, it: GOALS[name](), rank: RANK[name] }; mind.goal = name; stats.goals[name] = (stats.goals[name] || 0) + 1; ev('goal', { goal: name, thirst: +game.thirst.days.toFixed(2), hunger: +game.hunger.days.toFixed(2) });
+    const intent = { drink: 'drinkIntent', eat: 'foodIntent', sleep: 'sleepIntent', fire: 'firewood', stores: 'supplies' }[name];
+    if (intent && onIntent) onIntent({ kind: intent, goal: name });
     // a torch left in his hand is stuck in the ground first (it cannot be carried with wood)
     if (game.fire.torch && name !== 'fire' && pressKind(['plant'])) { /* the press is done in the next update */ }
   }

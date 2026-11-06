@@ -62,6 +62,10 @@
  * The developer panel shows both the selected mode and `habit`; headless
  * step/draw hooks use the player's input only.
  *
+ * Voice (render/voice): accepted game actions and new mind intents show one
+ * short fixed phrase above Dave. L opens the in-memory session log; its own
+ * capture guard keeps all log interaction passive to Hands and the camera.
+ *
  * Frame pacing (render/framePacer): the loop runs at the screen's rate but
  * only updates and draws a frame when it is due: at most 30 a second on
  * touch-only devices (same test as the thumb stick), and at most 15 a second
@@ -110,6 +114,7 @@ import { createNamePrompt } from './render/namePrompt.js';
 import { createDayLine, createWakeLine } from './render/nameLines.js';
 import { createInk } from './render/ink.js';
 import { createSoundMark } from './render/soundMark.js';
+import { createVoice, isVoiceKey, isVoiceLogEvent } from './render/voice.js';
 import { createSound } from './audio/sound.js';
 import { createMixer } from './audio/mix.js';
 import { createSoundSwitch, isSoundKey } from './audio/pref.js';
@@ -158,6 +163,7 @@ async function boot() {
   const drop = createThirstMark(document.getElementById('thirst'));
   const half = createHungerMark(document.getElementById('hunger'));
   const carry = createCarryMark(document.getElementById('carry'), kind => game.use(kind, input));   // a click on a drawing uses it (0.27.2)
+  const voice = createVoice(container, document.getElementById('voice-log'));
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
   dev.setQuality({ level: start.level, adapt: start.adapt });
   const hands = createHands(loadHands() || 'auto');
@@ -193,15 +199,20 @@ async function boot() {
   };
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
+  game.onAction(({ kind }) => voice.announce(kind));
   input.yaw = view.yaw;
-  const mind = createMind(world, game), takeover = createTakeover(QUIET, performance.now() / 1000);   // 0.28 "Habit"
+  const mind = createMind(world, game, { onIntent: ({ kind }) => voice.announce(kind) }), takeover = createTakeover(QUIET, performance.now() / 1000);   // 0.28 "Habit"
   const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
   const poke = e => {
+    if (isVoiceLogEvent(e)) return;
     if (!acting.event(e)) return;
     hands.playerAction(); saveHands(hands.mode); dev.setHands(hands.mode);
     takeover.poke(performance.now() / 1000); mind.release(); dev.setHabit(false);
   };   // a walk or action takes the castaway back
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'keydown', 'keyup', 'visibilitychange', 'focus']) window.addEventListener(type, poke, { capture: true, passive: true });
+  const voiceLog = document.getElementById('voice-log');
+  if (voiceLog) for (const type of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) voiceLog.addEventListener(type, e => e.stopPropagation(), { capture: true });
+  window.addEventListener('keydown', e => { if (isVoiceKey(e)) voice.toggle(); }, true);
 
   createThumbStick(document.getElementById('stick'), input);
   button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
@@ -217,7 +228,7 @@ async function boot() {
   const cap = touch ? FRAME_CAP_TOUCH : 0;   // 0: no cap
   const quiet = createIdleTracker(undefined, last);
   let anchor = -Infinity;   // where the frame schedule stands (render/framePacer)
-  const woken = () => { const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
+  const woken = e => { if (isVoiceLogEvent(e)) return; const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove']) window.addEventListener(type, woken, { capture: true, passive: true });
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };
@@ -266,7 +277,7 @@ async function boot() {
     if (driving) { mind.input.yaw = view.yaw; mind.step(dt); }
     const use = driving ? mind.input : input;   // whose hands the castaway has this frame
     const info = show(game.update(use, dt));
-    view.render(game.player, info, dt);
+    view.render(game.player, info, dt); voice.update(dt, game.player, view.camera);
     if (sound.active) hear(info, dt);
     autosave(dt);
     frames++;
