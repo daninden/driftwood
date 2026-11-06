@@ -9,7 +9,9 @@
  * crag on the line makes it four times dearer (he slides round it, and can stick between two). A* with a
  * straight-line guess. The stand and step results are cached for the life of the finder (the island does not change).
  * `allow` keeps a walk inside a part of the island (game/mind passes "known ground"). An optional read-only `obstacles` callback
- * supplies changing game-state solids without making this module depend on game state.
+ * supplies changing game-state solids without making this module depend on game state. The initial and final connections use
+ * the exact castaway and goal places, so they observe those solids too: a person inside a lean-to leaves through its open front,
+ * and a route into it enters through that opening. Someone already inside a newly placed round obstacle can still walk out.
  *
  * C, N
  * createPath(world, { allow?, obstacles? }) -> path
@@ -53,13 +55,19 @@ export function createPath(world, opts = {}) {
     return v === 1;
   };
   // The obstacle a line meets, or null (the circles already include his own radius).
+  // A dynamic solid wins over a natural obstacle: natural circles make a route dear,
+  // but a camp wall must always close it.
   const hitsObstacle = (a, b) => {
     const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1e-9;
+    let natural = null;
     for (const at of [a, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, b]) for (const o of obstaclesNear(world, at.x, at.z, moveOpts)) {
       const u = Math.min(1, Math.max(0, ((o.x - a.x) * dx + (o.z - a.z) * dz) / l2));
-      if (Math.hypot(a.x + dx * u - o.x, a.z + dz * u - o.z) < o.r) return o;
+      if (Math.hypot(a.x + dx * u - o.x, a.z + dz * u - o.z) < o.r) {
+        if (o.dynamic) return o;
+        if (!natural) natural = o;
+      }
     }
-    return null;
+    return natural;
   };
   // The speed factor of walking the straight line a -> b in the short steps stepPlayer takes (a probe 0.25 m ahead): 0 when any step of it is
   // a wall, else the pace over the whole line (the harmonic mean of the steps). The ground between two cells can be a good deal steeper than at
@@ -73,7 +81,10 @@ export function createPath(world, opts = {}) {
       inv += 1 / f; prev = { x, z, y: world.H(x, z) };
     }
     const hit = world.tiles && hitsObstacle(a, b);
-    if (hit && hit.dynamic) return 0;   // camp solids are routed round, never through
+    // A pile may appear under him. Preserve movement's escape rule, but only for
+    // the obstacle that already contains this exact start; every other camp solid
+    // is routed round.
+    if (hit && hit.dynamic && Math.hypot(a.x - hit.x, a.z - hit.z) >= hit.r) return 0;
     return n / inv * (hit ? 0.25 : 1);   // a natural obstacle is slid round, and he can stick between two: dear, not a wall
   };
   // clear(a, b): true when the straight line a -> b can be walked at once, with no wall, trunk or boulder on it (the follower cuts a corner only then)
@@ -88,7 +99,7 @@ export function createPath(world, opts = {}) {
     }
     return f;
   };
-  const path = { allow: opts.allow || null, banned, isStand, centre, cell, find, cost, nearestCell, ban, clear };
+  const path = { allow: opts.allow || null, dynamic, banned, isStand, centre, cell, find, cost, nearestCell, ban, clear };
   const ok = (ix, iz) => !path.allow || path.allow(centre(ix), centre(iz));
   function nearestCell(x, z, rings = 4, accept = null) {
     const ix = cell(x), iz = cell(z);
@@ -102,15 +113,20 @@ export function createPath(world, opts = {}) {
     }
     return null;
   }
-  function startCell(from) {   // the nearest cell he can step to from where he stands (he may stand on a slope that is no cell of its own, below a wall): else the nearest
-    const ix = cell(from.x), iz = cell(from.z), y = Number.isFinite(from.y) ? from.y : world.H(from.x, from.z), list = [];
+  function startCell(from) {   // the nearest cell he can actually reach from where he stands (he may stand on a slope that is no cell of its own, below a wall, or inside a shelter): legacy terrain fallback only
+    const ix = cell(from.x), iz = cell(from.z), list = [];
     for (let a = -6; a <= 6; a++) for (let b = -6; b <= 6; b++) if (isStand(ix + a, iz + b)) list.push([ix + a, iz + b, Math.hypot(centre(ix + a) - from.x, centre(iz + b) - from.z)]);
     list.sort((p, q) => p[2] - q[2]);
-    for (const c of list.slice(0, 12)) if (c[2] < 0.3 || stepFactor(world, { x: from.x, z: from.z, y }, centre(c[0]), centre(c[1]), 0) > 0.05) return [c[0], c[1]];
-    return list.length ? [list[0][0], list[0][1]] : null;
+    const candidates = dynamic ? list : list.slice(0, 12);
+    for (const c of candidates) if ((!dynamic && c[2] < 0.3) || walkFactor(from, { x: centre(c[0]), z: centre(c[1]) }) > 0.05) return [c[0], c[1]];
+    return dynamic ? null : (list.length ? [list[0][0], list[0][1]] : null);
   }
   function find(from, to, maxExp = 90000, retry = true) {
-    const s = startCell(from), g = nearestCell(to.x, to.z, 4, ok);
+    // Mind.walk moves targets that are themselves camp solids out to their rim
+    // before following the path. Keep that established interaction route; every
+    // open target, including a lean-to's sleep point, needs a real final line.
+    const targetSolid = world.tiles && obstaclesNear(world, to.x, to.z, moveOpts).some(o => o.dynamic && Math.hypot(to.x - o.x, to.z - o.z) < o.r);
+    const s = startCell(from), g = nearestCell(to.x, to.z, 4, (ix, iz) => ok(ix, iz) && (targetSolid || walkFactor({ x: centre(ix), z: centre(iz) }, to) > 0.05));
     if (!s || !g) { if (retry && banned.size) { banned.clear(); return find(from, to, maxExp, false); } return null; }
     const gk = g[1] * N + g[0], sk = s[1] * N + s[0];
     const gs = new Map([[sk, 0]]), came = new Map(), h = new Heap(), closed = new Set();

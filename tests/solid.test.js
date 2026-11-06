@@ -8,12 +8,18 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { BURN, EMBERS } from '../src/game/fire.js';
+import { follow } from './helpers/follow.js';
 
 const world = {
   tiles: [], H: () => 0, Lat: () => 0, slope: () => 0, riverAt: () => null,
   passAt: () => ({ any: 0, bench: 0, roots: 0 }), fallRouteAt: () => 0,
 };
 const state = () => ({ wood: { piles: [] }, fire: { fires: [], burnt: [] }, leantos: { list: [] } });
+const worldWithBackTree = () => {
+  const tiles = Array(18 * 18);
+  tiles[8 * 18 + 9] = { tx: 9, tz: 8, trees: [{ x: 0, z: -0.8, jungle: false }], pines: [], palms: [], rocks: [], crags: [], bushes: [] };
+  return { ...world, tiles };
+};
 let campWorld, campSpawn, campLogs;
 beforeAll(async () => {
   campWorld = await generateWorld(1337); campSpawn = startSpot(campWorld);
@@ -44,6 +50,52 @@ describe('Solid camp things', () => {
     s.leantos.list[0].heading = Math.PI / 2;
     for (const z of [-0.8, -0.4, 0, 0.4, 0.8]) expect(canStand(world, -0.8, z, 0, opts)).toBe(false);
     for (const z of [-0.5, 0, 0.5]) expect(canStand(world, 0.82, z, 0, opts)).toBe(true);
+  });
+
+  it('leaves a rotated lean-to through its open front, then walks round to a goal behind it', () => {
+    for (const heading of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      const s = state(), front = { x: Math.sin(heading), z: Math.cos(heading), trace: [] };
+      s.leantos.list.push({ x: 0, z: 0, heading, progress: 1 });
+      const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) }, path = createPath(world, opts);
+      const from = { x: 0, z: 0 }, to = { x: -4 * front.x, z: -4 * front.z };
+      const r = follow(world, path, from, to, { secs: 30, movement: opts, onStep: p => front.trace.push(p.x * front.x + p.z * front.z) });
+      expect(r.nopath).toBeUndefined(); expect(r.arrived).toBe(true); expect(r.stall).toBeLessThan(1);
+      const behind = front.trace.findIndex(d => d < -1.1);
+      expect(behind).toBeGreaterThan(0);
+      expect(front.trace.slice(0, behind).some(d => d > 0.7)).toBe(true);
+    }
+  });
+
+  it('enters a rotated lean-to through its open front when its goal is inside', () => {
+    for (const heading of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      const s = state(), front = { x: Math.sin(heading), z: Math.cos(heading), trace: [] };
+      s.leantos.list.push({ x: 0, z: 0, heading, progress: 1 });
+      const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) }, path = createPath(world, opts);
+      const from = { x: -4 * front.x, z: -4 * front.z }, to = { x: 0, z: 0 };
+      const r = follow(world, path, from, to, { secs: 30, arrivalDistance: 0.3, movement: opts, onStep: p => front.trace.push(p.x * front.x + p.z * front.z) });
+      expect(r.nopath).toBeUndefined(); expect(r.arrived).toBe(true); expect(r.stall).toBeLessThan(1);
+      expect(Math.hypot(r.x - to.x, r.z - to.z)).toBeLessThanOrEqual(0.3);
+      expect(front.trace.some(d => d > 0.7)).toBe(true);
+    }
+  });
+
+  it('does not fabricate a first cell when dynamic barriers enclose the exact start', () => {
+    const ring = Array.from({ length: 16 }, (_, i) => {
+      const a = i * Math.PI / 8;
+      return { x: Math.cos(a) * 0.4, z: Math.sin(a) * 0.4, r: 0.2, dynamic: true };
+    });
+    const path = createPath(world, { obstacles: () => ring });
+    expect(path.find({ x: 0, z: 0 }, { x: 4, z: 0 })).toBeNull();
+  });
+
+  it('does not let a natural obstacle mask the lean-to back while finding that way out', () => {
+    const s = state(), w = worldWithBackTree();
+    s.leantos.list.push({ x: 0, z: 0, heading: 0, progress: 1 });
+    const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) }, path = createPath(w, opts), trace = [];
+    const r = follow(w, path, { x: 0, z: 0 }, { x: 0, z: -4 }, { secs: 30, movement: opts, onStep: p => trace.push(p.z) });
+    expect(r.nopath).toBeUndefined(); expect(r.arrived).toBe(true); expect(r.stall).toBeLessThan(1);
+    const behind = trace.findIndex(z => z < -1.1);
+    expect(behind).toBeGreaterThan(0); expect(trace.slice(0, behind).some(z => z > 0.7)).toBe(true);
   });
 
   it('blocks each pile core with body clearance, while long wood overhang remains step-overable', () => {

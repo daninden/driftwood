@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.14 "Way out" — 2026-11-06
+
+Dave can no longer choose a path grid cell through the back or corner of the lean-to. Starting inside, he leaves through its open front and walks round the solid back and sides to a destination behind it; approaching a sleeping place inside, he comes in through that same opening.
+
+- **Pathing:** the initial connection from Dave's exact position to the first 1.5 m grid cell now uses the same changing camp-solid check as every path edge. A dynamic camp hit takes precedence over a tree or rock hit, so a natural obstacle cannot make a lean-to wall look passable. A person already inside a newly placed pile still keeps the established ability to walk out.
+- **Tests:** `tests/solid.test.js` follows the real waypoint/corner-cut and `stepPlayer` loop at all four cardinal headings: out from inside to a point behind the shelter, and in from behind to its sleeping point. It proves that each walk reaches its goal without a prolonged stall and crosses the open front before the back; entry reaches within 0.3 m of the shelter centre, not merely the 1 m sleep radius. A second route places a natural tree on the back wall, covering the former dynamic-hit masking case, and another confirms that an enclosed start returns no invented first grid cell. The established steep-route follower cases remain covered by `tests/pathFollow.test.js`.
+- **Verification:** focused path and solid tests passed. The required serial full-suite attempt, build and quick smoke are recorded in the handover for this release.
+
 ## 0.29.13 "Hands" — 2026-11-06
 
 Desktop **H** now cycles the browser-local choice of whose hands guide Dave: **Self → Computer → Auto → Self**. It adds no menu or game mark; the existing developer line quietly says `self`, `computer` or `auto`, while its existing `habit` marker still says when Dave is actually acting.

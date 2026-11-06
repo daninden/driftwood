@@ -417,12 +417,12 @@ export function createMind(world, game, opts = {}) {
       if (!plan) {
         plan = fd.find(p, { x, z }); pi = 0;
         if (!plan) { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); idleInput(); return false; }
-        if (d < 3.5 && plan.pts.length <= 3) plan.direct = true;
+        if (d < 3.5 && plan.pts.length <= 3 && (!fd.dynamic || fd.clear(p, { x, z }))) plan.direct = true;
       }
       { let bj = pi, bd = 1e9; for (let j = pi; j < Math.min(plan.pts.length, pi + 8); j++) { const dd = Math.hypot(plan.pts[j].x - p.x, plan.pts[j].z - p.z); if (dd < bd) { bd = dd; bj = j; } } pi = bj; if (bd > 5) { plan = null; finalSet = false; if (++replans > 6) { idleInput(); return false; } yield; continue; } }
       while (pi < plan.pts.length - 1 && (Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 0.45   // reached: on to the next (tight, a climbing route can be a narrow band) ...
         || (Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 1.1 && fd.clear(p, plan.pts[pi + 1])))) pi++;   // ... or passed: he cuts the corner only on a line that is clear (open ground)
-      const last = pi >= plan.pts.length - 1 || plan.direct || Math.hypot(plan.pts.at(-1).x - p.x, plan.pts.at(-1).z - p.z) < 2.2;
+      const last = plan.direct || ((pi >= plan.pts.length - 1 || Math.hypot(plan.pts.at(-1).x - p.x, plan.pts.at(-1).z - p.z) < 2.2) && (!fd.dynamic || fd.clear(p, { x, z })));
       let remaining = d;
       if (last) {
         if (tap) { if (!finalSet) { inp.target = { x, z, tap: true }; finalSet = true; } else if (!inp.target) return true; }
