@@ -10,6 +10,8 @@ Routes also explicitly covers the reported failure to get close enough to fires 
 
 **Following Routes (planning only, 2026-11-06): 0.30.4 "Timber".** First select the three nearest suitable pieces from Dave's current position (or fewer when needed); collect the farthest of that selected set first, then the nearer pieces. This is not a search for the farthest log overall or distance from camp. Wet wood for drying may be collected three pieces at a time within the existing carrying capacity and five-piece drying reserve. Preserve reachability, source eligibility, drying/fire separation and gameplay safety rules. See `docs/handover.md`; nothing is implemented in this planning update.
 
+Timber also includes returning carried wood to its proper camp pile before switching to fetching food, drinking or another unrelated task. Wet wood goes to drying, not fire stock. The interaction with existing emergency overrides must be discussed before implementation; see the handover for scope and ordered delivery tests.
+
 ## 0.30.1 "Thoughts" — 2026-11-06
 
 Dave's written voice now explains a need before its errand rather than narrating each hand movement: wood, hunger, thirst, rest, low flames, an unlit fire, food or fibre reserves and wood drying each get a brief situational thought. Material thoughts wait until there is something to fetch. Autonomous pickups, deliveries and repeated attempts stay quiet; the mind's decisions and gameplay remain unchanged. Displayed thoughts leave at least eight seconds of quiet between them, and the same kind is suppressed for a minute, without queuing stale lines.
