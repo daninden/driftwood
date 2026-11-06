@@ -9,7 +9,7 @@ import { startSpot } from '../src/world/spots.js';
 import { createGame, HUSK_TIME } from '../src/game/game.js';
 import { createWood, dryness, DRY_DAYS } from '../src/game/wood.js';
 import { createFibre, FIBRE_MAX, REGROW, REGROW_SPREAD, NUT_SHARE, nutsOfTile } from '../src/game/fibre.js';
-import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, BURN, EMBERS, FUEL_MAX, TORCH_DAYS, TORCH_COST, WARM_R } from '../src/game/fire.js';
+import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, BURN, EMBERS, WARM_EMBERS, FUEL_MAX, TORCH_DAYS, TORCH_COST, WARM_R, RAIN_OUT, RING_BURN } from '../src/game/fire.js';
 import { COLD_SLEEP, SLEEP_DAYS } from '../src/game/sleep.js';
 import { createInput } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
@@ -195,6 +195,38 @@ describe('a burning fire', () => {
     expect(fire.fuel).toBe(FUEL_MAX);
     const wet = createFire(w, { attempts: attemptsFor(true) }), f2 = wet.attempt(0, 0, logs.slice(0, 4), 1, 0, 0); f2.fuel = 0;
     wet.feed(f2, 0); expect(f2.fuel).toBeCloseTo(BURN / 2);
+  });
+  it('keeps embers for nearly twelve hours, but only their first hour and a half warm sleep', () => {
+    const f = createFire(w, { attempts: attemptsFor(true) }), fire = f.attempt(spawn.x, spawn.z, logs.slice(0, 4), 1, 0, 0);
+    f.update(fire.fuel + EMBERS * 0.95);
+    expect(f.fires).toContain(fire); expect(fire.embers).toBeGreaterThan(0); expect(f.warm(spawn.x, spawn.z)).toBe(false);
+    f.feed(fire); expect(fire.fuel).toBeGreaterThan(0);   // a morning ember can be woken just before it dies
+    f.update(fire.fuel + EMBERS * 1.01); expect(f.fires).toHaveLength(0);
+    const fresh = createFire(w, { attempts: attemptsFor(true) }).attempt(spawn.x, spawn.z, logs.slice(0, 4), 1, 0, 0);
+    const warm = createFire(w, { fires: [{ ...fresh, fuel: 0, embers: EMBERS, emberAge: WARM_EMBERS * 0.9 }] });
+    expect(warm.warm(spawn.x, spawn.z)).toBe(true);
+    warm.update(WARM_EMBERS * 0.2); expect(warm.warm(spawn.x, spawn.z)).toBe(false);
+  });
+  it('lets a ring hold embers for eighteen hours and rain still douses exposed embers', () => {
+    const ring = createFire(w, { attempts: attemptsFor(true) }), rf = ring.attempt(spawn.x, spawn.z, logs.slice(0, 4), 1, 0, 0);
+    ring.update(rf.fuel * RING_BURN + EMBERS * RING_BURN * 0.95, null, null, null, () => true);
+    expect(ring.fires).toContain(rf); ring.update(EMBERS * RING_BURN * 0.1, null, null, null, () => true); expect(ring.fires).toHaveLength(0);
+    const warmRing = createFire(w, { attempts: attemptsFor(true) }), wf = warmRing.attempt(spawn.x, spawn.z, logs.slice(0, 4), 1, 0, 0); wf.fuel = 0;
+    warmRing.update(WARM_EMBERS * 1.01, null, null, null, () => true);
+    expect(warmRing.fires).toContain(wf); expect(warmRing.warm(wf.x, wf.z)).toBe(false);   // the ring extends lifetime, not actual warmth
+    const crossing = createFire(w, { attempts: attemptsFor(true) }), cf = crossing.attempt(spawn.x, spawn.z, logs.slice(0, 4), 1, 0, 0);
+    crossing.update(cf.fuel * RING_BURN + WARM_EMBERS * 0.5, null, null, null, () => true);
+    expect(cf.fuel).toBe(0); expect(cf.emberAge).toBeCloseTo(WARM_EMBERS * 0.5);   // a large step crossing flames preserves real stage age
+    const rain = createFire(w, { attempts: attemptsFor(true) }), wet = rain.attempt(spawn.x, spawn.z, logs.slice(0, 4), 1, 0, 0); wet.fuel = 0;
+    rain.update(RAIN_OUT * 1.01, () => true); expect(rain.fires).toHaveLength(0); expect(rain.burnt[0].wet).toBe(true);
+  });
+  it('saves ember age and feeding an old ember only begins a fresh stage after flames burn', () => {
+    const f = createFire(w, { attempts: attemptsFor(true) }), fire = f.attempt(spawn.x, spawn.z, logs.slice(0, 4), 1, 0, 0);
+    f.update(fire.fuel + WARM_EMBERS * 1.1);
+    const back = createFire(w, JSON.parse(JSON.stringify(f.state()))), saved = back.fires[0];
+    expect(saved.emberAge).toBeGreaterThan(WARM_EMBERS); expect(back.warm(saved.x, saved.z)).toBe(false);
+    back.feed(saved); expect(saved.fuel).toBeGreaterThan(0); expect(saved.emberAge).toBe(0);
+    back.update(saved.fuel + WARM_EMBERS * 0.9); expect(back.warm(saved.x, saved.z)).toBe(true);
   });
   it('burns down while the castaway sleeps', () => {
     const g = lit(), fire = g.fire.fires[0], f0 = fire.fuel;

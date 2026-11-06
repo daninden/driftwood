@@ -105,7 +105,7 @@
  *   wood.state() -> { carried: [id], stones?: [id], piles: [{ x, z, kind, logs: [id] }], washed: [log],
  *     lost: [id], tide, nextId, wet?: [[id, t]] }   plain, for saving (wet: rain-soaked start wood and branches)
  *   saved: such a state, to start from
- * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, pileRadius(pile), WASH_MAX, DRY_DAYS, BRANCH_DRY_DAYS, RAIN_REACH
+ * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, pileVisibleRadius(pile), pileSolidRadius(pile), WASH_MAX, DRY_DAYS, BRANCH_DRY_DAYS, RAIN_REACH
  * TOP_K, logTop(log) -> the height of a log's top (log.y + TOP_K * log.rad, TOP_K 1.7); under the sea while that is below the sea level
  * inStripY(y) -> true when ground at height y lies in the strip between low and high water (0.29.5)
  * kindOf(log) -> 'branch', 'frond', 'stone' or else 'driftwood' (the kind of pile a piece goes on)
@@ -148,12 +148,18 @@ export const inStripY = y => y > LOW + 0.02 && y < -0.03;   // 0.29.5: the groun
 export const kindOf = log => log && log.branch ? 'branch' : log && log.frond ? 'frond' : log && log.stone ? 'stone' : 'driftwood';
 const PILE_KINDS = ['driftwood', 'branch', 'frond', 'stone'];
 
-/** The visible horizontal radius of a pile, matching the conservative outer bound of its rendered pieces. */
-export function pileRadius(pile) {
+/** The visible and interaction radius of a pile, including every rendered piece. */
+export function pileVisibleRadius(pile) {
   if (!pile || !pile.logs || !pile.logs.length) return PILE_R;
   if (pile.kind === 'frond') return 1;
   if (pile.kind === 'stone') return Math.max(PILE_R, ...pile.logs.map(s => 0.2 + s.rad * 1.25));
   return Math.max(PILE_R, ...pile.logs.map(l => l.len / 2 + 0.15 + l.rad));
+}
+
+/** The walk-blocking core of a pile. Long driftwood and branches can be stepped over outside their compact stack. */
+export function pileSolidRadius(pile) {
+  if (!pile || pile.kind === 'driftwood' || pile.kind === 'branch') return PILE_R;
+  return pileVisibleRadius(pile);
 }
 
 const dryDays = log => log.branch ? BRANCH_DRY_DAYS : DRY_DAYS;
@@ -227,7 +233,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
       const q = distToLog(l, x, z); if (q.d < bd) { bd = q.d; best = { kind: 'log', log: l, x: q.x, z: q.z, d: q.d }; }
     }
     if (only !== 'log') for (const p of wood.piles) {
-      const d = Math.max(0, Math.hypot(x - p.x, z - p.z) - pileRadius(p));
+      const d = Math.max(0, Math.hypot(x - p.x, z - p.z) - pileVisibleRadius(p));
       if (d < bd || (d === 0 && best && best.kind === 'log')) { bd = d; best = { kind: 'pile', pile: p, x: p.x, z: p.z, d }; }
     }
     return best;

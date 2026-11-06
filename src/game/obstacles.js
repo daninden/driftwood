@@ -2,18 +2,20 @@
  * game/obstacles — the small, changing things the castaway must walk around.
  *
  * Piles, fire places (lit, embers or burnt) and the built part of a lean-to are
- * represented as blocking circles for game/movement and game/path. The lean-to
- * keeps its front open: only its back roof edge and its two side edges block.
+ * represented as blocking circles for game/movement and game/path. Driftwood
+ * and branch piles block only their compact stack core, not each protruding log;
+ * their wider visible radius remains the interaction radius in game/wood. The
+ * lean-to keeps its front open: only its back roof edge and its two side edges block.
  * The data is derived from game state on demand; this module has no world,
  * renderer, DOM or WebGL dependency.
  *
  * PILE_R, FIRE_R, LEANTO_R
  * solidObstacles(wood, fire, leantos) -> (x, z, reach?) -> [{ x, z, r, dynamic }]
  *
- * Depends on: game/movement (BODY), game/wood (pileRadius)
+ * Depends on: game/movement (BODY), game/wood (pileSolidRadius)
  */
 import { BODY } from './movement.js';
-import { pileRadius } from './wood.js';
+import { pileSolidRadius } from './wood.js';
 
 // Dynamic obstacles give movement the clearance to a castaway's centre, unlike
 // rendered dimensions which stop at the visible edge.
@@ -36,7 +38,7 @@ function addLine(add, l, f0, r0, f1, r1) {
 export function solidObstacles(wood, fire, leantos) {
   return (x, z, reach = Infinity) => {
     const out = [], add = (q, r) => { if (Math.abs(q.x - x) <= reach + r && Math.abs(q.z - z) <= reach + r) out.push({ x: q.x, z: q.z, r, dynamic: true }); };
-    for (const p of wood.piles) add(p, pileRadius(p) + BODY);
+    for (const p of wood.piles) add(p, pileSolidRadius(p) + BODY);
     for (const f of fire.fires) add(f, FIRE_R);
     for (const b of fire.burnt) add(b, FIRE_R);
     for (const l of leantos.list) {

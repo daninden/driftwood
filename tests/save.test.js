@@ -124,6 +124,11 @@ describe('reading a save', () => {
     const s = good(); expect(s.v).toBe(SAVE_VERSION);
     expect(parseSave(JSON.stringify(s), 1337)).toEqual(s);
   });
+  it('round-trips an optional ember age and rejects a malformed one', () => {
+    const s = good(); s.fire.fires = [{ id: 0, x: spawn.x, z: spawn.z, fuel: 0, embers: 0.3, emberAge: 0.2, lit: 0, fed: 4 }];
+    expect(parseSave(JSON.stringify(s), 1337)).toEqual(s);
+    s.fire.fires[0].emberAge = 'old'; expect(parseSave(JSON.stringify(s), 1337)).toBeNull();
+  });
   it('ignores garbage without throwing', () => {
     for (const t of ['', 'not json', '{', 'null', '42', '"x"', '[]', '{}', '{"v":1}', undefined, null]) expect(parseSave(t, 1337)).toBeNull();
   });

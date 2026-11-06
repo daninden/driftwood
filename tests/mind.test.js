@@ -9,7 +9,7 @@ import { createTakeover, createActing, CAMERA_CODES, PASSIVE_CODES, QUIET } from
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { canStand } from '../src/game/movement.js';
 import { seaLevel } from '../src/game/tide.js';
-import { FUEL_MAX, TORCH_DRY } from '../src/game/fire.js';
+import { BURN, EMBERS, FUEL_MAX, TORCH_DRY } from '../src/game/fire.js';
 import { dryness, inStripY, PILE_MAX, PILE_FRONT } from '../src/game/wood.js';
 import { NEED, UPGRADES, ringCentre } from '../src/game/leanto.js';
 import { terrainAt, PACE } from '../src/game/movement.js';
@@ -89,6 +89,7 @@ describe('choosing a goal', () => {
     expect(fireStep(eve({ time: LIGHT_FROM, fireLit: true, fireFuel: 0.4, stock: 4 }))).toBe('feed');
     expect(fireStep(eve({ time: LIGHT_FROM, fireLit: true, fireFuel: 0.4, stock: 0, spare: 2 }))).toBe('feed');
     expect(fireStep(eve({ time: LIGHT_FROM, fireLit: true, fireFuel: 0.4, stock: 0 }))).toBe('gather');
+    expect(fireStep(eve({ time: LIGHT_FROM, fireLit: true, fireFuel: 0, stock: 1 }))).toBe('feed');   // an ember is rekindled, not drilled
     expect(fireStep(eve({ time: LIGHT_FROM, stock: 1, cool: { gather: true } }))).toBeNull();
     expect(fireStep(calm({ time: 0.4, stock: 0 }))).toBeNull();   // by day the stores do it
     expect(fireStep(calm({ time: BED_FROM + 0.01, stock: 0 }))).toBeNull();
@@ -236,6 +237,20 @@ describe('the mind with a game', () => {
     let woke = false, acted = false;
     for (let t = 0; t < 30 && g.sleep.asleep; t += 0.05) { m.step(0.05); if (m.input.target || m.goal) acted = true; const before = g.sleep.asleep; g.update(m.input, 0.05); if (before && !g.sleep.asleep && g.sleep.slept < 0.12) woke = true; }
     expect(acted).toBe(false); expect(woke).toBe(false);
+  });
+  it('feeds dry wood carried past home embers by day, without feeding flames or drilling', () => {
+    const logs = w.tiles.flatMap(t => t.drift).slice(0, 13), make = fuel => {
+      const fire = { id: 0, x: spawn.x, z: spawn.z, fuel, embers: EMBERS, emberAge: fuel ? 0 : EMBERS / 2, lit: 0, fed: 1 };
+      return createGame(w, { x: fire.x - 0.75, y: w.H(fire.x - 0.75, fire.z), z: fire.z }, {
+        time: 0.4, wood: { carried: [logs[12].id], piles: [{ x: fire.x + 1, z: fire.z, logs: logs.slice(0, 12).map(l => l.id) }] }, fire: { fires: [fire], attempts: 0, nextId: 1 }, fibre: { carried: 3 }, shells: { full: [], nuts: 2 },
+      });
+    };
+    const ember = make(0), mind = createMind(w, ember); mind.engage();
+    for (let t = 0; t < 6 && ember.fire.fires[0].fuel === 0; t += 0.1) { mind.step(0.1); ember.update(mind.input, 0.1); }
+    expect(ember.fire.fires[0].fuel).toBeGreaterThan(0); expect(ember.fire.attempts).toBe(0);
+    const flame = make(BURN), flameMind = createMind(w, flame); flameMind.engage();
+    for (let t = 0; t < 6; t += 0.1) { flameMind.step(0.1); flame.update(flameMind.input, 0.1); }
+    expect(flame.fire.fires[0].fed).toBe(1);   // day passing only wakes embers; it is not daytime flame maintenance
   });
 });
 

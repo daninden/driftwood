@@ -5,7 +5,8 @@
  *
  *   - Flames are a few unlit cones in the colours of FIRE (palette), sized by
  *     the fire's strength (game/fire `strength`); they flicker, each fire in
- *     its own rhythm. When the wood is gone only the embers glow, dimming.
+ *     its own rhythm. When the wood is gone only the embers glow: warm at
+ *     first, then dwindling to a few red points over their long stage.
  *   - Smoke rises and drifts away: thin over a good fire, thicker over embers
  *     and wet wood. A failed attempt (game/fire `puffs`) leaves a short puff;
  *     drilling (player.work) raises a thin wisp near the end.
@@ -61,7 +62,7 @@ import { toon, outlineMat } from './materials.js';
 import { FIRE } from './palette.js';
 import { createLightLayer, radialSprite } from './lightLayer.js';
 import { DAY_SECONDS } from '../game/clock.js';
-import { EMBERS, BURNT_DAYS, BURN, FUEL_MAX } from '../game/fire.js';
+import { EMBERS, BURNT_DAYS, BURN, FUEL_MAX, emberGlow } from '../game/fire.js';
 
 const PUFF_SECONDS = 7, WISPS = 7, LIGHT_RANGE = 14, NEAR = 60;
 export const POOL = 4, FADE = 0.3;   // point lights for fires and torches in the ground; seconds to fade a light out or in
@@ -93,7 +94,7 @@ export const burntOpacity = left => BURNT_FLOOR + (BURNT_PEAK - BURNT_FLOOR) * M
 /** How many charred pieces the tepee of a fire is laid with: one for each piece still on it (1..8), a sunk heap of three for embers. */
 export const pieces = f => f.fuel > 0 ? Math.max(1, Math.min(Math.round(FUEL_MAX / BURN), Math.ceil(f.fuel / BURN - 0.05))) : 3;
 
-export const smokeAmount = (f, s) => f.fuel > 0 ? 0.35 + 0.25 * (1 - s) : 0.5 * Math.min(1, f.embers / EMBERS + 0.2);
+export const smokeAmount = (f, s) => f.fuel > 0 ? 0.35 + 0.25 * (1 - s) : 0.5 * (0.1 + 0.9 * emberGlow(f));
 
 const TONGUES = [[0, 0, 1], [0.09, 0.05, 0.7], [-0.07, 0.07, 0.62], [0.02, -0.09, 0.55]];   // offset x, z and height of each flame tongue
 const coneGeo = (() => {   // a flame tongue: yellow at the foot, orange-red at the tip
@@ -207,7 +208,7 @@ export function createFireView(scene, container, fire, opts = {}) {
     const ash = new THREE.Mesh(ashGeo, ashMat); ash.scale.setScalar(0.42); ash.position.y = 0.012; ash.receiveShadow = true; g.add(ash);
     const wood = new THREE.Group(); g.add(wood);
     const flames = TONGUES.map(() => { const m = new THREE.Mesh(coneGeo, flameMat); g.add(m); return m; });
-    const embers = [0, 1, 2, 3, 4].map(i => { const m = new THREE.Mesh(blobGeo, emberMat); const a = i * 1.3 + f.id; m.position.set(Math.cos(a) * 0.12, 0.05, Math.sin(a) * 0.12); m.scale.set(0.06, 0.035, 0.05); g.add(m); return m; });
+    const embers = [0, 1, 2, 3, 4].map(i => { const m = new THREE.Mesh(blobGeo, emberMat.clone()); const a = i * 1.3 + f.id; m.position.set(Math.cos(a) * 0.12, 0.05, Math.sin(a) * 0.12); m.scale.set(0.06, 0.035, 0.05); g.add(m); return m; });
     return { g, wood, flames, embers, smoke: createSmoke(scene, f.id + 1), key: '' };
   }
   function layWood(vw, f, s) {
@@ -223,7 +224,7 @@ export function createFireView(scene, container, fire, opts = {}) {
       vw.wood.add(m);
     }
   }
-  function dropView(vw) { scene.remove(vw.g); vw.wood.children.forEach(c => c.material.dispose()); vw.smoke.dispose(); }
+  function dropView(vw) { scene.remove(vw.g); vw.wood.children.forEach(c => c.material.dispose()); vw.embers.forEach(m => m.material.dispose()); vw.smoke.dispose(); }
 
   function update(dt, { total, day, camera, player, H, heroFlame }) {
     clock += dt;
@@ -252,9 +253,12 @@ export function createFireView(scene, container, fire, opts = {}) {
         m.position.set(ox * (0.6 + 0.4 * s) + Math.sin(clock * 5 + i) * 0.012, 0.04, oz * (0.6 + 0.4 * s) + Math.cos(clock * 4 + i) * 0.012);
         m.rotation.set(ox * 1.2 + lick * 0.06, clock * (0.5 + i * 0.2), -oz * 1.2);
       });
-      const glowE = s > 0 ? 1 : Math.max(0.15, f.embers / EMBERS);
-      emberMat.opacity = 1;
-      vw.embers.forEach((m, i) => { m.visible = true; m.scale.y = 0.035 * (0.8 + 0.2 * Math.sin(clock * 2 + i)) * glowE; });
+      const glowE = s > 0 ? 1 : emberGlow(f);
+      vw.embers.forEach((m, i) => {
+        const point = s > 0 || i < 1 || glowE > 0.12;
+        m.visible = point; m.material.opacity = s > 0 ? 1 : (0.08 + 0.92 * glowE);
+        m.scale.y = 0.035 * (0.8 + 0.2 * Math.sin(clock * 2 + i)) * (s > 0 ? 1 : 0.35 + 0.65 * glowE);
+      });
       vw.smoke.update(dt, f.x, y + (s > 0 ? 0.3 + 0.5 * s : 0.05), f.z, smokeAmount(f, s));
       lights.push({ key: f, x: f.x, y: y + 0.6, z: f.z, pow: s > 0 ? s : 0.2 * glowE, range: LIGHT_RANGE, fl });
     });

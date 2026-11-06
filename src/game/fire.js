@@ -16,7 +16,8 @@
  *   - Each piece burns BURN days (wet wood half as long); a branch (a log with
  *     `branch: true`, game/branches) burns BRANCH_BURN (half) as long as a piece of driftwood; a fire holds at
  *     most FUEL_MAX of fuel. When the wood is gone the fire sinks to embers
- *     for EMBERS days and goes out. Wood laid on a fire or on its embers,
+ *     for EMBERS days and goes out. Its first WARM_EMBERS days still warm a
+ *     sleeper; wood laid on a fire or on its embers,
  *     one piece at a time, keeps it going.
  *   - The flood puts out a fire it reaches (on the wet sand of low water).
  *   - A torch: a burning brand taken out of a fire that has flames, which
@@ -40,20 +41,23 @@
  *   - A stone ring (0.27 "Home", game/leanto): a fire inside one (`ring(x, z)` is true there) burns RING_BURN (1.5) times as
  *     long, and the rain neither burns it faster nor puts it out. Torches are not helped.
  *   - A full fire (FUEL_MAX) takes no more wood: `full(f)`.
- *   - A fire, or its embers, within WARM_R warms a sleeper (game/sleep).
+ *   - A fire, or only its first WARM_EMBERS of embers, within WARM_R warms a
+ *     sleeper (game/sleep). A newly fed ember becomes a real flame and starts
+ *     a fresh ember stage only after that flame has burned down.
  *   - Whether a fire catches is fixed by the seed and how many attempts
  *     there have been, so a game plays the same way twice.
  *
  * Pure data; no DOM, no Three.js.
  *
- * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, TIRED_CATCH, BURN, FUEL_MAX, EMBERS,
+ * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, TIRED_CATCH, BURN, FUEL_MAX, EMBERS, WARM_EMBERS,
  * BRANCH_BURN, fuelOf(logs) -> the fuel in days of a list of pieces (a branch counts BRANCH_BURN of a piece)
  * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS, RAIN_BURN, RAIN_OUT, TORCH_RAIN, RING_BURN
  * full(f) -> true when fire f holds as much as it can (FUEL_MAX)
  * catchChance(dry, tired) -> 0..CATCH   dry: mean dryness 0..1, tired 0..1 (game/sleep)
  * createFire(world, saved?) -> fire
- *   fire.fires             [{ id, x, z, fuel, embers, lit, fed, rained? }]  fuel and embers in
- *                          days left; lit: the day it was lit; fed: pieces laid on; rained: days of rain on it so far
+ *   fire.fires             [{ id, x, z, fuel, embers, emberAge, lit, fed, rained? }]  fuel and embers in
+ *                          days left; emberAge: days since its current ember stage began; lit: the day it was lit;
+ *                          fed: pieces laid on; rained: days of rain on it so far
  *   fire.burnt             [{ id, x, z, left, n, wet? }]  burnt places: left: days to go (BURNT_DAYS
  *                          at first, then counting down), n: how many charred ends; wet: rain put the fire out
  *   fire.hissed            counts the fires the rain put out (for the sound); fire.hissAt is where the latest was { x, z }
@@ -97,7 +101,8 @@ export const BURN = 2.5 / 24;                 // a dry piece burns two and a hal
 export const BRANCH_BURN = 0.5;                // a branch burns half as long as a piece of driftwood
 export const fuelOf = logs => logs.reduce((s, l) => s + (l.branch ? BRANCH_BURN : 1), 0) * BURN;
 export const FUEL_MAX = 8 * BURN;
-export const EMBERS = 1.5 / 24;               // embers glow on for an hour and a half
+export const EMBERS = 12 / 24;                 // embers can be woken for half a day
+export const WARM_EMBERS = 1.5 / 24;           // only their first hour and a half warm sleep
 export const TORCH_DAYS = 2 / 24;             // a torch burns two hours
 export const TORCH_COST = BURN / 2;           // and takes half a piece's worth out of the fire
 export const TORCH_DRY = 0.75;                // a torch lights a pile this dry, always
@@ -116,12 +121,19 @@ const BURNT_R = 0.7;                          // a new fire this close to a burn
 
 export const full = f => f.fuel >= FUEL_MAX - 1e-9;
 export const catchChance = (dry, tired = 0) => CATCH * Math.max(0, Math.min(1, dry)) ** 2 * (1 - (1 - TIRED_CATCH) * Math.max(0, Math.min(1, tired)));
+/** The visual heat left in an ember stage: warm at first, a few red points at its end. */
+export const emberGlow = f => Math.max(0, Math.min(1, f.embers / EMBERS)) ** 1.7;
 
 export function createFire(w, saved) {
   const fire = { fires: [], puffs: [], attempts: 0, version: 0, hissed: 0, hissAt: null, torch: null, torches: [], burnt: [], find, attempt, kindle, feed, takeTorch, plant, pickTorch, douse, warm, update, flood, strength, state };
   let nextId = 0;
   if (saved) {
-    fire.fires = (saved.fires || []).map(f => ({ ...f }));
+    fire.fires = (saved.fires || []).map(f => {
+      // Saves before Embers held at most the old 1.5-hour remainder. Keep that
+      // remainder rather than giving them a fresh half day or fresh warmth.
+      const embers = Math.max(0, Math.min(EMBERS, f.embers || 0));
+      return { ...f, embers, emberAge: Number.isFinite(f.emberAge) ? Math.max(0, f.emberAge) : Math.max(WARM_EMBERS, EMBERS - embers) };
+    });
     fire.attempts = saved.attempts || 0;
     fire.torch = saved.torch ? { ...saved.torch } : null;
     fire.torches = (saved.torches || []).map(t => ({ ...t }));
@@ -154,7 +166,7 @@ export function createFire(w, saved) {
     fire.torches.splice(i, 1); fire.torch = { left: t.left }; fire.version++; return true;
   }
   function douse() { if (!fire.torch) return false; fire.torch = null; fire.version++; return true; }
-  function warm(x, z) { return fire.fires.some(f => Math.hypot(f.x - x, f.z - z) < WARM_R); }
+  function warm(x, z) { return fire.fires.some(f => (f.fuel > 0 || f.emberAge < WARM_EMBERS) && Math.hypot(f.x - x, f.z - z) < WARM_R); }
   function attempt(x, z, logs, dry, tired, total) {
     const r = mulberry32(hashInt(w.seed + 71, fire.attempts, 7)); r();
     fire.attempts++;
@@ -162,19 +174,19 @@ export function createFire(w, saved) {
       fire.puffs.push({ x, z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift();
       fire.version++; return null;
     }
-    const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, fuelOf(logs)), embers: EMBERS, lit: total, fed: logs.length };
+    const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, fuelOf(logs)), embers: EMBERS, emberAge: 0, lit: total, fed: logs.length };
     fire.fires.push(f); clearBurnt(x, z); fire.version++; return f;
   }
   function kindle(x, z, logs, dry, total) {
     if (!fire.torch) return null;
     if (dry < TORCH_DRY) { fire.puffs.push({ x, z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift(); fire.version++; return null; }
-    const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, fuelOf(logs)), embers: EMBERS, lit: total, fed: logs.length };
+    const f = { id: nextId++, x, z, fuel: Math.min(FUEL_MAX, fuelOf(logs)), embers: EMBERS, emberAge: 0, lit: total, fed: logs.length };
     fire.fires.push(f); clearBurnt(x, z); fire.torch = null; fire.version++; return f;
   }
   function clearBurnt(x, z) { fire.burnt = fire.burnt.filter(b => Math.hypot(b.x - x, b.z - z) >= BURNT_R); }
   function feed(f, dry = 1, burn = 1) {
     if (!fire.fires.includes(f) || full(f)) return false;
-    f.fuel = Math.min(FUEL_MAX, f.fuel + BURN * burn * (0.5 + 0.5 * dry)); f.embers = EMBERS; f.fed++;
+    f.fuel = Math.min(FUEL_MAX, f.fuel + BURN * burn * (0.5 + 0.5 * dry)); f.embers = EMBERS; f.emberAge = 0; f.fed++;
     fire.version++; return true;
   }
   function update(days, rain = null, at = null, total = null, ring = null) {
@@ -184,8 +196,17 @@ export function createFire(w, saved) {
       const f = fire.fires[i], held = !!ring && ring(f.x, f.z), wet = !held && !!rain && rain(f.x, f.z), k = (wet ? RAIN_BURN : 1) / (held ? RING_BURN : 1);
       if (wet) f.rained = (f.rained || 0) + days; else if (f.rained) delete f.rained;
       if (f.rained >= RAIN_OUT) { fire.fires.splice(i, 1); leaveBurnt(f, true); fire.hissed++; fire.hissAt = { x: f.x, z: f.z }; if (total !== null) { fire.puffs.push({ x: f.x, z: f.z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift(); } fire.version++; continue; }   // the rain put it out
-      if (f.fuel > 0) { const was = f.fuel; f.fuel = Math.max(0, f.fuel - days * k); if (was > 0 && f.fuel === 0) fire.version++; }
-      else { f.embers -= days * k; if (f.embers <= 0) { fire.fires.splice(i, 1); leaveBurnt(f); fire.version++; } }
+      let emberDays = days;
+      if (f.fuel > 0) {
+        const fuelDays = Math.min(days, f.fuel / k), burned = fuelDays * k;
+        f.fuel -= burned; emberDays -= fuelDays;
+        if (f.fuel < 1e-9) f.fuel = 0;
+        if (f.fuel === 0) { f.embers = EMBERS; f.emberAge = 0; fire.version++; }
+      }
+      if (f.fuel === 0 && emberDays > 0) {
+        f.embers -= emberDays * k; f.emberAge += emberDays;
+        if (f.embers <= 0) { fire.fires.splice(i, 1); leaveBurnt(f); fire.version++; }
+      }
     }
     if (fire.torch) { fire.torch.left -= days * (rain && at && rain(at.x, at.z) ? TORCH_RAIN : 1); if (fire.torch.left <= 0) { fire.torch = null; fire.version++; } }
     for (let i = fire.torches.length - 1; i >= 0; i--) { const t = fire.torches[i]; t.left -= days * (rain && rain(t.x, t.z) ? TORCH_RAIN : 1); if (t.left <= 0) { fire.torches.splice(i, 1); fire.version++; } }

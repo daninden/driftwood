@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.12 "Embers" — 2026-11-06
+
+A fire that has burned down now holds a small living glow for about twelve game hours, rather than only an hour and a half. It starts warm and visibly fades to a few red points. Dry wood laid on it brings back real flames through the ordinary feed action, so a night fire can be woken in the morning without drilling again.
+
+- **Warmth and weather:** only the first 1.5 hours of the ember stage warm a sleeper; old embers cannot make a cheap warm night. Exposed embers still hiss out after fifteen game minutes of rain, while a stone ring keeps them alive for 18 hours and remains rainproof.
+- **Dave:** when his home fire is embers, Dave uses the same feed action as the player rather than drilling. In the day he only does this while idle and passing the fire with a dry piece already carried: he neither fetches wood nor feeds flames, so this does not create a daytime maintenance loop or interrupt an errand.
+- **Saving and look:** saved fires include their ember-stage age. Pre-Embers saves keep at most their old short ember remainder and gain neither a fresh twelve hours nor fresh warmth. The ember meshes, smoke and faint fire light now use the remaining-stage ratio, with no change to Moonless night shadows.
+- **Camp access correction:** driftwood and branch piles now block only their compact stack core (0.45 m plus body clearance), while their full rendered radius remains the pickup and action footprint. Long logs can be stepped over, so a full wood pile cannot seal the open front of a lean-to or make a ring fire impossible to feed. Frond and stone pile collision and the lean-to's continuous back and sides are unchanged.
+
 ## 0.29.11 "Moonless" — 2026-11-06
 
 Nights are darker and truer while the day look is unchanged. Moonlight and sky fill are each half their former night strength: the island and Dave are just readable, while fire and torch circles stand out. The 35% comparison remains available as an optional review capture; the selected and shipped default is 50%.

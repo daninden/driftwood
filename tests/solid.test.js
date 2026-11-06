@@ -1,14 +1,24 @@
 // Changing camp things are solid to walking and path finding, but a lean-to stays open at its front.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { createPlayer, canStand, stepPlayer } from '../src/game/movement.js';
 import { createPath } from '../src/game/path.js';
 import { solidObstacles, PILE_R, FIRE_R } from '../src/game/obstacles.js';
+import { pileSolidRadius, pileVisibleRadius } from '../src/game/wood.js';
+import { generateWorld } from '../src/world/world.js';
+import { startSpot } from '../src/world/spots.js';
+import { createGame } from '../src/game/game.js';
+import { BURN, EMBERS } from '../src/game/fire.js';
 
 const world = {
   tiles: [], H: () => 0, Lat: () => 0, slope: () => 0, riverAt: () => null,
   passAt: () => ({ any: 0, bench: 0, roots: 0 }), fallRouteAt: () => 0,
 };
 const state = () => ({ wood: { piles: [] }, fire: { fires: [], burnt: [] }, leantos: { list: [] } });
+let campWorld, campSpawn, campLogs;
+beforeAll(async () => {
+  campWorld = await generateWorld(1337); campSpawn = startSpot(campWorld);
+  campLogs = campWorld.tiles.flatMap(t => t.drift).slice(0, 13);
+}, 120000);
 
 describe('Solid camp things', () => {
   it('blocks piles and fire places, but lets someone already inside a new pile walk out', () => {
@@ -36,7 +46,7 @@ describe('Solid camp things', () => {
     for (const z of [-0.5, 0, 0.5]) expect(canStand(world, 0.82, z, 0, opts)).toBe(true);
   });
 
-  it('matches each rendered pile kind and long-log overhang, with body clearance', () => {
+  it('blocks each pile core with body clearance, while long wood overhang remains step-overable', () => {
     const s = state(), log = (id, len, more = {}) => ({ id, x: 0, z: 0, len, a: 0, rad: 0.1, ...more });
     s.wood.piles.push(
       { x: 0, z: 0, kind: 'driftwood', logs: [log(1, 2.2)] },
@@ -47,12 +57,41 @@ describe('Solid camp things', () => {
     const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) };
     for (const p of s.wood.piles) {
       const o = opts.obstacles(p.x, p.z).find(q => q.x === p.x && q.z === p.z);
-      expect(o.r).toBeGreaterThan(PILE_R - 1e-6);
+      expect(o.r).toBeCloseTo(pileSolidRadius(p) + 0.2);
       expect(canStand(world, p.x + o.r - 0.01, p.z, 0, opts)).toBe(false);
       expect(canStand(world, p.x + o.r + 0.01, p.z, 0, opts)).toBe(true);
     }
+    const long = s.wood.piles[0], longCore = pileSolidRadius(long) + 0.2;
+    expect(pileVisibleRadius(long)).toBeGreaterThan(longCore + 0.5);
+    expect(canStand(world, long.x + longCore + 0.05, long.z, 0, opts)).toBe(true);
     const path = createPath(world, opts);
     expect(path.clear({ x: -3, z: 0 }, { x: 3, z: 0 })).toBe(false);
+  });
+
+  it('keeps a full wood pile compact enough to enter a ring shelter and reach its fire to feed', () => {
+    const s = state(), logs = Array.from({ length: 12 }, (_, id) => ({ id, x: 0, z: 0, len: 2.2, a: 0, rad: 0.1 }));
+    // A finished shelter opens south (+z); its ring fire and an ordinary full
+    // wood pile make the tight camp arrangement that must remain usable.
+    s.leantos.list.push({ x: 0, z: 0, heading: 0, progress: 1, up: { ring: 1 } });
+    s.fire.fires.push({ x: 0, z: 2.2 }); s.wood.piles.push({ x: 0.95, z: 2.2, kind: 'driftwood', logs });
+    const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) }, p = createPlayer({ x: 2, y: 0, z: 3.8 });
+    // Walk in from outside round the full pile, then through the shelter's open front.
+    for (let i = 0; i < 180; i++) stepPlayer(world, p, { x: 0, z: -1 }, 1 / 60, false, 1, 0, 1, opts);
+    expect(p.z).toBeLessThan(0.9);
+    for (let i = 0; i < 120; i++) stepPlayer(world, p, { x: -1, z: 0 }, 1 / 60, false, 1, 0, 1, opts);
+    expect(p.x).toBeLessThan(0.5);
+    for (let i = 0; i < 120; i++) stepPlayer(world, p, { x: 0, z: -1 }, 1 / 60, false, 1, 0, 1, opts);
+    expect(p.z).toBeLessThan(0.6);
+    const fireRim = { x: -0.75, z: 2.2 };
+    expect(createPath(world, opts).find({ x: p.x, z: p.z }, fireRim)).not.toBeNull();   // the fire rim remains approachable from inside
+    const fire = { id: 0, x: campSpawn.x, z: campSpawn.z + 2.2, fuel: BURN, embers: EMBERS, emberAge: 0, lit: 0, fed: 1 };
+    const game = createGame(campWorld, campSpawn, {
+      player: { x: fire.x - 0.75, z: fire.z },
+      wood: { carried: [campLogs[12].id], piles: [{ x: fire.x + 0.95, z: fire.z, kind: 'driftwood', logs: campLogs.slice(0, 12).map(l => l.id) }] },
+      leantos: { list: [{ id: 0, x: campSpawn.x, z: campSpawn.z, heading: 0, progress: 1, up: { ring: 1 } }] },
+      fire: { fires: [fire], attempts: 0, nextId: 1 },
+    });
+    expect(game.action().tap.kind).toBe('feed');   // carried wood can still be used at the reachable fire rim
   });
 
   it('routes round current piles and immediately sees a pile moved, removed or a lean-to built', () => {

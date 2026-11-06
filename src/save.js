@@ -46,6 +46,10 @@
  * Since 0.28 a save may also carry `known: { cell: 10, cells: [index] }`, the part of the island he has been to (game/known: cells of 10 m, index = row * 72 + column).
  * It is checked on reading (`cleanKnown`): the right cell size and a list of whole numbers within the island; anything else is dropped (the rest of the save
  * still loads) and the game then treats the ground round him as known. Older saves have none.
+ * Since 0.29.12 each saved fire may carry optional numeric `emberAge` (days since
+ * its current ember stage began, game/fire). Older fires have none and retain
+ * only their former short ember remainder when restored; a wrong age rejects
+ * the save with every other malformed fire field.
  * saveKey(seed) -> 'driftwood-save-<seed>'
  * serialise(state) -> string          state: game.state() (plus name, startDay); adds the format number `v`
  * parseSave(text, seed) -> state | null
@@ -99,7 +103,7 @@ function valid(s, seed) {
   if (w.washed && !w.washed.every(l => obj(l) && [l.id, l.x, l.y, l.z, l.len, l.a, l.rad].every(num) && (l.t === undefined || num(l.t)))) return false;
   const f = s.fibre; if (!obj(f) || !num(f.carried) || !optArr(f, 'taken') || (f.taken && !f.taken.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1])))) return false;
   const fi = s.fire; if (!obj(fi) || !arr(fi.fires) || !optArr(fi, 'torches') || !num(fi.attempts)) return false;
-  if (!fi.fires.every(q => obj(q) && [q.id, q.x, q.z, q.fuel, q.embers, q.lit, q.fed].every(num))) return false;
+  if (!fi.fires.every(q => obj(q) && [q.id, q.x, q.z, q.fuel, q.embers, q.lit, q.fed].every(num) && (q.emberAge === undefined || num(q.emberAge)))) return false;
   if (fi.torch !== null && fi.torch !== undefined && !(obj(fi.torch) && num(fi.torch.left))) return false;
   if (s.thirst !== undefined && !(obj(s.thirst) && num(s.thirst.days))) return false;
   if (s.hunger !== undefined && !(obj(s.hunger) && num(s.hunger.days))) return false;

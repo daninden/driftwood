@@ -17,7 +17,7 @@
  *             he walks home (his lean-to; else his fire; else where he last slept; else where he was when the mind took over) and lies down
  *   4 fire    in the evening (EVENING 0.6 to BED_FROM): dry driftwood (else branches) to a pile at the fire spot at home, enough for WOOD_WANT (6) pieces of
  *             burning (a branch counts half), the pile lit from LIGHT_FROM (0.74) when it holds at least FIRE_MIN pieces and LIGHT_MIN_FUEL (3) pieces' worth and he has
- *             fibre (or a torch in hand), and the fire fed from the piles when its fuel is below FEED_BELOW (0.6 of the most it holds)
+ *             fibre (or a torch in hand), and the fire fed from the piles when its fuel is below FEED_BELOW (0.6 of the most it holds). An ember still counts as a fire: he feeds it through the same player action and drills only when it has truly died. Since 0.29.12, while idle by day he also wakes a home ember he passes with one dry piece already carried; he never fetches wood or feeds flames by day.
  *   5 stores  by day (DAY_FROM 0.2 to EVENING): a nut husked to carry (NUT_WANT 2, game limits) and for fibre (the first tuft always, up to FIBRE_WANT 3 tufts when he is hungry
  *             enough to eat the nut, `huskWanted`), and wood to the pile at the fire spot, as above, then topped up to PILE_FULL (12) pieces, with the pile's own kind only.
  *             Driftwood and branches are never both piled there in piles of 6 or more (the arc would offer to build and not to light)
@@ -1108,10 +1108,19 @@ export function createMind(world, game, opts = {}) {
     if (missing.length && exploreChance({ time: clock.time, day: clock.day, thirst: game.thirst.days, hunger: game.hunger.days, last: exploredDay, missing: missing.length, cool: { explore: isCool('explore') }, crab: crabTripOk(senses()) }) > 0) yield* exploreTrip(missing);
   }
   let lastStroll = null;
+  // Embers are a small exception to the daytime fire rule: while idle, Dave
+  // uses a dry piece already under his arm if he passes his own home fire.
+  // He never fetches wood or maintains flames by day, so it cannot become a
+  // permanent daytime fire goal or interrupt an errand.
+  function feedPassingEmber() {
+    const f = fireAt(fireSpot(homeSpot()));
+    return !!f && f.fuel <= 0 && W.load() > 0 && dist(p, f) <= 1.2 && !!pressKind(['feed']);
+  }
   function* idleGoal() {
     const h = homeSpot(), t = clock.time;
     if (t >= GAZE_FROM && t < GAZE_TO && gazedDay !== clock.day) { gazedDay = clock.day; return yield* gaze(); }
     const step = homeNext(homeSnap()), need = step ? homeNeed(step, h) : null;   // 0.29.3: the next piece of his home
+    if (feedPassingEmber()) { yield; return true; }
     if (W.load() && !(need && need.kind && need.kind === carriedKind())) {   // wood goes to the fire's pile (wet building timber, left over from a trip, to the site, never to the fire: it would not catch); fronds and stones he does not need now are laid down
       const ck = carriedKind(), wet = ck === 'drift' && W.carried.reduce((n, l) => n + dryness(l, clock.total), 0) / W.carried.length < 0.6, d = wet && proj.site && !game.leantos.list.length ? siteDest(proj.site, 'driftwood', 'branch') : null;
       if (d) { if (yield* walk(d.x, d.z, { stop: 0.35 })) yield* layAt(d); } else if (ck === 'drift' || ck === 'branch') yield* deliver(); else yield* layAt(p);   // (0.29.5: deliver lays wet wood on the drying pile)
