@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.15 "Dry stock" — 2026-11-06
+
+Dave now treats wet shoreline wood as a small reserve rather than an endless shore-cleanup chance. In his ordinary daytime rhythm, after needs, evening fire, stores and home work, he first moves dry top logs from the drying pile into the firewood pile when that pile has room. Only then does he fetch up to two wet, visible logs from the known tidal strip to refill the drying pile, which still holds at most five. A full firewood pile or full drying pile makes him wait.
+
+- **Actual piles and wood:** the mind verifies the specific carried log IDs after each drying-to-fire transfer, and records only IDs that reached a non-drying fire pile. Drying sites remain classified while the camp fire moves, so the old broad-distance overlap cannot turn a fire pile into a drying source or send the same logs back and forth. Wet and dry carried wood remain separate, wet wood never goes on fire stock, existing drying time and rain rules are unchanged.
+- **Scope:** this changes no player action, terrain knowledge rule, carrying limit, pile cap, control, text or interface. The stock trip is a protected concrete errand, so normal needs wait for its delivery while the established severe thirst and hunger brakes and every goal timeout remain in force.
+- **Verification:** `tests/dryStock.test.js` passes a ten-day, walked-known seed-1337 run through the real game and mind: stock errands occur, wet intake, laying and fire transfers are all nonzero, every drying pile stays at five or fewer logs, and every `dry-moved` event records nonzero, never-repeated log IDs at distinct drying and fire destinations. Focused mind drying tests pass apart from the pre-existing home-upgrade assertion documented in the handover. The required one-shot serial suite, build and smoke evidence are recorded with this release.
+- **Agreed next:** after this release is pushed, a fresh session may implement **0.30 "Voice"**: one short English text line by Dave for each deliberate action, using varied fixed computer phrases only. **L** will passively toggle a small, scrollable chronological log of every utterance since the game opened; it is in-memory only, disappears on reload, is not a save or stored preference, and cannot create a world walk or take Dave over. There is no fixed new button, spoken sound or AI dependency. Then work stops for now. Outposts is renumbered to 0.31 and, with Garden (0.32) and Castaway's mind AI (0.33), remains unauthorized.
+
 ## 0.29.14 "Way out" — 2026-11-06
 
 Dave can no longer choose a path grid cell through the back or corner of the lean-to. Starting inside, he leaves through its open front and walks round the solid back and sides to a destination behind it; approaching a sleeping place inside, he comes in through that same opening.

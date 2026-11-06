@@ -4,7 +4,7 @@
 import { lifeSuite } from './helpers/lifeSuite.js';
 
 lifeSuite(1337, {
-  walked: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 1, crabs: 1, leanto: 9, upgrades: 1, explores: 2, evenings: 4, dried: 2, knownDryingShuttle: true },   // 0.29.8: known bug: six laid wet logs are repeatedly counted as moved (78); keep the expected failing conservation test until fixed
+  walked: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 1, crabs: 1, leanto: 9, upgrades: 1, explores: 2, evenings: 4, dried: 2 },   // 0.29.15: Dry stock restores the normal drying conservation check.
   fresh: { idle: 0.65, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, stuckMax: 3, nights: 7, inland: 3, leanto: 9, explores: 2, grow: 100, evenings: 6, dried: 3 },   // 0.29.8: user approved one additional fireless evening
   beach: { nights: 7, maxHunger: 1.2, hungry: 0.2 },
 });

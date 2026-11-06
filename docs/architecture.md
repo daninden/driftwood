@@ -25,6 +25,8 @@ Rules:
 
 **Hands (0.29.13):** `game/hands` is a pure, browser-local preference and controller for `self`, `computer` and `auto`: safe `driftwood-hands` storage, H key guard and the decision whether the mind drives. It is never part of an island save. `main` combines Auto with `game/input`'s 30-second timer; Computer drives immediately, and a real player walk/action changes it to Self. `KeyH`, camera, sound, quality and developer controls remain passive.
 
+**Dry stock (0.29.15):** `game/mind` keeps drying-pile sites in its live plan and classifies them apart from fire stock as the camp moves. Its low-priority daytime stock errand uses the ordinary path, pickup and lay actions: it verifies the exact dry log IDs reach a non-drying fire pile before recording a transfer, then fetches at most two known, above-water wet strip logs only if both the fire stock and five-piece drying reserve have room. Those identity sets are trace-only, not saved game state.
+
 | Module | Job |
 |---|---|
 | `core/noise` | Seeded noise (`vnoise`, `fbm`), PRNG and tile hash. The formulas are frozen. |
