@@ -37,7 +37,7 @@
  *   setSea moves the sea planes, the surf and the river mouths with the
  *   tide (game/tide) plus the breath; tick advances the water's own clock
  *   (any frame rate: it moves as fast as frames are drawn) and takes the
- *   daylight (0..1) that fades the pale lines of the swell at night; clock is the water's own time in
+ *   daylight (0..1) that fades river streaks, flecks, foam and pale swell lines at night; clock is the water's own time in
  *   seconds (the sound of the surf, audio/mix, breathes with it)
  * FOAM_LEVELS, foamWeights(level) -> weight 0..1 per foam level, pure
  * flowSpeed(slope, ford, fall) -> m/s a river's water moves, pure
@@ -59,6 +59,8 @@ import { rockColor } from './props.js';
 export const FOAM_LEVELS = [0, -0.1, -0.2, -0.3, -0.4];
 const FOAM_STEP = 0.1;
 export const foamWeights = s => FOAM_LEVELS.map(l => Math.max(0, 1 - Math.abs(s - l) / FOAM_STEP));
+/** Daylight used by water details: dark at night but still able to catch a nearby warm light. */
+export const waterLight = day => 0.35 + 0.65 * Math.max(0, Math.min(1, day));
 
 
 /** Speed of a river's water in m/s: slow in the calm, quicker down a steep stretch, over a ford and fastest down a fall (all three 0..1 or a drop per 2 m). */
@@ -144,7 +146,7 @@ function riverRibbon(w, rv, sea, uT, uDay, uRain) {
     sh.fragmentShader = 'varying float vA;\nvarying vec3 vRF;\nvarying vec3 vWP;\nuniform float uT;\nuniform float uDay;\n' + NOISE_GLSL + RAIN_GLSL + sh.fragmentShader
       .replace('#include <color_fragment>', `#include <color_fragment>
       {
-        float e = vRF.z, x = (vRF.x - uT) * 0.35, y = vRF.y * 2.2, lit = 0.45 + 0.55 * uDay;
+        float e = vRF.z, x = (vRF.x - uT) * 0.35, y = vRF.y * 2.2, lit = 0.12 + 0.88 * uDay;
         float streak = smoothstep(0.64, 0.82, wNoise(vec2(x, y))) * (0.16 + 0.5 * e);
         float fleck = smoothstep(0.84, 0.92, wNoise(vec2(x * 3.1 + 7.0, y * 2.7))) * (0.3 + 0.5 * e);
         float broken = smoothstep(0.42, 0.72, wNoise(vec2(x * 2.2 + 3.0, y * 1.6 + 5.0)));
@@ -250,14 +252,18 @@ export function buildWater(w, kit, scene) {
   }));
   B.build(scene);
 
-  let tide = 0, clock = 0;
+  let tide = 0, clock = 0, detailLight = 1;
   function setSea(base) {
     tide = base; const s = base + breath(clock);
     sea.position.y = s; seaTop.position.y = s + 0.005; seaU.value = s;
-    foamWeights(s).forEach((k, i) => { const f = surf[i]; f.g.visible = k > 0.001; f.m1.opacity = 0.7 * k; f.m2.opacity = 0.4 * k; });
+    foamWeights(s).forEach((k, i) => { const f = surf[i]; f.g.visible = k > 0.001; f.m1.opacity = 0.7 * k * detailLight; f.m2.opacity = 0.4 * k * detailLight; });
   }
   setSea(0);
   /** Advance the water's own clock by dt (real seconds between drawn frames) and set the daylight 0..1 and the rain 0..1. */
-  function tick(dt, day, rain = 0) { clock += dt; uT.value = clock; uDay.value = day; uRain.value = rain; setSea(tide); }
+  function tick(dt, day, rain = 0) {
+    clock += dt; uT.value = clock; uDay.value = day; uRain.value = rain;
+    detailLight = waterLight(day); foamMat.opacity = 0.7 * detailLight; sprayMat.opacity = 0.2 * detailLight;
+    setSea(tide);
+  }
   return { setSea, tick, get clock() { return clock; } };
 }

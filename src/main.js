@@ -179,7 +179,7 @@ async function boot() {
     const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
     mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); half.update(game.hunger.days, now); carry.update(carryState(game, carrySt), now);
     if (button) button.update(game.action());
-    ink.update(skyAt(info.time).day);
+    ink.update(skyAt(info.time).day, now);
     who.update(dayLine(name, day), now);
     if (wasAsleep && !game.sleep.asleep) wakes.show(wakeLine(name, day), now);   // any end of a sleep
     wasAsleep = game.sleep.asleep;

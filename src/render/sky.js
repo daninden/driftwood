@@ -22,11 +22,12 @@
  *   sun, moon        unit vectors towards sun and moon
  *   day              1 by day .. 0 at night
  *   golden, dusk     0..1 amounts of golden hour and of dusk/dawn
- *   light            { dir, color, intensity }  the one shadow-casting light
+ *   light            { dir, color, intensity }  the sun or moon light
  *                    (sun by day, moon by night)
  *   fill             { color, intensity }       the hemisphere sky fill
  *   grade            [r, g, b]  multiply colour over the picture (white = none)
  *   saturation       1 by day, lower at dusk and at night
+ *   shadows          0 at night .. 1 by day; the shadow map fades with it
  * }  colours as [r, g, b] in 0..1. Pure: no Three.js, no DOM.
  *
  * Depends on: core/math, render/palette
@@ -35,6 +36,10 @@ import { ss, lerp, hex, mix } from '../core/math.js';
 import { SKY } from './palette.js';
 
 export const SUNRISE = 0.175, SUNSET = 0.825;
+// Build-time comparison knob for optional Moonless review captures. Node exposes
+// import.meta but not its Vite `env`, so the pure module keeps the selected 50% default.
+const configuredNightLight = Number(import.meta.env?.VITE_NIGHT_LIGHT);
+export const NIGHT_LIGHT = Number.isFinite(configuredNightLight) && configuredNightLight > 0 && configuredNightLight <= 1 ? configuredNightLight : 0.5;
 const RAD = Math.PI / 180;
 export const DIR_STEP = RAD / 32;   // radians: the shadow light turns in steps of this size
 export const LIGHT_MIN = Math.sin(15 * RAD);   // sine of the lowest height of the shadow light
@@ -70,14 +75,15 @@ export function skyAt(time) {
   const day = ss(-0.1, 0.1, sun.y);
   const golden = ss(-0.04, 0.06, sun.y) * (1 - ss(0.12, 0.42, sun.y));
   const dusk = ss(-0.3, -0.02, sun.y) * (1 - ss(-0.02, 0.14, sun.y));
-  const sunI = ss(-0.04, 0.16, sun.y), moonI = 0.32 * ss(-0.02, 0.15, moon.y) * (1 - day);
+  const sunI = ss(-0.04, 0.16, sun.y), moonI = 0.32 * NIGHT_LIGHT * ss(-0.02, 0.15, moon.y) * (1 - day);
   const light = sunI >= moonI
     ? { dir: quantiseDir(lift(sun)), color: mix(C.sunNoon, C.sunLow, golden), intensity: sunI }
     : { dir: quantiseDir(lift(moon)), color: C.moon, intensity: moonI };
-  const fill = { color: mix(mix(C.fillNight, C.fillDay, day), C.fillDusk, dusk * 0.7), intensity: lerp(0.32, 0.6, day) + dusk * 0.15 + golden * 0.12 };
+  const shadows = ss(0.01, 0.5, day);
+  const fill = { color: mix(mix(C.fillNight, C.fillDay, day), C.fillDusk, dusk * 0.7), intensity: lerp(0.32 * NIGHT_LIGHT, 0.6, day) + dusk * 0.15 + golden * 0.12 };
   let grade = mix(C.gradeNight, WHITE, day);
   grade = mix(grade, C.gradeGolden, golden * 0.5);
   grade = mix(grade, C.gradeDusk, dusk * 0.7);
   const saturation = lerp(0.6, 1, day) - dusk * 0.1;
-  return { sun, moon, day, golden, dusk, light, fill, grade, saturation };
+  return { sun, moon, day, golden, dusk, light, fill, grade, saturation, shadows };
 }

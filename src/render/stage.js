@@ -32,7 +32,7 @@
  * is enough to switch filter live; a material that is not in the scene at that moment switches the
  * next time it is flagged or rebuilt (a few cached ones at most; both filters look much alike).
  *
- * createStage(container, { touch, settings }?) -> { renderer, scene, hemi, sun, resize(), followSun(view, dir), applyQuality(settings), tagTerrain(object) }
+ * createStage(container, { touch, settings }?) -> { renderer, scene, hemi, sun, resize(), setSun(color, intensity), followSun(view, dir, shadows?), applyQuality(settings), tagTerrain(object) }
  *   settings: as from render/quality settingsFor (default: the level 0 of the device)
  *   tagTerrain(object): sets castShadow of every terrain mesh below object to the current setting (for new tiles)
  *   view { target, yaw, pitch, zoom, aspect } as for fitShadow; dir: unit vector { x, y, z } towards the light
@@ -110,9 +110,9 @@ export function createStage(container, opts = {}) {
   container.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   const hemi = new THREE.HemisphereLight(0xe2ebf0, 0x8a7458, 0.6); scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffe6c4, 1.0);
+  const sun = new THREE.DirectionalLight(0xffe6c4, 1.0), clearSun = new THREE.DirectionalLight(0xffe6c4, 0);
   sun.castShadow = true; sun.shadow.mapSize.set(cfg.shadowSize, cfg.shadowSize); sun.shadow.normalBias = 0.03;
-  scene.add(sun); scene.add(sun.target);
+  scene.add(sun); scene.add(sun.target); scene.add(clearSun); scene.add(clearSun.target);
 
   function resize() { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cfg.pixelRatioMax)); renderer.setSize(window.innerWidth, window.innerHeight); }
   resize();
@@ -129,18 +129,28 @@ export function createStage(container, opts = {}) {
     }
   }
 
+  let shadowStrength = 1, sunIntensity = 1;
   const st = new THREE.Vector3(), dir = new THREE.Vector3();
-  function followSun(view, d) {
+  /** Split direct light between a shadowed and an unshadowed twin: total light stays unchanged while the shadow fades. */
+  function setSun(color, intensity) {
+    sun.color.copy(color); clearSun.color.copy(color); sunIntensity = intensity;
+    sun.intensity = sunIntensity * shadowStrength; clearSun.intensity = sunIntensity * (1 - shadowStrength);
+  }
+  function followSun(view, d, shadows = 1) {
+    shadowStrength = Math.max(0, Math.min(1, shadows));
+    sun.intensity = sunIntensity * shadowStrength; clearSun.intensity = sunIntensity * (1 - shadowStrength);
+    // Once the shadow contribution is actually zero there is no map pass.
+    sun.castShadow = shadowStrength > 0;
     dir.set(d.x, d.y, d.z).normalize();
     const { centre, ha, hb } = fitShadow(view, dir), size = sun.shadow.mapSize.x;
     const q = snapToTexels(centre, dir, ha * 2 / size, hb * 2 / size); st.set(q.x, q.y, q.z);
     const half = Math.max(ha, hb);
-    sun.target.position.copy(st); const dist = half * 3 + 200;   // far enough that a low light still stands above the summits (casters are found by depth, not by the box)
-    sun.position.copy(st).addScaledVector(dir, dist); sun.target.updateMatrixWorld();
+    sun.target.position.copy(st); clearSun.target.position.copy(st); const dist = half * 3 + 200;   // far enough that a low light still stands above the summits (casters are found by depth, not by the box)
+    sun.position.copy(st).addScaledVector(dir, dist); clearSun.position.copy(sun.position); sun.target.updateMatrixWorld(); clearSun.target.updateMatrixWorld();
     const far = dist * 2 + half * 2;
     Object.assign(sun.shadow.camera, { left: -ha, right: ha, top: hb, bottom: -hb, near: 1, far });
     sun.shadow.bias = shadowBias(far);
     sun.shadow.camera.updateProjectionMatrix();
   }
-  return { renderer, scene, hemi, sun, resize, followSun, applyQuality, tagTerrain };
+  return { renderer, scene, hemi, sun, resize, setSun, followSun, applyQuality, tagTerrain };
 }

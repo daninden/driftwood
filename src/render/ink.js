@@ -4,8 +4,9 @@
  * All ink on screen (the moon #rest, the drop #thirst, the row #carry, the thumb stick #stick, the action button #action, the tally marks (render/tallyMarks),
  * the dev panel #dev, the name line #who and the waking line #wake) takes its
  * colour from the CSS custom property `--ink`: dark brown by day, pale warm
- * paper at night, blending through dusk and dawn on the same curve as the
- * light of the world (render/sky `day`). The dev panel's faint backing
+ * paper at night. At middle dusk or dawn the ink moves over 0.9 seconds while
+ * its opposite glow holds, then the glow changes at the end. Thus one side
+ * always remains clear and the two mid tones never meet. The dev panel's faint backing
  * (`--ink-back`) turns the other way, from light sand to dark brown, so its
  * text stays readable. The day line and the waking line, and since 0.13.3 every
  * mark (action button, thumb stick, moon, drop, fibre, tally marks), also get a soft glow
@@ -13,24 +14,23 @@
  * at night), no frame. The loading screen keeps its own dark brown.
  *
  * INK_DAY (0x2e2418), INK_NIGHT (0xefe0c2), BACK_ALPHA (0.4), GLOW_ALPHA (0.85)
- * STEPS (24)                   the day factor is rounded to 1/STEPS, so the
- *                              style is written only when it changes noticeably
- * inkStep(day) -> int          the day factor 1 (day) .. 0 (night) as a step 0..STEPS. Pure.
+ * SWITCH (0.9 s)               the short real-time ink transition at dusk/dawn
+ * inkStep(day) -> int          1 (day) or 0 (night), switching at middle light. Pure.
  * inkColor(step) -> '#rrggbb'  the ink at that step. Pure.
  * inkBack(step) -> 'rgba(...)' the dev panel backing at that step. Pure.
  * inkGlow(step) -> 'rgba(...)' the glow behind the day and waking lines. Pure.
- * createInk(root) -> { update(day) }   root: the element that carries the
- *   properties (document.documentElement); update(day) takes sky.day and
- *   touches the DOM only when the step changed.
+ * createInk(root) -> { update(day, now?) }   root: the element that carries
+ *   properties (document.documentElement); `now` is real seconds and only
+ *   the brief switch writes per frame.
  *
  * Depends on: core/math
  */
 import { hex, mix } from '../core/math.js';
 
 export const INK_DAY = 0x2e2418, INK_NIGHT = 0xefe0c2, BACK_ALPHA = 0.4, GLOW_ALPHA = 0.85;
-export const STEPS = 24;
+export const STEPS = 24, SWITCH = 0.9;
 
-export const inkStep = day => Math.round(Math.min(1, Math.max(0, Number.isFinite(day) ? day : 1)) * STEPS);
+export const inkStep = day => (Number.isFinite(day) && day < 0.5 ? 0 : STEPS);
 
 const rgb = (from, to, step) => mix(hex(from), hex(to), 1 - step / STEPS).map(v => Math.round(v * 255));
 const two = n => n.toString(16).padStart(2, '0');
@@ -41,15 +41,23 @@ export const inkBack = step => `rgba(${rgb(INK_NIGHT, INK_DAY, step).join(', ')}
 export const inkGlow = step => `rgba(${rgb(INK_NIGHT, INK_DAY, step).join(', ')}, ${GLOW_ALPHA})`;
 
 export function createInk(root) {
-  let last = -1;
-  function update(day) {
+  let target = -1, ink = 1, from = 1, began = 0, glow = 1, lastInk = -1, lastGlow = -1;
+  function write(nextInk, nextGlow) {
+    const i = Math.round(nextInk * STEPS), g = Math.round(nextGlow * STEPS);
+    if (i !== lastInk) { lastInk = i; root.style.setProperty('--ink', inkColor(i)); root.style.setProperty('--ink-back', inkBack(i)); }
+    if (g !== lastGlow) { lastGlow = g; root.style.setProperty('--ink-glow', inkGlow(g)); }
+  }
+  function update(day, now = 0) {
     if (!root) return;
-    const s = inkStep(day);
-    if (s === last) return;
-    last = s;
-    root.style.setProperty('--ink', inkColor(s));
-    root.style.setProperty('--ink-back', inkBack(s));
-    root.style.setProperty('--ink-glow', inkGlow(s));
+    const next = inkStep(day) / STEPS;
+    if (target < 0) { target = next; ink = glow = next; write(ink, glow); return; }
+    if (next !== target) { from = ink; target = next; began = now; }
+    const p = Math.max(0, Math.min(1, (now - began) / SWITCH));
+    ink = from + (target - from) * p;
+    // Hold the opposite glow during the colour change. The final flip avoids
+    // a long pale-on-pale or dark-on-dark middle at the transition threshold.
+    if (p >= 1) glow = target;
+    write(ink, glow);
   }
   return { update };
 }

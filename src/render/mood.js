@@ -62,7 +62,8 @@ export function createMood({ stage, canvas, container }) {
     if (w !== warmth) { mult.style.opacity = (beach * warm).toFixed(2); tint.style.opacity = warm.toFixed(2); warmth = w; }
     fog.near = lerp(4000, 405, fogAmt); fog.far = lerp(5000, 480, fogAmt);
     const { light, fill } = sky;
-    stage.sun.color.setRGB(...light.color).lerp(sunC, cool * sky.day).lerp(greyC, 0.6 * rain); stage.sun.intensity = light.intensity * lerp(1, 0.5, rain);
+    const sunLight = stage.sun.color.setRGB(...light.color).lerp(sunC, cool * sky.day).lerp(greyC, 0.6 * rain);
+    stage.setSun(sunLight, light.intensity * lerp(1, 0.5, rain));
     stage.hemi.color.setRGB(...fill.color).lerp(hemiC, cool * sky.day).lerp(greyC, 0.55 * rain); stage.hemi.intensity = fill.intensity * lerp(1, 1.12, rain);
     const g = 'rgb(' + sky.grade.map((v, i) => Math.round(v * lerp(1, RAIN_GRADE[i], rain) * 255)).join(',') + ')';
     if (g !== grade) { daylight.style.backgroundColor = g; grade = g; }

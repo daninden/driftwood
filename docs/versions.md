@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.11 "Moonless" — 2026-11-06
+
+Nights are darker and truer while the day look is unchanged. Moonlight and sky fill are each half their former night strength: the island and Dave are just readable, while fire and torch circles stand out. The 35% comparison remains available as an optional review capture; the selected and shipped default is 50%.
+
+- **Dusk and dawn:** daylight shadows smoothly fade to nothing and return smoothly. A shadow-casting directional light trades strength with an identical non-shadowing twin, so the total direct illumination does not change while only the shadow contrast fades; no shadow map is drawn in full night. Fire and torch lights remain shadowless.
+- **Ink:** all screen marks make their dark-to-pale change in 0.9 seconds at middle dusk, then their opposite glow changes; dawn reverses it. One side stays clear throughout, avoiding the former muddy middle.
+- **Water and fish:** unlit fish and the silver jumping fish darken with daylight. River streaks and flecks, foam, waterfall spray and pale swell lines dim at night. Their day materials are unchanged; a small night floor keeps water detail visible by fire and torch light.
+- **Review helper:** `npm run smoke:moonless` builds identical full smoke scenes at 35% and 50%, saving the relevant day, night, fire, torch, fish and firefly frames in `moonless-35/` and `moonless-50/`; it leaves `dist/` at the shipped 50% default. No UI or control was added.
+
 ## 0.29.10 "Solid ground" — 2026-11-06
 
 Camp things now match the ground they visibly occupy. The back and both sides of a lean-to are continuous, body-clear barriers while the open front remains open. A pile blocks to the outer edge of the logs, fronds or stones it visibly contains, rather than as one small fixed circle; fires and burnt places have the same body clearance.

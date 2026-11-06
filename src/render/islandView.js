@@ -153,10 +153,10 @@ export async function createIslandView(world, container, progress, start, opts =
     if (lightLayer) lightLayer.begin();
     if (fireView) fireView.update(dt, { total, day: sky.day, camera: cam.camera, player, H: world.H, heroFlame: hero.flame });
     if (tallyView) tallyView.update(dt, { game, camera: cam.camera, H: world.H, player });
-    if (wildView) wildView.update(dt);
+    if (wildView) wildView.update(dt, sky.day);
     if (flyView) flyView.update(dt, cam.camera);
     if (lightLayer) lightLayer.end();
-    stage.followSun({ target: cam.target, yaw, pitch, zoom: cam.zoom, aspect }, sky.light.dir);
+    stage.followSun({ target: cam.target, yaw, pitch, zoom: cam.zoom, aspect }, sky.light.dir, sky.shadows);
     mood.update(world.tierAt(t.L), dt, sky, rain);
     pools.flush();
     renderer.render(scene, cam.camera);

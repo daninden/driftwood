@@ -1,7 +1,7 @@
 // the day: the clock (game/clock) and the light it gives (render/sky).
 import { describe, it, expect } from 'vitest';
 import { createClock, DAY_SECONDS, START_TIME } from '../src/game/clock.js';
-import { skyAt, quantiseDir, DIR_STEP, LIGHT_MIN, SUNRISE, SUNSET } from '../src/render/sky.js';
+import { skyAt, quantiseDir, DIR_STEP, LIGHT_MIN, NIGHT_LIGHT, SUNRISE, SUNSET } from '../src/render/sky.js';
 
 describe('game/clock', () => {
   it('starts in the middle of the morning and runs a 20-minute day', () => {
@@ -33,6 +33,16 @@ describe('render/sky', () => {
   it('always keeps some light, so the island stays visible at night', () => {
     for (const t of times) { const s = skyAt(t); expect(s.light.intensity + s.fill.intensity).toBeGreaterThan(0.3); }
     expect(Math.min(...skyAt(0).grade)).toBeGreaterThan(0.27);
+  });
+  it('uses the pending half-light Moonless default only at night', () => {
+    expect(NIGHT_LIGHT).toBe(0.5);
+    expect(skyAt(0).light.intensity).toBeCloseTo(0.32 * NIGHT_LIGHT, 3);
+    expect(skyAt(0).fill.intensity).toBeCloseTo(0.32 * NIGHT_LIGHT, 3);
+    expect(skyAt(0.5).fill.intensity).toBeCloseTo(0.6, 3);
+  });
+  it('fades shadows smoothly away before night and brings them back after dawn', () => {
+    expect(skyAt(0).shadows).toBe(0); expect(skyAt(0.5).shadows).toBe(1);
+    for (let i = 0; i < 20000; i++) expect(Math.abs(skyAt(i / 20000).shadows - skyAt((i + 1) / 20000).shadows)).toBeLessThan(0.01);
   });
   it('never lets the light come from below the minimum height', () => {
     for (const t of times) { const d = skyAt(t).light.dir; expect(d.y).toBeGreaterThan(LIGHT_MIN - 0.01); expect(Math.hypot(d.x, d.y, d.z)).toBeCloseTo(1); }

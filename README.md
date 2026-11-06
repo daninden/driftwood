@@ -161,7 +161,7 @@ Sound begins with your first key press or tap, because browsers do not allow it 
 
 ### Day and night
 
-A day lasts twenty minutes. The sun rises in the east, climbs over the south and sets in the west, with golden light low in the sky and lilac light at dusk and dawn. The night is moonlit: the island and Dave remain visible, while a fire or torch stands out and catches the nearby water. The small marks on screen change to pale ink at night so they remain readable.
+A day lasts twenty minutes. The sun rises in the east, climbs over the south and sets in the west, with golden light low in the sky and lilac light at dusk and dawn. The night is dark and moonlit: you can still just make out the island and Dave, while a fire or torch stands out and catches the nearby water. Daylight shadows fade away at dusk and return at dawn; fire and torch light has no shadows. Fish and the pale movement on the water become hard to see in the dark. The small marks on screen change over a moment at middle dusk and dawn, with their opposite glow kept clear, so they remain readable.
 
 ### Slow computers
 

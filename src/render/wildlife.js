@@ -26,7 +26,7 @@
  * flapAngle(t, ph, glide) -> wing angle in radians (up positive): flapping, or a
  *   gentle V while gliding (glide 0..1 is how much of the time a bird glides), pure
  * crabGeometry(), birdGeometries() -> baked geometries (positions, normals, vertex colours)
- * createWildlifeView(scene, wildlife) -> { update(dt) }   call once per drawn frame
+ * createWildlifeView(scene, wildlife) -> { update(dt, day?) }   call once per drawn frame; fish dim with daylight
  *   wildlife: game.wildlife
  *
  * Depends on: three, render/materials, render/palette, game/wildlife (SPLASH_TIME)
@@ -39,6 +39,8 @@ import { SPLASH_TIME } from '../game/wildlife.js';
 export const MAX_CRABS = 96, MAX_BIRDS = 40, MAX_FISH = 192, MAX_HOLES = 160;
 export const BIRD_SCALE = 0.5;   // 0.17.3: gulls half as big (30 cm long, half a metre across the wings)
 const CRAB_RISE = 0.02;   // the crab's body centre above the sand
+/** Fish keep their hues but are barely visible under moonlight. */
+export const fishLight = day => 0.16 + 0.84 * Math.max(0, Math.min(1, day));
 
 /** Wing angle (radians, up positive) at time t: a flapping burst, or a shallow V while gliding. */
 export function flapAngle(t, ph, glide) {
@@ -131,7 +133,7 @@ export function createWildlifeView(scene, wl) {
     { geo: ball(5, 3), at: [-0.17, 0, 0], s: [0.05, 0.05, 0.008], color: WILD.fish.jump },
     { geo: ball(4, 3), at: [0.11, 0.015, 0.032], s: [0.01, 0.01, 0.01], color: WILD.crab.eye }, { geo: ball(4, 3), at: [0.11, 0.015, -0.032], s: [0.01, 0.01, 0.01], color: WILD.crab.eye },
   ]);
-  const jm = new THREE.Mesh(JG, lit), jo = new THREE.Mesh(JG, outlineMat); jo.scale.setScalar(1.3); jumpFish.add(jm, jo); jumpFish.visible = false; root.add(jumpFish);
+  const jumpMat = toon(0xffffff, { vertexColors: true }), jm = new THREE.Mesh(JG, jumpMat), jo = new THREE.Mesh(JG, outlineMat); jo.scale.setScalar(1.3); jumpFish.add(jm, jo); jumpFish.visible = false; root.add(jumpFish);
   const foamGeo = new THREE.CircleGeometry(1, 10).rotateX(-Math.PI / 2), dropGeo = new THREE.SphereGeometry(1, 5, 4);
   const splashes = [0, 1].map(() => {
     const g = new THREE.Group(), fm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false }), dm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false });
@@ -182,12 +184,12 @@ export function createWildlifeView(scene, wl) {
     body.count = bodyO.count = wingR.count = wingRO.count = wingL.count = wingLO.count = n; done(body, bodyO, wingR, wingRO, wingL, wingLO);
   }
 
-  function fishes() {
+  function fishes(day) {
     const list = wl.fish(), n = Math.min(list.length, MAX_FISH);
     for (let i = 0; i < n; i++) {
       const f = list[i], k = 0.55 + 0.45 * f.a;
       dummy.position.set(f.x, f.y, f.z); dummy.rotation.set(0, -f.ang + Math.sin(clock * 6 + f.ph) * 0.14, 0); dummy.scale.set(f.len * k, 1, f.len * k); dummy.updateMatrix();
-      fish.setMatrixAt(i, dummy.matrix); fish.setColorAt(i, tint.copy(dark).lerp(pale, (1 - f.a) * 0.8));
+      fish.setMatrixAt(i, dummy.matrix); fish.setColorAt(i, tint.copy(dark).lerp(pale, (1 - f.a) * 0.8).multiplyScalar(fishLight(day)));
     }
     fish.count = n; done(fish); if (n) fish.instanceColor.needsUpdate = true;
   }
@@ -208,9 +210,10 @@ export function createWildlifeView(scene, wl) {
   }
 
   return {
-    update(dt) {
+    update(dt, day = 1) {
       clock += dt;
-      holes(); crabs(); birds(); fishes(); jumping();
+      jumpMat.color.setScalar(fishLight(day));
+      holes(); crabs(); birds(); fishes(day); jumping();
     },
   };
 }
