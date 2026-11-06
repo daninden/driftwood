@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.10 "Solid ground" — 2026-11-06
+
+Camp things now match the ground they visibly occupy. The back and both sides of a lean-to are continuous, body-clear barriers while the open front remains open. A pile blocks to the outer edge of the logs, fronds or stones it visibly contains, rather than as one small fixed circle; fires and burnt places have the same body clearance.
+
+- **No collision holes:** the lean-to uses connected circles along its full 2 m back and 1.5 m sides, including the castaway's radius. Pile and fire obstacle radii are likewise clearance to his centre, so he slides around their rims instead of walking through them. Existing escape-from-a-new-pile behaviour remains.
+- **Ring fire:** when Dave makes the first fire pile at his finished stone ring, he approaches from the exact offset that the ordinary drop rule uses. The resulting pile—and so the fire that replaces it—sits at the stone ring's centre, not half outside it. Player drops remain unchanged.
+- **Tests:** `tests/solid.test.js` samples the full lean-to rim in both orientations, its open front, pile types and a 2.2 m log overhang, body clearance and dynamic path blocking. `tests/mind.test.js` checks the exact ordinary-drop approach used for a ring fire.
+- **Verification:** a temporary isolated snapshot of `HEAD` overlaid only with this release's files built successfully and passed `npm.cmd run smoke` in 55.9 seconds; the inspected lean-to and finished-ring screenshots were sound. The focused Solid and ring-approach tests pass. One serial full-suite attempt exceeded its 600-second cap in the known long-running mind suites; it first exposed and then led to the fix of a new `gatherWood` reference error, so this release does not claim a green full suite.
+
 ## 0.29.9 "Solid" — 2026-11-06
 
 What Dave builds and lays down is now part of the ground he has to walk around. Piles of wood, branches, fronds and stones are small round obstacles; a fire place is solid when it has flames, embers or only its burnt remains. The back and both sides of a lean-to are solid from the first work onward, while its front stays open to enter and sleep.

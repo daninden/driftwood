@@ -27,9 +27,32 @@ describe('Solid camp things', () => {
   it('keeps a lean-to back and sides solid while its open front remains reachable', () => {
     const s = state(); s.leantos.list.push({ x: 0, z: 0, heading: 0, progress: 1 });
     const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) };
-    expect(canStand(world, 0, -0.78, 0, opts)).toBe(false);
-    expect(canStand(world, 0.92, -0.42, 0, opts)).toBe(false);
-    expect(canStand(world, 0, 0.7, 0, opts)).toBe(true);
+    for (const x of [-0.8, -0.4, 0, 0.4, 0.8]) expect(canStand(world, x, -0.8, 0, opts)).toBe(false);
+    for (const z of [-0.5, 0, 0.4]) { expect(canStand(world, -0.92, z, 0, opts)).toBe(false); expect(canStand(world, 0.92, z, 0, opts)).toBe(false); }
+    for (const x of [-0.5, 0, 0.5]) expect(canStand(world, x, 0.82, 0, opts)).toBe(true);
+    // The same complete rim applies after the shelter turns; the opening turns with it.
+    s.leantos.list[0].heading = Math.PI / 2;
+    for (const z of [-0.8, -0.4, 0, 0.4, 0.8]) expect(canStand(world, -0.8, z, 0, opts)).toBe(false);
+    for (const z of [-0.5, 0, 0.5]) expect(canStand(world, 0.82, z, 0, opts)).toBe(true);
+  });
+
+  it('matches each rendered pile kind and long-log overhang, with body clearance', () => {
+    const s = state(), log = (id, len, more = {}) => ({ id, x: 0, z: 0, len, a: 0, rad: 0.1, ...more });
+    s.wood.piles.push(
+      { x: 0, z: 0, kind: 'driftwood', logs: [log(1, 2.2)] },
+      { x: 4, z: 0, kind: 'branch', logs: [log(2, 1.2, { branch: true })] },
+      { x: 8, z: 0, kind: 'frond', logs: [log(3, 1.4, { frond: true })] },
+      { x: 12, z: 0, kind: 'stone', logs: [log(4, 0.4, { stone: true, rad: 0.28 })] },
+    );
+    const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) };
+    for (const p of s.wood.piles) {
+      const o = opts.obstacles(p.x, p.z).find(q => q.x === p.x && q.z === p.z);
+      expect(o.r).toBeGreaterThan(PILE_R - 1e-6);
+      expect(canStand(world, p.x + o.r - 0.01, p.z, 0, opts)).toBe(false);
+      expect(canStand(world, p.x + o.r + 0.01, p.z, 0, opts)).toBe(true);
+    }
+    const path = createPath(world, opts);
+    expect(path.clear({ x: -3, z: 0 }, { x: 3, z: 0 })).toBe(false);
   });
 
   it('routes round current piles and immediately sees a pile moved, removed or a lean-to built', () => {

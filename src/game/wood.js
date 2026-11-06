@@ -105,7 +105,7 @@
  *   wood.state() -> { carried: [id], stones?: [id], piles: [{ x, z, kind, logs: [id] }], washed: [log],
  *     lost: [id], tide, nextId, wet?: [[id, t]] }   plain, for saving (wet: rain-soaked start wood and branches)
  *   saved: such a state, to start from
- * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, WASH_MAX, DRY_DAYS, BRANCH_DRY_DAYS, RAIN_REACH
+ * CARRY_MAX, CARRY_SLOW, CARRY_STRIDE, PILE_JOIN, PILE_MAX, PILE_NEXT, pileRadius(pile), WASH_MAX, DRY_DAYS, BRANCH_DRY_DAYS, RAIN_REACH
  * TOP_K, logTop(log) -> the height of a log's top (log.y + TOP_K * log.rad, TOP_K 1.7); under the sea while that is below the sea level
  * inStripY(y) -> true when ground at height y lies in the strip between low and high water (0.29.5)
  * kindOf(log) -> 'branch', 'frond', 'stone' or else 'driftwood' (the kind of pile a piece goes on)
@@ -132,8 +132,8 @@ export const CARRY_STRIDE = 0.07; // per piece: his step gets this much shorter 
 export const PILE_JOIN = 1.0;     // laying down this close to a pile adds to it
 export const PILE_MAX = 12;       // a pile holds at most this many pieces
 export const PILE_NEXT = 0.95;    // a new pile beside a full one stands this far from it
-const FRONT = 0.45;               // a first pile is laid this far in front of him
-const PILE_R = 0.45;              // how far a pile reaches round its centre
+export const PILE_FRONT = 0.45;   // a first pile is laid this far in front of him
+const PILE_R = 0.45;              // the smallest visible pile radius (the reach of a short, sparse pile)
 const LOW = -RANGE;                // the sea level at low water
 export const WASH_MAX = 2;        // at most this many new pieces per beach tile and high water
 const WASH_GAP = 1.3;             // a new piece keeps this far from other wood
@@ -147,6 +147,14 @@ export const inStripY = y => y > LOW + 0.02 && y < -0.03;   // 0.29.5: the groun
 
 export const kindOf = log => log && log.branch ? 'branch' : log && log.frond ? 'frond' : log && log.stone ? 'stone' : 'driftwood';
 const PILE_KINDS = ['driftwood', 'branch', 'frond', 'stone'];
+
+/** The visible horizontal radius of a pile, matching the conservative outer bound of its rendered pieces. */
+export function pileRadius(pile) {
+  if (!pile || !pile.logs || !pile.logs.length) return PILE_R;
+  if (pile.kind === 'frond') return 1;
+  if (pile.kind === 'stone') return Math.max(PILE_R, ...pile.logs.map(s => 0.2 + s.rad * 1.25));
+  return Math.max(PILE_R, ...pile.logs.map(l => l.len / 2 + 0.15 + l.rad));
+}
 
 const dryDays = log => log.branch ? BRANCH_DRY_DAYS : DRY_DAYS;
 export const dryness = (log, total) => log.t === undefined ? 1 : Math.max(0, Math.min(1, (total - log.t) / dryDays(log)));
@@ -219,7 +227,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
       const q = distToLog(l, x, z); if (q.d < bd) { bd = q.d; best = { kind: 'log', log: l, x: q.x, z: q.z, d: q.d }; }
     }
     if (only !== 'log') for (const p of wood.piles) {
-      const d = Math.max(0, Math.hypot(x - p.x, z - p.z) - PILE_R);
+      const d = Math.max(0, Math.hypot(x - p.x, z - p.z) - pileRadius(p));
       if (d < bd || (d === 0 && best && best.kind === 'log')) { bd = d; best = { kind: 'pile', pile: p, x: p.x, z: p.z, d }; }
     }
     return best;
@@ -270,7 +278,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     const pieces = [...mine].reverse();
     if (pile) pile.logs.push(...pieces.splice(0, PILE_MAX - pile.logs.length));
     if (pieces.length) {   // a new pile: a step in front, or right next to the pile that was full
-      const c = pile || close, spot = c ? spotAround(c.x, c.z, PILE_NEXT, heading, wetAt) : spotAround(x, z, FRONT, heading, wetAt);
+      const c = pile || close, spot = c ? spotAround(c.x, c.z, PILE_NEXT, heading, wetAt) : spotAround(x, z, PILE_FRONT, heading, wetAt);
       if (spot) { wood.piles.push({ x: spot.x, z: spot.z, kind, logs: pieces.splice(0) }); }
     }
     return pieces.reverse();

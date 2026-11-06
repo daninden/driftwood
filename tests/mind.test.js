@@ -4,13 +4,13 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, DRY_AT, DRY_MAX, DRY_NEAR, DRY_FIRE, DRY_LT, chooseGoal, errandPreempts, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, DRY_AT, DRY_MAX, DRY_NEAR, DRY_FIRE, DRY_LT, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, PASSIVE_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { canStand } from '../src/game/movement.js';
 import { seaLevel } from '../src/game/tide.js';
 import { FUEL_MAX, TORCH_DRY } from '../src/game/fire.js';
-import { dryness, inStripY, PILE_MAX } from '../src/game/wood.js';
+import { dryness, inStripY, PILE_MAX, PILE_FRONT } from '../src/game/wood.js';
 import { NEED, UPGRADES, ringCentre } from '../src/game/leanto.js';
 import { terrainAt, PACE } from '../src/game/movement.js';
 
@@ -98,6 +98,17 @@ describe('choosing a goal', () => {
     expect(storesStep(calm({ stock: 2 }))).toBe('wood'); expect(storesStep(calm({ stock: 2, fireLit: true }))).toBeNull();
     expect(storesStep(calm({ nuts: 0, cool: { husk: true }, stock: 0 }))).toBe('wood'); expect(storesStep(calm())).toBeNull();
     expect(storesStep(calm({ time: 0.1, nuts: 0 }))).toBeNull(); expect(storesStep(calm({ time: 0.7, nuts: 0 }))).toBeNull();
+  });
+});
+
+describe('the ring fire place', () => {
+  it('approaches a new ring pile so the ordinary front drop lands at the exact centre', () => {
+    const to = { x: 8.25, z: -3.5 };
+    for (const from of [{ x: 0, z: 0 }, { x: 9, z: -8 }, { x: 8.25, z: -3.5 }]) {
+      const at = exactPileDrop(from, to);
+      expect(at.x + Math.sin(at.heading) * PILE_FRONT).toBeCloseTo(to.x, 10);
+      expect(at.z + Math.cos(at.heading) * PILE_FRONT).toBeCloseTo(to.z, 10);
+    }
   });
 });
 

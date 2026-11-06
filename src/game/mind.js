@@ -71,6 +71,7 @@
  * homeNext(s) -> 'leanto' | 'walls' | 'ring' | 'bed' | null   pure (0.29.3): the next piece of his home now (s: day, time, fire (he has a camp), lean ('none' | 'half' | 'done' | 'other'), up {walls, ring, bed: 0..1}, builtDay, cool)
  * RANK   the priority of each goal (lower wins)
  * errandPreempts(current, next, errand, thirst, hunger) -> bool  0.29.8 preemption rule, pure
+ * exactPileDrop(from, to) -> { x, z, heading } the approach for an ordinary first-pile drop that lands exactly at to
  * createMind(world, game, opts?) -> mind
  *   mind.input        the input-like object main passes to game.update while the mind is in charge: up, down, left, right false, run, stick null, target, yaw (main sets
  *                     it from the view; the mind sets it itself while it starts the building of a lean-to, as a player turns the view), pace (1, or PACE while idling) and sit (false, true or a point to look at; 0.29.2), learns false except while searching (the game then learns no new ground from his steps), takeWake always false, takeAction / takeChoice / takeSleep /
@@ -99,7 +100,7 @@ import { createPath } from './path.js';
 import { canStand, terrainAt, PACE, WALK_SPEED } from './movement.js';
 import { DAY_SECONDS } from './clock.js';
 import { freshWater } from './water.js';
-import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX } from './wood.js';
+import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX, PILE_FRONT } from './wood.js';
 import { FIRE_MIN, FUEL_MAX, TORCH_DRY } from './fire.js';
 import { ringCentre, siteFor, UPGRADES, UP_NEAR, NEED, RING_AT, paidSteps } from './leanto.js';
 import { DAWN as SLEEP_DAWN } from './sleep.js';
@@ -235,6 +236,12 @@ export function chooseGoal(s) {
 export function errandPreempts(current, next, errand, thirst, hunger) {
   if (!(next in RANK) || RANK[next] >= RANK[current]) return false;
   return !errand || (next === 'drink' && thirst >= VERY_AT) || (next === 'eat' && hunger >= VERY_HUNGER_AT);
+}
+
+/** The standing point and facing that make the ordinary first-pile drop land exactly at `to`. */
+export function exactPileDrop(from, to) {
+  const dx = to.x - from.x, dz = to.z - from.z, len = Math.hypot(dx, dz) || 1, heading = Math.atan2(dx / len, dz / len);
+  return { x: to.x - Math.sin(heading) * PILE_FRONT, z: to.z - Math.cos(heading) * PILE_FRONT, heading };
 }
 
 export function createMind(world, game, opts = {}) {
@@ -626,6 +633,11 @@ export function createMind(world, game, opts = {}) {
   const carriedKind = () => W.carried.length ? (W.carried[0].branch ? 'branch' : W.carried[0].frond ? 'frond' : 'drift') : (W.stones.length ? 'stone' : null);
   function* layDown() { for (let n = 0; n < 3 && (W.carried.length || W.stones.length); n++) { if (!pressKind(['feed', 'lay'])) break; yield* waitIdle(); } }
   function* layAt(d) {   // lays what he carries down at d; when something else within reach takes the place of 'lay' in the arc, he steps aside and tries again
+    if (d.exact && W.load()) {
+      const at = exactPileDrop(p, d);
+      if (yield* walk(at.x, at.z, { stop: 0.08 })) { p.heading = at.heading; yield* layDown(); }
+      if (!W.load()) return;
+    }
     for (let tries = 0; tries < 3 && W.load(); tries++) {
       yield* layDown();
       if (!W.load()) break;
@@ -659,7 +671,7 @@ export function createMind(world, game, opts = {}) {
   // goes first, so a pile of branches and a pile of driftwood do not both grow to 6 (the arc would then offer to build, not to light)
   const pairNear = (fs, pk) => firePiles(fs).some(q => q.kind !== pk && q.logs.length >= NEED);   // a pile of the other kind with 6 or more pieces stands at the fire (two such piles within 2 m make the arc offer to build)
   function* gatherWood() {
-    const fs = fireSpot(), best = bestPile(fs), st = best ? fuelOfPile(best) : 0;
+    const h = homeSpot(), fs = fireSpot(h), best = bestPile(fs), st = best ? fuelOfPile(best) : 0;
     const topUp = !!best && st >= WOOD_WANT;   // the evening's wood is there: only fill the pile up, and only with its own kind (two piles of 6 or more would make the arc offer to build)
     const order = best && best.kind === 'branch' ? ['branch', 'drift'] : ['drift', 'branch'];
     if (wetCarried()) yield* deliverWet();   // 0.29.5: wet wood from a stroll is not the fire's
@@ -667,7 +679,10 @@ export function createMind(world, game, opts = {}) {
       const pk = kind === 'branch' ? 'branch' : 'driftwood', mine = firePiles(fs).filter(x => x.kind === pk).sort((a, b) => b.logs.length - a.logs.length)[0];
       let want = topUp ? Math.max(1, PILE_FULL - best.logs.length) : Math.max(1, Math.ceil((WOOD_WANT - st) / (kind === 'branch' ? 0.5 : 1)));
       if (pairNear(fs, pk)) { want = Math.min(want, NEED - 1 - (mine ? mine.logs.length : 0)); if (want < 1) continue; }   // 0.29.3: the other kind is already 6 or more: this pile stays below 6, else the arc offers to build and not to light
-      const dest = () => { const q = firePiles(fs).filter(x => x.kind === pk && x.logs.length < 12).sort((a, b) => b.logs.length - a.logs.length)[0]; return q ? standNear(q.x, q.z, 1) || fs : fs; };
+      const dest = () => {
+        const q = firePiles(fs).filter(x => x.kind === pk && x.logs.length < 12).sort((a, b) => b.logs.length - a.logs.length)[0];
+        return q ? standNear(q.x, q.z, 1) || fs : (h.kind === 'leanto' && h.lt && game.leantos.has(h.lt, 'ring') ? { ...fs, exact: true } : fs);
+      };
       if (kind === 'drift' && (yield* fetchDried(dest, want))) return true;   // 0.29.5: wood that has dried on the drying pile first
       if (!nearestBy(kind, 45, 4)) continue;
       return yield* gather(kind, dest, want);
