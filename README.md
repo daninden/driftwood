@@ -67,7 +67,7 @@ A light wind moves the palms, trees, bushes and grass near you, and now and then
 
 You can wade up to your waist. Upstream, where a river is a narrow brook, you can cross anywhere. Along the middle reach you can cross only at fords, which you can tell by stones sticking out of the water and white rippling water. The deep stretch towards the sea cannot be crossed.
 
-The tide comes in and goes out twice a day. At low water there is more beach to walk on. When the flood comes in round you, you can always wade back to shore. The flood wipes out your footprints.
+The tide comes in and goes out twice a day. At low water there is more beach to walk on. Your footprints stay clear for a short while, then fade away over about a minute of game time; a sleep moves that time on too. When the flood comes in round you, you can always wade back to shore. The flood wipes out your footprints.
 
 ### Driftwood
 
@@ -190,5 +190,5 @@ On a slow computer the game lowers the quality of its shadows (and, as a last st
 - [docs/architecture.md](docs/architecture.md): layers, modules, testing and saving
 - [docs/versions.md](docs/versions.md): the release log, every version with its short name and what changed
 - [docs/handover.md](docs/handover.md): the planning: what is live, what is being built and what is agreed next
-- [CLAUDE.md](CLAUDE.md): working agreements
+- [AGENTS.md](AGENTS.md): working agreements
 - [prototypes/](prototypes/): the prototypes the game grew out of

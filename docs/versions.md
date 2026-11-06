@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.6 "Fade" — 2026-11-06
+
+Footprints no longer remain while Dave stands still or sleeps. Each print records the game clock when it is laid (`render/footprints`): it stays at its normal opacity for 20 game seconds, then fades over 40 more. Its time opacity multiplies with the existing `MAX` 80 / `FADE` 24 step fade, so walking still thins the oldest part of a trail as before. The tide wipe is unchanged. Sleeping advances the same game clock, so a night clears the trail.
+
+- **Implementation:** `game.update` now reports its total game-clock days to the renderer; `render/islandView` passes that value to `render/footprints`. The footprint view converts it using `game/clock` `DAY_SECONDS` (1200): no separate real-time clock is introduced.
+- **Tests:** `tests/render.test.js` covers the full 20-second hold, midpoint and end of the 40-second fade, and multiplication with the existing step opacity. It also creates the footprint `THREE.InstancedMesh` without WebGL and reads its `aFade` buffer: a new print; zero-distance ageing at 20, 40 and 60 seconds; an off-sand refresh; a tide-erased print that stays erased; and a ring-buffer wrap whose replacement has its own laid time while the surviving prints keep their step ages. `tests/sleep.test.js` confirms the returned frame info carries `clock.total`, and that sleeping advances beyond the full 60-second footprint lifetime. Existing tests retain the `MAX`/`FADE` behaviour. `npm.cmd test -- --maxWorkers=1 --minWorkers=1 --no-file-parallelism`: 996 tests in 51 files passed (351.71 s); limiting the CLI worker pool avoids the earlier Vitest `onTaskUpdate` reporting timeout.
+
 ## 0.29.5 "Drying" — 2026-11-05
 
 Dave dries wet wood. Agreed with the user on 2026-11-05 (the aim: fewer evenings without a fire, especially in the first days of a new game, where the real-page playtest of 0.29.4 still showed none on days 1 to 3). No new rule, key, picture, pose, sound or text: he picks up and lays down like a player.

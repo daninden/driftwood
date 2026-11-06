@@ -59,13 +59,14 @@
  *   and looks that way, and stays down while it holds. It does nothing, and he gets up (SIT_TIME), when he sleeps or lies, kneels, stoops, holds a torch, carries wood, a frond or
  *   a stone, stands in water, on steep ground (SIT_SLOPE) or a climbing route, when a key, the stick or a target asks to walk, or on any press of the action button, an icon,
  *   a row drawing, F or Z; a walk starts at once while he is still getting up (the get-up takes half the time then). Sitting is only resting: no rule, no faster recovery.
- *   game.update(input, dt) -> { distance, terrain, time, sea, rest }
+ *   game.update(input, dt) -> { distance, terrain, time, total, sea, rest }
  *     dt is real time. Moves the player from the input (game/input; Shift
  *     or a double-tapped target runs, a load and tiredness slow down),
  *     clears a reached or blocked click target, advances the clock (faster
  *     while asleep), lets the tide wash up wood at each high water and take
  *     piles it covers, and reports what is under the player's feet, the
- *     time of day, the sea level and how rested the castaway is.
+ *     time of day, total game-clock days, the sea level and how rested the
+ *     castaway is.
  *     Clicking and tapping only walk. A tapped target (target.tap) is looked
  *     at once: on or near a piece of driftwood, a pile, a coconut, a fire or a
  *     torch in the ground (closer for a mouse than for a finger, target.touch)
@@ -560,7 +561,7 @@ export function createGame(world, spawn, opts = {}) {
     settle();
     wildlife.update(dt, { gone: crabs.isGone, x: player.x, z: player.z, time: clock.time, sea: game.sea, wading: here().depth > 0.05, asleep: sleep.asleep });   // crabs, fish and birds near him (not saved)
     fireflies.update(dt, { x: player.x, z: player.z, time: clock.time });   // the fireflies near him at night (not saved)
-    return { distance: res.distance, terrain: here(), time: clock.time, sea: game.sea, rest: sleep.rest() };
+    return { distance: res.distance, terrain: here(), time: clock.time, total: clock.total, sea: game.sea, rest: sleep.rest() };
   }
   function state() {
     return { seed: world.seed, time: clock.time, day: clock.day, player: { x: player.x, z: player.z, heading: player.heading }, sleep: sleep.state(), wood: wood.state(), fibre: fibre.state(), fire: fire.state(), thirst: thirst.state(), hunger: hunger.state(), branches: branches.state(), fronds: fronds.state(), stones: stones.state(), leantos: leantos.state(), crabs: crabs.state(), shells: shells.state(), berries: berries.state(), bananas: bananas.state(), known: known.state() };

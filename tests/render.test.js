@@ -1,10 +1,11 @@
-// Small pure pieces of the renderer: the silhouette of the castaway, the
-// fading footprints, the rest mark and the surf following the tide.
+// Small renderer pieces: the silhouette of the castaway, the footprint fade
+// buffer, the rest mark and the surf following the tide.
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { flameWorld, FLAME_LOCAL } from '../src/render/fire.js';
 import { SIL_OPACITY, LEAN, HANG } from '../src/render/hero.js';
-import { printAlpha, MAX, FADE } from '../src/render/footprints.js';
+import { createFootprints, printAlpha, timeAlpha, MAX, FADE, TIME_HOLD, TIME_FADE } from '../src/render/footprints.js';
+import { DAY_SECONDS } from '../src/game/clock.js';
 import { moonPath, markOpacity, CLEAR_BELOW } from '../src/render/restMark.js';
 import { carryItems, carryChanged, carryOpacity, createCarryMark, isUsable, USABLE, DRAWINGS, ITEMS, REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 import { foamWeights, FOAM_LEVELS } from '../src/render/water.js';
@@ -37,12 +38,51 @@ describe('torch flame', () => {
 });
 
 describe('footprints', () => {
+  const player = { x: 0, z: 0, heading: 0 };
+  const seconds = n => n / DAY_SECONDS;
+  const footprintView = () => {
+    const scene = new THREE.Scene(), view = createFootprints(scene, () => 0);
+    const mesh = scene.children.find(o => o.isInstancedMesh);
+    return { view, fade: mesh.geometry.getAttribute('aFade').array };
+  };
   it('keep the newest prints, fade the oldest and drop the rest', () => {
     expect(printAlpha(0)).toBeCloseTo(0.75);
     expect(printAlpha(MAX - FADE - 1)).toBeCloseTo(0.75);
     expect(printAlpha(MAX - FADE / 2)).toBeCloseTo(0.75 / 2);
     expect(printAlpha(MAX - 1)).toBeGreaterThan(0); expect(printAlpha(MAX)).toBe(0);
     for (let a = 1; a < MAX; a++) expect(printAlpha(a)).toBeLessThanOrEqual(printAlpha(a - 1));
+  });
+  it('keep each print full for twenty game seconds, then fade it over forty', () => {
+    expect(TIME_HOLD).toBe(20); expect(TIME_FADE).toBe(40);
+    expect(timeAlpha(0)).toBe(1); expect(timeAlpha(TIME_HOLD)).toBe(1);
+    expect(timeAlpha(TIME_HOLD + TIME_FADE / 2)).toBeCloseTo(0.5);
+    expect(timeAlpha(TIME_HOLD + TIME_FADE)).toBe(0);
+    expect(printAlpha(MAX - FADE / 2) * timeAlpha(TIME_HOLD + TIME_FADE / 2)).toBeCloseTo(0.75 / 4);
+  });
+  it('writes the time fade into the aFade buffer while standing on sand', () => {
+    const { view, fade } = footprintView();
+    view.step(player, 1, true, 0); expect(fade[0]).toBeCloseTo(printAlpha(0));
+    view.step(player, 0, true, seconds(20)); expect(fade[0]).toBeCloseTo(printAlpha(0));
+    view.step(player, 0, true, seconds(40)); expect(fade[0]).toBeCloseTo(printAlpha(0) / 2);
+    view.step(player, 0, true, seconds(60)); expect(fade[0]).toBe(0);
+  });
+  it('refreshes while off sand, and a tide-erased print never returns', () => {
+    const { view, fade } = footprintView();
+    view.step(player, 1, true, 0);
+    view.step(player, 0, false, seconds(40)); expect(fade[0]).toBeCloseTo(printAlpha(0) / 2);
+    view.wash(1); expect(fade[0]).toBe(0);
+    view.step(player, 0, true, seconds(20)); expect(fade[0]).toBe(0);
+  });
+  it('keeps step ages through a ring-buffer wrap and gives the replacement its own laid time', () => {
+    const { view, fade } = footprintView();
+    for (let i = 0; i < MAX; i++) view.step(player, 1, true, 0);
+    view.step(player, 1, true, seconds(20));   // replaces slot 0, the oldest print
+    expect(fade[0]).toBeCloseTo(printAlpha(0));
+    expect(fade[79]).toBeCloseTo(printAlpha(1));
+    expect(fade[1]).toBeCloseTo(printAlpha(MAX - 1));
+    view.step(player, 0, true, seconds(40));
+    expect(fade[0]).toBeCloseTo(printAlpha(0));   // it is only 20 seconds old
+    expect(fade[79]).toBeCloseTo(printAlpha(1) / 2);
   });
 });
 

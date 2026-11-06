@@ -8,6 +8,7 @@ import { createSleep, isNight, AWAKE_MAX, TIRED_AT, TIRED_SLOW, SLEEP_DAYS, SPEE
 import { createGame } from '../src/game/game.js';
 import { createInput } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
+import { timeAlpha, TIME_HOLD, TIME_FADE } from '../src/render/footprints.js';
 import { FIRST_HIGH, PERIOD, RANGE } from '../src/game/tide.js';
 import { WALK_SPEED } from '../src/game/movement.js';
 
@@ -83,6 +84,15 @@ describe('sleeping in the game', () => {
     expect(g.sleep.asleep).toBe(false); expect(g.player.lie).toBe(0);
     run(dt => g.update(input, dt), 0.5);
     expect(Math.hypot(g.player.x - spawn.x, g.player.z - spawn.z)).toBeGreaterThan(0.5);
+  });
+  it('advances the game clock far enough to erase a time-faded footprint', () => {
+    const g = createGame(w, spawn, { time: 0.9, sleep: { awake: 1 } }), input = makeInput({ sleep: true });
+    const t0 = g.clock.total;
+    const info = g.update(input, 1 / 30);
+    expect(info.total).toBeCloseTo(g.clock.total);
+    run(dt => g.update(input, dt), 8);
+    expect((g.clock.total - t0) * DAY_SECONDS).toBeGreaterThan(TIME_HOLD + TIME_FADE);
+    expect(timeAlpha((g.clock.total - t0) * DAY_SECONDS)).toBe(0);
   });
   it('cannot lie down in the water', () => {
     let p = null;

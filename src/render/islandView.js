@@ -6,7 +6,7 @@
  *   start { x, z }: where the game begins, so only the far tiles in view
  *   there are built before it starts (the rest follow in the background)
  *   view.render(player, frameInfo, dt)
- *     frameInfo: { distance, terrain, time, sea } from game.update
+ *     frameInfo: { distance, terrain, time, total, sea } from game.update
  *     follows the player with camera and sun, sets the light for the time
  *     of day, streams detailed tiles,
  *     footprints, mood, sets the sea level of the tide, the wind (render/wind, render/windShader: plants on the detailed tiles sway), and draws the frame.
@@ -139,7 +139,7 @@ export async function createIslandView(world, container, progress, start, opts =
     const total = game ? game.clock.total : 0;
     if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); findsView.update(); berryView.update(); bananaView.update(); leantoView.update(); }
     hero.update(player, t.depth, game ? loadOf(game.wood, total) : NO_LOAD);
-    steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver);
+    steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver, info.total);
     steps.wash(sea);
     const { yaw, pitch } = cam;
     streamer.update(player, cam.zoom, aspect, yaw, pitch);
