@@ -6,7 +6,7 @@ Each push that delivers something gets a version number and a short name, shown 
 
 **Following Checks (design first, 2026-11-06): 0.30.3 "Routes".** Investigate and propose a coherent redesign of pathfinding and movement around structures, including entrances and valid action approach points. The user wants a fundamental solution rather than further local patches. Discuss and approve the architecture before implementation; the algorithm is not yet chosen. Scope and acceptance criteria are in `docs/handover.md`; no game changes are part of this planning update.
 
-**Following Routes (planning only, 2026-11-06): 0.30.4 "Timber".** Fetch wood from the farthest eligible piece towards nearer pieces on the return to its delivery place. Wet wood for drying may be collected three pieces at a time within the existing carrying capacity and five-piece drying reserve. Preserve reachability, source eligibility, drying/fire separation and gameplay safety rules. See `docs/handover.md`; nothing is implemented in this planning update.
+**Following Routes (planning only, 2026-11-06): 0.30.4 "Timber".** First select the three nearest suitable pieces from Dave's current position (or fewer when needed); collect the farthest of that selected set first, then the nearer pieces. This is not a search for the farthest log overall or distance from camp. Wet wood for drying may be collected three pieces at a time within the existing carrying capacity and five-piece drying reserve. Preserve reachability, source eligibility, drying/fire separation and gameplay safety rules. See `docs/handover.md`; nothing is implemented in this planning update.
 
 ## 0.30.1 "Thoughts" — 2026-11-06
 
