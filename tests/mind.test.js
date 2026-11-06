@@ -4,7 +4,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, DRY_AT, DRY_MAX, DRY_NEAR, DRY_FIRE, DRY_LT, chooseGoal, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, DRY_AT, DRY_MAX, DRY_NEAR, DRY_FIRE, DRY_LT, chooseGoal, errandPreempts, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, PASSIVE_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { canStand } from '../src/game/movement.js';
@@ -98,6 +98,22 @@ describe('choosing a goal', () => {
     expect(storesStep(calm({ stock: 2 }))).toBe('wood'); expect(storesStep(calm({ stock: 2, fireLit: true }))).toBeNull();
     expect(storesStep(calm({ nuts: 0, cool: { husk: true }, stock: 0 }))).toBe('wood'); expect(storesStep(calm())).toBeNull();
     expect(storesStep(calm({ time: 0.1, nuts: 0 }))).toBeNull(); expect(storesStep(calm({ time: 0.7, nuts: 0 }))).toBeNull();
+  });
+});
+
+describe('errands (0.29.8 "Errand")', () => {
+  it('finishes a material errand before ordinary drink, food or sleep, while pastimes remain interruptible', () => {
+    expect(errandPreempts('stores', 'drink', true, THIRST_GO, 0)).toBe(false);
+    expect(errandPreempts('idle', 'drink', false, THIRST_GO, 0)).toBe(true);
+    expect(errandPreempts('idle', 'sleep', false, 0, 0)).toBe(true);
+    expect(errandPreempts('idle', 'fire', false, 0, 0)).toBe(true);
+  });
+  it('uses the agreed thirst and hunger emergency brakes, without relaxing the ordinary thresholds', () => {
+    expect([VERY_AT, VERY_HUNGER_AT]).toEqual([1, 2]);
+    expect(errandPreempts('stores', 'drink', true, VERY_AT - 0.01, 0)).toBe(false);
+    expect(errandPreempts('stores', 'eat', true, 0, VERY_HUNGER_AT - 0.01)).toBe(false);
+    expect(errandPreempts('stores', 'drink', true, VERY_AT, 0)).toBe(true);
+    expect(errandPreempts('stores', 'eat', true, 0, VERY_HUNGER_AT)).toBe(true);
   });
 });
 
@@ -326,6 +342,32 @@ const camp = ({ day = HOME_DAY, time = 0.22, leantos = null, know = true, piles 
   return g;
 };
 const LT = (o = {}) => ({ list: [{ id: 0, x: spawn.x + 6, z: spawn.z + 2, heading: 0, progress: 1, ...o }], nextId: 1 });
+
+describe('abandoned material piles (0.29.8 "Errand")', () => {
+  it('finds an external pile on known ground by path cost, but not fire, drying or home-project piles', () => {
+    const g = camp();
+    g.player.x += 12;
+    const at = { x: g.player.x, z: g.player.z }, log = (id, x, z) => ({ id, x, y: w.H(x, z), z, len: 1, a: 0, rad: 0.08, branch: true });
+    const outside = { id: 801, x: at.x, z: at.z, kind: 'branch', logs: [log(801, at.x, at.z), log(802, at.x, at.z), log(803, at.x, at.z)] };
+    const fire = { id: 802, x: spawn.x, z: spawn.z, kind: 'branch', logs: [log(804, spawn.x, spawn.z)] };
+    g.wood.piles.push(outside, fire);
+    const m = createMind(w, g); m.engage();
+    expect(m.materialFind('branch', 45).pile).toBe(outside);
+    g.wood.piles.splice(g.wood.piles.indexOf(outside), 1);
+    expect(m.materialFind('branch', 45).pile).not.toBe(fire);
+  });
+  it('does not dig below a wet top piece when selecting a driftwood pile', () => {
+    const g = camp();
+    g.player.x += 12;
+    const x = g.player.x, z = g.player.z, dry = { id: 811, x, y: w.H(x, z), z, len: 1, a: 0, rad: 0.08, t: g.clock.total - 2 }, wet = { id: 812, x, y: w.H(x, z), z, len: 1, a: 0, rad: 0.08, t: g.clock.total };
+    const pile = { id: 811, x, z, kind: 'driftwood', logs: [dry, wet] };
+    g.wood.piles.push(pile);
+    const m = createMind(w, g); m.engage();
+    expect(m.materialFind('drift', 45)?.pile).not.toBe(pile);
+    pile.logs.pop();
+    expect(m.materialFind('drift', 45).pile).toBe(pile);
+  });
+});
 
 describe('his home: when and what (homeNext, pure)', () => {
   it('starts on the third day (two nights lived) and only with a camp, by day in the morning', () => {

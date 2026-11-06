@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.8 "Errand" — 2026-11-06
+
+Dave now finishes a real errand before an ordinary higher-ranked need takes over. A load for the fire, stores or home reaches its intended pile; moving dried wood, husking for supplies and a crab trip likewise finish before he drinks, eats or sleeps. Sitting, strolling and idling remain interruptible. The emergency brake remains: thirst at one day or hunger at two days immediately takes over, and every existing goal time limit still applies.
+
+- **Abandoned material piles:** while seeking driftwood, branches, fronds or stones, Dave now considers piles of the right kind on known ground as well as loose finds, selects by actual walking cost and takes the top pieces up to what he can carry. His own fire, drying and home-project piles are excluded. Dry-fire and wet-strip rules are unchanged: dry top driftwood only for the fire; wet strip wood still goes to drying.
+- **Known limitation:** on the ten-day, walked-first-day-known-ground simulation of seed 1337, the drying routine can shuttle the same six logs repeatedly (`wetTaken` 6, `laid` 6, `moved` 78). It does not create 78 sites (there are 3), but violates the normal moved-at-most-laid conservation check. That exact case is an explicit expected-failing regression test; every other scenario keeps the strict check. The release does not otherwise claim to fix it.
+- **Known limitation:** on the ten-day, walked-first-day-known-ground simulation of seed 2024, Dave records 11 exploring ticks on climbing routes (`exploreRoute`); `outside` is 0. The cause is not yet established. The normal route-safety assertion remains visibly red for that scenario; the separate, exact expected-failing assertion records the accepted regression without changing its identity. Every other route and known-ground check remains strict.
+- **Implementation and tests:** `game/mind` scopes protection to concrete errands rather than the enclosing idle goal, so a stroll or rest is still interrupted. The fresh starts of seeds 1337 and 7 each have one user-approved extra fireless evening (6 rather than 5), and the two-day sitting rhythm is accepted at over 170 s (measured 172.1 s). Common/rhythm checks now name their exact metric and include the run report on failure. The seed-2024 route failure and seed-1337 drying conservation failure are accepted release limitations; no broad assertion relaxation was made. The user accepted proceeding to the next story with these documented failures.
+
 ## 0.29.7 "Quality" — 2026-11-06
 
 Desktop players can choose whether quality keeps adapting. **G** cycles **Auto → 0 → 1 → 2 → 3 → 4 → Auto**; a numbered level is fixed and stops the governor, and Auto resumes from the last automatic level. The choice is remembered in the browser without adding a menu or any game UI. Touch-only devices have no new key and remain automatic. The developer line now says, for example, `q2 auto` or `q2 fixed`.

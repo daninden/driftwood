@@ -21,5 +21,5 @@ lifeSuite(7, {
       expect(drank).toBe(true); expect(maxThirst).toBeLessThan(0.7); expect(m.stats.stuck).toBeLessThan(5); expect(m.stats.searches).toBeGreaterThanOrEqual(1);
     },
   }],
-  fresh: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, stuckMax: 3, searches: 1, nights: 7, inland: 1, crabs: 1, drinksMin: 1.9, evenings: 5, dried: 1 },
+  fresh: { idle: 0.55, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, stuckMax: 3, searches: 1, nights: 7, inland: 1, crabs: 1, drinksMin: 1.9, evenings: 6, dried: 1 },   // 0.29.8: user approved one additional fireless evening
 });

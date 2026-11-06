@@ -124,6 +124,12 @@ Rules:
 
 Every module starts with a header that says what it does, what it exports and what it depends on.
 
+### Mind errands (0.29.8)
+
+`game/mind` keeps an internal errand depth while a concrete material task is running: gathering or delivering fire/store/home material, husking for supplies, moving dried wood, or a crab trip. The priority check still runs every `CHECK` seconds and all existing goal `LIMIT`s still end a stuck errand, but ordinary higher-ranked drink, eat and sleep goals wait until that generator returns. `errandPreempts` is pure and allows the two emergency overrides only: drink at `VERY_AT` (1 day of thirst) and eat at `VERY_HUNGER_AT` (2 days of hunger). Idle rests and strolls never enter the errand scope.
+
+Material lookup combines loose finds with eligible piles on known ground and compares their `game/path` cost. A pile is eligible only when its top carry-sized group satisfies the source's rules (dry driftwood for the fire); fire, drying and lean-to-site piles are excluded. The player's normal pickup still takes the top group, so the mind follows the same stack order.
+
 ## One frame
 
 The loop runs at the screen's rate but `main` only runs a frame when `render/framePacer` says it is due: at most 30 a second on touch-only devices (`touchOnly` from `render/thumbStick`), none on a desktop, and at most 15 a second on every device once nothing has been happening for 3 s. Happening: the castaway moving, working, bending, lying down or asleep (the sped-up sleep keeps the normal rate), the camera still easing (`view.settling`), a key held, the stick, a walking target, the action button held, and any pointer, touch, key or wheel event (listened for on `window` in the capture phase, so the stick counts too; an event while idle also drops the schedule, so the next screen frame is drawn at once). Fire and torch flicker and the slow sun and tide do not count. The game's `dt` is the time since the last drawn frame, clamped to 0.05 s (0.1 s while idle, so the game clock does not run slow at 15 fps). `__driftwood.frames` counts the drawn frames.

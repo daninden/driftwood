@@ -154,7 +154,7 @@ describe('when the mind sits (game/mind)', () => {
       lastSit = p.sitting;
     } });
     expect(r.errors).toEqual([]); expect(bad.slice(0, 5)).toEqual([]);
-    expect(sat).toBe(1); expect(mind.stats.sitSecs).toBeGreaterThan(200);
+    expect(sat).toBe(1); expect(mind.stats.sitSecs).toBeGreaterThan(170);   // 0.29.8: user approved the measured 172.1 s rhythm change
     expect(seen.idleMoving).toBeGreaterThan(1000); expect(seen.idleMax).toBeLessThan(WALK_SPEED * PACE * 1.1); expect(seen.idleSum / seen.idleMoving).toBeLessThan(WALK_SPEED * PACE);   // the stroll never goes faster than the amble (sliding past a trunk can add a few centimetres to a step)
     expect(seen.errandMoving).toBeGreaterThan(300); expect(seen.errandMax).toBeGreaterThan(WALK_SPEED * 0.95); expect(seen.errandSum / seen.errandMoving).toBeGreaterThan(WALK_SPEED * 0.8); expect(seen.errandMax).toBeLessThanOrEqual(RUN_SPEED);   // errands at the normal walking speed (a very thirsty run is faster)
     expect(Object.keys(mind.stats.sits).sort()).toEqual(['fire', 'gaze', 'rest']);   // all three: the gaze, the evening by the fire, the long rests
