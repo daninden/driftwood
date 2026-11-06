@@ -4,6 +4,8 @@ Each push that delivers something gets a version number and a short name, shown 
 
 **Next agreed (planning only, 2026-11-06): 0.30.2 "Checks".** Faster test feedback through explicit unit/integration/long-simulation commands, eliminating duplicate scenario runs and measuring conservative parallelism, without weakening coverage or changing gameplay. See `docs/handover.md` for scope and outstanding failures. This documentation-only planning update leaves the shipped game at 0.30.1 "Thoughts"; implementation has not started. Stop this session after pushing the planning update.
 
+**Following Checks (design first, 2026-11-06): 0.30.3 "Routes".** Investigate and propose a coherent redesign of pathfinding and movement around structures, including entrances and valid action approach points. The user wants a fundamental solution rather than further local patches. Discuss and approve the architecture before implementation; the algorithm is not yet chosen. Scope and acceptance criteria are in `docs/handover.md`; no game changes are part of this planning update.
+
 ## 0.30.1 "Thoughts" — 2026-11-06
 
 Dave's written voice now explains a need before its errand rather than narrating each hand movement: wood, hunger, thirst, rest, low flames, an unlit fire, food or fibre reserves and wood drying each get a brief situational thought. Material thoughts wait until there is something to fetch. Autonomous pickups, deliveries and repeated attempts stay quiet; the mind's decisions and gameplay remain unchanged. Displayed thoughts leave at least eight seconds of quiet between them, and the same kind is suppressed for a minute, without queuing stale lines.
