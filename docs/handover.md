@@ -34,9 +34,17 @@ Everything up to 0.29.5 "Drying" is built (reviewed and approved by the user on 
 
 ## Next, agreed with the user
 
-Agreed with the user on 2026-11-04, in this order (the user calls the castaway "Dave"):
+**Next: 0.30.2 "Checks" — faster test feedback without reducing coverage.** Agreed on 2026-11-06 after 0.30.1 "Thoughts" was pushed at `8dc3d1a`. The user requested recording this as the next task, pushing the handover, then stopping this session. Do not implement it in this session.
 
-**0.30.1 "Thoughts" is the current approved refinement of Voice**, including time-only log entries. Finish verification, then stop; 0.31 Outposts, 0.32 Garden and 0.33 Castaway mind AI remain unapproved. Dry stock and 0.30 Voice are already on main.
+Scope for the next session:
+1. Separate fast unit checks, integration tests and long game/mind simulations into clear commands, retaining one command that runs all checks. Keep browser smoke checks and browser playtests explicit and separate. Document what each command covers and which checks are required before release; do not silently weaken the existing release gate.
+2. Remove duplicate simulation work without dropping assertions: the ten-day walked seed-1337 scenario currently runs in both `tests/helpers/lifeSuite.js` and `tests/dryStock.test.js`. Share a scenario result safely, with independent game state for scenarios that need it; never reuse a stale result across code changes.
+3. Measure one versus two workers and retain safe memory use. Record before/after wall time and distinguish island generation, pathfinding and game updates before attempting deeper optimisation or shared world fixtures.
+4. Preserve seeds, scenario lengths, simulation step sizes and all safety/balance assertions. Do not hide the current failures, lower minimum counts, skip failing tests, or merely raise timeouts to present the suite as faster or green. The failures recorded above remain unresolved; compare against the previous release before attributing them to this work. Fixing gameplay is a separate discussion.
+
+Evidence from the last serial run: `tests/mind.test.js` about 123 s, `tests/mindLife1337.test.js` about 195 s and `tests/dryStock.test.js` about 69 s; the full run exceeded 600 s. These are baseline observations, not promised speedups. Relevant files: `package.json`, `vite.config.js`, `tests/helpers/lifeSuite.js`, `tests/helpers/mindSim.js`, `tests/mindLife*.test.js`, `tests/mind.test.js` and `tests/dryStock.test.js`. Preserve the existing local user changes in `tests/helpers/mindSim.js` and `tests/pathFollow.test.js`.
+
+0.30.1 "Thoughts" is delivered, including time-only log entries. 0.31 Outposts, 0.32 Garden and 0.33 Castaway mind AI remain unapproved. The items below are historical agreements, originally made from 2026-11-04 onward (the user calls the castaway "Dave"):
 
 1. **0.22.4 "Above water"** (built, live): loose wood that still sticks out of the water can be picked up (the sea below the top of the log), as long as he can wade there; fully covered wood stays out of reach.
 2. **0.23 "Breath"** (built, live): running 5.5 m/s (was 3.9), but only about 12 s in a row; then he is out of breath, walks by himself and pants softly, and can run again once he has recovered (about 8 s walking, faster standing still). Shorter, heavier strides when breath runs low; needs and load make it run out faster. No meter.
