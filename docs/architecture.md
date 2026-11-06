@@ -290,6 +290,10 @@ Before 0.27.8 every tile (near and far) and every ground view made one `Instance
 
 `node scripts/perf.js --only draw [--w 1366 --h 768] [--html file] [--out prefix]` measures this: it walks 100 m inland and back (about 0.12 m a frame) in rounds, standing and zoomed out, then again with the CPU slowed 4x (CDP `Emulation.setCPUThrottlingRate`), and reports draw calls, frame time (median, p95, max; frames in which tiles were built apart), the cost of the tile-building frames, the JS heap after a collection and the `stats()` after every round (the instance and geometry counts must return to the same level).
 
+## Dynamic camp obstacles (0.29.9 "Solid")
+
+`game/obstacles` is pure and turns the current piles, fires, burnt places and lean-tos into a read-only nearby-circle callback. It marks the lean-to's back roof edge and sides, never the open front. `game/game` owns that callback and passes it as an option to `game/movement`; `game/mind` gives the same option to `game/path`. Thus `world` does not know game state and there is no circular dependency. Static terrain stand and edge results remain cached; dynamic path checks are not cached, so piles and structures take effect immediately when they are added, moved, removed or built.
+
 ## Agreements
 
 - New game elements only after discussion. Atmosphere comes first.

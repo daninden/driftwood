@@ -34,15 +34,15 @@
  *   is allowed when it would be allowed onto the ground at either end (each judged by its own slope, the step's grade,
  *   and the climbing route there), so a step you took up into a steep pocket can always be taken back out. Water is
  *   not symmetric on purpose (only going deeper is blocked).
- * obstaclesNear(world, x, z) -> [{ x, z, r }] blocking circles from the tiles
+ * obstaclesNear(world, x, z, opts?) -> [{ x, z, r }] blocking circles from the tiles
  *   around (x, z); r already includes the castaway's own radius (BODY)
  * bushFactor(world, x, z) -> speed factor 0..1 from bushes at (x, z)
- * pushOut(world, from, x, z) -> { x, z } moved back onto the rim of any
+ * pushOut(world, from, x, z, opts?) -> { x, z } moved back onto the rim of any
  *   obstacle that stepping from `from` to (x, z) would enter
- * canStand(world, x, z, sea?) -> true when the castaway can be put at (x, z):
+ * canStand(world, x, z, sea?, opts?) -> true when the castaway can be put at (x, z):
  *   on the island, not in open sea or river water deeper than WADE_MAX, not
  *   on a wall (unless a passage) and not inside a trunk, boulder or crag
- * nearestStandable(world, x, z, sea?, maxR?) -> { x, z } | null   (x, z) itself
+ * nearestStandable(world, x, z, sea?, maxR?, opts?) -> { x, z } | null   (x, z) itself
  *   when he can stand there, else the nearest such spot on rings of 0.5 m
  *   steps out to maxR (15 m), or null
  * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase, stoop, sitting } (sitting: 0..1, game/game)
@@ -51,7 +51,7 @@
  *   stick (input.stick, already a direction on the island), keys or target;
  *   keys walk relative to the screen, so they use input.yaw (the current
  *   view angle, see core/view; the starting view when missing)
- * stepPlayer(world, player, dir, dt, run, load?, sea?, stride?) -> { moved, distance, blocked }
+ * stepPlayer(world, player, dir, dt, run, load?, sea?, stride?, opts?) -> { moved, distance, blocked }
  *   Mutates player. run: the run speed (RUN_SPEED), asked for by game/game only while he has breath (game/breath). load (default 1) scales the speed, for carrying
  *   (game/wood) and tiredness (game/sleep); sea is the sea level. `phase` advances with distance (for the walk cycle);
  *   stride (default 1) is the length of his step: a load makes it shorter
@@ -134,21 +134,22 @@ function neighbours(w, tile, x, z) {
 }
 
 const REACH = 1.6;   // larger than any obstacle radius
-export function obstaclesNear(w, x, z) {
+export function obstaclesNear(w, x, z, opts = null) {
   const out = [], t0x = Math.floor((x - REACH + HALF) / T), t1x = Math.floor((x + REACH + HALF) / T);
   const t0z = Math.floor((z - REACH + HALF) / T), t1z = Math.floor((z + REACH + HALF) / T);
   for (let tz = Math.max(0, t0z); tz <= Math.min(NT - 1, t1z); tz++) for (let tx = Math.max(0, t0x); tx <= Math.min(NT - 1, t1x); tx++) {
     const tile = w.tiles[tz * NT + tx];
     if (tile) for (const o of tileObstacles(w, tile)) if (Math.abs(o.x - x) < REACH && Math.abs(o.z - z) < REACH) out.push(o);
   }
+  if (opts && typeof opts.obstacles === 'function') out.push(...opts.obstacles(x, z, REACH));
   return out;
 }
 
 /** Push (x, z) out of any obstacle it entered from `a`, onto its rim: that makes you slide round trunks and boulders. */
-export function pushOut(w, a, x, z) {
+export function pushOut(w, a, x, z, opts = null) {
   for (let pass = 0; pass < 3; pass++) {
     let moved = false;
-    for (const o of obstaclesNear(w, x, z)) {
+    for (const o of obstaclesNear(w, x, z, opts)) {
       const dx = x - o.x, dz = z - o.z, d = Math.hypot(dx, dz);
       if (d >= o.r || d >= Math.hypot(a.x - o.x, a.z - o.z)) continue;   // outside, or already inside and walking out
       const k = d > 1e-6 ? o.r / d : 0; x = o.x + (k ? dx * k : o.r); z = o.z + (k ? dz * k : 0); moved = true;
@@ -189,12 +190,12 @@ export function stepFactor(w, a, x, z, sea = 0, bushes = true) {
   return f;
 }
 
-export function canStand(w, x, z, sea = 0) {
+export function canStand(w, x, z, sea = 0, opts = null) {
   if (!(Math.abs(x) < HALF - 1 && Math.abs(z) < HALF - 1)) return false;
   const t = terrainAt(w, x, z, sea);
   if (!Number.isFinite(t.y) || t.y < sea - 0.6 || (t.inRiver && t.depth > WADE_MAX)) return false;
   if (!(t.s < 0.85 || (t.climb > 0.25 && t.s < 3.2))) return false;
-  return !(w.tiles && obstaclesNear(w, x, z).some(o => Math.hypot(x - o.x, z - o.z) < o.r));
+  return !(w.tiles && obstaclesNear(w, x, z, opts).some(o => Math.hypot(x - o.x, z - o.z) < o.r));
 }
 
 /**
@@ -203,22 +204,22 @@ export function canStand(w, x, z, sea = 0) {
  * climbing: up to 3.2 anywhere, up to the haul limit (3.2, 4.8 on a bench or root wall) plus 0.5 on a climbing route, and wading no deeper than 0.6; the slack is for where a step ends between the points it was judged at. Wider than
  * canStand, which puts him down from outside (a click, a save of an older island); a saved spot he walked to passes this.
  */
-export function canOccupy(w, x, z, sea = 0) {
+export function canOccupy(w, x, z, sea = 0, opts = null) {
   if (!(Math.abs(x) < HALF - 1 && Math.abs(z) < HALF - 1)) return false;
   const t = terrainAt(w, x, z, sea);
   if (!Number.isFinite(t.y) || t.y < sea - 0.6 || (t.inRiver && t.depth > OCCUPY_DEPTH)) return false;
   if (!(t.s < OCCUPY_SLOPE || (t.climb > 0.25 && t.s < 3.2 + 1.6 * Math.max(t.pa.bench, t.pa.roots) + OCCUPY_CLIMB))) return false;
-  return !(w.tiles && obstaclesNear(w, x, z).some(o => Math.hypot(x - o.x, z - o.z) < o.r - 0.05));
+  return !(w.tiles && obstaclesNear(w, x, z, opts).some(o => Math.hypot(x - o.x, z - o.z) < o.r - 0.05));
 }
 
-export function nearestStandable(w, x, z, sea = 0, maxR = 15) {
+export function nearestStandable(w, x, z, sea = 0, maxR = 15, opts = null) {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
-  if (canStand(w, x, z, sea)) return { x, z };
+  if (canStand(w, x, z, sea, opts)) return { x, z };
   for (let r = 0.5; r <= maxR; r += 0.5) {
     const n = Math.max(8, Math.ceil(2 * Math.PI * r / 0.5));
     for (let i = 0; i < n; i++) {
       const a = 2 * Math.PI * i / n, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
-      if (canStand(w, px, pz, sea)) return { x: px, z: pz };
+      if (canStand(w, px, pz, sea, opts)) return { x: px, z: pz };
     }
   }
   return null;
@@ -244,7 +245,7 @@ export function moveIntent(input, player) {
 
 const DEFLECT = [0, 0.5, -0.5, 1.0, -1.0, 1.35, -1.35];
 
-export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0, stride = 1) {
+export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0, stride = 1, opts = null) {
   if (!dir) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: false }; }
   const base = (run ? RUN_SPEED : WALK_SPEED) * load * dt, here = { x: p.x, z: p.z, y: p.y };
   let best = null;
@@ -257,7 +258,7 @@ export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0, stride
   if (!best) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
   let step = base * best.f, nx = p.x + best.dx * step, nz = p.z + best.dz * step;
   if (w.tiles) {
-    const q = pushOut(w, here, nx, nz);
+    const q = pushOut(w, here, nx, nz, opts);
     if (q.x !== nx || q.z !== nz) {
       step = Math.hypot(q.x - p.x, q.z - p.z); nx = q.x; nz = q.z;
       if (step < 1e-4 || !stepFactor(w, here, nx, nz, sea)) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }

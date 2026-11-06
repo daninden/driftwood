@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.9 "Solid" — 2026-11-06
+
+What Dave builds and lays down is now part of the ground he has to walk around. Piles of wood, branches, fronds and stones are small round obstacles; a fire place is solid when it has flames, embers or only its burnt remains. The back and both sides of a lean-to are solid from the first work onward, while its front stays open to enter and sleep.
+
+- **Actions remain at the rim:** picking up, dropping, feeding a fire, lighting, building, upgrading and sleeping still use their existing reaches. If a new pile is laid where Dave stands, he can always walk out rather than getting pushed farther in.
+- **Routes follow the state:** `game/obstacles` derives a read-only obstacle callback from piles, fires, burnt places and lean-tos. `game/movement` receives it as an option and `game/path` uses the same callback, without making `world` depend on `game`. Dynamic path checks are deliberately not cached, so a new pile, a moved or removed pile, or construction progress changes the next route immediately.
+- **Tests:** `tests/solid.test.js` covers pile/fire/burnt blocking, escape from a new pile, lean-to back and side blocking with a reachable front, and dynamic routes around added, moved, removed and built obstacles. The existing known seed-1337 drying shuttle and seed-2024 climbing-route regressions remain documented limitations from 0.29.8; this release does not alter or hide them.
+
 ## 0.29.8 "Errand" — 2026-11-06
 
 Dave now finishes a real errand before an ordinary higher-ranked need takes over. A load for the fire, stores or home reaches its intended pile; moving dried wood, husking for supplies and a crab trip likewise finish before he drinks, eats or sleeps. Sitting, strolling and idling remain interruptible. The emergency brake remains: thirst at one day or hunger at two days immediately takes over, and every existing goal time limit still applies.

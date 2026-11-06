@@ -1,11 +1,11 @@
 /**
- * game/mind — Dave's head (0.28 "Habit" through 0.29.8 "Errand"): what the castaway does by himself when the player leaves him alone.
+ * game/mind — Dave's head (0.28 "Habit" through 0.29.9 "Solid"): what the castaway does by himself when the player leaves him alone.
  *
  * After QUIET (30 s, game/input `createTakeover`) without any input main hands the game this mind's input instead of the player's;
  * any input of the player takes it back at once (`release`). The mind adds NO game rule: it fills an input object like the player's
  * (a walk target, a press of the action button, a click on an icon of the arc, Z, a click on the row) and so can do only what a
  * player could do. It looks at the island only where the castaway has been (game/known): its targets and its paths stay inside the
- * known cells and 1.5 m away from their edge (`inside`), so he does not wander off into land he has not seen, except on a search (below) and on an exploring trip (0.29.4). It never wakes him from sleep and never starts a sleep before he could choose to.
+ * known cells and 1.5 m away from their edge (`inside`), so he does not wander off into land he has not seen, except on a search (below) and on an exploring trip (0.29.4). Since 0.29.9 a target at a dynamic solid's centre is approached at its rim, so the same actions still work. It never wakes him from sleep and never starts a sleep before he could choose to.
  * It builds only one thing: his home (0.29.3 "Homestead", below); every other kind of the arc it never chooses.
  *
  * What he does, in this order of priority (`chooseGoal`, pure, on a plain snapshot of the needs and the time of day):
@@ -244,7 +244,7 @@ export function createMind(world, game, opts = {}) {
   const MARGIN = 1.5, DIAG = MARGIN * 0.75;
   const inside = (x, z) => known.has(x, z) && known.has(x + MARGIN, z) && known.has(x - MARGIN, z) && known.has(x, z + MARGIN) && known.has(x, z - MARGIN)
     && known.has(x + DIAG, z + DIAG) && known.has(x - DIAG, z - DIAG) && known.has(x + DIAG, z - DIAG) && known.has(x - DIAG, z + DIAG);
-  const path = createPath(world, { allow: inside }), pathFree = createPath(world);   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
+  const path = createPath(world, { allow: inside, obstacles: game.movement.obstacles }), pathFree = createPath(world, { obstacles: game.movement.obstacles });   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
   const stats = { drying: { sites: 0, wetTaken: 0, laid: 0, moved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, events: [] };
   const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let exploring = false, exploredDay = -9, fullPace = false, now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
@@ -392,6 +392,14 @@ export function createMind(world, game, opts = {}) {
 
   // ---------- walking ----------
   function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground (o.free: anywhere, for a search)
+    // Things placed at their centre (piles and fire places) are now solid. Aim a
+    // little outside their rim before asking the grid finder, so the existing
+    // action reaches and pile-join distance remain available.
+    const solid = game.movement.obstacles(x, z, 0.01).find(q => Math.hypot(q.x - x, q.z - z) < 0.01);
+    if (solid) {
+      const dx = p.x - solid.x, dz = p.z - solid.z, d = Math.hypot(dx, dz) || 1;
+      x = solid.x + dx / d * (solid.r + 0.12); z = solid.z + dz / d * (solid.r + 0.12);
+    }
     const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : path), roam = o.free || !!o.finder;
     let plan = null, pi = 0, finalSet = false, replans = 0, chk = { x: p.x, z: p.z, t: now }, stuckN = 0, seen = now;
     for (;;) {
@@ -1021,7 +1029,7 @@ export function createMind(world, game, opts = {}) {
   // closed to the finder (`pathExplore`). He turns back in time (exploreLate), at the normal pace when it is late.
   const exo = { x: 0, z: 0, reach: 0 }, okMemo = new Map(), lack = {};   // lack[kind] = the day something he looked for (wood, branches, nuts) was not to be had on ground he knows
   const ordinary = (x, z) => { const k = Math.round(x * 2) * 100003 + Math.round(z * 2); let v = okMemo.get(k); if (v === undefined) { const t = terrainAt(world, x, z, 0); v = t.climb <= EXPLORE_ROUTE && t.s < EXPLORE_SLOPE; okMemo.set(k, v); } return v; };
-  const pathExplore = createPath(world, { allow: (x, z) => ordinary(x, z) && Math.hypot(x - exo.x, z - exo.z) <= exo.reach + 20 });
+  const pathExplore = createPath(world, { allow: (x, z) => ordinary(x, z) && Math.hypot(x - exo.x, z - exo.z) <= exo.reach + 20, obstacles: game.movement.obstacles });
   const exploreMissing = h => {   // what is short at home: wood (loose driftwood known within 70 m of home: fewer than 6), branches (fewer than 4), nuts (fewer than 2, for fibre and for food)
     const out = [];
     if (scan('timber', h.x, h.z, 70).length < 6) out.push('wood');

@@ -8,10 +8,11 @@
  * route is a narrow band, and the line between two cells on it can cross the wall); its pace is the harmonic mean of the steps; a trunk, boulder or
  * crag on the line makes it four times dearer (he slides round it, and can stick between two). A* with a
  * straight-line guess. The stand and step results are cached for the life of the finder (the island does not change).
- * The finder knows nothing about the game state: `allow` keeps a walk inside a part of the island (game/mind passes "known ground").
+ * `allow` keeps a walk inside a part of the island (game/mind passes "known ground"). An optional read-only `obstacles` callback
+ * supplies changing game-state solids without making this module depend on game state.
  *
  * C, N
- * createPath(world, { allow? }) -> path
+ * createPath(world, { allow?, obstacles? }) -> path
  *   path.find(from, to, maxExp?, retry?) -> { pts: [{ x, z }], cost } | null   from and to are { x, z } (a from with y: the first cell is one he can step to from there, not one above a wall); pts are the middles of the cells
  *     from the start to the goal; cost is in seconds of walking at full pace. With `allow`, every cell after the first has to be allowed,
  *     and so has the goal's (the start may be anywhere). null when there is no way (or more than maxExp, 90000, cells were looked at); a
@@ -43,22 +44,22 @@ class Heap {
 }
 
 export function createPath(world, opts = {}) {
-  const stand = new Map(), banned = new Set(), efs = new Map();
+  const stand = new Map(), banned = new Set(), efs = new Map(), dynamic = typeof opts.obstacles === 'function', moveOpts = dynamic ? { obstacles: opts.obstacles } : null;
   const centre = i => (i + 0.5) * C - HALF, cell = v => Math.floor((v + HALF) / C);
   const isStand = (ix, iz) => {
     if (ix < 0 || iz < 0 || ix >= N || iz >= N) return false;
     const k = iz * N + ix; if (banned.has(k)) return false;
-    let v = stand.get(k); if (v === undefined) { v = canStand(world, centre(ix), centre(iz), 0) ? 1 : 0; stand.set(k, v); }
+    let v = dynamic ? undefined : stand.get(k); if (v === undefined) { v = canStand(world, centre(ix), centre(iz), 0, moveOpts) ? 1 : 0; if (!dynamic) stand.set(k, v); }
     return v === 1;
   };
-  // true when the line a -> b passes through a trunk, boulder or crag (their circles already include his own radius)
+  // The obstacle a line meets, or null (the circles already include his own radius).
   const hitsObstacle = (a, b) => {
     const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1e-9;
-    for (const at of [a, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, b]) for (const o of obstaclesNear(world, at.x, at.z)) {
+    for (const at of [a, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, b]) for (const o of obstaclesNear(world, at.x, at.z, moveOpts)) {
       const u = Math.min(1, Math.max(0, ((o.x - a.x) * dx + (o.z - a.z) * dz) / l2));
-      if (Math.hypot(a.x + dx * u - o.x, a.z + dz * u - o.z) < o.r) return true;
+      if (Math.hypot(a.x + dx * u - o.x, a.z + dz * u - o.z) < o.r) return o;
     }
-    return false;
+    return null;
   };
   // The speed factor of walking the straight line a -> b in the short steps stepPlayer takes (a probe 0.25 m ahead): 0 when any step of it is
   // a wall, else the pace over the whole line (the harmonic mean of the steps). The ground between two cells can be a good deal steeper than at
@@ -71,17 +72,19 @@ export function createPath(world, opts = {}) {
       if (f <= 0) return 0;
       inv += 1 / f; prev = { x, z, y: world.H(x, z) };
     }
-    return n / inv * (world.tiles && hitsObstacle(a, b) ? 0.25 : 1);   // a trunk or boulder on the line is slid round, and he can stick between two: dear, not a wall
+    const hit = world.tiles && hitsObstacle(a, b);
+    if (hit && hit.dynamic) return 0;   // camp solids are routed round, never through
+    return n / inv * (hit ? 0.25 : 1);   // a natural obstacle is slid round, and he can stick between two: dear, not a wall
   };
   // clear(a, b): true when the straight line a -> b can be walked at once, with no wall, trunk or boulder on it (the follower cuts a corner only then)
   const clear = (a, b) => walkFactor(a, b) > 0.3 && !(world.tiles && hitsObstacle(a, b));
   const edgeF = (ix, iz, d) => {
-    const k = (iz * N + ix) * 8 + d; let f = efs.get(k);
+    const k = (iz * N + ix) * 8 + d; let f = dynamic ? undefined : efs.get(k);
     if (f === undefined) {
       const [dx, dz] = DIRS[d], ax = centre(ix), az = centre(iz);
       if (!isStand(ix + dx, iz + dz) || (dx && dz && (!isStand(ix + dx, iz) || !isStand(ix, iz + dz)))) f = 0;
       else f = walkFactor({ x: ax, z: az }, { x: centre(ix + dx), z: centre(iz + dz) });
-      efs.set(k, f);
+      if (!dynamic) efs.set(k, f);
     }
     return f;
   };
