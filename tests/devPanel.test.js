@@ -59,17 +59,17 @@ describe('label and version', () => {
     expect(devLabel('0.10', 'Wet wood', 30, 9, false, 10)).toBe('v0.10 · Wet wood · 30 fps · 9 ms');   // zoom only beyond 10
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.29.6'); expect(NAME).toBe('Fade');
+    expect(VERSION).toBe('0.29.7'); expect(NAME).toBe('Quality');
   });
   it('shows the quality level after the zoom and before idle, only when known', () => {
-    expect(devLabel('0.22', 'Crab catch', 30, 9, false, 0, 1)).toBe('v0.22 · Crab catch · 30 fps · 9 ms · q1');
-    expect(devLabel('0.22', 'Crab catch', 30, 9, true, 18, 0)).toBe('v0.22 · Crab catch · 30 fps · 9 ms · zoom 18 · q0 · idle');
+    expect(devLabel('0.22', 'Crab catch', 30, 9, false, 0, { level: 1, adapt: true })).toBe('v0.22 · Crab catch · 30 fps · 9 ms · q1 auto');
+    expect(devLabel('0.22', 'Crab catch', 30, 9, true, 18, { level: 0, adapt: false })).toBe('v0.22 · Crab catch · 30 fps · 9 ms · zoom 18 · q0 fixed · idle');
     expect(devLabel('0.22', 'Crab catch', 30, 9, false, 0, null)).toBe('v0.22 · Crab catch · 30 fps · 9 ms');
   });
   it('adds habit last, while the castaway\'s own habit is in charge (0.28)', () => {
-    expect(devLabel('0.28', 'Habit', 30, 9, false, 0, 1, true)).toBe('v0.28 · Habit · 30 fps · 9 ms · q1 · habit');
-    expect(devLabel('0.28', 'Habit', 15, 1, true, 0, 1, true)).toBe('v0.28 · Habit · 15 fps · 1 ms · q1 · idle · habit');
-    expect(devLabel('0.28', 'Habit', 30, 9, false, 0, 1, false)).toBe('v0.28 · Habit · 30 fps · 9 ms · q1');
+    expect(devLabel('0.28', 'Habit', 30, 9, false, 0, { level: 1, adapt: true }, true)).toBe('v0.28 · Habit · 30 fps · 9 ms · q1 auto · habit');
+    expect(devLabel('0.28', 'Habit', 15, 1, true, 0, { level: 1, adapt: false }, true)).toBe('v0.28 · Habit · 15 fps · 1 ms · q1 fixed · idle · habit');
+    expect(devLabel('0.28', 'Habit', 30, 9, false, 0, 1, false)).toBe('v0.28 · Habit · 30 fps · 9 ms · q1 auto');
   });
   it('starts visible for now', () => { expect(DEV_PANEL_VISIBLE).toBe(true); });
 });
@@ -124,9 +124,9 @@ describe('panel element', () => {
   });
   it('shows the quality level and writes at once when it changes', () => {
     const el = fakeEl(), p = createDevPanel(el, '0.4', 'Dev panel', true);
-    p.setQuality(1); expect(el.textContent).toBe('v0.4 · Dev panel · – fps · q1');
-    const w = el.writes(); p.setQuality(1); expect(el.writes()).toBe(w);
-    p.setQuality(2); expect(el.textContent).toBe('v0.4 · Dev panel · – fps · q2');
+    p.setQuality({ level: 1, adapt: true }); expect(el.textContent).toBe('v0.4 · Dev panel · – fps · q1 auto');
+    const w = el.writes(); p.setQuality({ level: 1, adapt: true }); expect(el.writes()).toBe(w);
+    p.setQuality({ level: 2, adapt: false }); expect(el.textContent).toBe('v0.4 · Dev panel · – fps · q2 fixed');
   });
   it('can start hidden', () => {
     const el = fakeEl(); createDevPanel(el, '0.4', 'Dev panel', false);

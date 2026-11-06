@@ -33,8 +33,11 @@
  *   time, that is measured: the work time leaves out the graphics card, and on a touch device capped at 30 a
  *   healthy interval is 33 ms. With adapt false (a forced level) it never steps.
  * parseQuality(search) -> level | null    the `?quality=N` test parameter ("2", not "2.5" or "x")
- * pickStart({ param, stored }?) -> { level, adapt }   the forced level (no adapting) or the remembered one, else 0
- * QUALITY_KEY, loadLevel(getStorage?) -> level | null, saveLevel(level, getStorage?) -> bool   per device, in localStorage, never throws
+ * pickStart({ param, preference?, stored?, touch? }?) -> { level, adapt }   the forced level (no adapting), fixed desktop preference, or remembered automatic level, else 0; touch-only starts automatic
+ * cyclePreference(preference) -> preference   Auto -> fixed 0 -> ... -> fixed 4 -> Auto, retaining Auto's last chosen level
+ * isQualityKey(event) -> bool   one plain G press outside a typing field
+ * QUALITY_KEY, loadPreference(getStorage?) -> { auto, fixed } | null, savePreference(preference, getStorage?) -> bool   per device, in localStorage, never throws
+ * loadLevel/saveLevel remain the automatic-level compatibility helpers for the earlier stored format.
  *
  * Depends on: nothing
  */
@@ -93,14 +96,47 @@ export function parseQuality(search) {
   return v !== null && /^\d+$/.test(v) && Number(v) <= MAX_LEVEL ? Number(v) : null;
 }
 
-export function pickStart({ param = null, stored = null } = {}) {
+const validLevel = level => Number.isInteger(level) && level >= 0 && level <= MAX_LEVEL;
+const cleanPreference = preference => preference && validLevel(preference.auto) && (preference.fixed === null || validLevel(preference.fixed)) ? { auto: preference.auto, fixed: preference.fixed } : null;
+
+export function pickStart({ param = null, preference = null, stored = null, touch = false } = {}) {
   if (param !== null) return { level: clamp(param), adapt: false };
+  const pref = cleanPreference(preference);
+  if (pref) return pref.fixed === null || touch ? { level: pref.auto, adapt: true } : { level: pref.fixed, adapt: false };
   return { level: stored !== null ? clamp(stored) : 0, adapt: true };
 }
 
+export function cyclePreference(preference = { auto: 0, fixed: null }) {
+  const pref = cleanPreference(preference) || { auto: 0, fixed: null };
+  if (pref.fixed === null) return { ...pref, fixed: 0 };
+  return pref.fixed < MAX_LEVEL ? { ...pref, fixed: pref.fixed + 1 } : { ...pref, fixed: null };
+}
+
+export const isQualityKey = e => {
+  const target = e.target;
+  const typing = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || ''));
+  return e.code === 'KeyG' && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !typing;
+};
+
+export function loadPreference(getStorage = () => window.localStorage) {
+  try {
+    const text = getStorage().getItem(QUALITY_KEY);
+    if (text === null) return null;
+    if (/^\d+$/.test(text) && Number(text) <= MAX_LEVEL) return { auto: Number(text), fixed: null };   // 0.29.6 and earlier
+    const value = JSON.parse(text);
+    return cleanPreference(value);
+  } catch (e) { return null; }
+}
+
+export function savePreference(preference, getStorage = () => window.localStorage) {
+  const pref = cleanPreference(preference);
+  if (!pref) return false;
+  try { getStorage().setItem(QUALITY_KEY, JSON.stringify(pref)); return true; } catch (e) { return false; }
+}
+
 export function loadLevel(getStorage = () => window.localStorage) {
-  try { const t = getStorage().getItem(QUALITY_KEY); return t !== null && /^\d+$/.test(t) && Number(t) <= MAX_LEVEL ? Number(t) : null; } catch (e) { return null; }
+  const preference = loadPreference(getStorage); return preference ? preference.auto : null;
 }
 export function saveLevel(level, getStorage = () => window.localStorage) {
-  try { getStorage().setItem(QUALITY_KEY, String(clamp(level))); return true; } catch (e) { return false; }
+  return savePreference({ auto: clamp(level), fixed: null }, getStorage);
 }

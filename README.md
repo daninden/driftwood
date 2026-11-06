@@ -165,7 +165,7 @@ A day lasts twenty minutes. The sun rises in the east and sets in the west, with
 
 ### Slow computers
 
-On a slow computer the game lowers the quality of its shadows (and, as a last step, how sharply it draws) by itself, a step at a time, until it runs smoothly. It remembers this on that device. There is nothing to set.
+On a slow computer the game lowers the quality of its shadows (and, as a last step, how sharply it draws) by itself, a step at a time, until it runs smoothly. It remembers its automatic choice on that device. On a desktop, press **G** to choose a fixed quality instead; press it through 0 to 4 once more to return to automatic quality. Phones and tablets stay automatic.
 
 ## Controls
 
@@ -180,9 +180,10 @@ On a slow computer the game lowers the quality of its shadows (and, as a last st
 - You can turn, tilt and zoom the view while he lives his life by himself: only things that act on him (walking, clicking the world, the action button) give him back to you.
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)
 - **M**, or a click or tap on the small speaker above the moon: turn sound on or off
+- **G** (desktop only): cycle the picture quality from automatic to fixed levels 0 through 4, then back to automatic; the developer panel says whether it is `auto` or `fixed`
 - **Enter** (or the arrow): confirm your name at the start of an island
 - **Shift + `**: start over (forget this island's save and begin again; the name is asked again)
-- **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame, quality level `q0` to `q4`); while it is shown you can zoom out further, to 25
+- **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame, quality level `q0` to `q4`, automatic or fixed); while it is shown you can zoom out further, to 25
 
 ## More
 

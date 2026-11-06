@@ -70,8 +70,9 @@
  * Quality (render/quality): the game lowers its own quality on a slow device. Once the island is
  * in, a governor watches the time between drawn, non-idle frames and steps down one level (smaller
  * shadow map, lighter shadow filter, pixel ratio 1, no terrain shadows) when it is slower than about
- * 27 fps (frames in which tiles were built, view.building, do not count, 0.27.7); the level is kept per device in localStorage (`driftwood-quality`) and the next start begins
- * there. `?quality=N` (0 to 4) forces a level and stops the adapting (tests). The dev panel shows `qN`.
+ * 27 fps (frames in which tiles were built, view.building, do not count, 0.27.7); its last level is kept per device in localStorage (`driftwood-quality`) and the next start begins
+ * there. On a desktop/fine-pointer device, G cycles Auto -> 0 -> 1 -> 2 -> 3 -> 4 -> Auto; a fixed level stops adapting and both the automatic choice and fixed preference persist.
+ * `?quality=N` (0 to 4) forces a level and stops the adapting (tests), without changing the preference. The dev panel shows `qN auto` or `qN fixed`.
  *
  * The height grids, the slowest part of generating the world, are built in
  * Web Workers (heightWorker, parallelHeights), one per spare core.
@@ -115,7 +116,7 @@ import { shouldAsk, dayNumber, dayLine, wakeLine } from './game/castaway.js';
 import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
 import { VERSION, NAME } from './version.js';
 import { zoomMax } from './core/view.js';
-import { settingsFor, parseQuality, pickStart, loadLevel, saveLevel, createGovernor } from './render/quality.js';
+import { settingsFor, parseQuality, pickStart, loadPreference, savePreference, cyclePreference, isQualityKey, createGovernor } from './render/quality.js';
 import { createSaveStore, parseHash, withoutNew, isResetKey, createMomentWatcher, createViewSaver, SAVE_EVERY } from './save.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
@@ -140,7 +141,9 @@ async function boot() {
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
   const at = saved ? { x: saved.player.x, z: saved.player.z, y: world.H(saved.player.x, saved.player.z) } : spawn;   // where the view opens
   const touch = touchOnly(window.matchMedia ? q => window.matchMedia(q) : null), dpr = window.devicePixelRatio || 1;
-  const start = pickStart({ param: parseQuality(location.search), stored: loadLevel() });   // forced by ?quality=N, else remembered, else 0
+  const forcedQuality = parseQuality(location.search);
+  let qualityPreference = loadPreference() || { auto: 0, fixed: null };
+  const start = pickStart({ param: forcedQuality, preference: qualityPreference, touch });   // forced by ?quality=N, else fixed desktop or remembered automatic level
   const view = await createIslandView(world, container, breathe, at, { touch, settings: settingsFor(start.level, { touch }) });   // touch-only: a 2048 px shadow map
   view.setZoomMax(zoomMax(DEV_PANEL_VISIBLE));   // the dev panel (visible at the start) allows zooming out to 25
   if (saved && saved.view) view.setPose(saved.view);   // silently, in the saved pose (before the tiles in view are chosen)
@@ -153,7 +156,7 @@ async function boot() {
   const half = createHungerMark(document.getElementById('hunger'));
   const carry = createCarryMark(document.getElementById('carry'), kind => game.use(kind, input));   // a click on a drawing uses it (0.27.2)
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
-  dev.setQuality(start.level);
+  dev.setQuality({ level: start.level, adapt: start.adapt });
   const who = createDayLine(document.getElementById('who')), wakes = createWakeLine(document.getElementById('wake'));
   const ink = createInk(document.documentElement);
   const store0 = (() => { try { return window.localStorage; } catch (e) { return null; } })();
@@ -218,7 +221,16 @@ async function boot() {
     view.render(game.player, show(game.update(input, 0)), 0);   // once more, with the name
   }
   document.body.classList.add('ready');
-  const governor = createGovernor({ level: start.level, adapt: start.adapt, touch, dpr });   // starts measuring now, the island has faded in
+  let governor = createGovernor({ level: start.level, adapt: start.adapt, touch, dpr });   // starts measuring now, the island has faded in
+  if (!touch && forcedQuality === null) window.addEventListener('keydown', e => {
+    if (!isQualityKey(e)) return;
+    qualityPreference = cyclePreference(qualityPreference);
+    const next = pickStart({ preference: qualityPreference });
+    governor = createGovernor({ level: next.level, adapt: next.adapt, touch, dpr });
+    view.setQuality(settingsFor(next.level, { touch }));
+    dev.setQuality({ level: next.level, adapt: next.adapt });
+    savePreference(qualityPreference);
+  });
   window.__driftwood = { world, game, view, input, mind, takeover, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     requestAnimationFrame(frame);
@@ -246,7 +258,11 @@ async function boot() {
     if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input: use })) quiet.poke(now);
     dev.frame(real, performance.now() - t0, idle, view.zoom);
     const lower = governor.frame(real, idle, view.building);
-    if (lower !== null) { view.setQuality(settingsFor(lower, { touch })); dev.setQuality(lower); if (!testing) saveLevel(lower); }
+    if (lower !== null) {
+      qualityPreference = { ...qualityPreference, auto: lower };
+      view.setQuality(settingsFor(lower, { touch })); dev.setQuality({ level: lower, adapt: true });
+      if (!testing) savePreference(qualityPreference);
+    }
   });
 }
 

@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.29.7 "Quality" — 2026-11-06
+
+Desktop players can choose whether quality keeps adapting. **G** cycles **Auto → 0 → 1 → 2 → 3 → 4 → Auto**; a numbered level is fixed and stops the governor, and Auto resumes from the last automatic level. The choice is remembered in the browser without adding a menu or any game UI. Touch-only devices have no new key and remain automatic. The developer line now says, for example, `q2 auto` or `q2 fixed`.
+
+- **Preference and forcing:** `render/quality` stores `{ auto, fixed }` under the existing `driftwood-quality` key, tolerates unavailable or malformed storage, and reads the old plain level as an automatic choice. It retains the automatic level while a fixed override is selected. `?quality=N` remains a temporary fixed test path and does not alter the saved preference.
+- **Input:** G ignores key repeats, modifiers and typing fields. Like the developer/view controls, it does not take Dave back from his habit or restart the quiet timer.
+- **Tests:** `tests/quality.test.js` covers the complete cycle and wrap, fixed override versus governor start (including touch-only automatic start), old and new preference storage, broken storage, query forcing and key guards. `tests/devPanel.test.js` covers the auto/fixed labels; `tests/mind.test.js` covers the passive takeover behavior. `npm run smoke:quality` runs Chromium through the live key cycle, CPU-throttles a fixed q0 to prove the governor does not lower it, reloads the fixed choice, checks `?quality=N` ignores G, checks a touch-only page stays automatic despite a stored desktop fixed preference, writes `quality-low.png`/`quality-high.png`, and fails on browser errors.
+
 ## 0.29.6 "Fade" — 2026-11-06
 
 Footprints no longer remain while Dave stands still or sleeps. Each print records the game clock when it is laid (`render/footprints`): it stays at its normal opacity for 20 game seconds, then fades over 40 more. Its time opacity multiplies with the existing `MAX` 80 / `FADE` 24 step fade, so walking still thins the oldest part of a trail as before. The tide wipe is unchanged. Sleeping advances the same game clock, so a night clears the trail.

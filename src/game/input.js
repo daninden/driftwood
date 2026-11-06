@@ -122,6 +122,7 @@ export function createTakeover(after = QUIET, start = 0) {
 }
 
 export const CAMERA_CODES = new Set(['KeyQ', 'KeyE', ...Object.keys(ZOOM_KEYS)]);
+export const PASSIVE_CODES = new Set([...CAMERA_CODES, 'Backquote', 'KeyG']);   // view and developer controls leave the habit alone
 
 /**
  * 0.29.1: which events of the player are for the castaway and so take the game back from his habit (a poke of the takeover); turning, tilting and zooming the view are not.
@@ -135,7 +136,7 @@ export function createActing() {
   return {
     event(e) {
       const type = e.type, touch = e.pointerType === 'touch';
-      if (type === 'keydown' || type === 'keyup') return !CAMERA_CODES.has(e.code);
+      if (type === 'keydown' || type === 'keyup') return !PASSIVE_CODES.has(e.code);
       if (type === 'visibilitychange' || type === 'focus') return true;
       if (!touch) {
         if (type === 'pointerdown' || type === 'pointerup') return e.button === 0;

@@ -2,7 +2,7 @@
 // level and the ?quality=N parameter (render/quality), and the stage's filters.
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { MAX_LEVEL, settingsFor, nextLevel, createGovernor, parseQuality, pickStart, loadLevel, saveLevel, QUALITY_KEY, SLOW_DT, START_SETTLE, SETTLE_STEP, MEASURE } from '../src/render/quality.js';
+import { MAX_LEVEL, settingsFor, nextLevel, createGovernor, parseQuality, pickStart, cyclePreference, isQualityKey, loadPreference, savePreference, loadLevel, saveLevel, QUALITY_KEY, SLOW_DT, START_SETTLE, SETTLE_STEP, MEASURE } from '../src/render/quality.js';
 import { lightPcf, softPcf, LIGHT_RADIUS, SOFT_RADIUS } from '../src/render/stage.js';
 
 describe('level table', () => {
@@ -101,25 +101,43 @@ describe('?quality=N', () => {
     for (const bad of ['', '?', '?quality=', '?quality=5', '?quality=-1', '?quality=2.5', '?quality=x', '?spawn=1,2']) expect(parseQuality(bad)).toBeNull();
     expect(parseQuality(undefined)).toBeNull();
   });
-  it('forces the level and stops adapting; otherwise starts from the remembered level', () => {
+  it('forces the level and stops adapting; otherwise uses a fixed preference before the remembered automatic level', () => {
     expect(pickStart({ param: 3, stored: 1 })).toEqual({ level: 3, adapt: false });
     expect(pickStart({ param: 0, stored: 2 })).toEqual({ level: 0, adapt: false });
     expect(pickStart({ stored: 2 })).toEqual({ level: 2, adapt: true });
+    expect(pickStart({ preference: { auto: 2, fixed: 4 } })).toEqual({ level: 4, adapt: false });
+    expect(pickStart({ preference: { auto: 2, fixed: null } })).toEqual({ level: 2, adapt: true });
+    expect(pickStart({ preference: { auto: 2, fixed: 4 }, touch: true })).toEqual({ level: 2, adapt: true });
+    expect(pickStart({ param: 1, preference: { auto: 2, fixed: 4 } })).toEqual({ level: 1, adapt: false });
     expect(pickStart({})).toEqual({ level: 0, adapt: true });
   });
 });
 
-describe('remembered level', () => {
+describe('quality preference', () => {
   const mem = () => { const d = {}; return { getItem: k => (k in d ? d[k] : null), setItem: (k, v) => { d[k] = String(v); }, d }; };
-  it('round-trips through storage', () => {
-    const s = mem(); expect(loadLevel(() => s)).toBeNull();
-    expect(saveLevel(3, () => s)).toBe(true); expect(s.d[QUALITY_KEY]).toBe('3'); expect(loadLevel(() => s)).toBe(3);
+  it('cycles Auto through every fixed level and returns with the automatic level intact', () => {
+    let preference = { auto: 2, fixed: null };
+    for (const fixed of [0, 1, 2, 3, 4]) { preference = cyclePreference(preference); expect(preference).toEqual({ auto: 2, fixed }); }
+    expect(cyclePreference(preference)).toEqual({ auto: 2, fixed: null });
+  });
+  it('round-trips the automatic choice and fixed override through storage', () => {
+    const s = mem(); expect(loadPreference(() => s)).toBeNull();
+    expect(savePreference({ auto: 2, fixed: 3 }, () => s)).toBe(true); expect(s.d[QUALITY_KEY]).toBe('{"auto":2,"fixed":3}');
+    expect(loadPreference(() => s)).toEqual({ auto: 2, fixed: 3 });
+    expect(saveLevel(1, () => s)).toBe(true); expect(loadLevel(() => s)).toBe(1);
+  });
+  it('reads the old automatic-only level as an automatic preference', () => {
+    expect(loadPreference(() => ({ getItem: () => '3' }))).toEqual({ auto: 3, fixed: null });
   });
   it('ignores rubbish and survives broken storage', () => {
-    for (const v of ['x', '9', '-1', '2.5', '']) expect(loadLevel(() => ({ getItem: () => v }))).toBeNull();
+    for (const v of ['x', '9', '-1', '2.5', '', '{"auto":5,"fixed":null}', '{"auto":2,"fixed":7}']) expect(loadPreference(() => ({ getItem: () => v }))).toBeNull();
     const broken = () => { throw new Error('denied'); };
-    expect(loadLevel(broken)).toBeNull(); expect(saveLevel(2, broken)).toBe(false);
-    expect(saveLevel(2, () => ({ setItem: broken }))).toBe(false); expect(loadLevel(() => ({ getItem: broken }))).toBeNull();
+    expect(loadPreference(broken)).toBeNull(); expect(savePreference({ auto: 2, fixed: null }, broken)).toBe(false);
+    expect(savePreference({ auto: 2, fixed: null }, () => ({ setItem: broken }))).toBe(false); expect(loadPreference(() => ({ getItem: broken }))).toBeNull();
+  });
+  it('accepts one plain G press but never a repeat, modified key or typing field', () => {
+    expect(isQualityKey({ code: 'KeyG' })).toBe(true);
+    for (const e of [{ code: 'KeyG', repeat: true }, { code: 'KeyG', shiftKey: true }, { code: 'KeyG', ctrlKey: true }, { code: 'KeyG', metaKey: true }, { code: 'KeyG', altKey: true }, { code: 'KeyG', target: { tagName: 'INPUT' } }, { code: 'KeyG', target: { isContentEditable: true } }, { code: 'KeyF' }]) expect(isQualityKey(e)).toBe(false);
   });
 });
 
