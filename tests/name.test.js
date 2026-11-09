@@ -6,7 +6,7 @@ import { NAME_MAX, PROMPT_LABEL, FALLBACK, cleanName, shouldAsk, dayNumber, call
 import { createClock, DAY_SECONDS, START_TIME } from '../src/game/clock.js';
 import { createSleep, SLEEP_DAYS } from '../src/game/sleep.js';
 import { serialise, parseSave, createSaveStore } from '../src/save.js';
-import { inkStep, inkColor, inkBack, inkGlow, createInk, STEPS, INK_DAY, INK_NIGHT } from '../src/render/ink.js';
+import { inkStep, inkColor, inkBack, inkGlow, createInk, STEPS, SWITCH, INK_DAY, INK_NIGHT } from '../src/render/ink.js';
 import { skyAt } from '../src/render/sky.js';
 import { wakeOpacity, createDayLine, createWakeLine, WAKE_TIME, WAKE_PEAK, DAY_REST, DAY_PEAK } from '../src/render/nameLines.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
@@ -121,11 +121,14 @@ describe('the ink', () => {
     expect(inkColor(inkStep(skyAt(0).day))).toBe('#efe0c2');
     expect(INK_DAY).toBe(0x2e2418); expect(INK_NIGHT).toBe(0xefe0c2);
   });
-  it('is in between at dusk and dawn', () => {
+  it('switches at middle light, not in steps through dusk and dawn', () => {
     const dusk = skyAt(0.825).day, dawn = skyAt(0.175).day;
     for (const d of [dusk, dawn]) expect(d).toBeGreaterThan(0.2), expect(d).toBeLessThan(0.8);
-    const c = inkColor(inkStep(dusk)), n = parseInt(c.slice(1, 3), 16);
-    expect(n).toBeGreaterThan(0x2e); expect(n).toBeLessThan(0xef);
+    expect(inkStep(0.51)).toBe(STEPS); expect(inkStep(0.49)).toBe(0);
+    expect(inkColor(inkStep(skyAt(0.75).day))).toBe(inkColor(inkStep(0.6)));   // evening light still above the middle: still dark ink
+    expect(inkColor(inkStep(skyAt(0.85).day))).toBe(inkColor(inkStep(0.1)));   // below the middle: pale ink
+    // the in-between tones exist only during the short timed transition
+    expect(SWITCH).toBeGreaterThan(0.5); expect(SWITCH).toBeLessThan(1);
   });
   it('goes monotonically from dark to pale as the day factor falls, in steps', () => {
     let prev = -1; const seen = new Set();
@@ -143,12 +146,26 @@ describe('the ink', () => {
     expect(inkColor(STEPS)).toBe('#2e2418'); expect(inkColor(0)).toBe('#efe0c2');   // the glow is always the other one (0.13.3: all marks use it)
     expect(inkGlow(STEPS / 2)).not.toBe(inkGlow(STEPS));
   });
-  it('writes the style only when the step changes', () => {
+  it('writes the style only on change: the ink moves over just under a second, the glow changes at the end', () => {
     const set = []; const root = { style: { setProperty: (k, v) => set.push([k, v]) } };
-    const ink = createInk(root);
-    ink.update(1); expect(set.length).toBe(3);
-    ink.update(1); ink.update(0.999); expect(set.length).toBe(3);
-    ink.update(0); expect(set.length).toBe(6); expect(set[3]).toEqual(['--ink', '#efe0c2']);
+    const ink = createInk(root), keys = () => set.map(e => e[0]);
+    ink.update(1, 0); expect(set.length).toBe(3);                  // first call: ink, backing, glow
+    ink.update(1, 5); ink.update(0.999, 6); expect(set.length).toBe(3);   // no step change, nothing written
+    ink.update(0.4, 10);                                            // dusk: the switch begins, nothing moved yet
+    expect(set.length).toBe(3);
+    ink.update(0.4, 10 + SWITCH / 2);                               // halfway: the ink is in between, the glow holds
+    expect(keys().slice(3)).toEqual(['--ink', '--ink-back']);
+    const mid = parseInt(set[3][1].slice(1, 3), 16);
+    expect(mid).toBeGreaterThan(0x2e); expect(mid).toBeLessThan(0xef);
+    ink.update(0.4, 10 + SWITCH / 2);                               // same moment again: nothing new
+    expect(set.length).toBe(5);
+    ink.update(0.4, 10 + SWITCH + 0.01);                            // the end: pale ink, and now the glow changes
+    expect(set.at(-1)).toEqual(['--ink-glow', inkGlow(0)]);
+    expect(set.some(e => e[0] === '--ink' && e[1] === '#efe0c2')).toBe(true);
+    const n = set.length; ink.update(0.1, 20); ink.update(0, 30); expect(set.length).toBe(n);   // night stays night
+    ink.update(0.9, 40); ink.update(0.9, 40 + SWITCH + 0.01);       // dawn reverses it
+    expect(set.at(-1)).toEqual(['--ink-glow', inkGlow(STEPS)]);
+    expect(set.some((e, i) => i >= n && e[0] === '--ink' && e[1] === '#2e2418')).toBe(true);
     expect(() => createInk(null).update(0.5)).not.toThrow();
   });
 });

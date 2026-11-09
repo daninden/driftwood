@@ -227,10 +227,20 @@ describe('building', () => {
       }
     }
   });
-  it('is not solid: he walks through it', () => {
-    const g = createGame(w, at(spawn.x - 1.5, spawn.z), { leantos: { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } });
-    run(g, makeInput({ target: { x: spawn.x + 1.5, z: spawn.z } }), 3);
-    expect(Math.hypot(g.player.x - spawn.x - 1.5, g.player.z - spawn.z)).toBeLessThan(0.5);
+  it('is solid at the back and sides but open at the front: he cannot walk through it, he can walk in', () => {
+    const lean = { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 };
+    // from the open front straight on to the far side: the back stops him, he does not pass it
+    const through = createGame(w, at(spawn.x, spawn.z + 1.5), { leantos: lean });
+    run(through, makeInput({ target: { x: spawn.x, z: spawn.z - 2 } }), 4);
+    expect(through.player.z).toBeGreaterThan(spawn.z - 0.8);
+    // from the side, across the side wall: he does not get inside
+    const side = createGame(w, at(spawn.x - 1.5, spawn.z), { leantos: { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } });
+    run(side, makeInput({ target: { x: spawn.x + 1.5, z: spawn.z } }), 3);
+    expect(side.player.x).toBeLessThan(spawn.x - 0.8);
+    // through the front he reaches the middle
+    const inside = createGame(w, at(spawn.x, spawn.z + 1.5), { leantos: { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } });
+    run(inside, makeInput({ target: { x: spawn.x, z: spawn.z } }), 4);
+    expect(Math.hypot(inside.player.x - spawn.x, inside.player.z - spawn.z)).toBeLessThan(0.5);
   });
 });
 

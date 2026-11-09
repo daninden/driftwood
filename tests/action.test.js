@@ -8,7 +8,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, wantsToMove, HUSK_TIME, DRINK_TIME, REACH, BESIDE, STOOP, OPTIONS } from '../src/game/game.js';
 import { FIRE_MIN, FUEL_MAX, BURN, EMBERS, TORCH_DAYS, TORCH_COST, DRILL_TIME, createFire } from '../src/game/fire.js';
-import { CARRY_MAX, PILE_MAX } from '../src/game/wood.js';
+import { CARRY_MAX, PILE_MAX, pileVisibleRadius } from '../src/game/wood.js';
 import { createInput } from '../src/game/input.js';
 import { terrainAt } from '../src/game/movement.js';
 import { freshWater } from '../src/game/water.js';
@@ -179,14 +179,20 @@ describe('what a short press does', () => {
 });
 
 describe('priorities', () => {
-  it('goes by what is in his hands first, then by what is nearest', () => {
+  it('goes by what is in his hands first, then by what is nearest (a pile is measured from its edge)', () => {
     const l = logs[0], x = l.x + 0.3, z = l.z;
-    // a log very near and a pile further: he picks up the log
-    const g = createGame(w, at(x, z), { wood: { carried: [], piles: [{ x: x + 0.9, z, logs: ids(10, 3) }] } });
+    // a pile is as near as its visible edge (0.29.10 Solid ground / 0.29.12 Embers), not its middle
+    const radius = createGame(w, at(x, z), { wood: { carried: [], piles: [{ x: x + 5, z, logs: ids(10, 3) }] } }).wood.piles[0];
+    const R = pileVisibleRadius(radius);
+    // a log very near (0.3 m) and a pile whose edge is further (0.8 m, still beside him): he picks up the log
+    const g = createGame(w, at(x, z), { wood: { carried: [], piles: [{ x: x + R + 0.8, z, logs: ids(10, 3) }] } });
     expect(g.action().tap.thing.kind).toBe('log');
-    // the pile nearer than the log: the pile
-    const h = createGame(w, at(x, z), { wood: { carried: [], piles: [{ x: x - 0.1, z: z + 0.05, logs: ids(10, 3) }] } });
+    // the same pile with its edge nearer than the log (but not underfoot): the pile
+    const h = createGame(w, at(x, z), { wood: { carried: [], piles: [{ x: x + R + 0.1, z, logs: ids(10, 3) }] } });
     expect(h.action().tap.thing.kind).toBe('pile');
+    // a pile whose edge is past the reach of the button is not offered at all
+    const far = createGame(w, at(x, z), { wood: { carried: [], piles: [{ x: x + R + BESIDE + 0.5, z, logs: ids(10, 3) }] } });
+    expect(far.action().tap.thing.kind).toBe('log');
   });
   it('feeds a fire before anything else, even a log underfoot', () => {
     const l = logs[0], g = createGame(w, at(l.x + 0.2, l.z), { wood: { carried: ids(40, 1), piles: [] }, fire: { fires: [fireAt(l.x + 1.2, l.z)], attempts: 0, nextId: 5 } });
