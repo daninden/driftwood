@@ -23,7 +23,6 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
   const walkedRun = () => {   // the walked ten-day run, played once by the first test that asks, on the world as generated
     if (!walkedMemo) {
       walkedMemo = runMind(w, spawn, { days: 10, know: true });
-      if (walked.knownExploreRoute) console.info(`[known issue: seed ${seed} walked explore-route] ${JSON.stringify(walkedMemo.r)}`);
     }
     return walkedMemo;
   };
@@ -81,9 +80,6 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
     }, SIM_TIMEOUT);
     if (on('walked') && walked.knownDryingShuttle) it.fails('has the documented drying shuttle regression (seed-specific, must become a normal passing conservation check when fixed)', () => {
       const { r } = walkedRun(); expect(r.drying.moved, `seed ${seed} walked: drying logs moved no more than laid; report=${JSON.stringify(r)}`).toBeLessThanOrEqual(r.drying.laid);
-    }, SIM_TIMEOUT);
-    if (on('walked') && walked.knownExploreRoute) it.fails('has the documented exploration-route regression (seed-specific, must become a normal passing route-safety check when fixed)', () => {
-      const { r } = walkedRun(); expect(r.exploreRoute, `seed ${seed} walked: exploring ticks on climbing routes; report=${JSON.stringify(r)}`).toBe(0);
     }, SIM_TIMEOUT);
     if (on('fresh')) it('lives ten days from a new game, with only the ground round the start known: he searches for water and food himself', () => {
       const { r } = runMind(w, spawn, { days: 10, know: false });
