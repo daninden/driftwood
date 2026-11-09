@@ -49,7 +49,7 @@
  * 0.29.5 "Drying" / 0.29.15 "Dry stock": DRYING WOOD. Wood in the strip between the tides never dries (game/wood: the sea covers it again and again), and the fire and his strolls take dry wood only. On a shore stroll (not at the far end of an exploring trip), with
  *   nothing but wet driftwood (or nothing) under his arm, he also takes up to two pieces of such wet wood from the strip within 8 m of where the leg ends (`pickUpWet`, `SRC.strip`) and lays them on a DRYING PILE of his own (`deliverWet`, `deliver` for any wood that is not
  *   dry enough, DRY_AT = the 0.75 the fire and the torch ask for): above the high-water line at his camp (`dryingSite`, worked out again from the fire and the known ground, so nothing is saved), DRY_RINGS (3.6, 4.6) m from the fire place, clear of the fire's pile,
- *   of other driftwood piles and of the lean-to's site; or, with a finished lean-to, DRY_LT (1) m from its middle at the back, where the rain does not reach. It holds at most DRY_MAX (5) pieces (never a pair of 6 and 6: the arc would offer to build).
+ *   of other driftwood piles and of the lean-to's site; or, with a finished lean-to, DRY_LT (1.9) m from its middle straight behind it (beside its keep-free region, rule (a); inside the 2.5 m where the rain does not reach once it has walls). It holds at most DRY_MAX (5) pieces (never a pair of 6 and 6: the arc would offer to build).
  *   Once the top pieces of a drying pile are dry enough (`readyPile`) the stores and the evening wood goal fetch them for the fire's pile (`fetchDried`, in `gatherWood`) before they go to the beach for more. In the ordinary daytime idle rhythm, one small stock errand first does the same dry transfer when fire stock has room, then fetches up to two wet, above-water strip logs from known ground to refill a drying pile only while it is below DRY_MAX. It cannot become beach cleanup: it stops at that five-piece reserve. The fire's piles never count a drying pile (`isDrying`), wet wood never goes on the fire's pile, and the lean-to project still takes wet logs as before. The same actions as a player's: pick up, lay down.
  * The other exception to staying on known ground (0.28, decided later the same day): SEARCH. Thirsty with no fresh water known, or hungry with no food known and none
  * carried, he walks out from home into the unknown, ring after ring, to the nearest unknown spot that borders what he knows (downhill for water, the low coast for
@@ -129,7 +129,8 @@ export const EXPLORE_FROM = 0.2, EXPLORE_TO = 0.52, EXPLORE_BACK = 0.6, EXPLORE_
 export const EXPLORE_THIRST = 0.25, EXPLORE_HUNGER = 0.3, EXPLORE_GAP = 2, EXPLORE_CHANCE = 0.3, EXPLORE_MISSING_CHANCE = 0.8, LACK_DAYS = 2;   // nothing urgent; every EXPLORE_GAP-th day, or every day when something is missing at home
 export const EXPLORE_REACH0 = 80, EXPLORE_REACH_DAY = 15, EXPLORE_REACH_MAX = 220, EXPLORE_EDGE = 18, EXPLORE_SLOPE = 0.45;   // how far from home a trip may go: 80 m on the first day, 15 m more each day, at most 220 m
 // 0.29.5 "Drying": wet wood from the strip between the tides is laid on a drying pile of its own above the high-water line at his camp (under or beside the lean-to when there is one), and moved to the fire's pile once it is dry enough to burn
-export const DRY_AT = TORCH_DRY, DRY_MAX = NEED - 1, DRY_NEAR = 1.6, DRY_RINGS = [3.6, 4.6], DRY_FIRE = 2.6, DRY_CLEAR = 4.5, DRY_LT = 1, STOCK_MAX_COST = 90;   // DRY_AT: the dryness the fire and the torch ask for; DRY_MAX: never 6 (a pair of piles of 6 would make the arc offer to build); the pile lies DRY_RINGS m from the fire, or DRY_LT m from the middle of the lean-to, at least DRY_FIRE from the fire's own pile and DRY_CLEAR from the lean-to's site; the active stock errand stays a short known-ground trip
+export const DRY_AT = TORCH_DRY, DRY_MAX = NEED - 1, DRY_NEAR = 1.6, DRY_RINGS = [3.6, 4.6], DRY_FIRE = 2.6, DRY_CLEAR = 4.5, DRY_LT = 1.9, STOCK_MAX_COST = 90;   // DRY_AT: the dryness the fire and the torch ask for; DRY_MAX: never 6 (a pair of piles of 6 would make the arc offer to build); the pile lies DRY_RINGS m from the fire, or DRY_LT m from the middle of the lean-to, at least DRY_FIRE from the fire's own pile and DRY_CLEAR from the lean-to's site; the active stock errand stays a short known-ground trip
+export const UP_AT = 2.1;   // 0.30.3 rule (a): the piles of the upgrades lie this far from the lean-to's middle, beside its keep-free region (a pile's solid is 0.65) and within UP_NEAR (3)
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
 const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
@@ -280,8 +281,10 @@ export function createMind(world, game, opts = {}) {
     for (let tz = tz0; tz <= tz1; tz++) for (let tx = tx0; tx <= tx1; tx++) { const t = world.tiles[tz * NT + tx]; if (t) out.push(t); }
     return out;
   };
-  const isBad = (kind, o) => (bad.get(kind + ':' + o.id) || 0) > now;
-  const markBad = (kind, o, secs = 400) => { bad.set(kind + ':' + o.id, now + secs); };
+  const pileIds = new WeakMap();   // a pile has no id of its own: an identity for the list of things he gave up on
+  const idOf = o => { if (o.id !== undefined) return o.id; let i = pileIds.get(o); if (i === undefined) pileIds.set(o, i = 'pile' + pileIds.size); return i; };
+  const isBad = (kind, o) => (bad.get(kind + ':' + idOf(o)) || 0) > now;
+  const markBad = (kind, o, secs = 400) => { bad.set(kind + ':' + idOf(o), now + secs); };
   function* errand(run) {   // only the concrete fetch / delivery is protected, never its enclosing idle pastime
     errands++;
     try { return yield* run(); } finally { errands--; }
@@ -321,6 +324,13 @@ export function createMind(world, game, opts = {}) {
     const ok = (a, b) => inside(a, b) && canStand(world, a, b, 0) && world.H(a, b) > 0.4;
     if (ok(x, z)) return { x, z };
     for (let rr = 0.5; rr <= Math.max(r, 3); rr += 0.5) for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6, px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr; if (ok(px, pz)) return { x: px, z: pz }; }
+    return null;
+  };
+
+  const openNear = (x, z, r = 1.2) => {   // like standNear, and clear of every solid of the camp (a pile, a fire place, a wall): a spot a walk can end at
+    const camp = game.movement.obstacles.camp, ok = (a, b) => inside(a, b) && canStand(world, a, b, 0) && world.H(a, b) > 0.4 && !camp.inside(a, b, 0.1);
+    if (ok(x, z)) return { x, z };
+    for (let rr = 0.25; rr <= r + 1e-9; rr += 0.25) for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8, px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr; if (ok(px, pz)) return { x: px, z: pz }; }
     return null;
   };
 
@@ -402,14 +412,8 @@ export function createMind(world, game, opts = {}) {
 
   // ---------- walking ----------
   function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground (o.free: anywhere, for a search). 0.30.3: a thin wrapper over game/route
-    // Things placed at their centre (piles and fire places) are now solid. Aim a
-    // little outside their rim before asking the finder, so the existing
-    // action reaches and pile-join distance remain available.
-    const solid = game.movement.obstacles(x, z, 0.01).find(q => Math.hypot(q.x - x, q.z - z) < q.r && Math.hypot(p.x - q.x, p.z - q.z) >= q.r - 0.02);   // 0.30.3: any point inside a solid, not only its centre (a stand-near spot in a pile's circle); not when he stands in that circle himself
-    if (solid) {   // (0.04 outside the rim, was 0.12: with his stop distance of 0.35 on top he too often stood beyond PILE_JOIN, 1 m from the pile's centre, and the wood he laid became a new fragment pile)
-      const dx = p.x - solid.x, dz = p.z - solid.z, d = Math.hypot(dx, dz) || 1;
-      x = solid.x + dx / d * (solid.r + 0.04); z = solid.z + dz / d * (solid.r + 0.04);
-    }
+    // A goal inside a solid (a pile, a fire place) cannot be stood on: the nearest free spot takes its place. Action errands never get here: they go to a standing point (goStand).
+    if (game.movement.obstacles.camp.inside(x, z, 0.02) && !game.movement.obstacles.camp.inside(p.x, p.z, 0)) { const q = openNear(x, z, 2); if (q) { x = q.x; z = q.z; } }
     const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : path);
     let route = null, finalSet = false, last = now;
     for (;;) {
@@ -426,9 +430,9 @@ export function createMind(world, game, opts = {}) {
       if (u.state === 'arrived') { idleInput(); return true; }
       if (u.state === 'unreachable') { if (route.reason === 'nopath') { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); } idleInput(); return false; }
       if (u.final) {
-        if (tap) { if (!finalSet) { inp.target = { x, z, tap: true }; finalSet = true; } else if (!inp.target) return true; }
-        else inp.target = { x, z };
-      } else { finalSet = false; inp.target = u.target; }
+        if (tap) { if (!finalSet) { inp.target = { x, z, tap: true, routed: true }; finalSet = true; } else if (!inp.target) return true; }
+        else inp.target = { x, z, routed: true };
+      } else { finalSet = false; inp.target = { x: u.target.x, z: u.target.z, routed: true }; }
       inp.run = !!o.hurry && u.remaining > 20 && !p.winded;
       yield;
     }
@@ -436,6 +440,21 @@ export function createMind(world, game, opts = {}) {
   function* waitIdle() { while (busy()) yield; yield; }
   function* waitActs(max = 25) { const t0 = now; yield; while (inp.target && inp.target.act && now - t0 < max) yield; yield; }
   const hurry = () => game.thirst.days >= 0.95;
+  const stand = game.stand;
+  const STOP = 0.12;   // the follower ends within this of a standing point (moveIntent takes less than 0.12 m for arrived)
+  // 0.30.3 "Routes": to a spot where the game really offers `kind` for `obj` (game/stand: a pile to take from, add to or light, a fire to feed, a site or lean-to to build or upgrade). True when he stands there and the
+  // action is offered; false when there is no such spot he can reach (the caller marks the object bad and goes on). A world that changed on the way (the pile is gone, another pile now counts) is looked at once more.
+  function* goStand(kind, obj, o = {}) {
+    for (let tries = 0; tries < 2; tries++) {
+      if (kind === 'take' || kind === 'add' || kind === 'light' ? !W.piles.includes(obj) : kind === 'feed' ? !game.fire.fires.includes(obj) : false) return false;
+      if (stand.usable(kind, obj, p.x, p.z, o.free ? null : inside)) { idleInput(); return true; }
+      const s = stand.plan(kind, obj, o.free ? pathFree : path, p, { allow: o.free ? null : inside });
+      if (!s) { stats.noStand = (stats.noStand || 0) + 1; ev('no-stand', { kind }); return false; }
+      if (!(yield* walk(s.x, s.z, { stop: STOP, hurry: o.hurry }))) return false;
+      if (stand.offered(kind, obj, p.x, p.z)) return true;
+    }
+    return false;
+  }
 
   // ---------- searching (the one exception to staying on known ground) ----------
   // Thirsty with no fresh water known, or hungry with no food known and none carried: he walks out from home over the unknown, ring by ring (rings of 12 m,
@@ -542,7 +561,7 @@ export function createMind(world, game, opts = {}) {
 
   function* roastCrab() {   // to the fire with flames and the row's crab: kneels ROAST_TIME and eats it
     const f = flameFire(); if (!f) return false;
-    yield* walk(f.x + 0.8, f.z + 0.4, { stop: 0.7 });
+    if (!(yield* goStand('nearFire', f))) return false;
     if (useRow('crab')) { yield* waitIdle(); return true; }
     return false;
   }
@@ -604,6 +623,14 @@ export function createMind(world, game, opts = {}) {
 
   const carriedKind = () => W.carried.length ? (W.carried[0].branch ? 'branch' : W.carried[0].frond ? 'frond' : 'drift') : (W.stones.length ? 'stone' : null);
   function* layDown() { for (let n = 0; n < 3 && (W.carried.length || W.stones.length); n++) { if (!pressKind(['feed', 'lay'])) break; yield* waitIdle(); } }
+  function* toDest(d) {   // to where wood is laid down: beside the pile that is to take it (a spot where the game's lay joins that very pile), at a fire (where it is fed), else to the point itself (a new pile there)
+    if (d.pile && W.piles.includes(d.pile) && (yield* goStand('add', d.pile))) return true;   // (a frond or stone pile is wider than the join distance: none to be had from outside, then a pile of its own beside it)
+    const f = game.fire.fires.find(q => dist(q, d) < 1.2);
+    if (f && !d.exact) return (yield* goStand('feed', f)) || (yield* goStand('nearFire', f));
+    if (d.exact) return true;   // layAt walks the exact approach itself
+    const q = openNear(d.x, d.z, 1.5);
+    return q ? yield* walk(q.x, q.z, { stop: 0.35 }) : false;
+  }
   function* layAt(d) {   // lays what he carries down at d; when something else within reach takes the place of 'lay' in the arc, he steps aside and tries again
     if (d.exact && W.load()) {
       const at = exactPileDrop(p, d);
@@ -613,7 +640,8 @@ export function createMind(world, game, opts = {}) {
     for (let tries = 0; tries < 3 && W.load(); tries++) {
       yield* layDown();
       if (!W.load()) break;
-      const a = tries * 2.1 + 0.5, q = standNear(d.x + Math.sin(a) * 1.3, d.z + Math.cos(a) * 1.3, 0.5); if (q) yield* walk(q.x, q.z, { stop: 0.3 });
+      if (d.pile && W.piles.includes(d.pile) && tries < 2 && (yield* goStand('add', d.pile))) continue;   // the pile is still there: a spot where the lay joins it
+      const a = tries * 2.1 + 0.5, q = openNear(d.x + Math.sin(a) * 1.3, d.z + Math.cos(a) * 1.3, 0.5); if (q) yield* walk(q.x, q.z, { stop: 0.3 });
     }
   }
   // fetch up to three pieces of one kind (stones: two) and bring them to dest (fire: feed it first, then lay down); maxCost: only pieces within that walk (0.29.3, the home project)
@@ -626,15 +654,19 @@ export function createMind(world, game, opts = {}) {
       const t = nearestBy(src, 45); if (!t || t.cost > maxCost) break;
       if (kind === 'drift' || kind === 'branch') think('woodIntent');
       const before = mine(), wanted = o => !!o.thing && (t.pile ? o.thing.kind === 'pile' && o.thing.pile === t.pile : o.thing.kind === 'log' && kindOf(o.thing.log) === pk);
-      yield* walk(t.x, t.z, { tap: true, stop: 0.4, until: () => { const a = game.action().tap; return !!a && a.kind === 'pickup' && wanted(a) && Math.hypot(a.thing.x - t.x, a.thing.z - t.z) < 1.5; } });
-      let k = pressKind(['pickup'], wanted); if (k) yield* waitIdle();
-      if (!k) { yield* walk(t.x, t.z, { stop: 0.2 }); k = pressKind(['pickup'], wanted); if (k) yield* waitIdle(); }
+      let k = null;
+      if (t.pile) { if (yield* goStand('take', t.pile)) { k = pressKind(['pickup'], wanted); if (k) yield* waitIdle(); } }   // 0.30.3: a pile is taken from where the arc really offers it for that pile
+      else {
+        yield* walk(t.x, t.z, { tap: true, stop: 0.4, until: () => { const a = game.action().tap; return !!a && a.kind === 'pickup' && wanted(a) && Math.hypot(a.thing.x - t.x, a.thing.z - t.z) < 1.5; } });
+        k = pressKind(['pickup'], wanted); if (k) yield* waitIdle();
+        if (!k) { yield* walk(t.x, t.z, { stop: 0.2 }); k = pressKind(['pickup'], wanted); if (k) yield* waitIdle(); }
+      }
       yield;
       if (mine() > before) got = mine(); else markBad(src, t.o, 600);
     }
     if (!W.load()) return got > 0;
     const d = dest(); if (!d) return false;
-    const ok = yield* walk(d.x, d.z, { stop: 0.35 });
+    const ok = yield* toDest(d);
     if (!ok) return false;
     yield* layAt(d);
     return true;
@@ -660,7 +692,7 @@ export function createMind(world, game, opts = {}) {
       if (pairNear(fs, pk)) { want = Math.min(want, NEED - 1 - (mine ? mine.logs.length : 0)); if (want < 1) continue; }   // 0.29.3: the other kind is already 6 or more: this pile stays below 6, else the arc offers to build and not to light
       const dest = () => {
         const q = firePiles(fs).filter(x => x.kind === pk && x.logs.length < 12).sort((a, b) => b.logs.length - a.logs.length)[0];
-        if (q) return { ...(standNear(q.x, q.z, 1) || fs), pile: q, room: PILE_FULL - q.logs.length };
+        if (q) return { x: q.x, z: q.z, pile: q, room: PILE_FULL - q.logs.length };
         return h.kind === 'leanto' && h.lt && game.leantos.has(h.lt, 'ring') ? { ...fs, exact: true, pile: null, room: PILE_FULL } : { ...fs, pile: null, room: PILE_FULL };
       };
       if (kind === 'drift' && (yield* fetchDried(dest, want))) return true;   // 0.29.5: wood that has dried on the drying pile first
@@ -670,14 +702,12 @@ export function createMind(world, game, opts = {}) {
     return false;
   }
 
-  function* breakPair(pile, side) {   // takes up to three pieces from the other pile of the pair under his arm (a pile of 6 or more becomes smaller), then lights
+  function* breakPair(pile) {   // takes up to three pieces from the other pile of the pair under his arm (a pile of 6 or more becomes smaller), then lights
     const other = firePiles(fireSpot()).filter(q => q !== pile && q.logs.length >= NEED).sort((a, b) => fuelOfPile(a) - fuelOfPile(b))[0]; if (!other) return false;
     const mine = o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === other;
-    yield* walk(other.x, other.z, { tap: true, stop: 0.5, until: () => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === 'pickup' && mine(o)); } });
-    if (!pressKind(['pickup'], mine)) return false;
+    if (!(yield* goStand('take', other)) || !pressKind(['pickup'], mine)) return false;
     yield* waitIdle(); ev('pair-broken');
-    yield* walk(side.x, side.z, { stop: 0.5 });
-    return !!pressKind(['light']);
+    return (yield* goStand('light', pile)) && !!pressKind(['light']);
   }
   function* lightFire() {
     const fs = fireSpot(), h = homeSpot();
@@ -688,15 +718,10 @@ export function createMind(world, game, opts = {}) {
     if (mean < 0.6) { ev('fire-skipped-wet', { mean: +mean.toFixed(2) }); cool('light'); return false; }
     think('fireOut');
     for (let k = 0; k < 3 && (game.fibre.carried || game.fire.torch) && !fireAt(fs); k++) {
-      // the lean-to's side gets the upgrade icon: stand on the far side of the pile so the arc offers to light
-      const dx = h.kind === 'leanto' ? pile.x - h.x : 0.9, dz = h.kind === 'leanto' ? pile.z - h.z : 0, l = Math.hypot(dx, dz) || 1;
-      const side = standNear(pile.x + dx / l * 0.9, pile.z + dz / l * 0.9) || fs;
-      yield* walk(side.x, side.z, { stop: 0.5 });
-      if (!pressKind(['light'])) {
-        // try the other sides before giving up
+      // 0.30.3: to a spot where the arc really offers to light THIS pile (not a neighbour, not the lean-to's upgrade icon)
+      if (!(yield* goStand('light', pile)) || !pressKind(['light'])) {
         let done = false;
-        for (let i = 1; i <= 3 && !done; i++) { const a = i * Math.PI / 2, s2 = standNear(pile.x + Math.sin(a) * 0.9, pile.z + Math.cos(a) * 0.9); if (!s2) continue; yield* walk(s2.x, s2.z, { stop: 0.5 }); done = !!pressKind(['light']); }
-        if (!done && game.action().options.some(o => o.kind === 'build')) done = yield* breakPair(pile, side);   // two piles of 6 or more at the fire (a legacy of the piles): the arc offers to build and not to light
+        if (siteFor(W.piles, pile)) done = yield* breakPair(pile);   // two piles of 6 or more at the fire (a legacy of the piles): the arc offers to build and not to light
         if (!done) { stats.lightRefused++; ev('light-not-offered', { arc: game.action().options.map(o => o.kind).join() }); cool('light'); return false; }
       }
       yield* waitActs(30); yield* waitIdle();
@@ -710,14 +735,13 @@ export function createMind(world, game, opts = {}) {
     const fs = fireSpot(), f = fireAt(fs); if (!f) return false;
     if (wetCarried()) yield* deliverWet();   // 0.29.5: wet wood from a stroll goes to the drying pile first
     if (!W.load()) {
-      const pile = [...pilesNear('driftwood', fs.x, fs.z, 8), ...pilesNear('branch', fs.x, fs.z, 8)].filter(q => q.logs.length && !isDrying(q)).sort((a, b) => dist(a, f) - dist(b, f))[0];
+      const pile = [...pilesNear('driftwood', fs.x, fs.z, 8), ...pilesNear('branch', fs.x, fs.z, 8)].filter(q => q.logs.length && !isDrying(q) && !isBad('feedpile', q)).sort((a, b) => dist(a, f) - dist(b, f))[0];
       if (!pile) return false;
       think('fireLow');
-      yield* walk(pile.x, pile.z, { tap: true, stop: 0.4, until: () => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === 'pickup' && o.thing && o.thing.kind === 'pile'); } });
-      if (pressKind(['pickup'])) yield* waitIdle();
+      if (yield* goStand('take', pile)) { if (pressKind(['pickup'], o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === pile)) yield* waitIdle(); } else { markBad('feedpile', pile, 120); return false; }
     }
     think('fireLow');
-    yield* walk(f.x + 0.8, f.z + 0.4, { stop: 0.7 });
+    if (!(yield* goStand('feed', f))) { yield* layDown(); return false; }   // 0.30.3: where the arc really feeds THIS fire
     for (let i = 0; i < 4; i++) { if (!pressKind(['feed'])) break; yield* waitIdle(); }
     yield* layDown();
     return true;
@@ -773,7 +797,7 @@ export function createMind(world, game, opts = {}) {
       const sx = Math.sin(c.heading), sz = Math.cos(c.heading), y0 = world.H(c.x, c.z);
       if (terrainAt(world, c.x, c.z, 0).s >= SITE_SLOPE) continue;
       let ok = true, rise = 0;
-      for (const [u, v] of [[0, 0], [1, 0.75], [-1, 0.75], [1, -0.75], [-1, -0.75], [0.9, 0], [-0.9, 0], [0, RING_AT], [1.7, 0], [-1.7, 0], [0, -1.7]]) {   // u across the opening (perpendicular to the heading), v along it
+      for (const [u, v] of [[0, 0], [1, 0.75], [-1, 0.75], [1, -0.75], [-1, -0.75], [0.9, 0], [-0.9, 0], [0, RING_AT], [UP_AT, 0], [-UP_AT, 0], [0, -UP_AT]]) {   // u across the opening (perpendicular to the heading), v along it
         const qx = c.x + sz * u + sx * v, qz = c.z - sx * u + sz * v, y = world.H(qx, qz), t = terrainAt(world, qx, qz, 0);
         if (!inside(qx, qz) || !canStand(world, qx, qz, 0) || t.inRiver || !world.dryOfRiver(qx, qz, 1.5) || y < SITE_HIGH || Math.abs(y - y0) > SITE_LEVEL) { ok = false; break; }
         rise = Math.max(rise, Math.abs(y - y0));
@@ -794,9 +818,8 @@ export function createMind(world, game, opts = {}) {
     return null;
   };
   const sitePile = (kind, sp) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - sp.x, q.z - sp.z) <= 2.2 && Math.hypot(q.x - sp.fire.x, q.z - sp.fire.z) > 2.6 && !isDrying(q)).sort((a, b) => b.logs.length - a.logs.length)[0] || null;   // the piles for the building: close to the site, and not the fire's stock
-  const buildOffered = kind => () => game.action().options.some(o => o.kind === kind);
-  function* doBuild(kind, at, stop, face) {   // walks to `at`, presses build / upgrade and kneels until it is done (or he is called away); face: the way a new lean-to is to open
-    yield* walk(at.x, at.z, { stop, until: buildOffered(kind) });
+  function* doBuild(kind, obj, face) {   // walks to a spot where the arc offers `kind` for obj (a lean-to being built or upgraded, { site } of two piles), presses build / upgrade and kneels until it is done (or he is called away); face: the way a new lean-to is to open
+    if (!(yield* goStand(kind, obj))) { stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join(), stand: false }); cool('home', 300); return false; }
     if (face !== undefined) headingWanted = face;
     if (!pressKind([kind])) { headingWanted = null; stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join() }); cool('home', 300); return false; }
     stats.home.builds++;
@@ -813,7 +836,7 @@ export function createMind(world, game, opts = {}) {
   function homeNeed(what, h) {
     if (what === 'leanto') {
       const half = game.leantos.list.filter(l => l.progress < 1 && inside(l.x, l.z)).sort((a, b) => dist(a, p) - dist(b, p))[0];
-      if (half) return { build: true, run: () => doBuild('build', half, 1.2, undefined) };
+      if (half) return { build: true, run: () => doBuild('build', { leanto: half }, undefined) };
       let s = existingSite(h);
       if (!s) {
         const sp = homeSite(h); if (!sp) { ev('home-no-site'); cool('home', 900); return null; }
@@ -825,18 +848,18 @@ export function createMind(world, game, opts = {}) {
         if (!s) { ev('home-site-bad'); cool('home', 600); return null; }
       }
       // 0.29.4: he builds at the pile that has its partner within 2 m (a second pile of 6 nearby, with no partner, offered 'light' only); the open side towards the fire
-      return { build: true, run: () => doBuild('build', s.drift || bigPile('driftwood', s.x, s.z, 3), 0.9, Math.atan2(h.x - s.x, h.z - s.z)) };
+      return { build: true, run: () => doBuild('build', { site: s }, Math.atan2(h.x - s.x, h.z - s.z)) };
     }
     if (h.kind !== 'leanto') return null;
     const lt = h.lt, per = UPGRADES[what].per, p0 = (lt.up && lt.up[what]) || 0, left = UPGRADES[what].steps - paidSteps(what, p0), hx = Math.sin(lt.heading), hz = Math.cos(lt.heading);
-    const spot = { frond: [hz, -hx], stone: [-hz, hx], branch: [-hx, -hz] };   // fronds on one side, stones on the other, branches behind the lean-to
+    const spot = { frond: [hz, -hx], stone: [-hz, hx], branch: [-hx, -hz] };   // fronds on one side, stones on the other, branches behind the lean-to (UP_AT m from its middle: beside the keep-free region, within UP_NEAR)
     for (const [kind, n] of Object.entries(per)) {
       const need = n * left - pileSum(kind, lt.x, lt.z, UP_NEAR);
       if (need <= 0) continue;
-      const [ux, uz] = spot[kind], at = { x: lt.x + ux * 1.7, z: lt.z + uz * 1.7 };
-      return { kind: kind === 'branch' ? 'branch' : kind, want: need, dest: () => { const q = bigPile(kind, at.x, at.z, 1.5); return q ? standNear(q.x, q.z, 1) : standNear(at.x, at.z, 1.2); } };
+      const [ux, uz] = spot[kind], at = { x: lt.x + ux * UP_AT, z: lt.z + uz * UP_AT };
+      return { kind: kind === 'branch' ? 'branch' : kind, want: need, dest: () => { const q = bigPile(kind, at.x, at.z, 1.5); return q ? { x: q.x, z: q.z, pile: q } : { x: at.x, z: at.z, exact: true }; } };
     }
-    return { build: true, run: () => doBuild('upgrade', lt, 1.5, undefined) };
+    return { build: true, run: () => doBuild('upgrade', lt, undefined) };
   }
   function* homeGoal(what, need) {
     if (cur) cur.limit = HOME_LIMIT;
@@ -851,7 +874,7 @@ export function createMind(world, game, opts = {}) {
 
   // ---------- drying wood (0.29.5 "Drying", 0.29.15 "Dry stock") ----------
   // Wet wood from the strip between the tides never dries there (the sea covers it again and again). On a shore stroll, with an arm free, he takes up to two such pieces to a drying pile of its own: above the high-water line at his camp,
-  // DRY_RINGS m from the fire (clear of the fire's own pile, `isDrying`), or, with a finished lean-to, DRY_LT m from its middle at the back (within the 1.5 m where the rain does not reach). A pile holds at most DRY_MAX pieces (never 6: with a pile
+  // DRY_RINGS m from the fire (clear of the fire's own pile, `isDrying`), or, with a finished lean-to, DRY_LT m from its middle at the back (outside the keep-free region of the lean-to). A pile holds at most DRY_MAX pieces (never 6: with a pile
   // of branches within 2 m the arc would offer to build). When the pieces on top are dry enough to burn (DRY_AT) the stores, evening wood and one low-priority daytime stock errand move them to the fire's pile before wet strip wood is fetched. Nothing is saved:
   // sites are worked out again from the fire and known ground, while each live mind keeps their pile classification stable as the fire moves. The same actions as a player's: pick up, lay down.
   const wetPiece = l => dryness(l, clock.total) < DRY_AT;
@@ -873,7 +896,7 @@ export function createMind(world, game, opts = {}) {
     };
     let found = null;
     if (lean) for (const sg of [1, -1]) {   // at the back of the lean-to, either side
-      const a = h.lt.heading + sg * Math.PI * 0.75, x = h.x + Math.sin(a) * DRY_LT, z = h.z + Math.cos(a) * DRY_LT;
+      const a = h.lt.heading + Math.PI + sg * 0.3, x = h.x + Math.sin(a) * DRY_LT, z = h.z + Math.cos(a) * DRY_LT;
       if (!found && okAt(x, z)) found = { x, z, ux: Math.sin(a), uz: Math.cos(a) };
     }
     for (const r of DRY_RINGS) for (let i = 0; i < 16 && !found; i++) {   // else beside the camp, nearest ring first
@@ -886,7 +909,7 @@ export function createMind(world, game, opts = {}) {
   }
   function* toDrying(s) {   // to the drying pile (beside it), or, with none yet, to where a first pile is laid: he comes from outside and faces the site, so the pile lands on it
     const q = dryPileAt(s);
-    if (q) { const st = standNear(q.x, q.z, 1) || { x: q.x, z: q.z }; return yield* walk(st.x, st.z, { stop: 0.35 }); }
+    if (q) return yield* goStand('add', q);
     const out = standNear(s.x + s.ux * 1.4, s.z + s.uz * 1.4, 0.5);
     if (out && Math.hypot(out.x - s.x, out.z - s.z) > 0.8 && !(yield* walk(out.x, out.z, { stop: 0.4 }))) return false;
     return yield* walk(s.x, s.z, { stop: 0.5 });
@@ -920,19 +943,20 @@ export function createMind(world, game, opts = {}) {
   function* fetchDried(dest, want) {   // from the drying pile to the fire's pile; true only when those exact log ids reached that non-drying pile
     return yield* errand(function* () {
     if (W.load()) return false;
-    const d0 = dest(), q = readyPile(); if (!d0 || !q) return false;
+    const d0 = dest(), q = readyPile(); if (process.env.DBGFD) console.error('fetchDried', clock.day, clock.time.toFixed(3), 'd0', !!d0, 'q', !!q, d0 && d0.room, want, d0 && d0.pile && isDrying(d0.pile)); if (!d0 || !q) return false;
     const take = Math.min(CARRY_MAX, q.logs.length);
     if (want < take || d0.room < take || isDrying(d0.pile)) return false;
     think('drytransfer');
     const mine = o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === q;
-    yield* walk(q.x, q.z, { tap: true, stop: 0.5, until: () => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === 'pickup' && mine(o)); } });
-    if (!pressKind(['pickup'], mine)) return false;
+    const gs = yield* goStand('take', q); if (process.env.DBGFD) console.error('  goStand', gs, 'offered now', JSON.stringify(game.action().options.map(o => o.kind)), game.action().tap && game.action().tap.kind); if (!gs || !pressKind(['pickup'], mine)) return false;
     yield* waitIdle();
     const ids = W.carried.map(l => l.id); if (!ids.length) return false;
     const d = dest(); if (!d || d.room < ids.length || isDrying(d.pile)) return false;
-    const ok = yield* walk(d.x, d.z, { stop: 0.35 });
+    const ok = yield* toDest(d);
+    if (process.env.DBGFD) console.error('  toDest', ok, JSON.stringify({ x: d.x, z: d.z, pile: !!d.pile, exact: d.exact }), 'at', p.x.toFixed(2), p.z.toFixed(2));
     if (ok) {
       yield* layAt(d);
+      if (process.env.DBGFD) console.error('  after layAt carried', W.carried.length, 'piles', JSON.stringify(W.piles.map(q => [+q.x.toFixed(1), +q.z.toFixed(1), q.kind, q.logs.length])), 'fs', JSON.stringify(fireSpot()));
       const landed = firePiles(fireSpot()).find(pile => !isDrying(pile) && ids.every(id => pile.logs.some(l => l.id === id)));
       if (landed) { let n = 0; for (const id of ids) if (!proj.movedIds.has(id)) { proj.movedIds.add(id); stats.drying.moved++; n++; } ev('dry-moved', { n, ids, from: [+q.x.toFixed(2), +q.z.toFixed(2)], to: [+landed.x.toFixed(2), +landed.z.toFixed(2)], destination: 'fire', drying: isDrying(landed) }); return true; }
     }
@@ -1008,10 +1032,11 @@ export function createMind(world, game, opts = {}) {
     if (!W.carried.length || (carriedKind() !== 'drift' && carriedKind() !== 'branch')) return;
     if (wetCarried()) { yield* deliverWet(); return; }   // 0.29.5: wood that is not dry enough to burn never goes to the fire's pile
     const fs = fireSpot(), kind = carriedKind() === 'branch' ? 'branch' : 'driftwood';
-    const q = firePiles(fs).filter(x => x.kind === kind && x.logs.length < PILE_FULL).sort((a, b) => b.logs.length - a.logs.length)[0], d = q ? standNear(q.x, q.z, 1) || fs : fs;
+    const q = firePiles(fs).filter(x => x.kind === kind && x.logs.length < PILE_FULL).sort((a, b) => b.logs.length - a.logs.length)[0], d = q ? { x: q.x, z: q.z, pile: q } : fs;
     if (pairNear(fs, kind) && (q ? q.logs.length : 0) + W.carried.length >= NEED) { yield* layAt(p); return; }   // it would make a second pile of 6 or more at the fire: laid down where he stands
-    if (!(yield* walk(d.x, d.z, { stop: 0.35 }))) return;
-    for (let n = 0; n < 3 && W.carried.length; n++) { if (!pressKind(['lay'])) break; yield* waitIdle(); }
+    if (d.pile) { if (!(yield* goStand('add', d.pile))) return; }
+    else { const o = openNear(d.x, d.z, 1.5); if (!o || !(yield* walk(o.x, o.z, { stop: 0.35 }))) return; }
+    for (let n = 0; n < 3 && W.carried.length; n++) { if (!pressKind(['lay'])) break; yield* waitIdle(); }   // (lay only: by day he never feeds the flames with it)
     });
   }
   function* arrive(kind, c, stroll = false) {   // what he does at the end of a leg (stroll: on a stroll of his own, not at the far end of an exploring trip)

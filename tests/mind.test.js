@@ -5,7 +5,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, DRY_AT, DRY_MAX, DRY_NEAR, DRY_FIRE, DRY_LT, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, DRY_AT, DRY_MAX, DRY_NEAR, DRY_FIRE, DRY_LT, UP_AT, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, PASSIVE_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { campGame } from './helpers/mindCamp.js';
@@ -13,7 +13,7 @@ import { canStand } from '../src/game/movement.js';
 import { seaLevel } from '../src/game/tide.js';
 import { BURN, EMBERS, FUEL_MAX, TORCH_DRY } from '../src/game/fire.js';
 import { dryness, inStripY, PILE_MAX, PILE_FRONT } from '../src/game/wood.js';
-import { NEED, UPGRADES, ringCentre } from '../src/game/leanto.js';
+import { NEED, UPGRADES, ringCentre, keepFree } from '../src/game/leanto.js';
 import { terrainAt, PACE } from '../src/game/movement.js';
 
 let w, spawn;
@@ -421,7 +421,7 @@ describe('his home: the site (0.29.3)', () => {
       const sx = Math.sin(c.heading), sz = Math.cos(c.heading), along = ((f.x - c.x) * sx + (f.z - c.z) * sz) / c.r;
       expect(Math.abs(along)).toBeLessThan(1e-6);   // the opening is a quarter turn from the line to the fire: the ring stands 4 m or more from the old fire
       const rc = ringCentre({ x: c.x, z: c.z, heading: c.heading }); expect(Math.hypot(rc.x - f.x, rc.z - f.z)).toBeGreaterThan(5);
-      for (const [u, v] of [[0, 0], [1, 0.75], [-1, -0.75], [1.7, 0], [-1.7, 0], [0, -1.7], [0, 2.2]]) {   // the footprint, the piles of the upgrades, the ring: all on ground he knows
+      for (const [u, v] of [[0, 0], [1, 0.75], [-1, -0.75], [UP_AT, 0], [-UP_AT, 0], [0, -UP_AT], [0, 2.2]]) {   // the footprint, the piles of the upgrades, the ring: all on ground he knows
         const qx = c.x + sz * u + sx * v, qz = c.z - sx * u + sz * v;
         expect(g.known.has(qx, qz)).toBe(true); expect(canStand(w, qx, qz, 0)).toBe(true); expect(w.H(qx, qz)).toBeGreaterThanOrEqual(SITE_HIGH); expect(Math.abs(w.H(qx, qz) - w.H(c.x, c.z))).toBeLessThan(0.31);
       }
@@ -536,11 +536,14 @@ describe('drying wood: the site (0.29.5)', () => {
     const again = createMind(w, camp()).dryingSite(); expect(again.x).toBe(s.x); expect(again.z).toBe(s.z);   // and repeatable: nothing of it is saved, it is worked out again
     const home = m.homePlan(); if (home.site) expect(Math.hypot(home.site.x - s.x, home.site.z - s.z)).toBeGreaterThanOrEqual(4.5);   // the lean-to's site keeps clear of it
   });
-  it('is at the back of the lean-to once there is one, within the 1.5 m where the rain does not reach, and clear of the stone ring and the fire', () => {
+  it('is straight behind the lean-to once there is one, outside its keep-free region (rule (a), 0.30.3), dry once it has walls, and clear of the stone ring and the fire', () => {
     const g = camp({ leantos: LT() }), m = createMind(w, g), s = m.dryingSite(), lt = g.leantos.list[0];
     expect(s).not.toBeNull(); expect(s.lean).toBe(true);
     expect(Math.hypot(s.x - lt.x, s.z - lt.z)).toBeCloseTo(DRY_LT, 3);
-    expect(g.leantos.dry(s.x, s.z, 'wood')).toBe(true);   // wood there stays dry in the rain
+    expect(keepFree(lt).touches(s.x, s.z, 0.65)).toBe(false);   // a pile laid there is not pushed away from the lean-to
+    expect(g.leantos.dry(s.x, s.z, 'wood')).toBe(false);        // 1.9 m is beyond the 1.5 m the bare roof keeps dry ...
+    const g2 = camp({ leantos: LT({ up: { walls: 1 } }) }), s2 = createMind(w, g2).dryingSite();
+    expect(g2.leantos.dry(s2.x, s2.z, 'wood')).toBe(true);      // ... and inside the 2.5 m of a lean-to with side walls
     const rc = ringCentre(lt); expect(Math.hypot(s.x - rc.x, s.z - rc.z)).toBeGreaterThanOrEqual(DRY_FIRE);
     expect(w.H(s.x, s.z)).toBeGreaterThanOrEqual(SITE_HIGH);
   });

@@ -27,12 +27,14 @@
  *
  * Depends on: game/movement
  */
-import { stepFactor, obstaclesNear } from './movement.js';
+import { stepFactor, stepAhead, obstaclesNear } from './movement.js';
 
 export const STEP = 0.25;            // the length of the short steps a line is checked in (the probe of stepPlayer)
 export const PLAN_MARGIN = 0.05;     // clearance a planned line keeps from a camp circle
 export const FOLLOW_MARGIN = 0.04;   // clearance the follower keeps when it cuts a corner
 export const NATURAL_DEAR = 0.25;
+export const STEEP = 0.85;           // ground at least this steep along a line makes `terrainPace` ask the stepper's own test (a gentler line has no band for the lattice to miss)
+export const DENSE = 0.05;           // the spacing of the places along a line where the stepper's own test is made (about one step at 60 frames a second)
 const EPS = 1e-6;
 
 /** The camp view for an `obstacles` option: a campSolids view (`fn.camp`), a plain callback wrapped, or null. */
@@ -42,16 +44,31 @@ export function asCamp(obstacles) {
   return { key: null, circles: null, groups: null, count: 1, refresh() { return this; }, nearNow: (x, z, r) => obstacles(x, z, r), near: (x, z, r) => obstacles(x, z, r), inside(x, z, m = 0) { for (const o of obstacles(x, z, m)) if (Math.hypot(x - o.x, z - o.z) < o.r + m) return o; return null; }, plain: true };
 }
 
-/** 0 when a step of the line is a wall (or water too deep), else the harmonic mean of the speed factors of the 0.25 m steps. */
+/**
+ * True when stepPlayer could walk the line a -> b step by step: at a place every DENSE (0.05 m) along it, game/movement `stepAhead` (the stepper's own test: the point 0.25 m
+ * ahead and the point one step ahead must both be walkable, with the symmetric steepness rule) is made in the direction of the line, the look-ahead cut short at the end
+ * of the line. The lattice of 0.25 m steps in `terrainPace` alone let a thin steep band between two of its places through, and the stepper then refused a step into it.
+ */
+export function stepperOpen(world, a, b) {
+  const len = Math.hypot(b.x - a.x, b.z - a.z); if (len < 1e-6) return true;
+  const n = Math.max(1, Math.ceil(len / DENSE)), d = len / n, ux = (b.x - a.x) / len, uz = (b.z - a.z) / len, here = { x: a.x, y: 0, z: a.z };
+  for (let i = 0; i < n; i++) {
+    here.x = a.x + ux * d * i; here.z = a.z + uz * d * i; here.y = world.H(here.x, here.z);
+    if (!stepAhead(world, here, ux, uz, d, 0, Math.min(STEP, len - d * i), false)) return false;
+  }
+  return true;
+}
+
+/** 0 when a step of the line is a wall (or water too deep), else the harmonic mean of the speed factors of the 0.25 m steps; 0 too when the stepper itself could not walk it (`stepperOpen`). */
 export function terrainPace(world, a, b) {
   const len = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(len / STEP));
-  let prev = { x: a.x, z: a.z, y: world.H(a.x, a.z) }, inv = 0;
+  let prev = { x: a.x, z: a.z, y: world.H(a.x, a.z) }, inv = 0, steep = world.slope(a.x, a.z) >= STEEP;
   for (let i = 1; i <= n; i++) {
     const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n, f = stepFactor(world, prev, x, z, 0, i === n);   // the bushes only where the line ends (they are dear to look up)
     if (f <= 0) return 0;
-    inv += 1 / f; prev = { x, z, y: world.H(x, z) };
+    inv += 1 / f; prev = { x, z, y: world.H(x, z) }; if (!steep && world.slope(x, z) >= STEEP) steep = true;
   }
-  return n / inv;
+  return !steep || stepperOpen(world, a, b) ? n / inv : 0;   // (only where the ground along the line is steep can a band hide between the places of the lattice)
 }
 
 /** The natural circle (trunk, boulder, crag) the line a -> b comes nearer to than its radius, or null. */

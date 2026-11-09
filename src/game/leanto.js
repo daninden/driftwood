@@ -5,7 +5,7 @@
  *   - The condition for building is a pile with at least NEED (6) driftwood and a
  *     pile with at least NEED branches whose centres are within NEAR (2 m) of each
  *     other (`siteFor`). The lean-to icon of the arc (or F) beside either builds
- *     instead of lighting (game/game). Building takes NEED pieces of each kind out
+ *     instead of lighting (game/game); 0.30.3 rule (b): any pile within reach (BESIDE) that has such a partner counts, not only the nearest. Building takes NEED pieces of each kind out
  *     of those two piles (the rest stays); the lean-to stands midway between them.
  *   - It takes BUILD_TIME seconds of work (an hour of game time, about a minute of
  *     play) and costs BUILD_COST days of rest in all (as much as two attempts to
@@ -37,6 +37,7 @@
  * upgradeFor(l, piles) -> 'walls' | 'bed' | 'ring' | null   the first unfinished upgrade of finished lean-to l whose remaining materials
  *   lie in piles within UP_NEAR of its centre (piles: game/wood piles)
  * ringCentre(l) -> { x, z }   where the fire ring stands (RING_AT in front of the open side)
+ * KEEP, keepFree(l) -> { f, r, touches(x, z, rad) }   the region of a lean-to that stays free of wood (rule (a), 0.30.3): the inside and the area just in front of its opening; wood is laid beside it instead (game/wood drop, game/game)
  * siteFor(piles, pile) -> { drift, branch, x, z } | null   for a pile beside him: the pair of piles
  *   (that one and the nearest of the other kind that qualifies) and the middle between them
  * createLeantos(world, saved?) -> leantos
@@ -79,6 +80,24 @@ export const UP_REACH = 2.2, UP_NEAR = 3, UP_TIME = 30, UP_COST = BUILD_COST / 2
 export const WALLS_WOOD = 2.5, WALLS_FIRE = 3, RING_AT = 2.2, RING_R = 1;
 
 export const paidSteps = (what, p) => p > 0 ? Math.min(UPGRADES[what].steps, Math.floor(p * UPGRADES[what].steps + 1e-9) + 1) : 0;
+
+/**
+ * 0.30.3 "Routes", rule (a): the region K of a lean-to that stays free of wood, in its frame (f along the heading, the open side; r across): the footprint -1.1 <= f <= 0.95, |r| <= 1.25
+ * (back wall and sides with their body-clear edge, the gap and the front tips) and the apron 0.95 < f <= 1.5, |r| <= 1.0. The apron ends at 1.5 on purpose: RING_AT puts the fire's pile at
+ * f = 2.2, whose solid (0.65) reaches back to f = 1.55. keepFree(l) -> { f(x, z), r(x, z), touches(x, z, rad) } for a finished or a half-built lean-to; touches is true when the disc of radius rad
+ * at (x, z) (a pile's solid, 0.65) overlaps K.
+ */
+export const KEEP = { back: -1.1, front: 0.95, side: 1.25, apron: 1.5, apronSide: 1.0 };
+export function keepFree(l) {
+  const s = Math.sin(l.heading), c = Math.cos(l.heading);
+  const f = (x, z) => (x - l.x) * s + (z - l.z) * c, r = (x, z) => (x - l.x) * c - (z - l.z) * s;
+  const gap = (v, lo, hi) => v < lo ? lo - v : v > hi ? v - hi : 0;
+  const touches = (x, z, rad = 0) => {
+    const u = f(x, z), v = r(x, z);
+    return Math.hypot(gap(u, KEEP.back, KEEP.front), gap(v, -KEEP.side, KEEP.side)) < rad || Math.hypot(gap(u, KEEP.front, KEEP.apron), gap(v, -KEEP.apronSide, KEEP.apronSide)) < rad;
+  };
+  return { f, r, touches };
+}
 
 export function ringCentre(l) { return { x: l.x + Math.sin(l.heading) * RING_AT, z: l.z + Math.cos(l.heading) * RING_AT }; }
 

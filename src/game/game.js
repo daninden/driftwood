@@ -152,10 +152,10 @@
  * Depends on: game/known, game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
  *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/water, game/wildlife, game/fireflies, game/weather
  */
-import { createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, nearestStandable, weariStride, paceOf, paceStride } from './movement.js';
+import { createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, canStand, nearestStandable, weariStride, paceOf, paceStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
 import { createKnown } from './known.js';
-import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, dryness } from './wood.js';
+import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, PILE_NEXT, dryness } from './wood.js';
 import { seaLevel, highWaters } from './tide.js';
 import { createSleep, isNight } from './sleep.js';
 import { createFibre } from './fibre.js';
@@ -164,7 +164,7 @@ import { createBranches } from './branches.js';
 import { createFronds } from './fronds.js';
 import { createStones } from './stones.js';
 import { createForage, BERRIES, BANANAS, BERRY_FOOD, BANANA_FOOD } from './forage.js';
-import { createLeantos, siteFor, upgradeFor, paidSteps, UPGRADES, UP_REACH, UP_NEAR, UP_TIME, UP_COST, NEED, BUILD_TIME, BUILD_COST, REACH as LEANTO_REACH } from './leanto.js';
+import { createLeantos, siteFor, upgradeFor, paidSteps, keepFree, UPGRADES, UP_REACH, UP_NEAR, UP_TIME, UP_COST, NEED, BUILD_TIME, BUILD_COST, REACH as LEANTO_REACH } from './leanto.js';
 import { YAW } from '../core/view.js';
 import { createThirst } from './thirst.js';
 import { createHunger } from './hunger.js';
@@ -176,6 +176,9 @@ import { createFireflies } from './fireflies.js';
 import { createWeather, FALLING } from './weather.js';
 import { createFire, full, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH, TORCH_DRY, TORCH_COST, BRANCH_BURN } from './fire.js';
 import { solidObstacles } from './obstacles.js';
+import { createPath } from './path.js';
+import { createRoute } from './route.js';
+import { createStand } from './stand.js';
 
 export const STOOP = 0.55;         // seconds to bend down and up again
 export const SIT_TIME = 0.5;       // 0.29.2 "Amble": seconds to sit down or get up (a get-up that makes way for a walk takes SIT_TIME / 2)
@@ -206,18 +209,22 @@ export function createGame(world, spawn, opts = {}) {
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
   const voiceListeners = new Set();
   const notifyAction = kind => { for (const listener of voiceListeners) listener({ kind, x: player.x, z: player.z }); };
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
+  const stand = game.stand = createStand(game, world, { BESIDE });   // 0.30.3 "Routes": standing points (game/stand), asked by the click on a pile or fire and by the walk to the spot of a light, a build or an upgrade
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
   const stoop = () => { player.stoop = 1; };
   wood.tideUpdate(game.sea, clock.total);
-  const here = () => terrainAt(world, player.x, player.z, game.sea);
+  const hereAt = (px, pz) => terrainAt(world, px, pz, game.sea);
+  const here = () => hereAt(player.x, player.z);
   const wet = t => t.inRiver || t.y < game.sea + 0.05;
   const beside = (x, z) => {   // where to kneel by a pile or a fire: SIDE from its middle, on the castaway's side
     const dx = player.x - x, dz = player.z - z, d = Math.hypot(dx, dz) || 1;
     return { x: x + dx / d * SIDE, z: z + dz / d * SIDE };
   };
-  const lay = heading => wood.drop(player.x, player.z, heading, wet(here()), (x, z) => wet(terrainAt(world, x, z, game.sea)));   // a pile never goes in the water
+  const PILE_SOLID = 0.65;   // the walk-blocking circle of a pile (game/obstacles PILE_R): a pile whose circle touches a lean-to's keep-free region is laid beside it
+  const blockedAt = (x, z) => leantos.list.some(l => keepFree(l).touches(x, z, PILE_SOLID));   // 0.30.3 rule (a): the inside of a lean-to and the area in front of its opening stay free of wood
+  const lay = heading => wood.drop(player.x, player.z, heading, wet(here()), (x, z) => wet(terrainAt(world, x, z, game.sea)), blockedAt);   // a pile never goes in the water
   const meanDry = logs => logs.reduce((s, l) => s + dryness(l, clock.total), 0) / Math.max(1, logs.length);
   const face = th => { player.heading = Math.atan2(th.x - player.x, th.z - player.z) || player.heading; };
   const fuel = l => !l.frond && dryness(l, clock.total) >= TORCH_DRY;   // a frond never burns
@@ -229,17 +236,43 @@ export function createGame(world, spawn, opts = {}) {
     const piece = wood.find(tg.x, tg.z, aim), coco = fibre.find(tg.x, tg.z, aim);
     const thing = fire.find(tg.x, tg.z, aim) || (dist(coco) < dist(piece) ? coco : piece);   // a fire first
     if (!thing) return;   // ground, river water, anything else: just walk (wading works as usual)
-    const close = thing.kind === 'fire' || thing.kind === 'pile', at = close ? beside(thing.x, thing.z) : thing;
+    const close = thing.kind === 'fire' || thing.kind === 'pile', at = close ? spotBeside(thing.kind === 'fire' ? 'nearFire' : 'nearPile', thing.kind === 'fire' ? thing.fire : thing.pile, beside(thing.x, thing.z)) : thing;
     tg.act = { kind: 'stand', close }; tg.x = at.x; tg.z = at.z;
   }
 
-  function plantSpot() {   // a step in front, in the dry ground
-    const x = player.x + Math.sin(player.heading) * 0.4, z = player.z + Math.cos(player.heading) * 0.4;
-    return !wet(terrainAt(world, x, z, game.sea)) && !wet(here()) ? { x, z } : null;
+  // 0.30.3 "Routes": where he walks to and kneels or stands for a thing: the old spot beside it (SIDE from the middle, on his side) when he can stand there and the game offers the action for that very
+  // object there, else the cheapest standing point (game/stand), else the old spot. The route to it is followed by the game itself (routeAim).
+  function spotBeside(kind, obj, ideal) {
+    if (stand.usable(kind, obj, ideal.x, ideal.z, null, 0.02)) return ideal;
+    const s = stand.plan(kind, obj, finder(), player);
+    return s ? { x: s.x, z: s.z } : ideal;
   }
-  function plantBesideSpot() {   // for drinking: behind or beside him, on dry ground (he stands at the water)
+
+  // The route the game follows to a target that needs one: a click on a pile or a fire, the walk to the spot of a light, a build or an upgrade (all end at a standing point), and a plain click on the ground
+  // only when a solid of the camp closes the straight line. A target marked `routed` (the mind, the tests) walks by its own route. No route at all (unreachable) clears the target.
+  let trip = null, finderMemo = null;
+  const finder = () => finderMemo || (finderMemo = createPath(world, { obstacles: movement.obstacles }));
+  function routeAim(input, dt) {
+    const tg = input.target;
+    if (!tg || tg.routed) { trip = null; return tg; }
+    if (!trip || trip.tg !== tg) {
+      const act = tg.act, planned = !!act && (act.close || act.kind === 'light' || act.kind === 'kindle' || act.kind === 'build' || act.kind === 'upgrade'), f = finder();
+      trip = { tg, route: planned || !f.open(player, tg) ? createRoute(f, player, { x: tg.x, z: tg.z }, { stop: 0.05, tap: true }) : null };
+      if (trip.route && trip.route.state === 'unreachable') { trip = null; input.clearTarget(); return null; }
+    }
+    if (!trip.route) return tg;
+    const u = trip.route.update(player, dt, false);
+    if (u.state !== 'going') { trip = null; input.clearTarget(); return null; }
+    return u.final ? tg : u.target;
+  }
+
+  function plantSpot(px = player.x, pz = player.z) {   // a step in front, in the dry ground
+    const x = px + Math.sin(player.heading) * 0.4, z = pz + Math.cos(player.heading) * 0.4;
+    return !wet(terrainAt(world, x, z, game.sea)) && !wet(hereAt(px, pz)) ? { x, z } : null;
+  }
+  function plantBesideSpot(px = player.x, pz = player.z) {   // for drinking: behind or beside him, on dry ground (he stands at the water)
     for (const r of [0.4, 0.8]) for (const a of [Math.PI, Math.PI / 2, -Math.PI / 2, Math.PI * 0.75, -Math.PI * 0.75, 0]) {
-      const x = player.x + Math.sin(player.heading + a) * r, z = player.z + Math.cos(player.heading + a) * r;
+      const x = px + Math.sin(player.heading + a) * r, z = pz + Math.cos(player.heading + a) * r;
       if (!wet(terrainAt(world, x, z, game.sea))) return { x, z };
     }
     return null;
@@ -247,31 +280,37 @@ export function createGame(world, spawn, opts = {}) {
   const plantTorch = () => { const s = plantSpot(); return !!s && fire.plant(s.x, s.z); };
   const plantBeside = () => { const s = plantBesideSpot(); return !!s && fire.plant(s.x, s.z); };
 
-  function lightable() {   // the pile beside him he could light now, with the torch or with fibre
-    if (wet(here()) || (!fire.torch && !fibre.carried)) return null;
-    const p = wood.find(player.x, player.z, BESIDE, 'pile');
+  function lightable(px, pz) {   // the pile beside him he could light now, with the torch or with fibre
+    if (wet(hereAt(px, pz)) || (!fire.torch && !fibre.carried)) return null;
+    const p = wood.find(px, pz, BESIDE, 'pile');
     return p && p.pile.logs.length >= FIRE_MIN ? { kind: 'light', pile: p.pile, torch: !!fire.torch } : null;
   }
-  function buildable() {   // a lean-to he could build or go on building now: beside a half-built one, or beside a pile that has a partner of the other kind within 2 m
-    if (wet(here())) return null;
-    const half = leantos.unfinished(player.x, player.z, LEANTO_REACH);
+  function buildable(px, pz) {   // a lean-to he could build or go on building now: beside a half-built one, or beside a pile that has a partner of the other kind within 2 m (0.30.3 rule (b): any pile within reach counts, not only the nearest)
+    if (wet(hereAt(px, pz))) return null;
+    const half = leantos.unfinished(px, pz, LEANTO_REACH);
     if (half) return { kind: 'build', leanto: half, x: half.x, z: half.z };
-    const p = wood.find(player.x, player.z, BESIDE, 'pile'), s = p && siteFor(wood.piles, p.pile);
-    return s && !wet(terrainAt(world, s.x, s.z, game.sea)) ? { kind: 'build', site: s, x: s.x, z: s.z } : null;
+    for (const p of wood.findAll(px, pz, BESIDE, 'pile')) {
+      const s = siteFor(wood.piles, p.pile);
+      if (s && !wet(terrainAt(world, s.x, s.z, game.sea))) return { kind: 'build', site: s, x: s.x, z: s.z };
+    }
+    return null;
   }
-  function upgradable() {   // an upgrade he could build or go on building now: beside a finished lean-to whose materials lie in piles close by
-    if (wet(here())) return null;
-    const lt = leantos.nearFinished(player.x, player.z, UP_REACH), what = lt && upgradeFor(lt, wood.piles);
+  function upgradable(px, pz) {   // an upgrade he could build or go on building now: beside a finished lean-to whose materials lie in piles close by
+    if (wet(hereAt(px, pz))) return null;
+    const lt = leantos.nearFinished(px, pz, UP_REACH), what = lt && upgradeFor(lt, wood.piles);
     return what ? { kind: 'upgrade', leanto: lt, what, x: lt.x, z: lt.z } : null;
   }
-  const sleepable = () => { const t = here(); return !wet(t) && t.climb <= 0.25; };
+  const sleepable = (px = player.x, pz = player.z) => { const t = hereAt(px, pz); return !wet(t) && t.climb <= 0.25; };
   const sitOk = () => { const t = here(); return !wet(t) && t.depth <= 0.05 && t.climb <= 0.25 && t.s < SIT_SLOPE; };   // 0.29.2: level dry ground, no climbing route
 
   /** Everything he could do now, as a flat list (pure, changes nothing): the small actions first, nearest first (the first is the main one the ring
    *  and Space do), then the big ones, each marked `big: true` (build, upgrade, light, sleep). See the header for the kinds. */
-  function actions() {
+  function actions() { return actionsAt(player.x, player.z); }
+  /** 0.30.3 "Routes": the same list as if he stood at (px, pz) (pure, nothing changes; what he carries, holds and does is as it is now). The one rule of what is offered where:
+   *  `actions()` is `actionsAt` at his feet, and game/stand asks it at the spots it considers, so the standing points never disagree with the game. */
+  function actionsAt(px, pz) {
     if (sleep.asleep || sleep.lie > 0 || work) return [];
-    const px = player.x, pz = player.z, load = wood.load(), torch = !!fire.torch, swim = wet(here());
+    const load = wood.load(), torch = !!fire.torch, swim = wet(hereAt(px, pz));
     const small = [];
     const blaze = load ? fire.find(px, pz, BESIDE, 'fire') : null;
     if (blaze && dryPiece() && !full(blaze.fire)) small.push({ kind: 'feed', fire: blaze.fire, thing: blaze });   // dry wood beside a fire feeds it, whatever else is near
@@ -300,11 +339,11 @@ export function createGame(world, spawn, opts = {}) {
       if (t) cands.push({ d: t.d, a: { kind: 'torch', torch: t.torch, thing: t } });
     }
     const wp = findWater(world, px, pz, DRINK_REACH, game.sea);
-    if (wp && (load ? !swim : torch ? !!plantBesideSpot() : true)) cands.push({ d: Math.hypot(wp.x - px, wp.z - pz), a: { kind: thirst.days <= DRINK_AT && shells.empty() ? 'fill' : 'drink', thing: wp } });   // wood is laid down and a torch stuck in the ground first
+    if (wp && (load ? !swim : torch ? !!plantBesideSpot(px, pz) : true)) cands.push({ d: Math.hypot(wp.x - px, wp.z - pz), a: { kind: thirst.days <= DRINK_AT && shells.empty() ? 'fill' : 'drink', thing: wp } });   // wood is laid down and a torch stuck in the ground first
     cands.sort((p, q) => p.d - q.d);
     for (const c of cands) if (!small.some(x => x.kind === c.a.kind)) small.push(c.a);   // one of each kind (the nearest): two icons alike would say nothing
     if (!small.length) {   // nothing near to do: what is in his hands, then a carried bite
-      if (torch) { if (plantSpot()) small.push({ kind: 'plant' }); }
+      if (torch) { if (plantSpot(px, pz)) small.push({ kind: 'plant' }); }
       else if (load) { if (!swim) small.push({ kind: 'lay' }); }
       else if (!swim) {   // empty hands: a full shell when thirsty, else something carried when hungry
         if (shells.full() && thirst.days > SIP_AT) small.push({ kind: 'sip' });
@@ -313,32 +352,56 @@ export function createGame(world, spawn, opts = {}) {
         else if (shells.nuts && hunger.days > EAT_AT) small.push({ kind: 'husk', carried: true });
       }
     }
-    const b = buildable(), u = b ? null : upgradable(), l = b || u ? null : lightable(), big = b || u || l;
+    const b = buildable(px, pz), u = b ? null : upgradable(px, pz), l = b || u ? null : lightable(px, pz), big = b || u || l;
     if (big) small.push({ ...big, big: true });
-    if (sleepable() && sleep.canLie(clock.time)) small.push({ kind: 'sleep', big: true });
+    if (sleepable(px, pz) && sleep.canLie(clock.time)) small.push({ kind: 'sleep', big: true });
     return small;
   }
 
   /** What the action button offers now: { tap, options } (pure). tap: the main small action (the ring and Space do it) or null. options: up to
    *  OPTIONS (3) others in this order: the other small actions nearest first, then the big ones (never dropped for a small one). Keys 1 to 3 and the arc's icons pick from it. */
-  function action() {
-    const list = actions(), tap = list.length && !list[0].big ? list[0] : null, rest = tap ? list.slice(1) : list;
+  function action() { return actionAt(player.x, player.z); }
+  function actionAt(px, pz) {
+    const list = actionsAt(px, pz), tap = list.length && !list[0].big ? list[0] : null, rest = tap ? list.slice(1) : list;
     const bigs = rest.filter(o => o.big), smalls = rest.filter(o => !o.big);
     return { tap, options: [...smalls.slice(0, Math.max(0, OPTIONS - bigs.length)), ...bigs].slice(0, OPTIONS) };
   }
+  /** Everything the action button, its arc and the keys would offer at (px, pz): the ring's action and the arc's options, in one list (pure). */
+  function offersAt(px, pz) { const a = actionAt(px, pz); return a.tap ? [a.tap, ...a.options] : a.options; }
 
   /** Do an option of action() (or its tap) at the next update: it is looked up again among what can be done then (same kind), so a stale one does nothing. */
   function act(o) { if (!o || !o.kind) return false; chosen = o; return true; }
   const same = (a, b) => a.kind === b.kind && a.what === b.what && (a.thing && a.thing.kind) === (b.thing && b.thing.kind);
 
   function startLight(l, input) {   // walk to the pile's side, kneel there and light it (F or its icon)
-    const side = beside(l.pile.x, l.pile.z);
+    const side = spotBeside('light', l.pile, beside(l.pile.x, l.pile.z));
     input.target = { x: side.x, z: side.z, tap: true, seen: true, act: { kind: l.torch ? 'kindle' : 'light', pile: l.pile, x: l.pile.x, z: l.pile.z } };
   }
 
   function startBuild(b, input) {   // walk to beside the spot, kneel there and build a lean-to or an upgrade (F or its icon)
-    const side = beside(b.x, b.z), heading = b.leanto ? b.leanto.heading : Number.isFinite(input.yaw) ? input.yaw : YAW;
+    const side = spotBeside(b.kind === 'upgrade' ? 'upgrade' : 'build', b.kind === 'upgrade' ? b.leanto : b, beside(b.x, b.z)), heading = b.leanto ? b.leanto.heading : Number.isFinite(input.yaw) ? input.yaw : YAW;
     input.target = { x: side.x, z: side.z, tap: true, seen: true, act: { kind: b.kind === 'upgrade' ? 'upgrade' : 'build', leanto: b.leanto, site: b.site, what: b.what, heading, x: b.x, z: b.z } };
+  }
+
+  // 0.30.3 rule (a): the building piles stood between the two sites, which is now the inside of the lean-to. What is left of them (the rest of a pile of more than 6) is laid as one pile per kind (driftwood and
+  // branches never mix) at the nearest spot beside the lean-to, outside its walls and opening (the keep-free region), dry, standable, clear of every solid and of the other piles; the side that is not its front first.
+  function layLeftovers(lt, piles) {
+    const away = lt.heading + Math.PI;
+    for (const pile of piles) {
+      const i = wood.piles.indexOf(pile); if (i < 0) continue;   // all used up
+      wood.piles.splice(i, 1);
+      let spot = null;
+      for (let d = 1.5; d <= 6 && !spot; d += 0.25) {
+        const tries = []; for (let k = 0; k < 24; k++) tries.push(away + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 12);
+        for (const a of tries) {
+          const x = lt.x + Math.sin(a) * d, z = lt.z + Math.cos(a) * d;
+          if (blockedAt(x, z) || wet(terrainAt(world, x, z, game.sea)) || !canStand(world, x, z, game.sea) || movement.obstacles.camp.inside(x, z, 0.45) || wood.piles.some(q => Math.hypot(q.x - x, q.z - z) < PILE_NEXT)) continue;
+          spot = { x, z }; break;
+        }
+      }
+      if (spot) { pile.x = spot.x; pile.z = spot.z; }
+      wood.piles.push(pile); wood.version++;   // (with no spot at all it stays where it was)
+    }
   }
 
   // an upgrade takes its materials step by step: one of each kind, out of the piles within UP_NEAR of the lean-to, as each step begins
@@ -412,6 +475,7 @@ export function createGame(world, spawn, opts = {}) {
         const s = siteFor(wood.piles, a.site.drift);
         if (s && s.branch === a.site.branch && !wet(terrainAt(world, s.x, s.z, game.sea)) && !wet(here())) {
           wood.consume(s.drift, NEED); wood.consume(s.branch, NEED); lt = leantos.start(s.x, s.z, a.heading);
+          layLeftovers(lt, [s.drift, s.branch]);
         }
       }
       if (lt && !wet(here())) { work = { kind: 'build', t: 0, dur: Math.max(0.01, BUILD_TIME * (1 - lt.progress)), thing: lt, p0: lt.progress }; notifyAction('build'); }
@@ -505,7 +569,7 @@ export function createGame(world, spawn, opts = {}) {
       if (work && work.t >= work.dur) { const wk = work; work = null; finish(wk); }
       res = stepPlayer(world, player, null, dt);
     } else {
-      if (light) { const b = buildable() || upgradable(); if (b) startBuild(b, input); else { const l = lightable(); if (l) startLight(l, input); } }   // F
+      if (light) { const b = buildable(player.x, player.z) || upgradable(player.x, player.z); if (b) startBuild(b, input); else { const l = lightable(player.x, player.z); if (l) startLight(l, input); } }   // F
       else if (pick && (pick.kind === 'build' || pick.kind === 'upgrade')) startBuild(pick, input);
       else if (pick && pick.kind === 'light') startLight(pick, input);
       else if (pick && pick.kind !== 'sleep' && !player.stoop && !queued) press(pick, input);
@@ -524,8 +588,8 @@ export function createGame(world, spawn, opts = {}) {
         input.clearTarget(); if (a.kind !== 'stand') arrive(a);   // arrived: stand there, or light the pile
         res = stepPlayer(world, player, null, dt);
       } else {
-        const dir = moveIntent(input, player);
-        if (!dir && input.target) input.clearTarget();
+        const aimAt = routeAim(input, dt), dir = moveIntent(aimAt === input.target ? input : { ...input, target: aimAt }, player);
+        if (!dir && input.target && aimAt === input.target) input.clearTarget();
         const needs = sleep.speed() * thirst.speed() * hunger.speed();
         const wantRun = !!dir && (input.run || !!(input.target && input.target.run)), run = wantRun && breath.canRun();   // out of breath he walks
         const pace = run ? 1 : paceOf(input);   // 0.29.2: the habit's amble (the player's input has no pace); a run is never slowed

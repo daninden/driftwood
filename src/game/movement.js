@@ -244,6 +244,16 @@ export function moveIntent(input, player) {
 }
 
 const DEFLECT = [0, 0.5, -0.5, 1.0, -1.0, 1.35, -1.35];
+export const PROBE = 0.25;   // how far ahead stepPlayer looks before it takes a step
+
+/** 0.30.3 "Routes": stepPlayer's own test of one straight step from `here` ({ x, y, z }) in direction (dx, dz): the point `probe` ahead and the point `base` ahead must both be
+ *  walkable (stepFactor); 0 when the probe is not, else the smaller factor (when the short step alone is refused, the probe's). The one place that decides it: stepPlayer calls it for every direction it tries and game/walk calls it
+ *  along a planned line, so what the planner accepts is exactly what the stepper would walk (bushes false: only whether it is 0 is asked). */
+export function stepAhead(w, here, dx, dz, base, sea = 0, probe = PROBE, bushes = true) {
+  const pf = stepFactor(w, here, here.x + dx * probe, here.z + dz * probe, sea, bushes); if (!pf) return 0;
+  const f = stepFactor(w, here, here.x + dx * base, here.z + dz * base, sea, bushes);   // (a short step into a thin steep band that the point 0.25 m ahead clears is walked at the pace of that point: the band is narrower than the probe, as the planner's lattice sees it)
+  return f ? Math.min(f, pf) : pf;
+}
 
 export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0, stride = 1, opts = null) {
   if (!dir) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: false }; }
@@ -251,16 +261,21 @@ export function stepPlayer(w, p, dir, dt, run = false, load = 1, sea = 0, stride
   let best = null;
   for (const da of DEFLECT) {
     const c = Math.cos(da), s = Math.sin(da), dx = dir.x * c - dir.z * s, dz = dir.x * s + dir.z * c;
-    const probe = stepFactor(w, here, here.x + dx * 0.25, here.z + dz * 0.25, sea); if (!probe) continue;
-    const f = stepFactor(w, here, here.x + dx * base, here.z + dz * base, sea); if (!f) continue;
-    best = { dx, dz, f: Math.min(f, probe) * (da === 0 ? 1 : Math.cos(da) * 0.9) }; break;
+    const f = stepAhead(w, here, dx, dz, base, sea); if (!f) continue;
+    best = { dx, dz, f: f * (da === 0 ? 1 : Math.cos(da) * 0.9) }; break;
   }
   if (!best) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
   let step = base * best.f, nx = p.x + best.dx * step, nz = p.z + best.dz * step;
   if (w.tiles) {
     const q = pushOut(w, here, nx, nz, opts);
     if (q.x !== nx || q.z !== nz) {
-      step = Math.hypot(q.x - p.x, q.z - p.z); nx = q.x; nz = q.z;
+      const intended = step;
+      step = Math.hypot(q.x - p.x, q.z - p.z);
+      if (step > intended * (1 + 1e-9) && step > 1e-9) {   // 0.30.3: an ejection from inside a solid (a pile laid under his feet) never carries him farther than the step he took
+        const cx = p.x + (q.x - p.x) / step * intended, cz = p.z + (q.z - p.z) / step * intended;
+        if (obstaclesNear(w, cx, cz, opts).every(o => { const d = Math.hypot(cx - o.x, cz - o.z); return d >= o.r || d >= Math.hypot(here.x - o.x, here.z - o.z) - 1e-9; })) { q.x = cx; q.z = cz; step = intended; }   // (only where pushOut's own rule allows the point: outside, or not deeper than where he stood)
+      }
+      nx = q.x; nz = q.z;
       if (step < 1e-4 || !stepFactor(w, here, nx, nz, sea)) { p.moving = false; p.speed = 0; return { moved: false, distance: 0, blocked: true }; }
       best.dx = (nx - p.x) / step; best.dz = (nz - p.z) / step;
     }

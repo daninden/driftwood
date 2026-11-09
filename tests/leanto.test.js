@@ -228,19 +228,25 @@ describe('building', () => {
     }
   });
   it('is solid at the back and sides but open at the front: he cannot walk through it, he can walk in', () => {
-    const lean = { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 };
-    // from the open front straight on to the far side: the back stops him, he does not pass it
-    const through = createGame(w, at(spawn.x, spawn.z + 1.5), { leantos: lean });
-    run(through, makeInput({ target: { x: spawn.x, z: spawn.z - 2 } }), 4);
+    const lean = () => ({ leantos: { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } });
+    // from the open front straight on to the far side (walking by the stick, a straight line): the back stops him, he does not pass it
+    const through = createGame(w, at(spawn.x, spawn.z + 1.5), lean());
+    run(through, makeInput({ stick: { x: 0, z: -1 } }), 4);
     expect(through.player.z).toBeGreaterThan(spawn.z - 0.8);
     // from the side, across the side wall: he does not get inside
-    const side = createGame(w, at(spawn.x - 1.5, spawn.z), { leantos: { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } });
-    run(side, makeInput({ target: { x: spawn.x + 1.5, z: spawn.z } }), 3);
+    const side = createGame(w, at(spawn.x - 1.5, spawn.z), lean());
+    run(side, makeInput({ stick: { x: 1, z: 0 } }), 3);
     expect(side.player.x).toBeLessThan(spawn.x - 0.8);
     // through the front he reaches the middle
-    const inside = createGame(w, at(spawn.x, spawn.z + 1.5), { leantos: { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } });
+    const inside = createGame(w, at(spawn.x, spawn.z + 1.5), lean());
     run(inside, makeInput({ target: { x: spawn.x, z: spawn.z } }), 4);
     expect(Math.hypot(inside.player.x - spawn.x, inside.player.z - spawn.z)).toBeLessThan(0.5);
+  });
+  it('a click on the ground behind it walks round it (0.30.3: a click whose straight line a solid closes follows a route) and never through it', () => {
+    const lean = { leantos: { list: [{ id: 0, x: spawn.x, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } };
+    const g = createGame(w, at(spawn.x, spawn.z + 2.5), lean), goal = { x: spawn.x, z: spawn.z - 3 }, i = makeInput({ target: { ...goal } });
+    let inWall = false; for (let t = 0; t < 12 && i.target; t += 1 / 30) { g.update(i, 1 / 30); const dz = g.player.z - spawn.z, dx = Math.abs(g.player.x - spawn.x); if (dx < 0.6 && dz > -0.75 && dz < 0.6 && dz < -0.1) inWall = true; }
+    expect(Math.hypot(g.player.x - goal.x, g.player.z - goal.z)).toBeLessThan(0.3); expect(inWall).toBe(false);
   });
 });
 

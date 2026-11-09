@@ -78,11 +78,14 @@
  *     the nearest thing within reach of (x, z); x, z is its nearest point, d its
  *     distance from (x, z) (to a pile's edge); only: 'log' or 'pile' to look for
  *     that kind alone; ok(log): only loose pieces it accepts (game/game: wood while the arm has room, stones while the hands have)
+ *   wood.findAll(x, z, reach, only?) -> [thing]   (0.30.3 "Routes") every pile within reach, nearest first (only: 'pile' by default, 'log' for loose pieces, 'any' for both), the larger pile first among equals
+ *   wood.joinTarget(x, z, kind) -> pile | null   the pile that wood of that kind laid down at (x, z) joins (the nearest of its kind with room within PILE_JOIN of its middle)
  *   wood.take(thing, total?) -> number of pieces picked up (0 when the hands are full);
  *     total: the days on the clock, for when a branch taken from the ground grows back
  *   wood.consume(pile, n) -> the top n pieces of a pile, taken off the island (to build, game/leanto)
- *   wood.drop(x, z, heading, inWater?, wetAt?) -> true when something was laid down
- *     (wetAt(x, z) -> true for water, to keep a new pile out of it)
+ *   wood.drop(x, z, heading, inWater?, wetAt?, blockedAt?) -> true when something was laid down
+ *     (wetAt(x, z) -> true for water, to keep a new pile out of it; 0.30.3 rule (a): blockedAt(x, z) -> true where a pile may not stand, the keep-free region of a lean-to, and the search for
+ *     a spot then goes further out, SPOT_STEP (0.6) at a time up to SPOT_FAR (3) m, before wood stays in his arm)
  *   wood.washUp(n, avoid?, total?) -> the logs high water number n brought (none
  *     within 2 m of avoid { x, z }, the castaway); deterministic in (seed, n).
  *     Each carries t, the day of that high water (game/tide), for drying. When total (the clock now)
@@ -134,6 +137,7 @@ export const PILE_JOIN = 1.0;     // laying down this close to a pile adds to it
 export const PILE_MAX = 12;       // a pile holds at most this many pieces
 export const PILE_NEXT = 0.95;    // a new pile beside a full one stands this far from it
 export const PILE_FRONT = 0.45;   // a first pile is laid this far in front of him
+const SPOT_STEP = 0.6, SPOT_FAR = 3;   // 0.30.3 rule (a): a spot refused for a lean-to's keep-free region is looked for this much further out, in steps, up to this far
 const PILE_R = 0.45;              // the smallest visible pile radius (the reach of a short, sparse pile)
 const LOW = -RANGE;                // the sea level at low water
 export const WASH_MAX = 2;        // at most this many new pieces per beach tile and high water
@@ -197,7 +201,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
   let sea = -Infinity;   // the current sea level (tideUpdate)
   const washedIds = new Set();   // ids of the wood washed up since the start (saved in full, with its t)
   const soaked = new Map();   // id -> log: wood the rain wet that is not saved with the washed-up wood (start wood, branches)
-  const wood = { carried: [], stones: [], load, tideUpdate, drying, rain, piles: [], version: 0, dirty: new Set(), fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, take, drop, washUp, flood, takePile, giveOne, consume, state };
+  const wood = { carried: [], stones: [], load, tideUpdate, drying, rain, piles: [], version: 0, dirty: new Set(), fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, findAll, joinTarget, take, drop, washUp, flood, takePile, giveOne, consume, state };
   const special = id => id >= STONE_ID0 ? (stones ? stones.piece(id) : null) : id >= FROND_ID0 ? (fronds ? fronds.piece(id) : null) : (branches ? branches.piece(id) : null);   // a branch, frond or stone by its id
   function load() { return wood.carried.length + wood.stones.length; }   // pieces under his arm and in his hands: each slows him
   const homeTile = l => homeOf.has(l.id) ? homeOf.get(l.id) : tileOf(l.x, l.z);
@@ -245,6 +249,27 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     return best;
   }
 
+  // 0.30.3 "Routes": every pile within reach of (x, z), nearest first (d to the pile's edge), the larger pile first among equals
+  function findAll(x, z, reach, only = 'pile') {
+    const out = [];
+    if (only !== 'pile') for (const l of near(x, z, reach)) {
+      if (taken.has(l.id) || (!l.branch && !l.frond && !l.stone && logTop(l) <= sea)) continue;
+      const q = distToLog(l, x, z); if (q.d < reach) out.push({ kind: 'log', log: l, x: q.x, z: q.z, d: q.d });
+    }
+    if (only !== 'log') for (const p of wood.piles) {
+      const d = Math.max(0, Math.hypot(x - p.x, z - p.z) - pileVisibleRadius(p));
+      if (d < reach) out.push({ kind: 'pile', pile: p, x: p.x, z: p.z, d });
+    }
+    return out.sort((a, b) => a.d - b.d || (b.pile ? b.pile.logs.length : 0) - (a.pile ? a.pile.logs.length : 0));
+  }
+
+  // the pile that wood of `kind` laid down at (x, z) joins: the nearest pile of that kind with room within PILE_JOIN of its middle, or null (a new pile then)
+  function joinTarget(x, z, kind) {
+    let pile = null, bd = PILE_JOIN;
+    for (const p of wood.piles) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd && p.kind === kind && p.logs.length < PILE_MAX) { bd = d; pile = p; } }
+    return pile;
+  }
+
   function take(thing, total = 0) {
     if (!thing) return 0;
     const stone = thing.kind === 'log' ? !!thing.log.stone : wood.piles.includes(thing.pile) && thing.pile.kind === 'stone';   // stones are carried apart from the wood
@@ -265,12 +290,12 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     wood.version++; return got.length;
   }
 
-  function drop(x, z, heading, inWater = false, wetAt = null) {
+  function drop(x, z, heading, inWater = false, wetAt = null, blockedAt = null) {
     if (!load() || inWater) return false;
     let left = [], laid = false;   // each kind is laid down on piles of its own
     for (const kind of PILE_KINDS) {
       const mine = kind === 'stone' ? wood.stones.slice() : wood.carried.filter(l => kindOf(l) === kind); if (!mine.length) continue;
-      const rest = layKind(kind, mine, x, z, heading, wetAt);
+      const rest = layKind(kind, mine, x, z, heading, wetAt, blockedAt);
       if (rest.length < mine.length) laid = true;
       left.push(...rest);
     }
@@ -280,29 +305,33 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
   }
 
   // lay pieces of one kind on the nearest pile of that kind with room, then on new piles; returns the pieces that found no place (bottom first)
-  function layKind(kind, mine, x, z, heading, wetAt) {
-    let pile = null, bd = PILE_JOIN, close = null, cd = PILE_JOIN;   // pile: the nearest that can take more; close: the nearest of any kind or fullness
-    for (const p of wood.piles) {
-      const d = Math.hypot(p.x - x, p.z - z);
-      if (d < cd) { cd = d; close = p; }
-      if (d < bd && p.kind === kind && p.logs.length < PILE_MAX) { bd = d; pile = p; }
-    }
+  function layKind(kind, mine, x, z, heading, wetAt, blockedAt) {
+    let close = null, cd = PILE_JOIN;   // close: the nearest pile of any kind or fullness
+    for (const p of wood.piles) { const d = Math.hypot(p.x - x, p.z - z); if (d < cd) { cd = d; close = p; } }
+    const pile = joinTarget(x, z, kind);   // the nearest that can take more
     const pieces = [...mine].reverse();
     if (pile) pile.logs.push(...pieces.splice(0, PILE_MAX - pile.logs.length));
     if (pieces.length) {   // a new pile: a step in front, or right next to the pile that was full
-      const c = pile || close, spot = c ? spotAround(c.x, c.z, PILE_NEXT, heading, wetAt) : spotAround(x, z, PILE_FRONT, heading, wetAt);
+      const c = pile || close, spot = c ? spotAround(c.x, c.z, PILE_NEXT, heading, wetAt, blockedAt) : spotAround(x, z, PILE_FRONT, heading, wetAt, blockedAt);
       if (spot) { wood.piles.push({ x: spot.x, z: spot.z, kind, logs: pieces.splice(0) }); }
     }
     return pieces.reverse();
   }
 
   // a spot for a new pile, dist away from (cx, cz) (a pile, or the castaway): first in the direction he faces, then round it; dry and clear of other piles
-  function spotAround(cx, cz, dist, heading, wetAt) {
-    for (let k = 0; k < 12; k++) {
-      const a = heading + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 6, sx = cx + Math.sin(a) * dist, sz = cz + Math.cos(a) * dist;
-      if (wetAt && wetAt(sx, sz)) continue;
-      if (wood.piles.some(q => Math.hypot(q.x - sx, q.z - sz) < PILE_NEXT * 0.9)) continue;
-      return { x: sx, z: sz };
+  // 0.30.3 rule (a): blockedAt(x, z) -> true where a pile may not stand (the inside of a lean-to and the area in front of its opening, game/leanto keepFree); when a spot was refused for that
+  // reason the search goes further out, in steps of SPOT_STEP up to SPOT_FAR, all twelve directions each, so wood laid from the inside lands beside the lean-to
+  function spotAround(cx, cz, dist, heading, wetAt, blockedAt = null) {
+    let blocked = false;
+    for (let extra = 0; extra <= SPOT_FAR + 1e-9; extra += SPOT_STEP) {
+      for (let k = 0; k < 12; k++) {
+        const a = heading + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 6, sx = cx + Math.sin(a) * (dist + extra), sz = cz + Math.cos(a) * (dist + extra);
+        if (wetAt && wetAt(sx, sz)) continue;
+        if (blockedAt && blockedAt(sx, sz)) { blocked = true; continue; }
+        if (wood.piles.some(q => Math.hypot(q.x - sx, q.z - sz) < PILE_NEXT * 0.9)) continue;
+        return { x: sx, z: sz };
+      }
+      if (!blocked) break;
     }
     return null;
   }
