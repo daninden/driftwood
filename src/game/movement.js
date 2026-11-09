@@ -45,6 +45,7 @@
  * nearestStandable(world, x, z, sea?, maxR?, opts?) -> { x, z } | null   (x, z) itself
  *   when he can stand there, else the nearest such spot on rings of 0.5 m
  *   steps out to maxR (15 m), or null
+ * PROBE (0.25), stepAhead(w, here, dx, dz, base, sea?, probe?, bushes?) -> 0 | factor   (0.30.3) stepPlayer's own test of one straight step, also asked by game/walk along a planned line
  * createPlayer(spot) -> player state { x, y, z, heading, moving, speed, phase, stoop, sitting } (sitting: 0..1, game/game)
  * PACE (0.65), PACE_STRIDE (0.5), paceOf(input) -> 0.3..1 (1 without input.pace), paceStride(pace): the slower amble of the habit (0.29.2 "Amble"); the player's input has no pace
  * moveIntent(input, player) -> unit direction { x, z } or null, from the thumb
@@ -58,6 +59,8 @@
  *   (game/wood CARRY_STRIDE) and so does weariness (weariStride(needsSpeed) =
  *   1 - WEARY_STRIDE * (1 - needsSpeed), WEARY_STRIDE 0.4), so the phase
  *   advances faster per metre.
+ *
+ * An ejection by pushOut (from inside a solid) never carries him farther than the step he took, where pushOut's own rule allows that point.
  *
  * Depends on: core/view, world/constants, world/vegetation
  */

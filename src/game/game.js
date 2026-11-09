@@ -110,6 +110,7 @@
  *     costing rest and the fibre, or pushes the torch in, game/fire kindle) and
  *     'sleep' (on dry, walkable ground, and only once he may: from dusk on after about 3½ hours awake, by day after half a day awake, sleep.canLie(time)). F lights the pile beside
  *     him the same way (or builds), Z lies down to sleep (same rule).
+ *   game.actionsAt(px, pz) / actionAt(px, pz) / offersAt(px, pz)   (0.30.3 "Routes") the same as actions() / action() / their flat list if he stood at (px, pz): the one rule of what is offered where, which game/stand asks (game.stand)
  *   game.action() -> { tap, options }   pure: the main small action (or null: the ring and Space do it) and up to OPTIONS (3) others for the arc above the ring and the keys 1 to 3: the
  *     other small actions nearest first, then the big ones (a big one is never dropped for a small one). Nothing at all while he sleeps, lies down or kneels.
  *   game.act(option) -> bool   do one of them at the next update (looked up again by kind among what can be done then, so a stale one does nothing). input.takeChoice() (keys 1 to 3,
@@ -149,7 +150,9 @@
  *   In the sleep a lean-to's upgrades count (walls: a longer cold sleep, bed: faster rest, game/sleep); the walls widen where wood and fires stay dry
  *   (leantos.dry) and a stone ring holds a fire and keeps the rain off it (fire.update).
  *
- * Depends on: game/known, game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
+ * 0.30.3 "Routes": a click on a pile or fire, and the walk of a light, build or upgrade, go to a standing point (game/stand) by a route of game/route; a plain click walks round a camp solid that closes the straight line. Rule (b): `buildable` takes any pile within BESIDE. Rule (a): wood is not laid where a pile would touch the keep-free region of a lean-to (game/leanto keepFree), and the leftovers of the building piles are laid beside the new lean-to.
+ *
+ * Depends on: game/path, game/route, game/stand, game/known, game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
  *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/water, game/wildlife, game/fireflies, game/weather
  */
 import { createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, canStand, nearestStandable, weariStride, paceOf, paceStride } from './movement.js';

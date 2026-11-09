@@ -183,3 +183,25 @@ describe('no spot at all is an honest null', () => {
     expect(g.stand.plan('take', pile, finder, g.player)).toBeNull();     // ... but there is no way in
   });
 });
+
+describe('clicking (game.update on a player target)', () => {
+  const click = (g, target, secs = 20) => { const i = makeInput(); i.target = target; for (let t = 0; t < secs && i.target; t += DT) g.update(i, DT); return i; };
+  const lt = () => ({ id: 0, x: C.x - 2.5, z: C.z, heading: 0, progress: 1 });
+  it('a click on a pile behind a lean-to goes round it to a spot beside the pile, and acts on nothing', () => {
+    const g = createGame(w, at(C.x - 7, C.z), { wood: { carried: [], piles: [{ x: C.x, z: C.z, kind: 'driftwood', logs: ids(logs, 0, 4) }] }, leantos: { list: [lt()], nextId: 1 }, sleep: { awake: 0.05 } });
+    click(g, { x: C.x, z: C.z, tap: true });
+    const pile = g.wood.piles[0];
+    expect(g.stand.offered('nearPile', pile, g.player.x, g.player.z)).toBe(true); expect(Math.hypot(g.player.x - C.x, g.player.z - C.z)).toBeLessThan(1.6);
+    expect(pile.logs.length).toBe(4); expect(g.wood.carried.length).toBe(0);
+  });
+  it('a click on a fire beside a wall stands where the fire is within reach; a click on bare ground behind the wall walks round it, and one in the open stays a straight line', () => {
+    const g = createGame(w, at(C.x - 7, C.z), { leantos: { list: [lt()], nextId: 1 }, fire: { fires: [{ id: 0, x: C.x, z: C.z, fuel: 3 * BURN, embers: EMBERS, lit: 0, fed: 1 }], torch: null, torches: [], attempts: 0, nextId: 5 }, sleep: { awake: 0.05 } });
+    click(g, { x: C.x, z: C.z, tap: true });
+    expect(g.stand.offered('nearFire', g.fire.fires[0], g.player.x, g.player.z)).toBe(true);
+    const h = createGame(w, at(C.x - 7, C.z), { leantos: { list: [lt()], nextId: 1 }, sleep: { awake: 0.05 } });
+    click(h, { x: C.x + 3, z: C.z, tap: true }); expect(Math.hypot(h.player.x - C.x - 3, h.player.z - C.z)).toBeLessThan(0.3);
+    const o = createGame(w, at(C.x - 7, C.z + 6), { sleep: { awake: 0.05 } }), i = makeInput(); i.target = { x: C.x - 3, z: C.z + 6, tap: true };
+    let maxOff = 0; for (let t = 0; t < 6 && i.target; t += DT) { o.update(i, DT); maxOff = Math.max(maxOff, Math.abs(o.player.z - C.z - 6)); }
+    expect(maxOff).toBeLessThan(0.3);
+  });
+});

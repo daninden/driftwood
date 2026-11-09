@@ -14,7 +14,8 @@
  *     closed ('block') for corner cutting.
  * The circle geometry is the one `pushOut` enforces, so every planned segment can be walked.
  *
- * STEP, PLAN_MARGIN, FOLLOW_MARGIN, NATURAL_DEAR
+ * stepperOpen(world, a, b) -> true when stepPlayer's own test (movement stepAhead) passes at a place every DENSE along the line; terrainPace asks it where the ground along the line is at least STEEP
+ * STEP, STEEP, DENSE, PLAN_MARGIN, FOLLOW_MARGIN, NATURAL_DEAR
  * terrainPace(world, a, b) -> 0 | pace   the terrain part: 0 when any step is a wall, else the harmonic mean of the steps' speed factors
  * naturalHit(world, a, b) -> the natural circle the line meets, or null
  * staticFactor(world, a, b, natural?) -> terrainPace x (1 | NATURAL_DEAR | 0 for a natural hit: 'dear' (default) or 'block'); depends on the island only, so it may be cached
