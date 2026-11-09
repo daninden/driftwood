@@ -632,6 +632,15 @@ export function createMind(world, game, opts = {}) {
     return q ? yield* walk(q.x, q.z, { stop: 0.35 }) : false;
   }
   function* layAt(d) {   // lays what he carries down at d; when something else within reach takes the place of 'lay' in the arc, he steps aside and tries again
+    const alive = d.stock ? game.fire.fires.find(q => dist(q, d) < 1.5) : null;
+    if (alive && W.load()) {   // stock for tomorrow's fire never feeds a fire that still burns (by day he feeds embers only in passing): a pile of its own 2 m from it, on his side
+      const a = Math.atan2(p.x - alive.x, p.z - alive.z);
+      for (const da of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
+        const q = openNear(alive.x + Math.sin(a + da) * 2, alive.z + Math.cos(a + da) * 2, 0.5);
+        if (q && Math.hypot(q.x - alive.x, q.z - alive.z) >= 1.7 && (yield* walk(q.x, q.z, { stop: 0.3 }))) { for (let n = 0; n < 3 && W.load(); n++) { if (!pressKind(['lay'])) break; yield* waitIdle(); } break; }
+      }
+      if (!W.load()) return;
+    }
     if (d.exact && W.load()) {
       const at = exactPileDrop(p, d);
       if (yield* walk(at.x, at.z, { stop: 0.08 })) { p.heading = at.heading; yield* layDown(); }
@@ -679,7 +688,7 @@ export function createMind(world, game, opts = {}) {
     const drift = firePiles(fs).filter(q => q.kind === 'driftwood'), pile = drift.filter(q => q.logs.length < PILE_FULL).sort((a, b) => b.logs.length - a.logs.length)[0];
     if (pile) return { x: pile.x, z: pile.z, pile, room: pairNear(fs, 'driftwood') ? Math.max(0, NEED - 1 - pile.logs.length) : PILE_FULL - pile.logs.length };
     if (drift.length || pairNear(fs, 'driftwood') || proj.dry.some(s => Math.hypot(s.x - fs.x, s.z - fs.z) <= DRY_NEAR)) return null;
-    return { ...fs, exact: true, pile: null, room: PILE_FULL };
+    return { ...fs, exact: true, stock: true, pile: null, room: PILE_FULL };
   }
   function* gatherWood() {
     const h = homeSpot(), fs = fireSpot(h), best = bestPile(fs), st = best ? fuelOfPile(best) : 0;
@@ -943,20 +952,18 @@ export function createMind(world, game, opts = {}) {
   function* fetchDried(dest, want) {   // from the drying pile to the fire's pile; true only when those exact log ids reached that non-drying pile
     return yield* errand(function* () {
     if (W.load()) return false;
-    const d0 = dest(), q = readyPile(); if (process.env.DBGFD) console.error('fetchDried', clock.day, clock.time.toFixed(3), 'd0', !!d0, 'q', !!q, d0 && d0.room, want, d0 && d0.pile && isDrying(d0.pile)); if (!d0 || !q) return false;
+    const d0 = dest(), q = readyPile(); if (!d0 || !q) return false;
     const take = Math.min(CARRY_MAX, q.logs.length);
     if (want < take || d0.room < take || isDrying(d0.pile)) return false;
     think('drytransfer');
     const mine = o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === q;
-    const gs = yield* goStand('take', q); if (process.env.DBGFD) console.error('  goStand', gs, 'offered now', JSON.stringify(game.action().options.map(o => o.kind)), game.action().tap && game.action().tap.kind); if (!gs || !pressKind(['pickup'], mine)) return false;
+    if (!(yield* goStand('take', q)) || !pressKind(['pickup'], mine)) return false;
     yield* waitIdle();
     const ids = W.carried.map(l => l.id); if (!ids.length) return false;
     const d = dest(); if (!d || d.room < ids.length || isDrying(d.pile)) return false;
     const ok = yield* toDest(d);
-    if (process.env.DBGFD) console.error('  toDest', ok, JSON.stringify({ x: d.x, z: d.z, pile: !!d.pile, exact: d.exact }), 'at', p.x.toFixed(2), p.z.toFixed(2));
     if (ok) {
       yield* layAt(d);
-      if (process.env.DBGFD) console.error('  after layAt carried', W.carried.length, 'piles', JSON.stringify(W.piles.map(q => [+q.x.toFixed(1), +q.z.toFixed(1), q.kind, q.logs.length])), 'fs', JSON.stringify(fireSpot()));
       const landed = firePiles(fireSpot()).find(pile => !isDrying(pile) && ids.every(id => pile.logs.some(l => l.id === id)));
       if (landed) { let n = 0; for (const id of ids) if (!proj.movedIds.has(id)) { proj.movedIds.add(id); stats.drying.moved++; n++; } ev('dry-moved', { n, ids, from: [+q.x.toFixed(2), +q.z.toFixed(2)], to: [+landed.x.toFixed(2), +landed.z.toFixed(2)], destination: 'fire', drying: isDrying(landed) }); return true; }
     }
