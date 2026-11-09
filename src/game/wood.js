@@ -56,6 +56,7 @@
  *     is saved in the optional field `wet`.
  *
  * Pure data on a world (world/vegetation `tile.drift`); no DOM, no Three.js.
+ * The rain writes `t` on the world's own start logs and branches; createWood sets back what an earlier game on the same world object left, so games one after the other behave like on fresh worlds.
  *
  * createWood(world, saved?, branches?, fronds?, stones?) -> wood
  *   branches, fronds, stones: game/branches, game/fronds, game/stones, for the pieces on the ground (none without)
@@ -182,7 +183,12 @@ export function logsNear(w, x, z, reach) {
 
 const tileOf = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
 
+const wetOf = new WeakMap();   // world -> Set of the shared start logs and branches a game wet (`t` set on the world's own objects)
+
 export function createWood(w, saved, branches = null, fronds = null, stones = null) {
+  let wetShared = wetOf.get(w); if (!wetShared) wetOf.set(w, wetShared = new Set());
+  for (const l of wetShared) delete l.t;   // another game on this world object left its rain on them: this game starts dry (a save restores its own wetness below)
+  wetShared.clear();
   const byId = new Map(), homeOf = new Map();   // homeOf: id of a first log -> the index of its tile
   let nextId = 0;
   w.tiles.forEach((t, k) => { if (t.drift) for (const l of t.drift) { byId.set(l.id, l); homeOf.set(l.id, k); nextId = Math.max(nextId, l.id + 1); } });
@@ -207,7 +213,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     wood.piles = (saved.piles || []).map(p => ({ x: p.x, z: p.z, kind: p.kind || 'driftwood', logs: p.logs.map(get).filter(Boolean) })).filter(p => p.logs.length);
     for (const e of saved.wet || []) {   // rain-soaked start wood and branches
       const l = e[0] >= BRANCH_ID0 ? special(e[0]) : byId.get(e[0]);
-      if (l && !washedIds.has(l.id) && Number.isFinite(e[1])) { l.t = e[1]; soaked.set(l.id, l); }
+      if (l && !washedIds.has(l.id) && Number.isFinite(e[1])) { l.t = e[1]; soaked.set(l.id, l); wetShared.add(l); }
     }
   }
 
@@ -326,7 +332,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
       if (l.t !== undefined && l.t >= t) return;   // already wet since
       if (total - t >= dryDays(l)) return;          // dried again since
       if (dryness(l, total) > 0.02) fresh = true;
-      l.t = t; if (!washedIds.has(l.id)) soaked.set(l.id, l);
+      l.t = t; if (!washedIds.has(l.id)) { soaked.set(l.id, l); wetShared.add(l); }
       if (!l.branch && !taken.has(l.id)) wood.dirty.add(homeTile(l));   // a log on the beach looks wet from now on
     };
     if (falling) {   // carried wood and piles can move: only the rain falling now is known to have hit them

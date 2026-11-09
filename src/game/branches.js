@@ -2,6 +2,8 @@
  * game/branches — the branches that lie under the broadleaf and rain forest
  * trees, and grow back after he has taken them.
  *
+ * createBranches puts the lists back as an earlier game on the same world object left them (no `g`, no `t`).
+ *
  * Rules
  *   - About half of the broadleaf and rain forest trees (world/vegetation
  *     `tile.trees`) have 0 to 2 branches lying under them. Where they lie is
@@ -75,7 +77,12 @@ export function branchesOfTile(w, tile) {
   return list;
 }
 
+const regrownOf = new WeakMap();   // world -> Set of the pieces a game put in the shared lists when a branch grew back
+
 export function createBranches(w, saved) {
+  let regrown = regrownOf.get(w); if (!regrown) regrownOf.set(w, regrown = new Set());
+  for (const b of regrown) { delete b.g; delete b.t; }   // another game on this world object grew these back: they are the original branches again
+  regrown.clear();
   const taken = new Map();   // id -> the day it was taken
   const grown = new Map();   // id -> the day a regrown branch grew, kept for GROWN_KEEP days (saved, so the rain of before it grew stays off it)
   const branches = { version: 0, dirty: new Set(), groundBranches, near, onGround, piece, take, update, state };
@@ -86,7 +93,7 @@ export function createBranches(w, saved) {
   function regrow(id, when) {
     const s = id - BRANCH_ID0, tile = w.tiles[Math.floor(s / TILE_SPAN)]; if (!tile || !piece(id)) return;
     const list = branchesOfTile(w, tile), old = list[s % TILE_SPAN], { t, ...fresh } = old;   // a new piece: it starts dry, whatever the old one (maybe still carried) was
-    list[s % TILE_SPAN] = { ...fresh, g: when }; grown.set(id, when);
+    list[s % TILE_SPAN] = { ...fresh, g: when }; regrown.add(list[s % TILE_SPAN]); grown.set(id, when);
   }
   const back = (id, at) => at + REGROW + REGROW_SPREAD * (hashInt(id, Math.floor(at * 1000), 79) / 4294967296);
 
