@@ -8,7 +8,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { BURN, EMBERS } from '../src/game/fire.js';
-import { follow } from './helpers/follow.js';
+import { routeWalk } from './helpers/routeWalk.js';
 
 const world = {
   tiles: [], H: () => 0, Lat: () => 0, slope: () => 0, riverAt: () => null,
@@ -58,8 +58,8 @@ describe('Solid camp things', () => {
       s.leantos.list.push({ x: 0, z: 0, heading, progress: 1 });
       const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) }, path = createPath(world, opts);
       const from = { x: 0, z: 0 }, to = { x: -4 * front.x, z: -4 * front.z };
-      const r = follow(world, path, from, to, { secs: 30, movement: opts, onStep: p => front.trace.push(p.x * front.x + p.z * front.z) });
-      expect(r.nopath).toBeUndefined(); expect(r.arrived).toBe(true); expect(r.stall).toBeLessThan(1);
+      const r = routeWalk(world, path, from, to, { secs: 30, movement: opts, onStep: p => front.trace.push(p.x * front.x + p.z * front.z) });
+      expect(r.nopath).toBe(false); expect(r.arrived).toBe(true); expect(r.stall).toBeLessThan(1);
       const behind = front.trace.findIndex(d => d < -1.1);
       expect(behind).toBeGreaterThan(0);
       expect(front.trace.slice(0, behind).some(d => d > 0.7)).toBe(true);
@@ -72,8 +72,8 @@ describe('Solid camp things', () => {
       s.leantos.list.push({ x: 0, z: 0, heading, progress: 1 });
       const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) }, path = createPath(world, opts);
       const from = { x: -4 * front.x, z: -4 * front.z }, to = { x: 0, z: 0 };
-      const r = follow(world, path, from, to, { secs: 30, arrivalDistance: 0.3, movement: opts, onStep: p => front.trace.push(p.x * front.x + p.z * front.z) });
-      expect(r.nopath).toBeUndefined(); expect(r.arrived).toBe(true); expect(r.stall).toBeLessThan(1);
+      const r = routeWalk(world, path, from, to, { secs: 30, stop: 0.3, movement: opts, onStep: p => front.trace.push(p.x * front.x + p.z * front.z) });
+      expect(r.nopath).toBe(false); expect(r.arrived).toBe(true); expect(r.stall).toBeLessThan(1);
       expect(Math.hypot(r.x - to.x, r.z - to.z)).toBeLessThanOrEqual(0.3);
       expect(front.trace.some(d => d > 0.7)).toBe(true);
     }
@@ -92,8 +92,8 @@ describe('Solid camp things', () => {
     const s = state(), w = worldWithBackTree();
     s.leantos.list.push({ x: 0, z: 0, heading: 0, progress: 1 });
     const opts = { obstacles: solidObstacles(s.wood, s.fire, s.leantos) }, path = createPath(w, opts), trace = [];
-    const r = follow(w, path, { x: 0, z: 0 }, { x: 0, z: -4 }, { secs: 30, movement: opts, onStep: p => trace.push(p.z) });
-    expect(r.nopath).toBeUndefined(); expect(r.arrived).toBe(true); expect(r.stall).toBeLessThan(1);
+    const r = routeWalk(w, path, { x: 0, z: 0 }, { x: 0, z: -4 }, { secs: 30, movement: opts, onStep: p => trace.push(p.z) });
+    expect(r.nopath).toBe(false); expect(r.arrived).toBe(true); expect(r.stall).toBeLessThan(1);
     const behind = trace.findIndex(z => z < -1.1);
     expect(behind).toBeGreaterThan(0); expect(trace.slice(0, behind).some(z => z > 0.7)).toBe(true);
   });

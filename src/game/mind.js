@@ -56,8 +56,9 @@
  * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water he can walk to over known ground, or food, is known; then he is back on known ground only (0.29: water that is known but out of reach does not end a search).
  * A higher need breaks into a lower goal (checked every CHECK seconds), except while an actual material errand is under way: it delivers first. Very thirsty or very hungry needs still break in; a goal keeps going otherwise and a failing one is left alone for a while (`cool`; 0.28.2: 10 to 40 s, a failed
  * light 100 s, or 300 s when one tuft of fibre is left; a failed try keeps the last tuft).
- * Walking a path: he heads for the next waypoint and moves on at 0.45 m; he cuts a corner (moves on at up to 1.1 m) only when path.clear says the line to the one after is open
- * (0.28.1: a climbing route is a narrow band). He walks; only very thirsty (thirst >= 0.95) and far (20 m or more) does he run.
+ * Walking a path (0.30.3 "Routes"): `walk` is a thin wrapper over game/route, the one follower: it pulls the string over the next route points (he heads for the furthest of the next four he can see by the rule of game/walk),
+ * closes a segment he made no progress on for 1.2 s and plans again (at most three times: then `stats.stuck` counts each such stall, an event 'stuck' names it, and the walk fails), and reports no way at all as `stats.nopath` and an event 'nopath'.
+ * There are no bans and no hand steering. He walks; only very thirsty (thirst >= 0.95) and far (20 m or more) does he run.
  *
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
@@ -97,6 +98,7 @@
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 import { createPath } from './path.js';
+import { createRoute } from './route.js';
 import { canStand, terrainAt, PACE, WALK_SPEED } from './movement.js';
 import { DAY_SECONDS } from './clock.js';
 import { freshWater } from './water.js';
@@ -252,7 +254,7 @@ export function createMind(world, game, opts = {}) {
   const MARGIN = 1.5, DIAG = MARGIN * 0.75;
   const inside = (x, z) => known.has(x, z) && known.has(x + MARGIN, z) && known.has(x - MARGIN, z) && known.has(x, z + MARGIN) && known.has(x, z - MARGIN)
     && known.has(x + DIAG, z + DIAG) && known.has(x - DIAG, z - DIAG) && known.has(x + DIAG, z - DIAG) && known.has(x - DIAG, z + DIAG);
-  const path = createPath(world, { allow: inside, obstacles: game.movement.obstacles }), pathFree = createPath(world, { obstacles: game.movement.obstacles });   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
+  const path = createPath(world, { allow: inside, allowVersion: () => known.count, obstacles: game.movement.obstacles }), pathFree = createPath(world, { obstacles: game.movement.obstacles });   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
   const stats = { drying: { sites: 0, wetTaken: 0, laid: 0, moved: 0, stockErrands: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, events: [] };
   const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let exploring = false, exploredDay = -9, fullPace = false, now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
@@ -399,67 +401,35 @@ export function createMind(world, game, opts = {}) {
   const useRow = kind => { lastKind = 'use:' + kind; idleInput(); inp.sit = false; return game.use(kind, inp); };
 
   // ---------- walking ----------
-  function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground (o.free: anywhere, for a search)
+  function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground (o.free: anywhere, for a search). 0.30.3: a thin wrapper over game/route
     // Things placed at their centre (piles and fire places) are now solid. Aim a
-    // little outside their rim before asking the grid finder, so the existing
+    // little outside their rim before asking the finder, so the existing
     // action reaches and pile-join distance remain available.
     const solid = game.movement.obstacles(x, z, 0.01).find(q => Math.hypot(q.x - x, q.z - z) < 0.01);
     if (solid) {
       const dx = p.x - solid.x, dz = p.z - solid.z, d = Math.hypot(dx, dz) || 1;
       x = solid.x + dx / d * (solid.r + 0.12); z = solid.z + dz / d * (solid.r + 0.12);
     }
-    const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : path), roam = o.free || !!o.finder;
-    let plan = null, pi = 0, finalSet = false, replans = 0, chk = { x: p.x, z: p.z, t: now }, stuckN = 0, seen = now;
+    const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : path);
+    let route = null, finalSet = false, last = now;
     for (;;) {
       if (o.until && o.until()) { idleInput(); return true; }
-      if (p.sitting > 0) { inp.sit = false; idleInput(); yield; continue; }   // 0.29.2: he gets up first, then walks
+      if (p.sitting > 0) { inp.sit = false; idleInput(); last = now; yield; continue; }   // 0.29.2: he gets up first, then walks
       const d = Math.hypot(x - p.x, z - p.z);
       if (!tap && d <= stop) { idleInput(); return true; }
-      if (!plan) {
-        plan = fd.find(p, { x, z }); pi = 0;
-        if (!plan) { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); idleInput(); return false; }
-        if (d < 3.5 && plan.pts.length <= 3 && (!fd.dynamic || fd.clear(p, { x, z }))) plan.direct = true;
+      if (!route) {
+        route = createRoute(fd, p, { x, z }, { stop, tap, near: tap ? 1.3 : 0 });   // tap: a stall within 1.3 m of the thing ends the walk (it lies against a trunk: close enough)
+        if (route.state === 'unreachable') { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); idleInput(); return false; }
       }
-      { let bj = pi, bd = 1e9; for (let j = pi; j < Math.min(plan.pts.length, pi + 8); j++) { const dd = Math.hypot(plan.pts[j].x - p.x, plan.pts[j].z - p.z); if (dd < bd) { bd = dd; bj = j; } } pi = bj; if (bd > 5) { plan = null; finalSet = false; if (++replans > 6) { idleInput(); return false; } yield; continue; } }
-      while (pi < plan.pts.length - 1 && (Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 0.45   // reached: on to the next (tight, a climbing route can be a narrow band) ...
-        || (Math.hypot(plan.pts[pi].x - p.x, plan.pts[pi].z - p.z) < 1.1 && fd.clear(p, plan.pts[pi + 1])))) pi++;   // ... or passed: he cuts the corner only on a line that is clear (open ground)
-      const last = plan.direct || ((pi >= plan.pts.length - 1 || Math.hypot(plan.pts.at(-1).x - p.x, plan.pts.at(-1).z - p.z) < 2.2) && (!fd.dynamic || fd.clear(p, { x, z })));
-      let remaining = d;
-      if (last) {
+      const u = route.update(p, now - last, busy()); last = now;
+      if (u.stalled) { stats.stuck++; ev('stuck', { goal: cur && cur.name, to: [+x.toFixed(1), +z.toFixed(1)], dist: +d.toFixed(1), n: route.stalls }); }
+      if (u.state === 'arrived') { idleInput(); return true; }
+      if (u.state === 'unreachable') { if (route.reason === 'nopath') { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); } idleInput(); return false; }
+      if (u.final) {
         if (tap) { if (!finalSet) { inp.target = { x, z, tap: true }; finalSet = true; } else if (!inp.target) return true; }
         else inp.target = { x, z };
-      } else {
-        const w = plan.pts[pi], dx = w.x - p.x, dz = w.z - p.z, dl = Math.hypot(dx, dz) || 1;
-        // The path edge is sampled from cell centres, but the follower can be deflected between them. Avoid an un-routed wall face
-        // immediately ahead; climbing routes keep their existing movement rules.
-        const land = terrainAt(world, p.x + dx / dl * 0.3, p.z + dz / dl * 0.3, game.sea);
-        if (land.s > 3.2 && land.climb <= 0.25) { fd.ban(w.x, w.z); plan = null; finalSet = false; if (++replans > 6) { idleInput(); return false; } yield; continue; }
-        inp.target = { x: w.x, z: w.z }; remaining = (plan.pts.length - pi) * 1.5;
-      }
-      inp.run = !!o.hurry && remaining > 20 && !p.winded;
-      if (now - seen > 0.5) chk = { x: p.x, z: p.z, t: now };   // he was busy (kneeling, sleeping): count again
-      seen = now;
-      if (now - chk.t >= 4) {   // stuck check every 4 seconds
-        const moved = Math.hypot(p.x - chk.x, p.z - chk.z);
-        if (moved < 0.3 && !busy() && tap && d < 1.3) { idleInput(); return true; }   // beside a thing that lies against a trunk: close enough
-        if (moved < 0.3 && !busy()) {
-          stuckN++; stats.stuck++; ev('stuck', { goal: cur && cur.name, to: [+x.toFixed(1), +z.toFixed(1)], dist: +d.toFixed(1), n: stuckN });
-          const ahead = plan.pts[Math.min(pi + 1, plan.pts.length - 1)]; if (ahead) fd.ban(ahead.x, ahead.z);
-          if (fd.banned.size > 40) fd.banned.clear();
-          for (const t0 = now; now - t0 < 1.5;) {   // steer by hand for a moment: the free direction closest to the goal, over known ground
-            const gx = x - p.x, gz = z - p.z, gl = Math.hypot(gx, gz) || 1; let bu = null, bs = -2;
-            for (let a = 0; a < 24; a++) {
-              const ang = a * Math.PI / 12, ux = Math.sin(ang), uz = Math.cos(ang);
-              if ((!roam && !inside(p.x + ux * 1.5, p.z + uz * 1.5)) || !canStand(world, p.x + ux * 0.6, p.z + uz * 0.6, game.sea) || (o.finder && o.finder.allow && !o.finder.allow(p.x + ux * 1.5, p.z + uz * 1.5))) continue;
-              const sc = (ux * gx + uz * gz) / gl; if (sc > bs) { bs = sc; bu = { ux, uz }; }
-            }
-            inp.target = bu ? { x: p.x + bu.ux * 2.5, z: p.z + bu.uz * 2.5 } : null; yield;
-          }
-          chk = { x: p.x, z: p.z, t: now };
-          plan = null; finalSet = false; if (stuckN >= 3 || ++replans > 4) { idleInput(); return false; }
-        }
-        chk = { x: p.x, z: p.z, t: now };
-      }
+      } else { finalSet = false; inp.target = u.target; }
+      inp.run = !!o.hurry && u.remaining > 20 && !p.winded;
       yield;
     }
   }
