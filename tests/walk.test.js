@@ -152,11 +152,11 @@ describe('the follower (game/route)', () => {
     const path = createPath(world), route = createRoute(path, { x: 0, z: 0 }, { x: 5, z: 0 }, { stop: 0.2 });
     const u = route.update({ x: 0, z: 0 }, 0.1, false); expect(u.final).toBe(true); expect(u.target).toEqual({ x: 5, z: 0 }); expect(u.remaining).toBeCloseTo(5, 5);
   });
-  it('closes the blocked segment after 1.2 s without progress, plans again at most three times, then says unreachable', () => {
+  it('closes the blocked segment after 0.7 s without progress, plans again at most three times, then says unreachable', () => {
     const path = createPath(world), p = { x: 0, z: 0 }, route = createRoute(path, p, { x: 30, z: 0 }, { stop: 0.2 });
     let stalls = 0, t = 0;
     while (route.state === 'going' && t < 30) { if (route.update(p, 0.1, false).stalled) stalls++; t += 0.1; }
-    expect(route.state).toBe('unreachable'); expect(route.reason).toBe('stuck'); expect(stalls).toBe(4); expect(t).toBeLessThan(7);
+    expect(route.state).toBe('unreachable'); expect(route.reason).toBe('stuck'); expect(stalls).toBe(4); expect(t).toBeLessThan(4);
     expect(route.closed.size).toBeGreaterThan(0);
   });
   it('does not count the time he is busy, replans when the camp closes the way ahead, and costs nothing when a pile appears behind him', () => {

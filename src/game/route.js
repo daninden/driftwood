@@ -7,7 +7,7 @@
  *   - String pulling: the target is the furthest of the next STRING (4) route points, at most SIGHT (6 m) ahead, that is visible from where he stands
  *     by game/walk `segmentClear` (margin 0.04); the index never goes back. A route point is passed when he is within PASSED (0.3 m, less than one
  *     step) of it. There are no reach radii and no cell bans.
- *   - No progress: less than STALL_MOVE (0.15 m) in STALL_SECS (1.2 s) while not busy closes the blocked segment (the plan edge, or for a shortcut the
+ *   - No progress: less than STALL_MOVE (0.15 m) in STALL_SECS (0.7 s) while not busy closes the blocked segment (the plan edge, or for a shortcut the
  *     points ahead that he could have pulled to, which are then no longer pulled to) and plans again from where he stands. After MAX_REPLANS (3) such stalls the route is
  *     'unreachable' (reason 'stuck'). No hand steering.
  *   - A change of the camp (the finder's `campKey`) is checked against the rest of the route only (one pass of segment tests); it replans only when a
@@ -15,7 +15,7 @@
  *
  * createRoute(finder, from, goal, { stop?, tap?, near?, maxExp? }) -> route
  *   finder    a game/path finder; goal { x, z }
- *   stop      (1) the distance to the goal at which a walk without tap is over; tap: the walk ends by the game consuming a tapped target, never by distance; near (0): with tap, a stall within this distance of the goal also ends it
+ *   stop      (1) the distance to the goal at which a walk without tap is over; tap: the walk ends by the game consuming a tapped target, never by distance; near (0): with tap, a stall within this distance of the goal also ends it as arrived (without tap, a stall within ARRIVED, 0.15 m, does: movement takes less than 0.12 m for arrived)
  *   route.state       'going' | 'arrived' | 'unreachable';   route.reason  for 'unreachable': 'nopath' (no way at all, at the start or after a camp change) or 'stuck'
  *   route.update(player, dt, busy) -> { target: { x, z } | null, final (target is the goal itself), state, remaining (metres of route left), stalled (a stall was just handled) }
  *   route.pts, route.index, route.replans, route.stalls, route.closed   for the tests and the mind's statistics
@@ -24,7 +24,7 @@
  *
  * Depends on: game/path (the finder given), game/walk (through the finder)
  */
-export const STRING = 4, SIGHT = 6, PASSED = 0.3, STALL_SECS = 1.2, STALL_MOVE = 0.15, MAX_REPLANS = 3, DRIFT = 8, LOOK = 0.2;
+export const STRING = 4, SIGHT = 6, PASSED = 0.3, STALL_SECS = 0.7, STALL_MOVE = 0.15, MAX_REPLANS = 3, DRIFT = 8, LOOK = 0.2, ARRIVED = 0.15;
 
 export function createRoute(finder, from, goal, { stop = 1, tap = false, near = 0, maxExp } = {}) {
   const r = {
@@ -56,7 +56,7 @@ export function createRoute(finder, from, goal, { stop = 1, tap = false, near = 
 
   function blocked(p, d) {
     r.stalls++;
-    if (tap && d <= near) { r.state = 'arrived'; return; }
+    if (d <= (tap ? near : ARRIVED)) { r.state = 'arrived'; return; }   // (the game itself takes less than 0.12 m for arrived: moveIntent)
     if (r.replans >= MAX_REPLANS) { fail('stuck'); return; }
     r.replans++;
     if (aim > r.index) { for (let j = r.index + 1; j <= Math.min(r.pts.length - 1, r.index + STRING); j++) r.noShort.add(r.pts[j].id); aim = r.index; lookAt = -1; return; }   // he was pulled to a point past the next: no shortcut from here again, the plan edge next

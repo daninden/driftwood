@@ -13,8 +13,8 @@
  * (game/fine) adds nodes round the piles, fires and lean-tos, joined to each other and to the cells near them.
  * A* over cells + fine nodes with a straight-line guess. `allow` keeps a walk inside a part of the island (game/mind passes "known ground").
  * Start and goal points join the graph by several connections (the 4 nearest cells within 4.5 m and every fine node within 4.5 m whose straight line
- * from the exact point is open by game/walk). A start that already lies inside a camp circle (a pile laid under him, the wall zone of a lean-to being
- * built) may leave it along any line that does not get nearer to that circle's middle (movement's escape rule); a person inside a lean-to leaves
+ * from the exact point is open by game/walk, a trunk or boulder on it closing the connection; only when nothing else is left it is dear). A start that already lies inside a camp circle (a pile laid under him, the wall zone of a lean-to being
+ * built) may leave it along any line that does not get nearer to that circle's middle (movement's escape rule), and, when that finds no way out at all (wedged between overlapping piles), by any line; a person inside a lean-to leaves
  * through its open front and a route into it enters through that opening, to the sleep point itself. A goal inside a camp circle is aimed at the
  * circle's rim (0.12 m beyond it, on the side he comes from).
  * A failed search is remembered (same places, same camp, same known ground): a shut-in camp does not search again and again.
@@ -25,7 +25,7 @@
  *     the fine nodes from the start to the goal, the last is the goal point itself (the start is not in it); cost is in seconds of walking at full pace.
  *     With `allow`, every cell and node after the start has to be allowed, and so has the goal's connection (the start may be anywhere). null when there is no way (or more than maxExp, 90000, nodes were looked at)
  *   path.findAny(from, goals, opts?) -> { pts, cost, goal, index } | null   one search to the cheapest of several goal points (goal: the point reached, index into goals)
- *   path.clear(a, b) -> true when the straight line a -> b can be walked at once (game/walk segmentClear: open, no wall, no deep water, no trunk, boulder or crag, no camp circle within the follower's margin)
+ *   path.clear(a, b) -> true when the straight line a -> b can be walked at once (game/walk segmentClear: open, no wall, no deep water, no trunk, boulder or crag, no camp circle within the follower's margin) and, with `allow`, stays on allowed ground (checked every 0.75 m after a)
  *   path.open(a, b) -> true when no camp circle closes the line a -> b (planning margin, a's escape rule): the camp part of the rule only, for the follower after a camp change
  *   path.cost(from, to) -> cost | Infinity
  *   path.campKey() -> the camp view's key now (a number), or null without a camp
@@ -79,7 +79,14 @@ export function createPath(world, opts = {}) {
   const okAt = (x, z) => !path.allow || path.allow(x, z);
   const refresh = () => { if (camp) { camp.refresh(); if (fine) fine.sync(camp); } };
   function campKey() { if (!camp) return null; camp.refresh(); return camp.key; }
-  function clear(a, b) { return segmentClear(world, a, b, camp); }
+  function clear(a, b) {
+    if (!segmentClear(world, a, b, camp)) return false;
+    if (path.allow) {   // a shortcut stays on allowed ground too (known ground, or ground an exploring trip may use): checked every 0.75 m, the start itself may be anywhere
+      const len = Math.hypot(b.x - a.x, b.z - a.z), n = Math.ceil(len / 0.75);
+      for (let i = 1; i <= n; i++) if (!path.allow(a.x + (b.x - a.x) * i / n, a.z + (b.z - a.z) * i / n)) return false;
+    }
+    return true;
+  }
   function open(a, b) { if (!camp) return true; camp.refresh(); return campOpen(camp, a, b, PLAN_MARGIN, true); }
 
   // the island-only factor of the grid edge from (ix, iz) in direction d (cached): 0 closed, else pace x (0.25 for a trunk on it)
@@ -118,14 +125,14 @@ export function createPath(world, opts = {}) {
 
   // The connections of a point to the graph: [{ id, x, z, f }] (f: the pace of the straight line). A start may leave a circle it stands in and
   // needs no allowed ground; a goal is joined only to allowed cells and nodes. `leave`: the start (the line is judged from the point).
-  function connect(pt, leave, closedSet, towards) {
+  function connect(pt, leave, closedSet, towards, lenient = false, natural = 'block') {
     const out = [], ix = cell(pt.x), iz = cell(pt.z), list = [], rr = Math.ceil(CONN / C) + 1;
     for (let a = -rr; a <= rr; a++) for (let b = -rr; b <= rr; b++) {
       const cx = ix + a, cz = iz + b; if (!isStand(cx, cz) || (!leave && !ok(cx, cz))) continue;
       const d = Math.hypot(centre(cx) - pt.x, centre(cz) - pt.z); if (d <= CONN) list.push([cx, cz, d]);
     }
     list.sort((p, q) => p[2] - q[2]);
-    const line = (a, b) => (camp && camp.count && !campOpen(camp, a, b, PLAN_MARGIN, leave) ? 0 : staticFactor(world, a, b));
+    const line = (a, b) => (camp && camp.count && !campOpen(camp, a, b, PLAN_MARGIN, leave && (lenient ? 'lenient' : true)) ? 0 : staticFactor(world, a, b, natural));
     let taken = 0;
     for (const [cx, cz] of list) {
       if (taken >= CONN_CELLS) break;
@@ -149,7 +156,7 @@ export function createPath(world, opts = {}) {
     for (const [cx, cz] of list) {
       if (out.length >= 2) break;
       const c = { x: centre(cx), z: centre(cz) }, id = cz * N + cx;
-      if (camp && camp.count && !campOpen(camp, from, c, PLAN_MARGIN, true)) continue;
+      if (camp && camp.count && !campOpen(camp, from, c, PLAN_MARGIN, 'lenient')) continue;
       if (closedSet && closedSet.has(edgeKey(START, id))) continue;
       out.push({ id, x: c.x, z: c.z, f: 0.5 });
     }
@@ -178,11 +185,14 @@ export function createPath(world, opts = {}) {
       return { x: hit.x + dx / d * (hit.r + 0.12), z: hit.z + dz / d * (hit.r + 0.12), src: g };
     });
     if (here >= 0) return { pts: [{ x: gl[here].x, z: gl[here].z, id: GOAL - here }], cost: 0, goal: gl[here].src, index: here };
-    let sc = connect(from, true, closedSet, 0);
+    let sc = connect(from, true, closedSet, 0);   // (a trunk or boulder on the line closes a connection: he has several to choose from)
+    if (!sc.length) sc = connect(from, true, closedSet, 0, true);   // wedged between piles: any line out of the circles he stands in
+    if (!sc.length) sc = connect(from, true, closedSet, 0, true, 'dear');   // nothing but past a trunk: dear, not closed
     if (!sc.length) sc = startFallback(from, closedSet);
     if (!sc.length) return fail();
     const gmap = new Map();   // node id -> [[goal index, cost]]
     gl.forEach((g, gi) => { for (const c of connect(g, false, closedSet, GOAL - gi)) { const arr = gmap.get(c.id) || []; arr.push([gi, Math.hypot(c.x - g.x, c.z - g.z) / c.f]); gmap.set(c.id, arr); } });
+    if (!gmap.size) gl.forEach((g, gi) => { for (const c of connect(g, false, closedSet, GOAL - gi, false, 'dear')) { const arr = gmap.get(c.id) || []; arr.push([gi, Math.hypot(c.x - g.x, c.z - g.z) / c.f]); gmap.set(c.id, arr); } });
     if (!gmap.size) return fail();
 
     // heuristic: octile distance to the goal (to the middle of several, less their spread), x1.1

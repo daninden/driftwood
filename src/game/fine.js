@@ -9,7 +9,7 @@
  *     tips, F (1.6, 0) in front, and the four outer corners of the offset outline (-1.16, +-1.28) and (1.01, +-1.28); the segments S-G-F and the
  *     outline between the corners are clear. The ring nodes of its wall circles are not made.
  * A candidate is dropped when it is not standable on the island (game/movement canStand, no camp) or lies inside any solid (r - 0.001).
- * Edges are made lazily when the search looks at a node, by the rule of game/walk, and kept: to the other nodes up to FINE_SPAN (7 m) away and to
+ * Edges are made lazily when the search looks at a node, by the rule of game/walk (a trunk, boulder or crag on the line closes a fine edge; the grid edges only make it dear), and kept: to the other nodes up to FINE_SPAN (7 m) away and to
  * every standable grid cell up to FINE_LINK (3 m) away. The terrain and trunk part of an edge (it only depends on the island) is kept as long as the
  * node lives; the camp part is recomputed after a camp change.
  *
@@ -98,7 +98,7 @@ export function createFine(world, grid) {
   function nodeStatic(a, b) {
     const lo = a.uid < b.uid ? a : b, hi = lo === a ? b : a;
     let v = lo.sm.get(hi.uid);
-    if (v === undefined) { v = staticFactor(world, a, b); lo.sm.set(hi.uid, v); }
+    if (v === undefined) { v = staticFactor(world, a, b, 'block'); lo.sm.set(hi.uid, v); }
     return v;
   }
 
@@ -113,7 +113,7 @@ export function createFine(world, grid) {
       const k = 'cs' + cz * N + cx;
       let sf = node.sm.get(k);
       if (!campOpen(camp, node, p, PLAN_MARGIN, false)) continue;
-      if (sf === undefined) { sf = staticFactor(world, node, p); node.sm.set(k, sf); }
+      if (sf === undefined) { sf = staticFactor(world, node, p, 'block'); node.sm.set(k, sf); }
       if (sf > MIN) out.set(cz * N + cx, sf);
     }
     return node.cl = out;

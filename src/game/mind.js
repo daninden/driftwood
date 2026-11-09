@@ -57,7 +57,7 @@
  * A higher need breaks into a lower goal (checked every CHECK seconds), except while an actual material errand is under way: it delivers first. Very thirsty or very hungry needs still break in; a goal keeps going otherwise and a failing one is left alone for a while (`cool`; 0.28.2: 10 to 40 s, a failed
  * light 100 s, or 300 s when one tuft of fibre is left; a failed try keeps the last tuft).
  * Walking a path (0.30.3 "Routes"): `walk` is a thin wrapper over game/route, the one follower: it pulls the string over the next route points (he heads for the furthest of the next four he can see by the rule of game/walk),
- * closes a segment he made no progress on for 1.2 s and plans again (at most three times: then `stats.stuck` counts each such stall, an event 'stuck' names it, and the walk fails), and reports no way at all as `stats.nopath` and an event 'nopath'.
+ * closes a segment he made no progress on for 0.7 s and plans again (at most three times: then `stats.stuck` counts each such stall, an event 'stuck' names it, and the walk fails), and reports no way at all as `stats.nopath` and an event 'nopath'.
  * There are no bans and no hand steering. He walks; only very thirsty (thirst >= 0.95) and far (20 m or more) does he run.
  *
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
@@ -93,7 +93,7 @@
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
  *
- * Depends on: game/path, game/movement, game/clock (DAY_SECONDS), game/wildlife and game/crabs (through game), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY), game/leanto (siteFor, UPGRADES), game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
+ * Depends on: game/path, game/route, game/movement, game/clock (DAY_SECONDS), game/wildlife and game/crabs (through game), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY), game/leanto (siteFor, UPGRADES), game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -405,10 +405,10 @@ export function createMind(world, game, opts = {}) {
     // Things placed at their centre (piles and fire places) are now solid. Aim a
     // little outside their rim before asking the finder, so the existing
     // action reaches and pile-join distance remain available.
-    const solid = game.movement.obstacles(x, z, 0.01).find(q => Math.hypot(q.x - x, q.z - z) < 0.01);
-    if (solid) {
+    const solid = game.movement.obstacles(x, z, 0.01).find(q => Math.hypot(q.x - x, q.z - z) < q.r && Math.hypot(p.x - q.x, p.z - q.z) >= q.r - 0.02);   // 0.30.3: any point inside a solid, not only its centre (a stand-near spot in a pile's circle); not when he stands in that circle himself
+    if (solid) {   // (0.04 outside the rim, was 0.12: with his stop distance of 0.35 on top he too often stood beyond PILE_JOIN, 1 m from the pile's centre, and the wood he laid became a new fragment pile)
       const dx = p.x - solid.x, dz = p.z - solid.z, d = Math.hypot(dx, dz) || 1;
-      x = solid.x + dx / d * (solid.r + 0.12); z = solid.z + dz / d * (solid.r + 0.12);
+      x = solid.x + dx / d * (solid.r + 0.04); z = solid.z + dz / d * (solid.r + 0.04);
     }
     const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : path);
     let route = null, finalSet = false, last = now;
@@ -1100,7 +1100,8 @@ export function createMind(world, game, opts = {}) {
     const h = homeSpot(), home = fireSpot(h), reach = exploreReach(clock.day), where = exploreWhere(missing, stats.explores);
     const avail = (EXPLORE_BACK - clock.time) * DAY_SECONDS;
     exo.x = home.x; exo.z = home.z; exo.reach = Math.max(reach, dist(p, home) + 20);
-    if (!pathExplore.find(p, home, 20000, false)) { cool('explore', 300); ev('explore-none', { why: 'terrace' }); return true; }   // he stands where home cannot be reached without a climbing route (another terrace): no trip from here
+    // he stands where home cannot be reached without a climbing route (another terrace), or on ground the trip may not use at all (0.30.3: the finder would take him off it at once, but those ticks would still be on a route): no trip from here
+    if (!pathExplore.allow(p.x, p.z) || !pathExplore.find(p, home, 20000, false)) { cool('explore', 300); ev('explore-none', { why: 'terrace' }); return true; }
     const c = exploreTarget(home, reach, where, avail);
     if (!c) { cool('explore', 600); ev('explore-none', { why: 'no-target', reach, where }); return true; }
     if (cur) cur.limit = EXPLORE_LIMIT;

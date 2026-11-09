@@ -91,7 +91,10 @@ export function campOpen(camp, a, b, margin = PLAN_MARGIN, escape = true) {
     const dmin = Math.hypot(a.x + dx * u - o.x, a.z + dz * u - o.z);
     if (dmin >= o.r + margin - EPS) continue;
     if ((t <= 0 || t >= 1) && dmin >= o.r - EPS) continue;   // the margin zone is entered at an end only
-    if (escape && Math.hypot(a.x - o.x, a.z - o.z) < o.r && dx * (a.x - o.x) + dz * (a.z - o.z) >= -EPS) continue;   // leaving a circle he stands in
+    if (escape) {   // a circle he stands in (or in the margin of): he may leave it ('lenient': by any line, the old rule; movement slides him)
+      const d0 = Math.hypot(a.x - o.x, a.z - o.z);
+      if (escape === 'lenient' ? d0 < o.r + margin : d0 < o.r && dx * (a.x - o.x) + dz * (a.z - o.z) >= -EPS) continue;
+    }
     return false;
   }
   return true;
