@@ -593,7 +593,7 @@ describe('drying wood: the habit (0.29.5)', () => {
     expect(done).not.toBeNull();   // on one of the first streams a stroll to the shore finds wet wood
     const { m, g, site, log } = done;
     expect(m.stats.drying.wetTaken).toBeGreaterThan(0); expect(m.stats.drying.laid).toBeGreaterThan(0);
-    expect(log.maxCarriedWet).toBeLessThanOrEqual(2); expect(log.mixed).toBe(0); expect(log.wetOnFire).toBe(0); expect(log.over).toBe(0);
+    expect(log.maxCarriedWet).toBeLessThanOrEqual(3); expect(log.mixed).toBe(0); expect(log.wetOnFire).toBe(0); expect(log.over).toBe(0);
     const pile = g.wood.piles.find(q => Math.hypot(q.x - site.x, q.z - site.z) <= DRY_NEAR);
     expect(pile).toBeDefined(); expect(pile.kind).toBe('driftwood'); expect(pile.logs.length).toBeGreaterThan(0); expect(pile.logs.length).toBeLessThanOrEqual(DRY_MAX);
     expect(m.dryPiles()).toContain(pile);
