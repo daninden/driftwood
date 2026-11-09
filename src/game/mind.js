@@ -1104,6 +1104,7 @@ export function createMind(world, game, opts = {}) {
   function* deliver() {   // wood under his arm from a stroll goes to the pile at the fire spot (a pile of its own kind within a metre, else a new one there)
     return yield* errand(function* () {
     if (!W.carried.length || (carriedKind() !== 'drift' && carriedKind() !== 'branch')) return;
+    if (wetForSite()) { const d = siteDest(proj.site, 'driftwood', 'branch'); if (d && (yield* toDest(d))) yield* layAt(d); return; }
     if (wetCarried()) { yield* deliverWet(); return; }   // 0.29.5: wood that is not dry enough to burn never goes to the fire's pile
     const fs = fireSpot(), kind = carriedKind() === 'branch' ? 'branch' : 'driftwood';
     const q = firePiles(fs).filter(x => x.kind === kind && x.logs.length < PILE_FULL).sort((a, b) => b.logs.length - a.logs.length)[0], d = q ? { x: q.x, z: q.z, pile: q } : fs;
@@ -1116,6 +1117,8 @@ export function createMind(world, game, opts = {}) {
   // 0.30.4 "Timber": the handoff. Before any other task he brings the wood in his arms to camp and lays it on the pile it belongs to: dry firewood on the fire's stock, wet wood on the drying pile, building material where the project wants it (what the
   // load is for was noted when he picked it up, `tag`; wood of no known purpose goes by its dryness). A deposit that cannot be made (no way, no standing point, nothing laid) is not retried: he lays it on a spot of its own at camp (a pile of its own, clear of
   // other piles), and as the last resort where he stands, so that nothing is lost and nothing loops. The two emergencies (very thirsty, very hungry) go first with what is in his arms; if the game laid it down for the drink, the handoff fetches it afterwards (`fetchOwed`).
+  // 0.29.3 rule: wet driftwood in his arms (mean dryness under 0.6) is timber for the lean-to site while the project still needs driftwood there
+  const wetForSite = () => carriedKind() === 'drift' && !!proj.site && !game.leantos.list.length && W.carried.reduce((n, l) => n + dryness(l, clock.total), 0) / W.carried.length < 0.6 && (sitePile('driftwood', proj.site)?.logs.length || 0) < NEED;
   function* campSpot() {
     const fs = fireSpot(), spots = [];
     for (const r of [2.4, 3.4, 4.4]) for (let i = 0; i < 8; i++) {
@@ -1135,13 +1138,16 @@ export function createMind(world, game, opts = {}) {
     return yield* errand(function* () {
       if (cur && !cur.handed) { cur.handed = true; cur.limit = (cur.limit || LIMIT[cur.name]) + HANDOFF_SECS; }
       const ids = [...W.carried, ...W.stones].map(l => l.id), ck = carriedKind(), t = validTag();
-      const to = t && t.kind === 'home' ? 'project' : (ck === 'drift' && wetCarried()) || (t && t.kind === 'dry' && ck === 'drift') ? 'drying' : ck === 'drift' || ck === 'branch' ? 'stock' : 'here';
+      // 0.29.3 rule restored: wet driftwood (a stroll's, mean dryness under 0.6) goes to the lean-to site as timber while the project still needs driftwood there; never to the fire
+      const siteWet = !(t && t.kind === 'home') && wetForSite();
+      const dest = t && t.kind === 'home' ? t.dest : siteWet ? () => siteDest(proj.site, 'driftwood', 'branch') : null;
+      const to = dest ? 'project' : (ck === 'drift' && wetCarried()) || (t && t.kind === 'dry' && ck === 'drift') ? 'drying' : ck === 'drift' || ck === 'branch' ? 'stock' : 'here';
       stats.timber.handoffs++; stats.timber.handoffPieces += ids.length;
       ev('handoff', { why, ids, kind: ck, to, tag: t ? t.kind : null });
       // a pile farther than HANDOFF_MAX_COST of walking (on another terrace the way round can be many times the distance) counts as out of reach for the handoff, except on the way to bed: the wood is laid down where he stands, a pile of its own
-      const spot = to === 'project' ? t.dest() : to === 'drying' ? dryingSite() : to === 'stock' ? fireSpot() : null, open = spot && (openNear(spot.x, spot.z, 3) || spot), away = open && why !== 'sleep' ? path.cost(p, open) : 0;   // (the cost to a free spot beside the pile: a pile or a fire place is a solid)
+      const spot = to === 'project' ? dest() : to === 'drying' ? dryingSite() : to === 'stock' ? fireSpot() : null, open = spot && (openNear(spot.x, spot.z, 3) || spot), away = open && why !== 'sleep' ? path.cost(p, open) : 0;   // (the cost to a free spot beside the pile: a pile or a fire place is a solid)
       if (!(away <= HANDOFF_MAX_COST)) { stats.timber.far++; ev('handoff-far', { why, to, cost: +Math.min(9999, away).toFixed(0) }); yield* layAt(p); ev('handoff-done', { why, ids, left: W.load() }); return !W.load(); }
-      if (to === 'project') { const d = t.dest(); if (d && (yield* toDest(d))) yield* layAt(d); }
+      if (to === 'project') { const d = dest(); if (d && (yield* toDest(d))) yield* layAt(d); }
       else if (to === 'drying') yield* deliverWet();
       else if (to === 'stock') yield* deliver();
       else yield* layAt(p);
