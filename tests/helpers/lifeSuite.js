@@ -3,18 +3,27 @@
 // 0.29.5 "Drying": he also takes wet wood from the strip to a drying pile and moves it to the fire's pile once it is dry (r.drying: wet pieces taken, laid, moved), and a fire burns in the evening of most days (r.noFireEvenings).
 // Two starts (since 0.28 the fresh one is meant to work too: he searches for water and food when he knows none): `walked` (the ground a player would have walked in a first day: the start, the nearest water, a few nuts, driftwood, branches and a berry bush,
 // mindSim walkFirstDay) and `fresh` (only the 20 m round the start are known). The numbers are measured, not wished for; see docs/design.md "Habit".
+// 0.30.2 "Checks": the ten-day runs are test work, not setup. Only the world is generated in beforeAll; the walked run is computed lazily (and once) by the first test that needs it, on the world as generated,
+// and every simulation test has SIM_TIMEOUT of its own (measured alone: about 3.6 s for a world and 18 to 21 s for a ten-day run; several times that with four test files side by side on a four-core box).
+// The seed-1337 dry-stock checks (formerly tests/dryStock.test.js) use that same walked run through `extra`.
+// Exports: lifeSuite(seed, { walked, fresh, beach, extra }), SIM_TIMEOUT. Depends on: world/world, world/spots, tests/helpers/mindSim.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../../src/world/world.js';
 import { startSpot } from '../../src/world/spots.js';
 import { runMind } from './mindSim.js';
 
-export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // extra: [{ name, run(w, spawn) }], more tests on the same island
-  let w, spawn, walkedRun;
-  beforeAll(async () => {
-    w = await generateWorld(seed); spawn = startSpot(w);
-    walkedRun = runMind(w, spawn, { days: 10, know: true });
-    if (walked.knownExploreRoute) console.info(`[known issue: seed ${seed} walked explore-route] ${JSON.stringify(walkedRun.r)}`);
-  }, 120000);
+export const SIM_TIMEOUT = 600000;   // ms for one test that plays ten game days (see the header)
+
+export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // extra: [{ name, run(w, spawn, walkedRun) }], more tests on the same island; walkedRun() gives the (memoised) walked ten-day run
+  let w, spawn, walkedMemo;
+  beforeAll(async () => { w = await generateWorld(seed); spawn = startSpot(w); }, 120000);
+  const walkedRun = () => {   // the walked ten-day run, played once by the first test that asks, on the world as generated
+    if (!walkedMemo) {
+      walkedMemo = runMind(w, spawn, { days: 10, know: true });
+      if (walked.knownExploreRoute) console.info(`[known issue: seed ${seed} walked explore-route] ${JSON.stringify(walkedMemo.r)}`);
+    }
+    return walkedMemo;
+  };
   const common = (r, c = {}, scenario) => {
     const check = (actual, invariant) => expect(actual, `seed ${seed} ${scenario}: ${invariant}; report=${JSON.stringify(r)}`);
     check(r.errors, 'simulation errors').toEqual([]);                  // no exception in ten days
@@ -48,7 +57,7 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
   };
   describe(`Dave alone on island ${seed}`, () => {
     it('lives ten days on the ground a first day would have shown him', () => {
-      const { r, mind } = walkedRun;
+      const { r, mind } = walkedRun();
       const c = walked;
       common(r, c, 'walked');
       rhythm(r, c, 'walked');
@@ -66,13 +75,13 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
       if (c.evenings !== undefined) expect(r.noFireEvenings).toBeLessThanOrEqual(c.evenings);   // 0.29.5: evenings without a fire (measured +1: the first tries of the drill are luck, fixed by the attempt count)
       if (c.dried !== undefined) expect(r.drying.moved).toBeGreaterThanOrEqual(c.dried);        // 0.29.5: wood that dried on the drying pile and went to the fire's pile
       if (c.warm !== undefined) expect(r.warmSleeps).toBeGreaterThanOrEqual(c.warm);
-    });
+    }, SIM_TIMEOUT);
     if (walked.knownDryingShuttle) it.fails('has the documented drying shuttle regression (seed-specific, must become a normal passing conservation check when fixed)', () => {
-      expect(walkedRun.r.drying.moved, `seed ${seed} walked: drying logs moved no more than laid; report=${JSON.stringify(walkedRun.r)}`).toBeLessThanOrEqual(walkedRun.r.drying.laid);
-    });
+      const { r } = walkedRun(); expect(r.drying.moved, `seed ${seed} walked: drying logs moved no more than laid; report=${JSON.stringify(r)}`).toBeLessThanOrEqual(r.drying.laid);
+    }, SIM_TIMEOUT);
     if (walked.knownExploreRoute) it.fails('has the documented exploration-route regression (seed-specific, must become a normal passing route-safety check when fixed)', () => {
-      expect(walkedRun.r.exploreRoute, `seed ${seed} walked: exploring ticks on climbing routes; report=${JSON.stringify(walkedRun.r)}`).toBe(0);
-    });
+      const { r } = walkedRun(); expect(r.exploreRoute, `seed ${seed} walked: exploring ticks on climbing routes; report=${JSON.stringify(r)}`).toBe(0);
+    }, SIM_TIMEOUT);
     it('lives ten days from a new game, with only the ground round the start known: he searches for water and food himself', () => {
       const { r } = runMind(w, spawn, { days: 10, know: false });
       const c = fresh;
@@ -89,8 +98,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
       if (c.leanto !== undefined) { expect(r.homeDay.leanto).toBeDefined(); expect(r.homeDay.leanto).toBeLessThanOrEqual(c.leanto); }
       if (c.evenings !== undefined) expect(r.noFireEvenings).toBeLessThanOrEqual(c.evenings);
       if (c.dried !== undefined) expect(r.drying.moved).toBeGreaterThanOrEqual(c.dried);
-    });
-    for (const e of extra) it(e.name, () => e.run(w, spawn));
+    }, SIM_TIMEOUT);
+    for (const e of extra) it(e.name, () => e.run(w, spawn, walkedRun), SIM_TIMEOUT);
     if (beach) it('lives ten days on the beach alone (no berry bush, no banana plant): just about fed, searching along the coast for nuts when the near ones are taken', () => {
       const { r } = runMind(w, spawn, { days: 10, know: true, beachOnly: true });
       common(r);
@@ -98,6 +107,6 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }) {   // ext
       expect(r.thirstCollapses).toBe(0); expect(r.exhaustCollapses).toBe(0); expect(r.nights).toBeGreaterThanOrEqual(beach.nights);
       expect(r.maxHunger).toBeLessThan(beach.maxHunger); expect(r.hungryShare).toBeLessThan(beach.hungry);   // fed: hunger now and then, never near starving (3 days)
       expect(r.mealsPerDay).toBeGreaterThan(1.7); expect(r.mealsPerDay).toBeLessThan(3);
-    });
+    }, SIM_TIMEOUT);
   });
 }
