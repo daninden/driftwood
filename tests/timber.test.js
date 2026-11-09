@@ -258,6 +258,16 @@ describe('the handoff: wood in his arms goes to camp first (0.30.4)', () => {
     expect(g.wood.piles.some(q => near(q, camp, 3) && ids(q.logs).some(id => held.includes(id)))).toBe(false);
     expect(m.stats.events.find(e => e.type === 'handoff').to).toBe('drying');
   });
+  it('two wet logs in his arms go to the lean-to site as timber while the project still needs driftwood there (0.29.3), not to drying and never to the fire', () => {
+    const { g, ids: held } = away(2, { day: 2, time: 0.25, wet: true }); g.hunger.days = 0.45;
+    const m = createMind(w, g); m.engage();
+    const site = m.homePlan().site; expect(site).not.toBeNull();
+    const log = drive(g, m, l => l.eatAt !== null);
+    expect(log.emptyAt).toBeLessThan(log.eatAt);
+    const pile = g.wood.piles.find(q => held.every(id => ids(q.logs).includes(id)));
+    expect(pile).toBeDefined(); expect(near(pile, site, 2.5)).toBe(true); expect(m.dryPiles()).not.toContain(pile);
+    expect(m.stats.events.find(e => e.type === 'handoff').to).toBe('project');
+  });
   it('building timber (for the lean-to) goes to the site, not to the fire or the drying pile', () => {
     const probe = timberGame(w, spawn, { day: 2, time: 0.25 }), dry = places(w, probe, createMind(w, probe), { n: 4 });
     const g = timberGame(w, spawn, { day: 2, time: 0.25, dry }), m = createMind(w, g); m.engage();
