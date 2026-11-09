@@ -2,6 +2,22 @@
 
 Where the work stands, for the next session. Read `AGENTS.md`, `docs/design.md` and `docs/architecture.md` first, as always. Delete or rewrite this file once the work below is done.
 
+## Status on 2026-11-10 (read this first)
+
+**Live on `main`: still 0.30.1 "Thoughts".** 0.30.2 "Checks", 0.30.3 "Routes" and 0.30.4 "Timber" are built and committed on the session branch `claude/beautiful-feynman-dj6f5s`, but **not pushed to `main`**, because the agreed rule is a green full suite before every push to `main` unless the user says otherwise, and `npm test` (about 3.5 minutes) has 3 failures, all in the ten-day lives:
+
+1. `mindLife7.walked`: crabs eaten 1, bound 2.
+2. `mindLife2024.fresh`: crabs eaten 2, bound 3 (new with Timber).
+3. `mindLife7.fresh`: one night not attempted (7 of 9): on day 5 at 0.84 a fire-wood errand sent him 196 m for branches and he was away until 0.98. The same mechanism skips nights before Timber too (2 of 16 seed-7 walked runs in both).
+
+Each life test plays **one** random stream, and the bounds were measured on that one stream. Over many streams the results are as good as or better than before: 48 runs (three islands, walked and fresh, eight streams): crabs 151 before Timber against 162 after, collapses 0 and 0, stuck 259 against 179, lean-tos 39 against 42, nights 414 against 416, dried wood moved to the fire 879 against 1136; seed-7 walked crabs per stream now 1, 4, 2, 3 (before Routes 2, 4, 0, 2). No bug was found behind 1 and 2 (investigated with per-day traces). **Bounds were not changed.**
+
+**Decision for the user** (proposals, nothing done): (A) make the ten-day lives play several streams (for example four) and check the bounds on their mean or on all but one, so a single unlucky stream no longer decides; the cost is about four times the simulation work (the suite would take roughly 6 to 8 minutes on four cores); or (B) re-measure the three bounds on the current single stream, with this evidence; or (C) allow the push with these three failures documented. For 3 there is also a possible rule: no long fire-wood errand once dusk has begun (for example none of more than 60 s of walking after 0.8); that is new behaviour and needs agreement.
+
+**Choices made while building that the user should confirm:** (a) Routes: the drying pile at a lean-to now lies behind it and keeps dry once the walls are built (it can no longer lie under the bare roof, because the agreed rule keeps the inside free of wood); (b) Timber: `HANDOFF_MAX_COST` 150 m of walking: wood carried farther than that from camp is laid down where he stands as a pile of its own (except on the way to bed) instead of a very long walk home (without it seed 7 skipped nights in 7 of 16 runs, with it 2 of 16, as before); (c) Timber: the distance metric for "nearest three" is walking cost from where he stands; (d) Timber: wet logs from a stroll go to the lean-to site while it still needs driftwood (as agreed in 0.29.3), else to drying; (e) Timber: in an emergency (very thirsty or very hungry) he goes at once carrying the wood, the game lays it down for a drink, and afterwards he takes that pile to camp once; (f) a follower fix: a very exact stop was overshot for ever (`walk(..., { settle })`).
+
+**To release once allowed:** bump `src/version.js` and `package.json` to 0.30.4 "Timber" (the release log in `docs/versions.md` has 0.30.2 and 0.30.3; add 0.30.4), enable the hook (`git config core.hooksPath .githooks`), run `npm test`, `npm run build && npm run smoke`, merge the branch into `main` and push.
+
 ## Done and live on `main`
 
 **Final full-suite result for 0.30.1:** the single serial attempt exceeded 600 seconds and was not retried. It reported the documented home-upgrade failure in `tests/mind.test.js`, and two failures in `tests/mindLife1337.test.js`: a missing expected home result and inland-food count 2 against minimum 3. Seed 7 was incomplete at timeout; Dry stock and both path-follow tests passed. These seed-1337 failures have not been baseline-compared or repaired. Focused checks remain green; do not call the complete suite green. The user explicitly requested the release push after these limitations were disclosed.
