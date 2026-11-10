@@ -1,10 +1,10 @@
-// 0.30.4 "Timber" (game/mind): wood is fetched from far to near among the nearest pieces, wet wood for drying comes three at a time, and the wood in his arms goes to camp before another task.
+// 0.30.4 "Timber" (game/mind): wood is fetched from far to near among the nearest pieces, wet wood is carried to the tideline three at a time (0.30.13), and the wood in his arms goes to camp before another task.
 // Everything runs with real movement (mind.step + game.update); the logs are put where the test says (tests/helpers/timber.js), the island's own loose logs are taken away.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
-import { createMind, DRY_MAX, DRY_AT, DRY_NEAR, PILE_FULL, SET_SPAN, VERY_AT } from '../src/game/mind.js';
-import { CARRY_MAX, dryness, inStripY } from '../src/game/wood.js';
+import { createMind, PILE_FULL, SET_SPAN, VERY_AT } from '../src/game/mind.js';
+import { CARRY_MAX } from '../src/game/wood.js';
 import { timberGame, places, tick, DRY_ID, WET_ID } from './helpers/timber.js';
 
 let w, spawn;
@@ -106,96 +106,7 @@ describe('collecting: the nearest three, the farthest of them first (0.30.4)', (
   });
 });
 
-// ---------- wet wood for drying: up to three (0.30.4) ----------
-// low water on day 1 (the strip is bare); a fire burns, so the stores leave the wood alone and the only errand left is the small reserve one
-const stripMorning = ({ pile = 0, wetN = 8, time = 0.45, extra = {}, ...o } = {}) => {
-  const probe = timberGame(w, spawn, { time }), wet = places(w, probe, createMind(w, probe), { strip: true, n: wetN, gapCost: 2, gapDist: 3, max: 60 });
-  const fuel = 0.25, rc = { x: spawn.x, z: spawn.z };
-  const g = timberGame(w, spawn, { time, wet, extra: { fire: { fires: [{ id: 0, x: rc.x, z: rc.z, fuel, embers: 0.1, emberAge: 0, lit: 1 + time - 0.01, fed: 3 }], burnt: [], attempts: 1, nextId: 1 }, ...extra }, ...o });
-  g.wood.piles.splice(0, 1);
-  const m = createMind(w, g);
-  if (pile) { const s = m.dryingSite(), now = g.clock.total; g.wood.piles.push({ x: s.x, z: s.z, kind: 'driftwood', logs: Array.from({ length: pile }, (_, i) => ({ id: 702000 + i, x: s.x, y: w.H(s.x, s.z), z: s.z, len: 1.4, a: 0.3, rad: 0.1, t: now - 0.05 })) }); }
-  m.engage();
-  return { g, m, wet };
-};
-const dryingPile = (g, m) => g.wood.piles.find(q => m.dryPiles().includes(q));
-
-describe('wet wood for the drying pile: up to three at a time (0.30.4)', () => {
-  it('a reserve trip carries three wet logs, then the two that the reserve (a full pile of twelve, seven there already) still has room for, never more, and none goes anywhere but the drying pile', () => {
-    const { g, m, wet } = stripMorning({ pile: 7, wetN: 8 }); expect(wet.length).toBeGreaterThanOrEqual(6);
-    let maxCarried = 0, maxPile = 0, wetOnFire = 0; const trips = [];
-    for (let i = 0; i < 9000 && g.clock.time < 0.58; i++) {
-      tick(g, m);
-      const n = g.wood.carried.length; if (n > maxCarried) maxCarried = n;
-      if (n && !trips.at(-1)?.open) trips.push({ open: true, max: 0 }); if (trips.at(-1)?.open) { trips.at(-1).max = Math.max(trips.at(-1).max, n); if (!n) trips.at(-1).open = false; }
-      const dp = dryingPile(g, m); if (dp) maxPile = Math.max(maxPile, dp.logs.length);
-      for (const q of g.wood.piles) if (!m.dryPiles().includes(q) && q.logs.some(l => l.id >= WET_ID && l.id < WET_ID + 100 && dryness(l, g.clock.total) < DRY_AT)) wetOnFire++;
-      for (const f of g.fire.fires) expect(f.fed).toBeLessThanOrEqual(3);   // nothing is laid on the fire
-    }
-    const dp = dryingPile(g, m);
-    expect(maxCarried).toBe(CARRY_MAX); expect(maxPile).toBeLessThanOrEqual(DRY_MAX); expect(dp.logs.length).toBe(DRY_MAX); expect(wetOnFire).toBe(0);
-    expect(trips.map(t => t.max).slice(0, 2)).toEqual([3, 2]);
-    expect(m.stats.timber.wetLoads[3]).toBeGreaterThanOrEqual(1); expect(m.stats.timber.wetLoads[2]).toBeGreaterThanOrEqual(1);
-    expect(ids(dp.logs).filter(id => id >= WET_ID && id < WET_ID + 100).length).toBe(DRY_MAX - 7);   // the five he fetched joined the seven that lay there
-    expect(m.stats.drying.laid).toBe(DRY_MAX - 7);
-  });
-  it('near a full drying pile he brings fewer: nine there means three more, ten means two, eleven means one, twelve means none', () => {
-    expect(DRY_MAX).toBe(PILE_FULL);
-    for (const [pile, more] of [[9, 3], [10, 2], [11, 1], [12, 0]]) {
-      const { g, m } = stripMorning({ pile, wetN: 6 });
-      let maxCarried = 0, maxPile = 0;
-      for (let i = 0; i < 3500 && g.clock.time < 0.58; i++) { tick(g, m); maxCarried = Math.max(maxCarried, g.wood.carried.length); maxPile = Math.max(maxPile, dryingPile(g, m)?.logs.length ?? 0); }
-      expect(maxCarried).toBe(more); expect(dryingPile(g, m).logs.length).toBe(pile + more); expect(maxPile).toBeLessThanOrEqual(DRY_MAX);
-    }
-  });
-  it('never fills the drying pile to six or more beside a pile of six or more branches (the arc would offer to build): it stays at five', () => {
-    const { g, m } = stripMorning({ pile: 3, wetN: 6 });
-    const s = m.dryingSite(); g.wood.piles.push({ x: s.x + 1.5, z: s.z, kind: 'branch', logs: Array.from({ length: 6 }, (_, i) => logAt(703000 + i, s.x + 1.5, s.z)) });
-    let maxPile = 0;
-    for (let i = 0; i < 3500 && g.clock.time < 0.58; i++) { tick(g, m); maxPile = Math.max(maxPile, dryingPile(g, m)?.logs.length ?? 0); }
-    expect(maxPile).toBe(5); expect(dryingPile(g, m).logs.length).toBe(5);
-  });
-  it('delivers exactly the logs he took, the farthest taken first, and fewer when fewer wet logs can be reached', () => {
-    const { g, m } = stripMorning({ wetN: 2 });
-    const order = [];
-    for (let i = 0; i < 3000 && g.clock.time < 0.58; i++) { tick(g, m); for (const l of g.wood.carried) if (!order.includes(l.id)) order.push(l.id); if (order.length >= 2 && !g.wood.load() && dryingPile(g, m)) break; }
-    expect(order.length).toBe(2);
-    expect(collects(m)[0].src).toBe('strip'); expect(collects(m)[0].ids).toEqual(order);
-    expect(ids(dryingPile(g, m).logs).sort()).toEqual([...order].sort());
-    expect(m.stats.timber.wetLoads[2]).toBe(1); expect(m.stats.timber.wetLoads[3]).toBe(0);
-  });
-});
-
-describe('wet wood on a shore stroll: up to three as well (0.30.4)', () => {
-  it('picks up to three wet logs from the strip near the end of a shore leg and lays exactly those on the drying pile', () => {
-    const time = 0.42, probe = timberGame(w, spawn, { time }), shore = createMind(w, probe).strollCands().shore, wet = [];
-    for (const c of shore) for (let r = 1, k = 0; r <= 7 && k < 3; r++) for (let i = 0; i < 16; i++) {
-      const a = i * Math.PI / 8, x = c.x + Math.sin(a) * r, z = c.z + Math.cos(a) * r, y = w.H(x, z);
-      if (inStripY(y) && w.slope(x, z) < 0.3 && !w.riverAt(x, z) && probe.known.has(x, z) && !wet.some(q => Math.hypot(q.x - x, q.z - z) < 2)) { k++; wet.push({ x, z }); break; }
-    }
-    expect(wet.length).toBeGreaterThanOrEqual(3);
-    let done = null;
-    for (let stream = 0; stream < 10 && !done; stream++) {
-      const g = timberGame(w, spawn, { day: 1, time, wet });   // the stocked pile at the fire is full: no reserve errand, only strolls
-      const m = createMind(w, g, { stream }); m.engage();
-      let maxCarried = 0, over = 0;
-      for (let i = 0; i < 12000 && g.clock.time < 0.78; i++) {
-        tick(g, m); maxCarried = Math.max(maxCarried, g.wood.carried.length);
-        for (const q of g.wood.piles) if (m.dryPiles().includes(q) && q.logs.length > DRY_MAX) over++;
-        if (m.stats.timber.wetLoads[3] > 0 && !g.wood.load() && m.stats.drying.laid >= 3) break;
-      }
-      if (m.stats.timber.wetLoads[3] > 0) done = { g, m, maxCarried, over };
-    }
-    expect(done).not.toBeNull();
-    const { g, m, maxCarried, over } = done;
-    expect(maxCarried).toBe(3); expect(over).toBe(0);
-    const trip = collects(m).find(e => e.src === 'strip' && e.ids.length === 3);
-    expect(trip).toBeDefined();
-    const pile = dryingPile(g, m); expect(pile).toBeDefined();
-    for (const id of trip.ids) expect(ids(pile.logs)).toContain(id);
-    for (const q of g.wood.piles) if (q !== pile) expect(q.logs.some(l => trip.ids.includes(l.id))).toBe(false);
-  });
-});
+// (0.30.13 "Tideline": the wet-wood trips to the camp's drying pile are gone; their successors are in tests/tideline.test.js)
 
 // ---------- the handoff: the load goes to camp before the next task (0.30.4) ----------
 // a game with `n` logs in his arms far from camp (dry, or wet), a need that is due, and the order of what happens watched tick by tick
@@ -255,28 +166,17 @@ describe('the handoff: wood in his arms goes to camp first (0.30.4)', () => {
     expect(m.stats.events.find(e => e.type === 'handoff').to).toBe('stock');
     expect(log.atDrink.load).toBe(0);
   });
-  it('hungry: two wet logs left in his arms go to the drying pile, not to the fire\'s stock, then he eats', () => {
-    const { g, ids: held } = away(2, { time: 0.3, wet: true }); g.hunger.days = 0.45;
-    const m = createMind(w, g); m.engage();
-    const camp = m.home(), site = m.dryingSite(); expect(site).not.toBeNull();
-    const log = drive(g, m, l => l.eatAt !== null);
-    expect(log.eatAt).not.toBeNull(); expect(log.emptyAt).toBeLessThan(log.eatAt);
-    const pile = g.wood.piles.find(q => held.every(id => ids(q.logs).includes(id)));
-    expect(pile).toBeDefined(); expect(near(pile, site, 2)).toBe(true); expect(m.dryPiles()).toContain(pile);
-    expect(g.wood.piles.some(q => near(q, camp, 3) && ids(q.logs).some(id => held.includes(id)))).toBe(false);
-    expect(m.stats.events.find(e => e.type === 'handoff').to).toBe('drying');
-  });
-  it('two wet logs in his arms go to the lean-to site as timber while the project still needs driftwood there (0.29.3), not to drying and never to the fire', () => {
+  it('two wet logs in his arms go to the lean-to site as timber while the project still needs driftwood there (0.29.3), not to the tideline and never to the fire', () => {
     const { g, ids: held } = away(2, { day: 2, time: 0.25, wet: true }); g.hunger.days = 0.45;
     const m = createMind(w, g); m.engage();
     const site = m.homePlan().site; expect(site).not.toBeNull();
     const log = drive(g, m, l => l.eatAt !== null);
     expect(log.emptyAt).toBeLessThan(log.eatAt);
     const pile = g.wood.piles.find(q => held.every(id => ids(q.logs).includes(id)));
-    expect(pile).toBeDefined(); expect(near(pile, site, 2.5)).toBe(true); expect(m.dryPiles()).not.toContain(pile);
+    expect(pile).toBeDefined(); expect(near(pile, site, 2.5)).toBe(true);
     expect(m.stats.events.find(e => e.type === 'handoff').to).toBe('project');
   });
-  it('building timber (for the lean-to) goes to the site, not to the fire or the drying pile', () => {
+  it('building timber (for the lean-to) goes to the site, not to the fire or the tideline', () => {
     const probe = timberGame(w, spawn, { day: 2, time: 0.25 }), dry = places(w, probe, createMind(w, probe), { n: 4 });
     const g = timberGame(w, spawn, { day: 2, time: 0.25, dry }), m = createMind(w, g); m.engage();
     let got = false;

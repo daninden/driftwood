@@ -1,6 +1,6 @@
 // Dave alone for ten game days (game/mind, 0.28 "Habit", rhythm of 0.29 "Daily bread"): the same checks for each island, used by tests/mindLife<seed>.<part>.test.js.
 // 0.29.4 "Wander": he also goes exploring now and then (r.explores); on a fresh start his known ground grows (r.knownAt: cells known at day 1, 5, 10).
-// 0.29.5 "Drying": he also takes wet wood from the strip to a drying pile and moves it to the fire's pile once it is dry (r.drying: wet pieces taken, laid, moved), and a fire burns in the evening of most days (r.noFireEvenings).
+// 0.29.5 "Drying" (replaced in 0.30.13 "Tideline"): a fire burns in the evening of most days (r.noFireEvenings). 0.30.13: he carries wet wood from the strip to a pile above the high-water line (r.tide: pieces picked, laid, burned later, burned wet); 0.30.14 "Torch": r.torch.
 // Two starts (since 0.28 the fresh one is meant to work too: he searches for water and food when he knows none): `walked` (the ground a player would have walked in a first day: the start, the nearest water, a few nuts, driftwood, branches and a berry bush,
 // mindSim walkFirstDay) and `fresh` (only the 20 m round the start are known), and `beach` (the walked start with no berry bush or banana plant). The numbers are measured, not wished for; see docs/design.md "Habit".
 // 0.30.2 "Checks": the ten-day runs are test work, not setup. Each simulation test has SIM_TIMEOUT of its own; the seed-1337 dry-stock checks (formerly tests/dryStock.test.js) use the walked runs through `extra`.
@@ -8,14 +8,14 @@
 // 0.30.5 "Streams": SEVERAL RANDOM STREAMS. One ten-day life is one stream of the mind's chance (mind option `stream`); a bound measured on one stream failed on another by luck of that stream alone (a crab dug fewer, a night lost to an errand). So each scenario
 // (walked / fresh / beach, per seed) plays the streams 0 to 3: four runs, each on its own freshly generated world (runMind changes the world it plays on, so the runs must be independent). The rule:
 //   - SAFETY invariants hold on EVERY stream, with the bounds unchanged: no simulation errors, at most one lean-to, the home pieces in order (lean-to from day 2, then walls, ring, bed, never two on one day), no tick outside known ground, no exploring tick on a climbing route,
-//     known cells at day 1, drying conservation (moved <= laid) and sites, no unexpected wakes, the final day reached, no thirst or exhaustion collapse, collapses, maximum thirst and hunger, no more than CRAB_DIGS digs on a crab trip, spoiled crabs,
-//     stuckSelf / stuckMax, and (0.30.5) no drying pile of 6 or more with a partner pile within 2 m (the arc would offer to build); beach: no berries or bananas, collapses and maximum hunger; seed 1337 walked: the dry-stock checks of `extra` on each stream.
+//     known cells at day 1, tideline conservation (laid <= picked, burned <= laid), wood burned wet, no unexpected wakes, the final day reached, no thirst or exhaustion collapse, collapses, maximum thirst and hunger, no more than CRAB_DIGS digs on a crab trip, spoiled crabs,
+//     stuckSelf / stuckMax; beach: no berries or bananas, collapses and maximum hunger; seed 1337 walked: the dry-stock checks of `extra` on each stream.
 //   - QUANTITY and RHYTHM bounds hold on the MEAN over the four streams, with the same bound values as before (so one unlucky stream no longer decides): nights of 5 hours or more, hungry and thirsty shares, meals and drinks per day, inland food, crabs eaten, chosen sleeps,
-//     warm sleeps, idle share, upgrades, explores and the growth of the known ground, searches, evenings without a fire, dried wood moved, strolls and kinds of strolls, and on the beach the coconuts eaten.
+//     warm sleeps, idle share, upgrades, explores and the growth of the known ground, searches, evenings without a fire, rescued wood laid and burned (0.30.13), strolls and kinds of strolls, and on the beach the coconuts eaten.
 //   - Counted over the streams: nights attempted (every night between the first and the last day: exactly on at least 3 of the 4 streams, so one skipped night on one stream is allowed, two streams are not) and the lean-to (built on at least 3 of 4 streams, and the mean of the days it was
 //     finished on, over the streams that built it, within the bound).
 // 0.30.9 "Errands": THE POLICY (decided by the user, 2026-11-10: "in real life things don't always go well either; as long as he doesn't collapse and it often works"). Two kinds of bound:
-//   - SAFETY, strict, on every stream: errors, collapses, stuck, ticks outside known ground, exploring on climbing routes, wet wood burned, drying conservation, one lean-to, the order of the home pieces, the drying-pair check, the largest drying pile; and the
+//   - SAFETY, strict, on every stream: errors, collapses, stuck, ticks outside known ground, exploring on climbing routes, wet wood burned, tideline conservation, one lean-to, the order of the home pieces; and the
 //     maxima of thirst (MAX_THIRST: 75% of COLLAPSE_AT, 1.5 days, is not clearly below it) and hunger (MAX_HUNGER 1.5 days: half of STARVING_AT, 3, hunger has no collapse of its own; below VERY_HUNGER_AT 2).
 //   - QUANTITIES ("often"): each must be met on at least OFTEN (2) of the 4 streams, not on the mean. A threshold is about half the mean of 0.30.8 on that scenario (whole counts rounded down, at least 1 where it was above 0), never tighter than
 //     the bound before; at-most bounds are 1.5 times that mean or the bound before, whichever is looser; the day of the lean-to is the mean plus twice the old margin, at most 10 (built at all by the end).
@@ -27,7 +27,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../../src/world/world.js';
 import { startSpot } from '../../src/world/spots.js';
-import { siteFor, NEED } from '../../src/game/leanto.js';
 import { runMind } from './mindSim.js';
 
 export const SIM_TIMEOUT = 600000;   // ms for one test that plays four times ten game days (see the header)
@@ -37,7 +36,7 @@ const MAX_THIRST = 1.125, MAX_HUNGER = 1.5;   // 0.30.9: days; 75% of the thirst
 
 const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
 const fix = v => typeof v === 'number' ? +v.toFixed(3) : v;
-const brief = (r, s) => `s${s}: crabs ${r.crabsEaten} nights ${r.nights}/${r.nightsAny} leanto ${r.homeDay.leanto} up ${['walls', 'ring', 'bed'].filter(k => r.homeDay[k] !== undefined).length} dried ${r.drying.moved}/${r.drying.laid} explores ${r.explores} noFire ${r.noFireEvenings} chosen ${r.chosenSleeps} warm ${r.warmSleeps} hungry ${fix(r.hungryShare)} thirsty ${fix(r.thirstyShare)} meals ${fix(r.mealsPerDay)} idle ${fix(r.idleShare)} stuck ${r.stuckSelf}/${fix(r.stuckMax)} maxT ${fix(r.maxThirst)} maxH ${fix(r.maxHunger)} coll ${r.collapses}`;
+const brief = (r, s) => `s${s}: crabs ${r.crabsEaten} nights ${r.nights}/${r.nightsAny} leanto ${r.homeDay.leanto} up ${['walls', 'ring', 'bed'].filter(k => r.homeDay[k] !== undefined).length} tide ${r.tide.burned}/${r.tide.laid}/${r.tide.picked} explores ${r.explores} noFire ${r.noFireEvenings} chosen ${r.chosenSleeps} warm ${r.warmSleeps} hungry ${fix(r.hungryShare)} thirsty ${fix(r.thirstyShare)} meals ${fix(r.mealsPerDay)} idle ${fix(r.idleShare)} stuck ${r.stuckSelf}/${fix(r.stuckMax)} maxT ${fix(r.maxThirst)} maxH ${fix(r.maxHunger)} coll ${r.collapses}`;
 
 export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = null) {   // extra: [{ name, part?, run(w, spawn, walkedRuns) }], more tests on the same island (part: the scenario file it runs in, 'walked' by default); walkedRuns() gives the (memoised) walked ten-day runs of all streams, a promise of [{ stream, r, mind }]; part: 'walked' | 'fresh' | 'beach' plays only that scenario (null: all)
   const on = k => !part || part === k;
@@ -47,10 +46,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
     const out = [];
     for (const stream of STREAMS) {
       const world = w, sp = startSpot(world);
-      const pairs = { n: 0, max: 0 };   // 0.30.5: a drying pile that has a partner pile within 2 m would make the arc offer to build
-      const onTick = (game, mind) => { for (const q of mind.dryPiles()) { pairs.max = Math.max(pairs.max, q.logs.length); if (q.logs.length >= NEED && siteFor(game.wood.piles, q)) pairs.n++; } };
-      const { r, mind } = runMind(world, sp, { days: 10, know: kind !== 'fresh', beachOnly: kind === 'beach', stream, onTick });
-      r.dryPairs = pairs.n; r.dryPileMax = pairs.max; r.strollsN = mind.stats.strolls; r.strollKindsN = Object.keys(mind.stats.strollKinds).length;
+      const { r, mind } = runMind(world, sp, { days: 10, know: kind !== 'fresh', beachOnly: kind === 'beach', stream });
+      r.strollsN = mind.stats.strolls; r.strollKindsN = Object.keys(mind.stats.strollKinds).length;
       out.push({ stream, r, mind });
     }
     return out;
@@ -71,10 +68,9 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
     check(r.outside, 'ticks outside known ground').toBe(0); // outside a search for water or food or an exploring trip (0.29.4), never a step on ground he does not know
     check(r.exploreRoute, 'exploring ticks on climbing routes').toBe(0); // 0.29.4: and exploring never takes him onto a climbing route
     check(r.knownAt[1], 'known cells at day 1').toBeGreaterThan(0);        // (the cells known at the start of day 1, 5 and 10 are in the report)
-    check(r.drying.moved, 'drying logs moved no more than laid').toBeLessThanOrEqual(r.drying.laid);   // 0.29.5: only what lay on the drying pile is moved from it to the fire's pile (and only once it is dry enough: the unit tests watch each piece)
-    check(r.drying.sites, 'drying sites').toBeLessThanOrEqual(k.drySites ?? 6);
-    check(r.dryPairs, 'ticks with a drying pile of 6 or more beside a partner pile (the arc would offer to build)').toBe(0);   // 0.30.5: the drying pile holds up to 12 and keeps clear of branch piles
-    check(r.dryPileMax, 'largest drying pile').toBeLessThanOrEqual(12);
+    check(r.tide.laid, 'rescued pieces laid no more than picked').toBeLessThanOrEqual(r.tide.picked);   // 0.30.13: only what he took out of the strip is laid above the high-water line
+    check(r.tide.burned, 'rescued pieces burned no more than laid').toBeLessThanOrEqual(r.tide.laid);
+    check(r.tide.wetBurned, 'rescued pieces burned while wet').toBe(0); check(r.wetBurned, 'wood burned wetter than 0.5').toBe(0);   // wet wood is never burned
     check(r.wakes, 'unexpected wakes').toBe(0);
     check(r.final.day, 'final day').toBeGreaterThanOrEqual(r.days);   // the days really were played
     check(r.thirstCollapses, 'thirst collapses').toBe(0); check(r.exhaustCollapses, 'exhaustion collapses').toBe(0);   // never collapses from thirst or tiredness
@@ -110,7 +106,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
       c.min(r => r.strollKindsN, 2, 'kinds of strolls');   // and varies it
       if (k.idle !== undefined) c.max(r => r.idleShare, k.idle, 'idle share');
       if (k.evenings !== undefined) c.max(r => r.noFireEvenings, k.evenings, 'evenings without a fire');
-      if (k.dried !== undefined) c.min(r => r.drying.moved, k.dried, 'wood that dried on the drying pile and went to the fire\'s pile');
+      if (k.rescued !== undefined) c.min(r => r.tide.laid, k.rescued, 'wet pieces rescued from the strip and laid above the high-water line');
+      if (k.burned !== undefined) c.min(r => r.tide.burned, k.burned, 'rescued pieces that were burned later');
       if (k.warm !== undefined) c.min(r => r.warmSleeps, k.warm, 'warm sleeps');
     }, SIM_TIMEOUT);
     if (on('fresh')) it('lives ten days from a new game, with only the ground round the start known: he searches for water and food himself (streams 0 to 3)', async () => {
@@ -126,7 +123,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
       if (k.explores !== undefined) { c.min(r => r.explores, k.explores, 'exploring trips'); c.min(r => r.final.known - r.known0, k.grow, 'cells of ground gained: he explores, and his known ground grows well beyond the start'); }   // 0.29.4
       if (k.leanto !== undefined) c.max(r => r.homeDay.leanto, k.leanto, 'day the lean-to was finished (built at all, by that day)');
       if (k.evenings !== undefined) c.max(r => r.noFireEvenings, k.evenings, 'evenings without a fire');
-      if (k.dried !== undefined) c.min(r => r.drying.moved, k.dried, 'wood that dried on the drying pile and went to the fire\'s pile');
+      if (k.rescued !== undefined) c.min(r => r.tide.laid, k.rescued, 'wet pieces rescued from the strip and laid above the high-water line');
+      if (k.burned !== undefined) c.min(r => r.tide.burned, k.burned, 'rescued pieces that were burned later');
     }, SIM_TIMEOUT);
     for (const e of extra) if (on(e.part || 'walked')) it(e.name, () => e.run(w, spawn, () => play('walked')), SIM_TIMEOUT);
     if (beach && on('beach')) it('lives ten days on the beach alone (no berry bush, no banana plant): just about fed, searching along the coast for nuts when the near ones are taken (streams 0 to 3)', async () => {

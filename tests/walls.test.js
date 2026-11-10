@@ -3,7 +3,7 @@
 //      fronds laid while he stands between the first pile and the lean-to: before, the pile landed on top of the first one and closed a pocket round him (no way out, thirst 1.5, collapse); now it lands
 //      apart and a way leads out;
 //   2. the gap rule (`gapFree`): the edge to edge distance, the fire place it replaces, the walls it ignores;
-//   3. every placement path keeps the gap: a pile laid by hand or by his habit (`wood.drop`, kinds that differ in size), the leftovers of a build, the pile places of the upgrades and the drying site,
+//   3. every placement path keeps the gap: a pile laid by hand or by his habit (`wood.drop`, kinds that differ in size), the leftovers of a build, the pile places of the upgrades (the tideline spot is tested in tests/tideline.test.js),
 //      and the building pair stays within the 2 m of the arc's build rule.
 // Depends on: game/game, game/obstacles, game/path, game/mind, game/leanto, tests/helpers/spots.
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -138,12 +138,5 @@ describe('every placement keeps the gap', () => {
     expect(d.pile).toBeUndefined();
     expect(Math.hypot(d.x - l.x, d.z - l.z)).toBeLessThanOrEqual(UP_NEAR);
     expect(OB.gapFree(cp, d.x, d.z, pileSolidRadius({ kind: 'frond', logs: [{}] }) + BODY)).toBe(true);
-  });
-  it('the drying site keeps the gap from every pile of the camp', () => {
-    const l = lean(C.x, C.z, 0);
-    const g = createGame(w, at(C.x + 6, C.z + 2), { leantos: { list: [l], nextId: 1 }, time: 0.3, wood: { carried: [], piles: [{ x: C.x, z: C.z - 3.3, kind: 'branch', logs: ids(branches, 0, 3) }] } });
-    const m = createMind(w, g); m.engage();
-    const s = m.dryingSite();
-    if (s) expect(OB.gapFree(g.movement.obstacles.camp, s.x, s.z, OB.PILE_R)).toBe(true);
   });
 });

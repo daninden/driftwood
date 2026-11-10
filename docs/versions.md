@@ -2,6 +2,43 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30.14 "Torch" — 2026-11-10
+
+After dusk, standing beside a fire with flames and with empty hands, when Dave starts a trip of more than 15 m (to drink, to his bed, to look for food) he takes a torch from the fire (the player's own action, which costs the fire half a piece, so not from a low fire) and plants it where he arrives; it burns out there. No torch in rain, with wood in his arms (so never on a wood trip) or when the way leads through water deeper than `DOUSE_DEPTH`. No new UI or text. `torchFor` and `plantTorch` in `game/mind`; the constants are `TORCH_TRIP` and `TORCH_FUEL`. Tests: `tests/torch.test.js`.
+
+**Shared measurement of 0.30.12 "Kindling", 0.30.13 "Tideline" and 0.30.14 "Torch"** (built together, measured once; 24 ten-day lives: seeds 1337, 2024 and 7, walked and fresh, streams 0 to 3; live code 0.30.11 against the three together):
+
+| | 0.30.11 | 0.30.14 |
+|---|---|---|
+| wood share of waking time | 35.6 % | 23.2 % |
+| its parts | fire fetch 15.0, dry shuttle 12.7, fire feed 0.9, home 5.4, dry transfer 1.4, other 0.2 | fire fetch 14.8, tideline 1.1, fire feed 0.2, home 6.7, other 0.4 |
+| fire fetch trips per life, metres per trip, metres per life | 24.9, 100, 2484 | 25.7, 98, 2508 |
+| pieces burned per day | 8.4 | 6.3 |
+| rescued pieces laid per life, of which burned later | (drying pile: 25.3 laid, 18.6 moved) | 8.3, 0.6 |
+| tideline rounds per life | n/a | 2.0 |
+| evenings with a fire (of 9) | 8.04 | 8.33 |
+| warm sleeps | 8.29 | 8.50 |
+| nights of 5 hours or more (of 9) | 8.71 | 8.71 |
+| maximum hunger / thirst (days) | 0.84 / 0.81 | 0.85 / 0.78 |
+| collapses, stuck (`stuckSelf`), errors | 0, 0, 0 | 0, 0, 0 |
+| lean-tos built by day 10, mean day | 20 of 24, 4.2 | 18 of 24, 5.1 |
+| torches taken per life | 0 | 0.3 |
+
+Wet wood burned: 0. Tideline conservation (laid <= picked, burned <= laid) holds on every stream. **Tuning, within the design:** the first build of the daily round gave 16 of 24 lean-tos (17 of 24 before it). Looking at the lives that did not build, two causes: (1) tideline piles laid 6 to 10 m from the fire, where the lean-to's site, its ring and its upgrade piles may come, so the site went bad (`TIDE_CAMP`, the distance of a tideline pile from the fire, the lean-to and its site, from 6 to 11 m: 19 of 24); (2) with no spot at hand (he stands in the camp) wet wood in his arms was laid where he stood, a small pile at the camp that spoiled the site: now he walks to the nearest strip he knows and lays it up the beach there (`stripPoint`). A step that was tried and taken out again: choosing the lean-to's site at the first round (no change). **A real fault found by the suite and fixed:** a dry beach-edge pile was sometimes a later stop of a plan with wood already in his arm, where the game offers no pickup from a pile (`no-stand`, `tests/mindSim.test.js`); a pile is now only a stop with empty arms, and then the whole stop. The lean-to count moves between 16 and 19 of 24 with such small changes (the sites are fragile); at 18 of 24 (seed 7 walked 1 of 4, seed 7 fresh 2 of 4, seed 1337 fresh 3 of 4) it stays below 20 and is **accepted** while every safety bound holds; see *Open* in `docs/handover.md`. Long-simulation quantity bounds `rescued` and `burned` (`tests/helpers/lifeSeeds.js`) by the policy (met on 2 of 4 streams, about half the mean, at least 1); no `burned` bound where it cannot be met on 2 of 4 streams (all scenarios but seed 1337 walked).
+
+## 0.30.13 "Tideline" — 2026-11-10
+
+No drying pile at the camp any more (its errands and the transfer to the fire's pile are gone). Wet wood from the strip between the tides (it never dries there, and the sea takes a pile laid there) is carried a few metres higher and laid just above the high-water line, a small pile at the beach edge where it dries, on his shore strolls and at the far end of exploring trips, near or far from home (`pickUpWet`, `layTideline`, `tideSpot`; `TIDE_*`): up to three pieces, from the strip within 8 m. While the lean-to still needs driftwood at its site, wet wood goes there instead (`wetForSite`). Wet wood in his arms at the start of another task is laid at such a spot (else where he stands, never in the strip) and never goes on the fire's pile.
+
+- **The daily round** (`tideRound`, a PRNG stream of its own, `rngTide`): once a day, by day (0.22 to 0.5, chance 0.85), when calm (the conditions of a stroll or an exploring trip; not when a crab trip is possible; after the morning's home work), he walks to the nearest strip he knows (by path cost, on known ground, at most 150 s away) where wet wood lies, takes up to three pieces and, when more lies there and there is time, a second load, and is home before dark (the exploring trip's turn-back).
+- **Firewood prefers beach-edge piles:** a dry pile that is not his own counts 0.7 times its walking cost against loose wood and other piles (`TIDE_BONUS`).
+- `TIDE_CAMP` is 11 m (see the measurement under 0.30.14).
+- Tests: `tests/tideline.test.js` (carry and lay on a stroll, away from the camp, drying; a beach-edge pile is fetched, and preferred when its cost x 0.7 is below the loose log's; the round once a day by day, none at night or in the evening or without wet wood; no drying pile; wet wood never burned). The long simulations check the conservation (laid <= picked, burned <= laid) and wet wood never burned on every stream.
+
+## 0.30.12 "Kindling" — 2026-11-10
+
+The evening fire is lit with 4 pieces (`WOOD_WANT` 4, was 6) and in the evening it is fed only when nearly out (`FEED_BELOW` 0.25 of `FUEL_MAX`, was 0.6). Tests: `tests/kindling.test.js`. Measurement: see 0.30.14.
+
 ## 0.30.11 "Hurry" — 2026-11-10
 
 A time speed-up for testing, for the developer and tester only (agreed with the user): `?speed=N` in the page address (1 to 16, default 1) runs game time N times as fast. Each frame the game and the habit get N × dt in sub-steps of at most 0.1 s, the same step the simulations use, so Dave behaves exactly as at normal speed; the takeover wait follows. Drawing, sound and the fades of the interface stay on real time. The speed is not saved; saving works as usual. The developer panel shows `×N` when N > 1. New `game/steps` (`parseSpeed`, `subSteps`), tested in `tests/steps.test.js`; checked on a real page (the game clock ran 7.9 times as fast at `?speed=8`, no page errors).
