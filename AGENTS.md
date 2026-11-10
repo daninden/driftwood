@@ -12,7 +12,7 @@ Read `docs/design.md` (what the game is) and `docs/architecture.md` (how the cod
 - **Everything in English:** game text, code, comments, documentation and commit messages.
 - **No personal data** in the repository: no names, e-mail addresses, private links or account details.
 - **Delegate the hands-on work to cheaper subagents.** The main session plans, reviews and pushes; the actual tool calls and implementation go to subagents on Sonnet, or Haiku for very simple tasks.
-- **Work directly on `main`.** No feature branches or pull requests. Every push to `main` goes live (see `docs/architecture.md`), so run `npm test` (and for changes that touch render the quick smoke test, `npm run smoke`; for visual versions `npm run smoke:full`) before pushing. The full `npm test` runs before every push to `main` (the `.githooks/pre-push` hook enforces it) and must be green unless the user explicitly says otherwise.
+- **Work directly on `main`.** No feature branches or pull requests. Every push to `main` goes live (see `docs/architecture.md`), so run `npm test` (and for changes that touch render the quick smoke test, `npm run smoke`; for visual versions `npm run smoke:full`) before pushing. The full `npm test` runs as the last step after the last code change before every push to `main`, and must be green unless the user explicitly says otherwise; say in the commit message that it was green (tests and time). No git hook checks this (removed in 0.30.6 "Trust" to avoid running the suite twice): it is this agreement that holds.
 
 ## Code
 

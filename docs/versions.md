@@ -2,6 +2,13 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30.6 "Trust" — 2026-11-10
+
+No pre-push hook any more. The full suite ran twice before a push (once by hand, once by the hook); now it runs once, as the last step after the last code change, and must be green, as the working agreement in `AGENTS.md` says. Nothing in the game changes.
+
+- **Hook removed** (decided by the user): `.githooks/pre-push` is gone. A clone that set `git config core.hooksPath .githooks` can unset it with `git config --unset core.hooksPath`.
+- **The rule stays:** the full `npm test` green before every push to `main`, unless the user explicitly says otherwise; the commit message says it was green.
+
 ## 0.30.5 "Quicker" — 2026-11-10
 
 The full test suite runs in well under half the time (480 s to 180 s) and tests exactly as much. Nothing in the game changes: Dave lives the same ten days, step for step.

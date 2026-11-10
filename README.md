@@ -9,9 +9,8 @@ You walk, wade rivers, gather the driftwood the tide brings, husk coconuts for f
 ```
 npm install
 npx playwright install chromium   once, for the smoke test
-git config core.hooksPath .githooks   once per clone: a push to main then runs npm test first
 npm run dev        development server at http://localhost:5173
-npm test           all tests (the full check before a release, a few minutes)
+npm test           all tests (the full check before every push to main, about 3 minutes)
 npm run test:fast  the quick tests only, for feedback while working
 npm run test:sim   only the long simulations of Dave alone for ten days
 npm run build      dist/ plus dist/driftwood.html (everything in one file)
