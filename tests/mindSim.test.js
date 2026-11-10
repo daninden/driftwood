@@ -90,3 +90,11 @@ describe('exploring: the trip (with a game)', () => {
     expect(a.m.stats.explores).toBe(b.m.stats.explores); expect(a.known1).toBe(b.known1);
   });
 });
+
+describe('a spot to stand at is reached, not swung across (0.30.7 "Clearing")', () => {
+  it('seed 1337 from a new game, stream 0: he roasts the crab he carries at the ring fire of his lean-to instead of swinging across the standing point for two days (max hunger 1.39 before)', () => {
+    const { r, mind } = runMind(w, startSpot(w), { days: 10, know: false, stream: 0 });
+    expect(mind.stats.events.filter(e => e.type === 'goal-dropped' && e.goal === 'eat' && e.why === 'timeout')).toEqual([]);   // no eat goal ran out of time beside the fire
+    expect(r.maxHunger).toBeLessThan(1); expect(r.mix.crab).toBeGreaterThan(0); expect(mind.stats.noStand || 0).toBe(0);   // a crab was roasted and eaten; no standing point was lost at the ring
+  });
+});

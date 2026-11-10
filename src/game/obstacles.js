@@ -16,6 +16,7 @@
  *
  * PILE_R, FIRE_R, LEANTO_R, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT
  * leantoPoint(l, f, r) -> { x, z }   a point of a lean-to's local frame (f along the heading, the open side; r across)
+ * leantoCircles(l) -> [{ x, z, r }]   (0.30.7) the collision circles of a lean-to at { x, z, heading }, real or hypothetical (the one code path `campSolids` and the siting of game/mind share)
  * campSolids(wood, fire, leantos) -> camp
  *   camp.refresh() -> camp   rebuild when the game's solids changed (cheap when they did not); the other readers call it themselves
  *   camp.key        a number that changes exactly when some solid was added, moved, removed or resized
@@ -55,6 +56,19 @@ function addLine(add, l, f0, r0, f1, r1) {
   }
 }
 
+/**
+ * 0.30.7 "Clearing": the collision circles of a lean-to at { x, z, heading } as the camp view gives them (connected, body-clear back and side edges of the 2 m by 1.5 m
+ * shelter; the front is deliberately omitted, so sleeping remains accessible). One code path for the real lean-to (`campSolids`) and for the hypothetical one Dave
+ * checks a site with (game/mind `leantoSites`).
+ */
+export function leantoCircles(l) {
+  const out = [], put = (q, r) => out.push({ x: q.x, z: q.z, r });
+  addLine(put, l, LEANTO_BACK, -LEANTO_SIDE, LEANTO_BACK, LEANTO_SIDE);
+  addLine(put, l, LEANTO_BACK, -LEANTO_SIDE, LEANTO_FRONT, -LEANTO_SIDE);
+  addLine(put, l, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT, LEANTO_SIDE);
+  return out;
+}
+
 const mm = v => Math.round(v * 1000);
 
 /** The cached camp view (see the header). */
@@ -81,12 +95,8 @@ export function campSolids(wood, fire, leantos) {
     for (const f of fire.fires) add(group('fire', f, FIRE_R), f, FIRE_R);
     for (const b of fire.burnt) add(group('burnt', b, FIRE_R), b, FIRE_R);
     for (const l of leantos.list) {
-      const g = group('leanto', l, LEANTO_R, { heading: l.heading }), put = (q, r) => add(g, q, r);
-      // Connected, body-clear back and side edges of the 2 m by 1.5 m shelter.
-      // The front is deliberately omitted, so sleeping remains accessible.
-      addLine(put, l, LEANTO_BACK, -LEANTO_SIDE, LEANTO_BACK, LEANTO_SIDE);
-      addLine(put, l, LEANTO_BACK, -LEANTO_SIDE, LEANTO_FRONT, -LEANTO_SIDE);
-      addLine(put, l, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT, LEANTO_SIDE);
+      const g = group('leanto', l, LEANTO_R, { heading: l.heading });
+      for (const c of leantoCircles(l)) add(g, c, c.r);   // (the shape is shared with the hypothetical lean-to of game/mind's siting)
     }
     buckets = new Map(); rmax = 0; x0 = z0 = Infinity; x1 = z1 = -Infinity;
     for (const o of circles) {

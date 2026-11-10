@@ -37,7 +37,7 @@
  * 0.29.3 "Homestead": HOME, a project that takes the morning's idle moments (`homeNext`, pure; part of the idle goal, at the amble): from the third day (HOME_DAY 2, two nights lived) with a camp (a fire of his, lit or burnt out, or the place he sleeps) he builds ONE lean-to and then
  *   its upgrades, walls (6 fronds), stone ring (8 stones), bed (4 branches and 4 fronds), through the very actions a player has (the arc's build / upgrade icon). A step of the project (a trip for up to three pieces,
  *   or the building) is what he does at an idle moment of the morning, between HOME_FROM 0.21 and HOME_TO 0.44 (0.29.4, was 0.38: mornings are for the house, a crab trip at low water comes first, the afternoon belongs to the tide and the crabs, the evening to the fire; every need
- *   and every errand comes first), and at most one piece of the home is finished a day (`builtDay`). The site (`leantoSites`, chosen once and kept): on known, dry, level ground at least SITE_HIGH (0.8 m) above the high-water line, 5 to 7.5 m from his home fire, the open side across
+ *   and every errand comes first), and at most one piece of the home is finished a day (`builtDay`). The site (`leantoSites`, chosen once and kept, checked again when asked for and right before the building; 0.30.7 "Clearing": a lean-to that fits as the real one: its collision circles and keep-free region touch no trunk, boulder, crag or camp solid, the ground rules hold on a grid of 0.3 m, a straight line S-G-F-ring spot is walkable, the ring and the three upgrade piles have room, a way leads there from the fire; a drying pile within DRY_PAIR of a place for a building pile rejects it ('drying'); none that fits: he waits, `home-no-site`; a player's pair of piles gets the same check, `existingSite`): on known, dry, level ground at least SITE_HIGH (0.8 m) above the high-water line, 5 to 7.5 m from his home fire, the open side across
  *   from the fire (so the stone ring comes to stand about 5 m from it, not on it), preferring ground near fresh water he knows; the piles for the building (6 driftwood and 6 branches, within 2 m of each other) are laid there.
  *   Never a second lean-to: with one (also a player's) the project only adds the upgrades to it, and a half-built one is built on. Materials only from known ground, within HOME_MAX_COST of walking; piles for the upgrades lie
  *   beside the lean-to (fronds on one side, stones on the other, branches behind).
@@ -61,7 +61,7 @@
  * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water he can walk to over known ground, or food, is known; then he is back on known ground only (0.29: water that is known but out of reach does not end a search).
  * A higher need breaks into a lower goal (checked every CHECK seconds), except while an actual material errand is under way: it delivers first. Very thirsty or very hungry needs still break in; a goal keeps going otherwise and a failing one is left alone for a while (`cool`; 0.28.2: 10 to 40 s, a failed
  * light 100 s, or 300 s when one tuft of fibre is left; a failed try keeps the last tuft).
- * Standing points (0.30.3 "Routes"): every errand at a pile, a fire or a building site goes to a spot where the game really offers the action for that object (game/stand, `goStand`); none reachable is an honest false, no stall. Frond and stone piles cannot be added to (wider than the join distance): their next pile is a pile of its own on the ring UP_AT round the lean-to. Stock for the next fire never feeds a burning fire.
+ * Standing points (0.30.3 "Routes"): every errand at a pile, a fire or a building site goes to a spot where the game really offers the action for that object (game/stand, `goStand`); none reachable is an honest false, no stall. 0.30.7: the walk to a standing point has `settle` (STAND_SETTLE 3 s): a step of a coarse tick is longer than the 0.12 m window the movement takes for arrived, so he could swing across the point for ever; after 3 s within 0.3 m the arrival test (the action is offered at his real place) decides. Frond and stone piles cannot be added to (wider than the join distance): their next pile is a pile of its own on the ring UP_AT round the lean-to. Stock for the next fire never feeds a burning fire.
  * Walking a path (0.30.3 "Routes"): `walk` is a thin wrapper over game/route, the one follower: it pulls the string over the next route points (he heads for the furthest of the next four he can see by the rule of game/walk),
  * closes a segment he made no progress on for 0.7 s and plans again (at most three times: then `stats.stuck` counts each such stall, an event 'stuck' names it, and the walk fails), and reports no way at all as `stats.nopath` and an event 'nopath'.
  * There are no bans and no hand steering. He walks; only very thirsty (thirst >= 0.95) and far (20 m or more) does he run.
@@ -95,7 +95,7 @@
  *   mind.dryingSite()  the place of the drying pile for his camp as it is (or null), { x, z, ux, uz, lean, of }; mind.dryPiles() the piles of wood on drying sites (for the tests)
  *   mind.strollCands(centre?, range?)  { shore, river, palms, forest, crabs: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
  *   mind.homePlan()   { step (homeNext without the time window), need (what the next unit does: { kind, want } a trip for pieces of that kind, { build } the building, or null), site } for the tests
- *   mind.leantoSites(fire)  the places for the lean-to round a fire, best first: [{ x, z, heading, score, r }]; mind.stats.home { units, trips, builds, refused, noMaterial }
+ *   mind.leantoSites(fire)  the places for the lean-to round a fire, best first: [{ x, z, heading, score, r, water, geo }]; mind.siteReason(c, fire, ignore?) -> null | 'ground' | 'footprint' | 'keep' | 'solid' | 'drying' | 'approach' | 'room' | 'route' (0.30.7: why a lean-to { x, z, heading } does not fit there; ignore: the piles the building consumes); mind.existingSite(fire) -> { ...siteFor, heading } | null; mind.stats.home { units, trips, builds, refused, noMaterial }
  *   mind.materialFind(kind, range?)  nearest eligible loose material or abandoned pile by path cost (test helper); mind.timberPlan(src, n, opts?)  the set `selectStops` would fetch now, farthest first (test helper)
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
@@ -106,12 +106,14 @@ import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 import { createPath } from './path.js';
 import { createRoute } from './route.js';
-import { canStand, terrainAt, PACE, WALK_SPEED } from './movement.js';
+import { canStand, terrainAt, obstaclesNear, PACE, WALK_SPEED } from './movement.js';
+import { asCamp, segmentClear } from './walk.js';
+import { leantoCircles, leantoPoint, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT } from './obstacles.js';
 import { DAY_SECONDS } from './clock.js';
 import { freshWater } from './water.js';
 import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX, PILE_FRONT } from './wood.js';
 import { FIRE_MIN, FUEL_MAX, TORCH_DRY } from './fire.js';
-import { ringCentre, siteFor, keepFree, UPGRADES, UP_NEAR, NEED, RING_AT, paidSteps } from './leanto.js';
+import { ringCentre, siteFor, keepFree, KEEP, UPGRADES, UP_NEAR, NEED, RING_AT, RING_R, paidSteps } from './leanto.js';
 import { DAWN as SLEEP_DAWN } from './sleep.js';
 import { EAT_AT } from './shells.js';
 
@@ -450,7 +452,7 @@ export function createMind(world, game, opts = {}) {
   function* waitActs(max = 25) { const t0 = now; yield; while (inp.target && inp.target.act && now - t0 < max) yield; yield; }
   const hurry = () => game.thirst.days >= 0.95;
   const stand = game.stand;
-  const STOP = 0.12;   // the follower ends within this of a standing point (moveIntent takes less than 0.12 m for arrived)
+  const STOP = 0.12, STAND_SETTLE = 3;   // the follower ends within this of a standing point (moveIntent takes less than 0.12 m for arrived)
   // 0.30.3 "Routes": to a spot where the game really offers `kind` for `obj` (game/stand: a pile to take from, add to or light, a fire to feed, a site or lean-to to build or upgrade). True when he stands there and the
   // action is offered; false when there is no such spot he can reach (the caller marks the object bad and goes on). A world that changed on the way (the pile is gone, another pile now counts) is looked at once more.
   function* goStand(kind, obj, o = {}) {
@@ -459,7 +461,7 @@ export function createMind(world, game, opts = {}) {
       if (stand.usable(kind, obj, p.x, p.z, o.free ? null : inside)) { idleInput(); return true; }
       const s = stand.plan(kind, obj, o.free ? pathFree : path, p, { allow: o.free ? null : inside });
       if (!s) { stats.noStand = (stats.noStand || 0) + 1; if (stats.noStand <= 30) ev('no-stand', { kind }); return false; }
-      if (!(yield* walk(s.x, s.z, { stop: STOP, hurry: o.hurry }))) return false;
+      if (!(yield* walk(s.x, s.z, { stop: STOP, hurry: o.hurry, settle: STAND_SETTLE }))) return false;   // 0.30.7: a step of a coarse tick is longer than the 0.12 m window, so he can swing across the point for ever (seed 1337 fresh, ring fire, a crab to roast): after STAND_SETTLE s within 0.3 m the arrival test (`offered` at his real place) decides
       if (stand.offered(kind, obj, p.x, p.z)) return true;
     }
     return false;
@@ -870,39 +872,99 @@ export function createMind(world, game, opts = {}) {
     else if (game.leantos.list.length) lean = game.leantos.list.some(l => l.progress < 1 && inside(l.x, l.z)) ? 'half' : 'other';
     return { day: clock.day, time: clock.time, fire: h.kind === 'fire' || h.kind === 'bed', lean, up, builtDay, cool: { home: isCool('home') } };
   }
-  // Places for the lean-to round the fire f, best first: on ground he knows, dry and level, 0.8 m above the high-water line, its footprint, the two piles for the building, the ring and the piles of the upgrades all standable and
-  // clear of the rivers; the open side across from the fire (heading a quarter turn from the line to it), so that the stone ring comes to stand 4 m or more from the old fire; nearer the fire and nearer fresh water he knows is better.
-  function leantoSites(f) {
+  // ---------- the lean-to's site (0.30.7 "Clearing") ----------
+  // A site is a lean-to { x, z, heading } checked as the real one: its collision circles (game/obstacles `leantoCircles`, the very ones `campSolids` gives the built lean-to) and its keep-free region (game/leanto `keepFree`) must not touch a trunk, boulder or crag nor a solid of the camp, and no drying pile lies within DRY_PAIR of a place for a building pile (the piles that are
+  // to be consumed by the building are left out); no drying pile lies within DRY_PAIR of either place for a building pile (it would pair with it: the arc would offer to build there); the ground rules hold on a grid of about SITE_CELL over the lean-to's own footprint (the walls' area), and the rest of the keep-free region is standable and out of the river (not a few sample points); a straight line S (the sleep point) - G (the gate) - F (in front) - the ring spot is walkable with the lean-to's own solids in place;
+  // the ring spot and the three places of the upgrade piles have room (and, for a pile, a standing spot); and a way leads from the fire to the ring spot and to those standing spots. `siteGeometry` is pure geometry, `siteRoutes` asks the path finder.
+  const SITE_CELL = 0.3, SITE_REACH = 4.5, PILE_CORE = 0.45;
+  const axis = (lo, hi, step) => { const n = Math.max(1, Math.ceil((hi - lo) / step)); return Array.from({ length: n + 1 }, (_, i) => lo + (hi - lo) * i / n); };
+  const SITE_DENSE = []; for (const f of axis(KEEP.back, KEEP.apron, SITE_CELL)) for (const r of axis(-KEEP.side, KEEP.side, SITE_CELL)) if (f <= KEEP.front || Math.abs(r) <= KEEP.apronSide) SITE_DENSE.push([f, r]);   // (f along the opening, r across; the footprint and then the narrower apron)
+  const naturalNear = (x, z) => {   // the trunks, boulders and crags within SITE_REACH of a point (each once)
+    const seen = new Set();
+    for (let dx = -3; dx <= 3; dx += 3) for (let dz = -3; dz <= 3; dz += 3) for (const o of obstaclesNear(world, x + dx, z + dz)) if (Math.hypot(o.x - x, o.z - z) < SITE_REACH + o.r) seen.add(o);
+    return [...seen];
+  };
+  const groundOk = (x, z, y0) => {   // the ground rules at one point: known, standable, not in a river, 1.5 m dry of it, SITE_HIGH above the high-water line, level with the middle within SITE_LEVEL
+    if (!inside(x, z) || !canStand(world, x, z, 0)) return false;
+    const t = terrainAt(world, x, z, 0);
+    return !t.inRiver && world.dryOfRiver(x, z, 1.5) && t.y >= SITE_HIGH && Math.abs(t.y - y0) <= SITE_LEVEL;
+  };
+  function siteGeometry(c, ignore = []) {   // c: { x, z, heading }; ignore: piles that the building will consume. -> the reason it does not fit (a string), or { R, F, stands, rise }
+    const l = { x: c.x, z: c.z, heading: c.heading }, keep = keepFree(l), pt = (f, r) => leantoPoint(l, f, r), y0 = world.H(l.x, l.z);
+    if (!inside(l.x, l.z) || terrainAt(world, l.x, l.z, 0).s >= SITE_SLOPE) return 'ground';
+    const nat = naturalNear(l.x, l.z), hyp = leantoCircles(l);
+    const cc = game.movement.obstacles.camp.near(l.x, l.z, SITE_REACH).filter(o => !(o.g.kind === 'pile' && ignore.some(q => Math.abs(q.x - o.g.x) < 1e-6 && Math.abs(q.z - o.g.z) < 1e-6)));
+    const drying = W.piles.filter(isDrying), bp = [pt(0, -0.7), pt(0, 0.7), ...ignore.map(q => ({ x: q.x, z: q.z }))];   // 0.30.7: a drying pile within DRY_PAIR of a building pile would pair with it (the arc would offer to build there)
+    for (const q of drying) if (bp.some(b => Math.hypot(q.x - b.x, q.z - b.z) < DRY_PAIR)) return 'drying';
+    for (const o of nat) for (const h of hyp) if (Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) return 'footprint';   // a trunk, boulder or crag in the walls (no room for a body between)
+    for (const o of nat) if (keep.touches(o.x, o.z, o.r)) return 'keep';                                            // ... or in the room inside and in front of the opening
+    for (const o of cc) { for (const h of hyp) if (Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) return 'solid'; if (keep.touches(o.x, o.z, o.r)) return 'solid'; }   // a pile, a fire place or a wall of the camp
+    let rise = 0;
+    for (const [f, r] of SITE_DENSE) {
+      const q = pt(f, r);
+      if (f >= LEANTO_BACK && f <= LEANTO_FRONT && Math.abs(r) <= LEANTO_SIDE) { if (!groundOk(q.x, q.z, y0)) return 'ground'; rise = Math.max(rise, Math.abs(world.H(q.x, q.z) - y0)); }   // inside the walls: all the ground rules
+      else if (!canStand(world, q.x, q.z, 0) || terrainAt(world, q.x, q.z, 0).inRiver) return 'ground';   // the rest of the keep-free region: standable and not in a river
+    }
+    const S = pt(0, 0), G = pt(0.65, 0), F = pt(1.6, 0), R = ringCentre(l), solids = [...cc, ...hyp];
+    const view = asCamp((x, z, reach) => solids.filter(o => Math.abs(o.x - x) <= reach + o.r && Math.abs(o.z - z) <= reach + o.r));
+    if (!canStand(world, S.x, S.z, 0) || !segmentClear(world, S, G, view) || !segmentClear(world, G, F, view) || !segmentClear(world, F, R, view)) return 'approach';
+    const room = (q, rad) => nat.every(o => Math.hypot(o.x - q.x, o.z - q.z) >= o.r + rad) && solids.every(o => Math.hypot(o.x - q.x, o.z - q.z) >= o.r + rad);
+    if (!groundOk(R.x, R.z, y0) || !room(R, RING_R)) return 'room';
+    rise = Math.max(rise, Math.abs(world.H(R.x, R.z) - y0));
+    const stands = [];
+    for (const [f, r] of [[0, UP_AT], [0, -UP_AT], [-UP_AT, 0]]) {   // the piles of the upgrades: fronds on one side, stones on the other, branches behind
+      const U = pt(f, r);
+      if (!groundOk(U.x, U.z, y0) || !room(U, PILE_CORE)) return 'room';
+      rise = Math.max(rise, Math.abs(world.H(U.x, U.z) - y0));
+      let st = null;
+      for (let k = 0; k < 12 && !st; k++) { const a = k * Math.PI / 6, q = { x: U.x + Math.sin(a) * 0.9, z: U.z + Math.cos(a) * 0.9 }; if (inside(q.x, q.z) && canStand(world, q.x, q.z, 0) && room(q, 0.02) && !keep.touches(q.x, q.z, 0.1)) st = q; }
+      if (!st) return 'room';
+      stands.push(st);
+    }
+    return { R, F, stands, rise };
+  }
+  function siteRoutes(c, f, geo) {   // null when ways lead from the fire to the ring spot (or in front of the opening) and to a standing spot at each upgrade pile, else the reason
+    const bound = Math.hypot(c.x - f.x, c.z - f.z) * 2.5 + 10;
+    if (!(Math.min(path.cost(f, geo.R), path.cost(f, geo.F)) < bound)) return 'route';
+    for (const st of geo.stands) if (!(path.cost(f, st) < bound + 10)) return 'room';
+    return null;
+  }
+  const siteReason = (c, f, ignore = []) => { const g = siteGeometry(c, ignore); return typeof g === 'string' ? g : siteRoutes(c, f, g); };   // null: the lean-to fits at c = { x, z, heading }
+  // Places for the lean-to round the fire f, best first: a lean-to that fits as the real one (above), on ground he knows, dry and level, 0.8 m above the high-water line, with the ring and the piles of the upgrades in reach
+  // and clear of the rivers; the open side a quarter turn from the line to the fire (so that the stone ring comes to stand 4 m or more from the old fire, and becomes his fire); nearer the fire and nearer fresh water he knows is better.
+  function leantoSites(f, ignore = []) {
     const wp = waterPts(), out = [];
     for (const r of SITE_RINGS) for (let i = 0; i < 16; i++) for (const side of [1, -1]) {
       const a = (i + (r === SITE_RINGS[1] ? 0.5 : 0)) * Math.PI / 8, c = { x: f.x + Math.sin(a) * r, z: f.z + Math.cos(a) * r, heading: a + side * Math.PI / 2, r };
-      const sx = Math.sin(c.heading), sz = Math.cos(c.heading), y0 = world.H(c.x, c.z);
-      if (terrainAt(world, c.x, c.z, 0).s >= SITE_SLOPE) continue;
-      let ok = true, rise = 0;
-      for (const [u, v] of [[0, 0], [1, 0.75], [-1, 0.75], [1, -0.75], [-1, -0.75], [0.9, 0], [-0.9, 0], [0, RING_AT], [UP_AT, 0], [-UP_AT, 0], [0, -UP_AT]]) {   // u across the opening (perpendicular to the heading), v along it
-        const qx = c.x + sz * u + sx * v, qz = c.z - sx * u + sz * v, y = world.H(qx, qz), t = terrainAt(world, qx, qz, 0);
-        if (!inside(qx, qz) || !canStand(world, qx, qz, 0) || t.inRiver || !world.dryOfRiver(qx, qz, 1.5) || y < SITE_HIGH || Math.abs(y - y0) > SITE_LEVEL) { ok = false; break; }
-        rise = Math.max(rise, Math.abs(y - y0));
-      }
-      if (!ok || proj.dry.some(q => Math.hypot(q.x - c.x, q.z - c.z) < DRY_CLEAR)) continue;   // (0.29.5: and clear of a drying pile, whose wood would be taken for the building's)
+      const g = siteGeometry(c, ignore); if (typeof g === 'string') continue;
       let wd = 120; for (const q of wp) wd = Math.min(wd, Math.hypot(q.x - c.x, q.z - c.z));
-      out.push({ ...c, score: r + 0.05 * wd + 3 * rise, water: wd });
+      out.push({ ...c, score: r + 0.05 * wd + 3 * g.rise, water: wd, geo: g });
     }
     return out.sort((a, b) => a.score - b.score);
   }
-  function homeSite(h) {   // kept once chosen (while the fire is the same)
-    if (proj.site && dist(proj.site.fire, h) < 4) return proj.site;
-    for (const c of leantoSites(h).slice(0, 8)) if (path.cost(h, c) < c.r * 2.5 + 10) return (proj.site = { ...c, fire: { x: h.x, z: h.z } });
+  const sitePiles = sp => W.piles.filter(q => (q.kind === 'driftwood' || q.kind === 'branch') && Math.hypot(q.x - sp.x, q.z - sp.z) <= 2.2 && Math.hypot(q.x - sp.fire.x, q.z - sp.fire.z) > 2.6 && !isDrying(q));   // 0.30.7: every pile of building material at the site, whatever its size (what the build does not use, `layLeftovers` of game/game moves out of the footprint): never a reason to reject the site
+  function homeSite(h) {   // kept once chosen (while the fire is the same), and checked again each time it is asked for: if the ground has changed (a pile, a fire) a new one is chosen
+    if (proj.site && dist(proj.site.fire, h) < 4) {
+      const why = siteReason(proj.site, h, sitePiles(proj.site));
+      if (!why) return proj.site;
+      ev('home-site-bad', { why }); proj.site = null;
+    }
+    for (const c of leantoSites(h).slice(0, 8)) if (path.cost(h, c) < c.r * 2.5 + 10 && !siteRoutes(c, h, c.geo)) return (proj.site = { ...c, fire: { x: h.x, z: h.z } });
     return null;
   }
-  const existingSite = h => {   // two piles of 6 near the fire that the player left: the building is there
-    for (const q of W.piles) if (q.kind === 'driftwood' && q.logs.length >= NEED && Math.hypot(q.x - h.x, q.z - h.z) <= 30 && inside(q.x, q.z)) { const s = siteFor(W.piles, q); if (s && Math.hypot(s.x - h.x, s.z - h.z) >= 3.5 && inside(s.x, s.z) && canStand(world, s.x, s.z, 0)) return s; }   // (a pair at the fire is its stock, not a site)
+  const existingSite = h => {   // two piles of 6 near the fire that the player left: the building is there, if the lean-to fits (a quarter turn from the line to the fire first, then towards the fire, then away from it); else he does not adopt them
+    for (const q of W.piles) if (q.kind === 'driftwood' && q.logs.length >= NEED && Math.hypot(q.x - h.x, q.z - h.z) <= 30 && inside(q.x, q.z)) {
+      const s = siteFor(W.piles, q);   // (a pair at the fire is its stock, not a site)
+      if (!s || Math.hypot(s.x - h.x, s.z - h.z) < 3.5 || !inside(s.x, s.z) || !canStand(world, s.x, s.z, 0)) continue;
+      const a = Math.atan2(s.x - h.x, s.z - h.z), ig = [s.drift, s.branch, ...sitePiles({ x: s.x, z: s.z, fire: h })], mine = proj.site && dist(proj.site, s) < 1.5 ? [proj.site.heading] : [];   // (his own piles for the site he chose: its heading first)
+      for (const heading of [...mine, a + Math.PI / 2, a - Math.PI / 2, a + Math.PI, a]) if (!siteReason({ x: s.x, z: s.z, heading }, h, ig)) return { ...s, heading };
+    }
     return null;
   };
   const sitePile = (kind, sp) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - sp.x, q.z - sp.z) <= 2.2 && Math.hypot(q.x - sp.fire.x, q.z - sp.fire.z) > 2.6 && !isDrying(q)).sort((a, b) => b.logs.length - a.logs.length)[0] || null;   // the piles for the building: close to the site, and not the fire's stock
   function* doBuild(kind, obj, face) {   // walks to a spot where the arc offers `kind` for obj (a lean-to being built or upgraded, { site } of two piles), presses build / upgrade and kneels until it is done (or he is called away); face: the way a new lean-to is to open
     if (!(yield* goStand(kind, obj))) { stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join(), stand: false }); cool('home', 300); return false; }
-    if (face !== undefined) headingWanted = face;
+    if (face !== undefined) { headingWanted = face; inp.yaw = face; }   // 0.30.7: at once, the game reads the way to open at the press of the same step
     if (!pressKind([kind])) { headingWanted = null; stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join() }); cool('home', 300); return false; }
     stats.home.builds++;
     yield* waitActs(40); yield* waitIdle(); headingWanted = null;
@@ -919,18 +981,23 @@ export function createMind(world, game, opts = {}) {
     if (what === 'leanto') {
       const half = game.leantos.list.filter(l => l.progress < 1 && inside(l.x, l.z)).sort((a, b) => dist(a, p) - dist(b, p))[0];
       if (half) return { build: true, run: () => doBuild('build', { leanto: half }, undefined) };
-      let s = existingSite(h);
+      let s = existingSite(h), face = s && s.heading, sp = null;
       if (!s) {
-        const sp = homeSite(h); if (!sp) { ev('home-no-site'); cool('home', 900); return null; }
+        sp = homeSite(h); if (!sp) { ev('home-no-site'); cool('home', 900); return null; }
         const dest = (kind, other) => () => siteDest(sp, kind, other);
         const d = sitePile('driftwood', sp), b = sitePile('branch', sp), nd = d ? d.logs.length : 0, nb = b ? b.logs.length : 0;
         if (nd < NEED) return { kind: 'drift', src: 'timber', want: NEED - nd, dest: dest('driftwood', 'branch') };
         if (nb < NEED) return { kind: 'branch', want: NEED - nb, dest: dest('branch', 'driftwood') };
-        s = siteFor(W.piles, d);
+        s = siteFor(W.piles, d); face = sp.heading;
         if (!s) { ev('home-site-bad'); cool('home', 600); return null; }
       }
-      // 0.29.4: he builds at the pile that has its partner within 2 m (a second pile of 6 nearby, with no partner, offered 'light' only); the open side towards the fire
-      return { build: true, run: () => doBuild('build', { site: s }, Math.atan2(h.x - s.x, h.z - s.z)) };
+      // 0.29.4: he builds at the pile that has its partner within 2 m (a second pile of 6 nearby, with no partner, offered 'light' only). 0.30.7: it opens the way the site was validated (a quarter turn from the line to the fire; towards its own ring,
+      // which becomes the fire), and is checked once more at the pile pair itself right before the building starts
+      return { build: true, run: function* () {
+        const why = siteReason({ x: s.x, z: s.z, heading: face }, h, [s.drift, s.branch, ...sitePiles({ x: s.x, z: s.z, fire: h })]);
+        if (why) { ev('home-site-bad', { why }); if (sp) proj.site = null; cool('home', 300); return false; }
+        return yield* doBuild('build', { site: s }, face);
+      } };
     }
     if (h.kind !== 'leanto') return null;
     const lt = h.lt, per = UPGRADES[what].per, p0 = (lt.up && lt.up[what]) || 0, left = UPGRADES[what].steps - paidSteps(what, p0), hx = Math.sin(lt.heading), hz = Math.cos(lt.heading);
@@ -1387,7 +1454,7 @@ export function createMind(world, game, opts = {}) {
   function step(dt) {
     if (!mind.active) return;
     now += dt;
-    if (headingWanted !== null) inp.yaw = headingWanted;   // a lean-to being started opens towards the fire (main sets the view's yaw each frame, before this)
+    if (headingWanted !== null) inp.yaw = headingWanted;   // a lean-to being started opens the way its site was validated (main sets the view's yaw each frame, before this)
     if (p.sitting > 0.5) stats.sitSecs += dt;
     if (game.sleep.asleep || p.lie > 0) {   // never wakes him, never acts in his sleep
       if (cur) endGoal(); idleInput(); inp.sit = false; pressed = null; choice = null; sleepKey = false;
@@ -1428,6 +1495,6 @@ export function createMind(world, game, opts = {}) {
   mind.chose = () => chose;
   mind.lastKind = () => lastKind;
   mind.path = path; mind.strollCands = strollCands; mind.leantoSites = leantoSites; mind.dryingSite = dryingSite; mind.dryPiles = () => W.piles.filter(isDrying); mind.materialFind = (kind, range) => nearestBy(kind, range); mind.timberPlan = (src, n, o) => selectStops(src, n, o).sort((a, b) => b.cost - a.cost);
-  mind.homePlan = () => { const h = homeSpot(), sn = { ...homeSnap(), time: HOME_FROM, day: Math.max(clock.day, HOME_DAY), builtDay: -1, cool: {} }, step = homeNext(sn); return { step, need: step ? homeNeed(step, h) : null, site: proj.site, snap: sn }; };
+  mind.siteReason = siteReason; mind.existingSite = existingSite; mind.homePlan = () => { const h = homeSpot(), sn = { ...homeSnap(), time: HOME_FROM, day: Math.max(clock.day, HOME_DAY), builtDay: -1, cool: {} }, step = homeNext(sn); return { step, need: step ? homeNeed(step, h) : null, site: proj.site, snap: sn }; };
   return mind;
 }

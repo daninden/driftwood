@@ -64,7 +64,7 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
     check(r.outside, 'ticks outside known ground').toBe(0); // outside a search for water or food or an exploring trip (0.29.4), never a step on ground he does not know
     check(r.exploreRoute, 'exploring ticks on climbing routes').toBe(0); // 0.29.4: and exploring never takes him onto a climbing route
     check(r.knownAt[1], 'known cells at day 1').toBeGreaterThan(0);        // (the cells known at the start of day 1, 5 and 10 are in the report)
-    if (!k.knownDryingShuttle) check(r.drying.moved, 'drying logs moved no more than laid').toBeLessThanOrEqual(r.drying.laid);   // 0.29.5: only what lay on the drying pile is moved from it to the fire's pile (and only once it is dry enough: the unit tests watch each piece)
+    check(r.drying.moved, 'drying logs moved no more than laid').toBeLessThanOrEqual(r.drying.laid);   // 0.29.5: only what lay on the drying pile is moved from it to the fire's pile (and only once it is dry enough: the unit tests watch each piece)
     check(r.drying.sites, 'drying sites').toBeLessThanOrEqual(k.drySites ?? 6);
     check(r.dryPairs, 'ticks with a drying pile of 6 or more beside a partner pile (the arc would offer to build)').toBe(0);   // 0.30.5: the drying pile holds up to 12 and keeps clear of branch piles
     check(r.dryPileMax, 'largest drying pile').toBeLessThanOrEqual(12);
@@ -107,9 +107,6 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
       if (k.evenings !== undefined) c.mean(r => r.noFireEvenings, 'evenings without a fire (0.29.5; measured +1: the first tries of the drill are luck)').toBeLessThanOrEqual(k.evenings);
       if (k.dried !== undefined) c.mean(r => r.drying.moved, 'wood that dried on the drying pile and went to the fire\'s pile').toBeGreaterThanOrEqual(k.dried);
       if (k.warm !== undefined) c.mean(r => r.warmSleeps, 'warm sleeps').toBeGreaterThanOrEqual(k.warm);
-    }, SIM_TIMEOUT);
-    if (on('walked') && walked.knownDryingShuttle) it.fails('has the documented drying shuttle regression (seed-specific, must become a normal passing conservation check when fixed)', async () => {
-      const runs = await play('walked'); ctx('walked', runs).every('', (check, r) => check(r.drying.moved, 'drying logs moved no more than laid').toBeLessThanOrEqual(r.drying.laid));
     }, SIM_TIMEOUT);
     if (on('fresh')) it('lives ten days from a new game, with only the ground round the start known: he searches for water and food himself (streams 0 to 3)', async () => {
       const runs = await play('fresh'), c = ctx('fresh', runs), k = fresh;

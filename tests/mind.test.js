@@ -13,8 +13,10 @@ import { canStand } from '../src/game/movement.js';
 import { seaLevel } from '../src/game/tide.js';
 import { BURN, EMBERS, FUEL_MAX, TORCH_DRY } from '../src/game/fire.js';
 import { dryness, inStripY, PILE_MAX, PILE_FRONT } from '../src/game/wood.js';
-import { NEED, UPGRADES, ringCentre, keepFree, siteFor } from '../src/game/leanto.js';
-import { terrainAt, PACE } from '../src/game/movement.js';
+import { NEED, UPGRADES, ringCentre, keepFree, siteFor, RING_AT } from '../src/game/leanto.js';
+import { leantoPoint, leantoCircles } from '../src/game/obstacles.js';
+import { HALF, T, NT } from '../src/world/constants.js';
+import { terrainAt, PACE, obstaclesNear } from '../src/game/movement.js';
 
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
@@ -445,6 +447,167 @@ describe('his home: the site (0.29.3)', () => {
   });
 });
 
+// ---------- the lean-to's site as the real one (0.30.7 "Clearing") ----------
+// A world in which things stand where a test puts them: `things` [{ kind: 'palms' | 'rocks', x, z, s? }] are added to the tiles of a copy (the others are shared), `over` replaces functions of the world (H, dryOfRiver, ...)
+const HALF_T = HALF, tileAt = (x, z) => Math.floor((z + HALF_T) / T) * NT + Math.floor((x + HALF_T) / T);
+const derive = over => Object.create(w, Object.fromEntries(Object.entries(over).map(([k, v]) => [k, { value: v }])));   // the island with some of its members replaced
+const worldWith = (things, over = {}) => {
+  const tiles = w.tiles.slice(), palm0 = w.tiles.find(t => t && t.palms.length).palms[0], rock0 = w.tiles.find(t => t && t.rocks.length).rocks[0];
+  for (const th of things) {
+    const i = tileAt(th.x, th.z), t = tiles[i] = tiles[i] === w.tiles[i] ? { ...w.tiles[i], palms: [...w.tiles[i].palms], rocks: [...w.tiles[i].rocks] } : tiles[i];
+    t[th.kind].push(th.kind === 'palms' ? { ...palm0, x: th.x, z: th.z } : { ...rock0, x: th.x, z: th.z, s: th.s });
+  }
+  return derive({ tiles, ...over });
+};
+const OLD_SAMPLES = [[0, 0], [1, 0.75], [-1, 0.75], [1, -0.75], [-1, -0.75], [0.9, 0], [-0.9, 0], [0, 2.2], [2.1, 0], [-2.1, 0], [0, -2.1]];   // the 11 points the old siting looked at, (u across, v along the opening)
+const oldSampled = (ww, c) => OLD_SAMPLES.every(([u, v]) => { const q = leantoPoint(c, v, u), t = terrainAt(ww, q.x, q.z, 0); return canStand(ww, q.x, q.z, 0) && !t.inRiver && ww.dryOfRiver(q.x, q.z, 1.5) && ww.H(q.x, q.z) >= SITE_HIGH && Math.abs(ww.H(q.x, q.z) - ww.H(c.x, c.z)) <= 0.3; });
+const pileOf = (kind, n, x, z, id0) => ({ x, z, kind, logs: Array.from({ length: n }, (_, i) => ({ id: id0 + i, x, y: w.H(x, z), z, len: 2, a: 0, rad: 0.1, ...(kind === 'branch' ? { branch: true } : {}) })) });
+
+describe('his home: the lean-to is sited as the real one (0.30.7 "Clearing")', () => {
+  const fire = () => ({ x: spawn.x, z: spawn.z });
+  // the best site of the open island, and a mind that looks at the same island with the given things in it
+  const best = () => { const g = camp(), c = createMind(w, g).leantoSites(fire())[0]; return { g, c }; };
+  const same = (a, b) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.z - b.z) < 1e-6 && Math.abs(a.heading - b.heading) < 1e-6;
+  const reasonWith = (things, over, tweak) => { const { g, c } = best(); if (tweak) tweak(g, c); const m = createMind(worldWith(things, over), g); return { reason: m.siteReason(c, fire()), m, c, g }; };
+
+  it('shares one shape with the real lean-to: the circles of the hypothetical one are those of the camp view', () => {
+    const l = { id: 0, x: spawn.x + 6, z: spawn.z + 2, heading: 0.7, progress: 1 }, g = camp({ leantos: { list: [l], nextId: 1 } });
+    const real = g.movement.obstacles.camp.circles.filter(o => o.g.kind === 'leanto'), hyp = leantoCircles(l);
+    expect(real.length).toBe(hyp.length); expect(hyp.length).toBeGreaterThan(10);
+    real.forEach((o, i) => { expect(o.x).toBeCloseTo(hyp[i].x, 9); expect(o.z).toBeCloseTo(hyp[i].z, 9); expect(o.r).toBe(hyp[i].r); });
+  });
+  it('accepts the best site of the open island, and every site it lists passes its own check', () => {
+    const g = camp(), m = createMind(w, g), sites = m.leantoSites(fire());
+    expect(sites.length).toBeGreaterThan(3);
+    for (const c of sites) expect(m.siteReason(c, fire())).toBeNull();
+  });
+  it('rejects a trunk squeezed between sample points that the old siting accepted (a palm in the side wall, between two of the eleven points)', () => {
+    const { g, c } = best(), at = leantoPoint(c, 0.375, 0.95), ww = worldWith([{ kind: 'palms', x: at.x, z: at.z }]);
+    expect(oldSampled(ww, c)).toBe(true);   // all eleven points stand: the old check let this site through
+    expect(oldSampled(w, c)).toBe(true);
+    const o = obstaclesNear(ww, at.x, at.z).find(q => q.x === at.x && q.z === at.z);
+    expect(leantoCircles(c).some(h => Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r)).toBe(true);   // ... but the trunk is in the wall: no body between the two
+    const m = createMind(ww, g);
+    expect(m.siteReason(c, fire())).toBe('footprint');
+    expect(m.leantoSites(fire()).some(s => same(s, c))).toBe(false);
+  });
+  it('rejects a trunk or a boulder in the footprint or in the room in front of the opening (the keep-free region)', () => {
+    for (const [name, th] of [['trunk in the sleeping room', { kind: 'palms', f: 0.2, r: 0 }], ['boulder in the apron', { kind: 'rocks', f: 1.3, r: 0, s: 0.4 }], ['boulder at the side', { kind: 'rocks', f: 0, r: 1.5, s: 0.6 }], ['boulder behind', { kind: 'rocks', f: -1.3, r: 0, s: 0.5 }]]) {
+      const { c } = best(), at = leantoPoint(c, th.f, th.r), m = createMind(worldWith([{ kind: th.kind, x: at.x, z: at.z, s: th.s }]), camp());
+      expect(['footprint', 'keep'], name).toContain(m.siteReason(c, fire()));
+    }
+    const { reason } = reasonWith([{ kind: 'palms', ...(() => { const { c } = best(); return leantoPoint(c, 0.2, 0); })() }]); expect(reason).toBe('keep');
+  });
+  it('rejects a solid of the camp (a pile in the footprint), but not the piles of the building itself', () => {
+    const { c } = best(), at = leantoPoint(c, 1.2, 0.2), g = camp({ piles: [{ id: 5, kind: 'frond', n: 2, x: at.x, z: at.z }] }), m = createMind(w, g);
+    expect(m.siteReason(c, fire())).toBe('solid');
+    expect(m.leantoSites(fire()).some(s => same(s, c))).toBe(false);
+    // the two piles that are to be consumed lie in the footprint: with them named, the site fits
+    const a = leantoPoint(c, 0, -0.6), b = leantoPoint(c, 0, 0.6), g2 = camp({ piles: [{ id: 6, kind: 'driftwood', n: NEED, x: a.x, z: a.z }, { id: 7, kind: 'branch', n: NEED, x: b.x, z: b.z }] }), m2 = createMind(w, g2), pair = g2.wood.piles.filter(q => Math.hypot(q.x - c.x, q.z - c.z) < 1);
+    expect(m2.siteReason(c, fire())).toBe('solid');
+    expect(m2.siteReason(c, fire(), pair)).toBeNull();
+    const old = camp({ leantos: { list: [{ id: 0, ...leantoPoint(c, 0, 0), heading: c.heading, progress: 1 }], nextId: 1 } });   // a lean-to of his own on the spot
+    expect(createMind(w, old).siteReason(c, fire())).toBe('solid');
+  });
+  it('checks the ground on a dense grid: a bump or a wet patch between the old sample points rejects the site', () => {
+    const { c } = best(), at = leantoPoint(c, -0.5, 0.45);
+    const bump = { H: (x, z) => w.H(x, z) + (Math.hypot(x - at.x, z - at.z) < 0.3 ? 0.7 : 0) }, wet = { dryOfRiver: (x, z, m) => Math.hypot(x - at.x, z - at.z) < 0.3 ? false : w.dryOfRiver(x, z, m) };
+    for (const over of [bump, wet]) {
+      expect(oldSampled(derive(over), c)).toBe(true);   // none of the eleven points is on it
+      expect(createMind(derive(over), camp()).siteReason(c, fire())).toBe('ground');
+    }
+  });
+  it('needs a walkable line from the sleep point through the gate to the front and the ring spot', () => {
+    const { c } = best(), at = leantoPoint(c, 2.0, 0), m = createMind(worldWith([{ kind: 'palms', x: at.x, z: at.z }]), camp());
+    expect(m.siteReason(c, fire())).toBe('approach');
+  });
+  it('needs room for the stone ring and for each of the three piles of the upgrades, with a place to stand', () => {
+    const { c } = best();
+    const ring = leantoPoint(c, RING_AT, 1.2); expect(createMind(worldWith([{ kind: 'palms', x: ring.x, z: ring.z }]), camp()).siteReason(c, fire())).toBe('room');
+    for (const [name, f, r] of [['fronds', 0, UP_AT], ['stones', 0, -UP_AT], ['branches', -UP_AT, 0]]) {
+      const at = leantoPoint(c, f, r);
+      expect(createMind(worldWith([{ kind: 'palms', x: at.x, z: at.z }]), camp()).siteReason(c, fire()), name).toBe('room');
+      const g = camp({ piles: [{ id: 8, kind: 'frond', n: 1, x: at.x, z: at.z }] });   // a pile of the camp there already
+      expect(['solid', 'room'], `${name}: a pile`).toContain(createMind(w, g).siteReason(c, fire()));   // (its solid touches the room, or the spot has none left)
+    }
+  });
+  it('lists no site when none fits, and then he waits: no lean-to, one home-no-site, a long cool-down', () => {
+    const wet = derive({ dryOfRiver: () => false }), g = camp(), m = createMind(wet, g); m.engage();
+    expect(m.leantoSites(fire())).toEqual([]);
+    const plan = m.homePlan(); expect(plan.step).toBe('leanto'); expect(plan.need).toBeNull(); expect(plan.site).toBeNull();
+    expect(m.stats.events.filter(e => e.type === 'home-no-site').length).toBe(1);
+    for (let t = 0; t < 400; t += 0.1) { m.step(0.1); g.update(m.input, 0.1); }
+    expect(g.leantos.list.length).toBe(0); expect(m.stats.home.builds).toBe(0);
+    expect(m.stats.events.filter(e => e.type === 'home-no-site').length).toBeLessThanOrEqual(2);   // asked again only after the 900 s cool-down
+  });
+  it('checks a chosen site again when it is asked for, and chooses a new one when a pile has been left on it', () => {
+    const g = camp(), m = createMind(w, g); m.engage();
+    const a = m.homePlan().site; expect(a).not.toBeNull(); expect(m.homePlan().site).toBe(a);
+    g.wood.piles.push(pileOf('frond', 2, a.x, a.z, 700000));   // left in the middle of it
+    const b = m.homePlan().site; expect(b).not.toBeNull(); expect(b).not.toBe(a);
+    expect(m.stats.events.some(e => e.type === 'home-site-bad')).toBe(true);
+    expect(Math.hypot(b.x - a.x, b.z - a.z)).toBeGreaterThan(0.5);
+  });
+
+  const pairAt = (c, sg = 1) => { const a = leantoPoint(c, 0, -0.6 * sg), b = leantoPoint(c, 0, 0.6 * sg); return [{ id: 6, kind: 'driftwood', n: NEED, x: a.x, z: a.z }, { id: 7, kind: 'branch', n: NEED, x: b.x, z: b.z }]; };
+  const alongFire = (s, heading) => Math.sin(heading) * (spawn.x - s.x) + Math.cos(heading) * (spawn.z - s.z);   // 0: a quarter turn from the line to the fire
+  it('treats a drying pile as an ordinary camp obstacle: a site next to it is accepted and one it touches is not', () => {
+    const { c } = best(), m0 = createMind(w, camp()), side = leantoPoint(c, 0, 3.4);   // 3.4 m beside the middle: clear of the footprint, the room and the upgrade spots (stand at 2.1 + 0.9)
+    const dry = pileOf('driftwood', 4, side.x, side.z, 710000), g = camp(); g.wood.piles.push(dry);
+    const m = createMind(w, g); m.engage();
+    expect(m.siteReason(c, fire())).toBeNull();                 // a pile that does not touch it is no reason
+    expect(m.leantoSites(fire()).some(s => same(s, c))).toBe(true);
+    const on = leantoPoint(c, 0.2, 0.2), g2 = camp(); g2.wood.piles.push(pileOf('driftwood', 4, on.x, on.z, 720000));
+    expect(createMind(w, g2).siteReason(c, fire())).toBe('solid');   // one that does is
+  });
+  it('never rejects its own site for the building piles near it, whatever their size (a pile of 8 beside the lean-to, a stray one, a partner)', () => {
+    const g = camp(), m = createMind(w, g); m.engage();
+    const a = m.homePlan().site; expect(a).not.toBeNull();
+    for (const [kind, n, f, r, id] of [['driftwood', 8, -0.2, 1.75, 740000], ['driftwood', 1, 0.3, -1.6, 741000], ['branch', 6, 0, 0.5, 742000]]) { const q = leantoPoint(a, f, r); g.wood.piles.push(pileOf(kind, n, q.x, q.z, id)); }
+    expect(m.homePlan().site).toBe(a);   // kept: the re-check ignores them
+    expect(m.stats.events.some(e => e.type === 'home-site-bad')).toBe(false);
+    const foreign = leantoPoint(a, 0.3, 0), f = pileOf('frond', 2, foreign.x, foreign.z, 743000); g.wood.piles.push(f);
+    expect(m.homePlan().site).not.toBe(a);   // a foreign solid still spoils it
+  });
+  it('rejects a site where a drying pile lies within DRY_PAIR of a place for a building pile, and accepts one just beyond (0.30.7)', () => {
+    const g = camp(), m = createMind(w, g); m.engage();
+    const ds = m.dryingSite(); expect(ds).not.toBeNull();
+    g.wood.piles.push(pileOf('driftwood', 4, ds.x, ds.z, 750000)); expect(m.dryPiles().length).toBe(1);   // the drying pile, on its site
+    const at = (gap, h = 0.5) => { const o = leantoPoint({ x: 0, z: 0, heading: h }, 0, 0.7 + gap); return { x: ds.x - o.x, z: ds.z - o.z, heading: h }; };   // the drying pile lies `gap` m beyond the building pile place at r = 0.7 (and gap + 1.4 from the other)
+    expect(m.siteReason(at(DRY_PAIR - 0.1), spawn)).toBe('drying');
+    expect(m.siteReason(at(DRY_PAIR + 0.1), spawn)).not.toBe('drying');
+    expect(m.siteReason(at(0.3), spawn)).toBe('drying');
+    for (const c of m.leantoSites(fire())) for (const r of [-0.7, 0.7]) { const b = leantoPoint(c, 0, r); expect(Math.hypot(b.x - ds.x, b.z - ds.z)).toBeGreaterThanOrEqual(DRY_PAIR); }
+  });
+  it('adopts a player\'s pair of piles when the lean-to fits, opening a quarter turn from the line to the fire', () => {
+    const { c } = best(), g = camp({ piles: pairAt(c) }), m = createMind(w, g), s = m.existingSite(fire());
+    expect(s).not.toBeNull(); expect(Math.hypot(s.x - c.x, s.z - c.z)).toBeLessThan(0.01);
+    expect(Math.abs(alongFire(s, s.heading))).toBeLessThan(1e-6);
+  });
+  it('does not adopt a pair that is squeezed between trunks, whatever the heading (those piles stay material, he chooses a site of his own)', () => {
+    const { c } = best(), at = leantoPoint(c, 0.375, 0.95), g = camp({ piles: pairAt(c) }), m = createMind(worldWith([{ kind: 'palms', x: at.x, z: at.z }]), g);
+    expect(m.existingSite(fire())).toBeNull();
+    const plan = m.homePlan(); if (plan.site) expect(Math.hypot(plan.site.x - c.x, plan.site.z - c.z)).toBeGreaterThan(0.5);   // (his own site is somewhere else)
+  });
+  it('tries the other headings: with the first quarter turn blocked he opens the other way', () => {
+    const g0 = camp(), m0 = createMind(w, g0), both = m0.leantoSites(fire()).find(c => !m0.siteReason({ ...c, heading: c.heading + Math.PI }, fire()));
+    expect(both, 'a site that fits either way').toBeDefined();
+    const a = Math.atan2(both.x - spawn.x, both.z - spawn.z), first = a + Math.PI / 2, other = a - Math.PI / 2;
+    const at = leantoPoint({ x: both.x, z: both.z, heading: first }, RING_AT, 1.2), g = camp({ piles: pairAt(both) }), m = createMind(worldWith([{ kind: 'palms', x: at.x, z: at.z }]), g);
+    expect(m.siteReason({ x: both.x, z: both.z, heading: first }, fire(), g.wood.piles.filter(q => Math.hypot(q.x - both.x, q.z - both.z) < 1.5))).not.toBeNull();
+    const s = m.existingSite(fire()); expect(s).not.toBeNull();
+    expect(Math.cos(s.heading - other)).toBeCloseTo(1, 6);
+  });
+  it('builds the lean-to with the heading it was validated with (a quarter turn from the line to the fire), not towards the fire', () => {
+    const { c } = best(), g = camp({ piles: pairAt(c) }), m = createMind(w, g); m.engage();
+    const s = m.existingSite(m.home()); expect(s).not.toBeNull();
+    let t = 0; while (t < 600 && g.leantos.list.length === 0) { m.step(0.1); g.update(m.input, 0.1); t += 0.1; }
+    expect(g.leantos.list.length).toBe(1);
+    const l = g.leantos.list[0]; expect(Math.cos(l.heading - s.heading)).toBeCloseTo(1, 3);
+    expect(Math.abs(alongFire(l, l.heading))).toBeLessThan(0.02);   // a quarter turn: not towards the fire (that would be 1)
+  });
+});
+
 describe('his home: the project (0.29.3)', () => {
   it('adopts a lean-to the player built as his home and only adds the upgrades to it, never a second lean-to', () => {
     const g = camp({ leantos: LT(), piles: [{ id: 1, kind: 'driftwood', n: 6, x: spawn.x - 4, z: spawn.z }, { id: 2, kind: 'branch', n: 6, x: spawn.x - 4, z: spawn.z + 1.2 }] }), m = createMind(w, g); m.engage();
@@ -534,7 +697,7 @@ describe('drying wood: the site (0.29.5)', () => {
     for (const q of g.wood.piles) expect(Math.hypot(s.x - q.x, s.z - q.z)).toBeGreaterThan(2.4);
     expect(m.dryingSite()).toBe(s);   // kept
     const again = createMind(w, camp()).dryingSite(); expect(again.x).toBe(s.x); expect(again.z).toBe(s.z);   // and repeatable: nothing of it is saved, it is worked out again
-    const home = m.homePlan(); if (home.site) expect(Math.hypot(home.site.x - s.x, home.site.z - s.z)).toBeGreaterThanOrEqual(4.5);   // the lean-to's site keeps clear of it
+    const home = m.homePlan(); if (home.site) expect(m.siteReason(home.site, m.home())).toBeNull();   // 0.30.7: the lean-to's site fits with the drying pile as an ordinary camp obstacle (no 4.5 m exclusion)
   });
   it('is behind the lean-to once there is one (farther round to its side where the branch place is too near), outside its keep-free region (rule (a), 0.30.3), dry once it has walls, and clear of the stone ring and the fire', () => {
     const g = camp({ leantos: LT() }), m = createMind(w, g), s = m.dryingSite(), lt = g.leantos.list[0];
