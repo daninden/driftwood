@@ -2,6 +2,10 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30.15 "Address" — 2026-11-10
+
+Every address option is now `name=value` after `?`, joined with `&`. `?seed=2024` replaces `#seed-2024` and `?new` replaces `#new` (removed from the address after the start, as before; other options stay). The `#` forms are dropped. `parseHash` is now `parseAddress` and `withoutNew` works on the query (`src/save.js`, `src/main.js`). The test options (spawn, time, awake, quality, speed) are unchanged. README has an "Address options" block (player options apart from test options, nothing saved with spawn, time or awake); `docs/architecture.md` and `docs/design.md` follow; the playtest script uses `?seed=`. Tests in `tests/save.test.js` cover the new forms and that the old `#` forms are ignored.
+
 ## 0.30.14 "Torch" — 2026-11-10
 
 After dusk, standing beside a fire with flames and with empty hands, when Dave starts a trip of more than 15 m (to drink, to his bed, to look for food) he takes a torch from the fire (the player's own action, which costs the fire half a piece, so not from a low fire) and plants it where he arrives; it burns out there. No torch in rain, with wood in his arms (so never on a wood trip) or when the way leads through water deeper than `DOUSE_DEPTH`. No new UI or text. `torchFor` and `plantTorch` in `game/mind`; the constants are `TORCH_TRIP` and `TORCH_FUEL`. Tests: `tests/torch.test.js`.

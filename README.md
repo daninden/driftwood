@@ -21,7 +21,24 @@ npm run playtest   a scripted castaway plays several game days in a real browser
 
 The playtest (`npm run playtest -- --seed 7,1337 --days 10`, after a build) lets a simple bot play: it looks for food and water, gathers wood, makes fire and sleeps, saves and reloads once a day, and writes a short report and a few screenshots into `playtest-out/` (or the folder after `--out`). It is for finding bugs and judging balance, not part of the game.
 
-Another island: add `#seed-2024` to the address. Start an island over: add `new` (`#new`, or `#seed-2024&new`); it starts fresh and `new` disappears from the address again.
+### Address options
+
+Options go in the address after a `?`, written `name=value` and joined with `&`. For example `?seed=2024&speed=8&time=0.75`.
+
+For playing:
+
+- `seed=2024`: another island (the default is the fixed island, seed 1337). Each island has its own save.
+- `new`: start this island over. It starts fresh and `new` disappears from the address again, so a refresh keeps the game.
+
+For testing (not needed to play):
+
+- `spawn=x,z`: start somewhere else on the island.
+- `time=t`: start at another time of day (0 is midnight, 0.5 is noon).
+- `awake=d`: start as if he had been awake for `d` days.
+- `quality=N`: force a picture quality from 0 to 4.
+- `speed=N`: run the game N times as fast (1 to 16).
+
+With `spawn`, `time` or `awake` nothing is loaded and nothing is saved.
 
 ## How to play
 

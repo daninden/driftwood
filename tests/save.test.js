@@ -10,7 +10,7 @@ import { canStand, nearestStandable } from '../src/game/movement.js';
 import { createClock, DAY_SECONDS } from '../src/game/clock.js';
 import { createFire, FIRE_MIN } from '../src/game/fire.js';
 import { PERIOD } from '../src/game/tide.js';
-import { serialise, parseSave, cleanKnown, momentKey, parseHash, withoutNew, isResetKey, createSaveStore, saveKey, SAVE_VERSION, SAVE_EVERY } from '../src/save.js';
+import { serialise, parseSave, cleanKnown, momentKey, parseAddress, withoutNew, isResetKey, createSaveStore, saveKey, SAVE_VERSION, SAVE_EVERY } from '../src/save.js';
 
 let w, spawn, logs, cocos;
 beforeAll(async () => {
@@ -182,18 +182,21 @@ describe('when to save', () => {
 });
 
 describe('the address and the reset key', () => {
-  it('reads the seed and `new`', () => {
-    expect(parseHash('')).toEqual({ seed: 1337, fresh: false });
-    expect(parseHash(undefined)).toEqual({ seed: 1337, fresh: false });
-    expect(parseHash('#seed-2024')).toEqual({ seed: 2024, fresh: false });
-    expect(parseHash('#new')).toEqual({ seed: 1337, fresh: true });
-    expect(parseHash('#seed-2024&new')).toEqual({ seed: 2024, fresh: true });
-    expect(parseHash('#new&seed-77')).toEqual({ seed: 77, fresh: true });
-    expect(parseHash('#renewed')).toEqual({ seed: 1337, fresh: false });
+  it('reads the seed and `new` from the query', () => {
+    expect(parseAddress('')).toEqual({ seed: 1337, fresh: false });
+    expect(parseAddress(undefined)).toEqual({ seed: 1337, fresh: false });
+    expect(parseAddress('?seed=2024')).toEqual({ seed: 2024, fresh: false });
+    expect(parseAddress('?new')).toEqual({ seed: 1337, fresh: true });
+    expect(parseAddress('?seed=2024&new')).toEqual({ seed: 2024, fresh: true });
+    expect(parseAddress('?new&seed=77')).toEqual({ seed: 77, fresh: true });
+    expect(parseAddress('?seed=2024&speed=8&time=0.75')).toEqual({ seed: 2024, fresh: false });
+    expect(parseAddress('?renewed')).toEqual({ seed: 1337, fresh: false });
+    expect(parseAddress('#seed-2024')).toEqual({ seed: 1337, fresh: false });   // the old # forms are gone
   });
   it('removes `new` and nothing else', () => {
-    expect(withoutNew('#new')).toBe(''); expect(withoutNew('#seed-2024&new')).toBe('#seed-2024');
-    expect(withoutNew('#new&seed-77')).toBe('#seed-77'); expect(withoutNew('#seed-5')).toBe('#seed-5'); expect(withoutNew('')).toBe('');
+    expect(withoutNew('?new')).toBe(''); expect(withoutNew('?seed=2024&new')).toBe('?seed=2024');
+    expect(withoutNew('?new&seed=77')).toBe('?seed=77'); expect(withoutNew('?seed=5')).toBe('?seed=5'); expect(withoutNew('')).toBe('');
+    expect(withoutNew('?seed=5&new&speed=8')).toBe('?seed=5&speed=8');
   });
   it('Shift+backtick resets, plain backtick does not', () => {
     expect(isResetKey({ code: 'Backquote', shiftKey: true })).toBe(true);

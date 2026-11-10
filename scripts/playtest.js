@@ -64,7 +64,7 @@ async function runSeed(seed) {
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') pageErrors.push(m.type() + ': ' + m.text().slice(0, 300)); });
-  const url = 'file://' + file + '#seed-' + seed;
+  const url = 'file://' + file + '?seed=' + seed;
   const waitReady = async (ask) => {
     if (ask) { await page.waitForSelector('#ask:not([hidden]) input', { timeout: 180000 }); await page.press('#ask input', 'Enter'); }
     await page.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 180000, polling: 250 });

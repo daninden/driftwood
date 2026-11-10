@@ -1,8 +1,9 @@
 /**
  * main — boots the game: world, view, game state, input, loop.
  *
- * Seed: from the page address `#seed-<n>`, otherwise 1337 (the fixed demo).
- * `new` in the hash (`#new`, `#seed-2024&new`) starts this island over: the
+ * Address (0.30.15 "Address"): every option is `name=value` after `?`, joined with `&`.
+ * Seed: from `?seed=<n>`, otherwise 1337 (the fixed demo).
+ * `new` (`?new`, `?seed=2024&new`) starts this island over: the
  * save is cleared and `new` removed from the address, so a refresh keeps
  * the game. Shift + backtick clears the save and reloads.
  *
@@ -129,7 +130,7 @@ import { parseSpeed, subSteps } from './game/steps.js';
 import { VERSION, NAME } from './version.js';
 import { zoomMax } from './core/view.js';
 import { settingsFor, parseQuality, pickStart, loadPreference, savePreference, cyclePreference, isQualityKey, createGovernor } from './render/quality.js';
-import { createSaveStore, parseHash, withoutNew, isResetKey, createMomentWatcher, createViewSaver, SAVE_EVERY } from './save.js';
+import { createSaveStore, parseAddress, withoutNew, isResetKey, createMomentWatcher, createViewSaver, SAVE_EVERY } from './save.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
 import HeightWorker from './heightWorker.js?worker&inline';
@@ -139,9 +140,9 @@ const loading = createLoading(v => { if (fill) fill.style.transform = `scaleX(${
 const breathe = (label, f) => { loading.report(label, f); return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); };
 
 async function boot() {
-  const { seed, fresh } = parseHash(location.hash);
+  const { seed, fresh } = parseAddress(location.search);
   const store = createSaveStore(seed);
-  if (fresh) { store.clear(); try { history.replaceState(null, '', location.pathname + location.search + withoutNew(location.hash)); } catch (e) { /* keep the address */ } }
+  if (fresh) { store.clear(); try { history.replaceState(null, '', location.pathname + withoutNew(location.search) + location.hash); } catch (e) { /* keep the address */ } }
   const qs = new URLSearchParams(location.search), q = qs.get('spawn'), qt = qs.get('time'), qa = qs.get('awake');
   const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no question, no loading, no saving
   const saved = testing ? null : store.load();

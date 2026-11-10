@@ -4,11 +4,15 @@ Where the work stands, for the next session. Read `AGENTS.md`, `docs/design.md` 
 
 ## Status
 
-**Live on `main`: 0.30.11 "Hurry".** **Ready to push (built together, measured once, `npm test` green at the last step): 0.30.12 "Kindling", 0.30.13 "Tideline" and 0.30.14 "Torch"** (see `docs/versions.md`; the measurement is under 0.30.14). The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
+**Live on `main`: 0.30.14 "Torch".** **Ready to push: 0.30.15 "Address"** (see `docs/versions.md`). The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
 
 ## Next, agreed in order
 
-1. **0.30.15 "Address"** (agreed with the user on 2026-11-10): all address options use `?` in `name=value` form joined with `&`. `?seed=2024` and `?new` replace `#seed-2024` and `#new`; old links need not keep working. The README gets an "Address options" block with the player options (seed, new) apart from the test options (spawn, time, awake, speed, quality, and so on), noting that with spawn, time or awake nothing is saved. Docs, tests and the smoke and playtest scripts are updated with it.
+1. **0.30.16 "Reach"** (agreed 2026-11-10): the exploring cap of 220 m from home goes away; his reach keeps growing (80 m + 15 m a day) up to the whole island; "home before dark" stays and is the real limit; a long trip may start in the morning when nothing at home is urgent. Measure how far he gets, and that safety, lean-tos and nights hold.
+
+Later, agreed in principle, to work out first: **fishing close to home** (in his river or the sea off his own coast, e.g. with a spear made from a branch; a new way to get food, not a reason for a far trip).
+
+**Milk explored and not built (2026-11-10):** a coconut already quenches 0.15 day of thirst since 0.15; a drink rule that preferred carried nuts made seed 7 walked collapse twice and lose its lean-to (nuts eaten for drink, none left for fibre and food); trips never needed a drink (they start with thirst under 0.25 and are short). The range of exploring is limited by its own rules (reach 80 m + 15 m a day, at most 220 m from home, home before dark), not by water. Still open: a reason for long trips across the island (the user wants something repeatable; not outposts, not storm wrack, not a one-off goal).
 
 The long-simulation bounds follow the policy in `docs/architecture.md`. (The "Woodpile" idea was explored and shelved on 2026-11-10; see *Drying, the way ahead* in `docs/design.md`.)
 

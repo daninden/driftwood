@@ -64,9 +64,9 @@
  *   happens: wood laid down or taken from a pile, a lean-to started or finished, a fire lit or gone out, a
  *   torch stuck in the ground or taken up, falling asleep or waking up, a crab caught or eaten or gone bad, a shell kept, filled or drunk, a coconut picked up or eaten, berries or a banana bunch picked, eaten or gone bad
  * MOMENT_EVERY (0.5), createMomentWatcher(game, every?) -> { update(dt) -> bool }   true when momentKey changed since the last look; it only looks every `every` seconds (0.27.7), not every frame
- * parseHash(hash) -> { seed, fresh }  from `#seed-<n>` and/or `new`, joined
- *   with `&` (`#new`, `#seed-2024`, `#seed-2024&new`); seed defaults to 1337
- * withoutNew(hash) -> string          the hash with `new` removed
+ * parseAddress(search) -> { seed, fresh }  from the address query (0.30.15 "Address": `?seed=<n>` and/or `new`,
+ *   joined with `&`: `?new`, `?seed=2024`, `?seed=2024&new`); seed defaults to 1337
+ * withoutNew(search) -> string        the query with `new` removed (the other options stay; '' when nothing is left)
  * isResetKey(e) -> bool               Shift + backtick (not repeating, no Ctrl/Cmd/Alt)
  * createSaveStore(seed, getStorage?) -> { load(), save(state), clear() }
  *   getStorage returns a Storage (default: window.localStorage). load gives
@@ -168,15 +168,15 @@ export function createMomentWatcher(game, every = MOMENT_EVERY) {
   return { update(dt) { t += dt; if (t < every) return false; t = 0; const k = momentKey(game); if (k === key) return false; key = k; return true; } };
 }
 
-export function parseHash(hash) {
-  const parts = String(hash || '').replace(/^#/, '').split('&');
-  const m = parts.map(p => p.match(/^seed-(\d+)$/)).find(Boolean);
+export function parseAddress(search) {
+  const parts = String(search || '').replace(/^\?/, '').split('&');
+  const m = parts.map(p => p.match(/^seed=(\d+)$/)).find(Boolean);
   return { seed: m ? parseInt(m[1], 10) : DEFAULT_SEED, fresh: parts.includes('new') };
 }
 
-export const withoutNew = hash => {
-  const rest = String(hash || '').replace(/^#/, '').split('&').filter(p => p !== 'new' && p !== '');
-  return rest.length ? '#' + rest.join('&') : '';
+export const withoutNew = search => {
+  const rest = String(search || '').replace(/^\?/, '').split('&').filter(p => p !== 'new' && p !== '');
+  return rest.length ? '?' + rest.join('&') : '';
 };
 
 export const isResetKey = e => e.code === 'Backquote' && !!e.shiftKey && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey;
