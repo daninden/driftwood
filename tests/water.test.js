@@ -8,6 +8,7 @@ import { createSleep, AWAKE_MAX } from '../src/game/sleep.js';
 import { createFire, BURNT_DAYS, BURN, EMBERS, FIRE_MIN } from '../src/game/fire.js';
 import { createGame, DRINK_TIME } from '../src/game/game.js';
 import { freshWater, findWater } from '../src/game/water.js';
+import { terrainAt } from '../src/game/movement.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { serialise, parseSave } from '../src/save.js';
 import { dropClip, thirstOpacity, drank, createThirstMark, FILL_STEPS } from '../src/render/thirstMark.js';
@@ -102,6 +103,25 @@ describe('what thirst does', () => {
 });
 
 describe('fresh water', () => {
+  it('0.30.5 "Quicker": gives exactly the answer of terrainAt (inRiver and a river above the sea) everywhere along and beside every river, at any sea level', () => {
+    let n = 0, wet = 0;
+    for (const rv of w.rivers) for (let i = 0; i < rv.pts.length; i += 3) for (let dx = -6; dx <= 6; dx += 0.75) for (let dz = -6; dz <= 6; dz += 1.5) {
+      const x = rv.pts[i].x + dx, z = rv.pts[i].z + dz;
+      for (const sea of [0, 0.4, -0.4]) { const t = terrainAt(w, x, z, sea), old = t.inRiver && t.rv.lw > 0.02; expect(freshWater(w, x, z, sea), `${x} ${z} ${sea}`).toBe(old); n++; if (old) wet++; }
+    }
+    expect(n).toBeGreaterThan(10000); expect(wet).toBeGreaterThan(1000);
+  });
+  it('0.30.5 "Quicker": findWater with the river block mask finds exactly what the full search finds, near rivers and away from them', () => {
+    const full = { ...w, riverNear: undefined };   // the same world without the mask: every ring point is looked at
+    let n = 0, found = 0, skipped = 0;
+    const pts = []; for (const rv of w.rivers) for (let i = 0; i < rv.pts.length; i += 7) for (const [dx, dz] of [[0, 0], [1.1, 0.3], [-2.3, 1.7], [6, -4], [11.5, 2], [13.2, -12.6], [20, 20]]) pts.push([rv.pts[i].x + dx, rv.pts[i].z + dz]);
+    for (let x = -300; x <= 300; x += 23.7) for (let z = -300; z <= 300; z += 23.7) pts.push([x, z]);
+    for (const [x, z] of pts) for (const r of [0.8, 2]) {
+      const a = findWater(w, x, z, r), b = findWater(full, x, z, r); expect(a, `${x} ${z} ${r}`).toEqual(b); n++; if (b) found++; if (!w.riverNear(x, z, r + 0.01)) skipped++;
+      if (!w.riverNear(x, z, r)) for (let k = 0; k < 12; k++) { const a2 = k * 2.4, q = r * (k % 4) / 3; expect(w.riverAt(x + Math.sin(a2) * q, z + Math.cos(a2) * q)).toBeNull(); }
+    }
+    expect(n).toBeGreaterThan(1000); expect(found).toBeGreaterThan(100); expect(skipped).toBeGreaterThan(300);
+  });
   it('is river water above the sea, not the sea, not dry land', () => {
     expect(freshWater(w, WATER.x, WATER.z)).toBe(true);
     expect(freshWater(w, BANK.x, BANK.z)).toBe(false);

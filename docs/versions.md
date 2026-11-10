@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30.5 "Quicker" — 2026-11-10
+
+The full test suite runs in well under half the time (480 s to 180 s) and tests exactly as much. Nothing in the game changes: Dave lives the same ten days, step for step.
+
+- **Same tests, quicker:** the same seeds, streams, scenario lengths, step sizes and bounds. `npm test` takes about 3 minutes on four cores (was 8 minutes, 480 s, measured on the same machine); `test:fast` about 80 s, `test:sim` about 2 minutes.
+- **One island per ten-day-life file:** the four streams of a scenario play one after the other on one generated island. All 28 runs were checked to be byte-identical to fresh islands and to the code before; a short guard test stays in `tests/sharedWorld.test.js`.
+- **All cores, native imports:** the tests use every core and Node's own module loading instead of Vite's module runner.
+- **Quicker lookups, same answers:** checking for fresh water and for known ground does less work for the same result (compared point for point in the tests). Standing-point tests went from about 104 s to 40 s.
+
 ## 0.30.4 "Timber" — 2026-11-10
 
 Dave handles wood more sensibly, and the ten-day lives are judged over four random streams. Released together with 0.30.2 "Checks" and 0.30.3 "Routes".

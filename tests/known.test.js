@@ -58,3 +58,21 @@ describe('known ground', () => {
     expect(k.state().cells).toEqual([3, 12]);
   });
 });
+
+describe('0.30.5 "Quicker": hasAround', () => {
+  it('is exactly the nine has() lookups of the mind\'s `inside`, at cell edges, corners, the island edge and at random', () => {
+    const k = createKnown();
+    for (const [x, z] of [[0, 0], [37, -12], [-120, 80], [-355, -355], [200, 140]]) k.visit(x, z);
+    k.visit(14, 9, 0); k.visit(355, 355, 0);
+    let s = 7; const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    const pts = [];
+    for (let i = 0; i < 20000; i++) pts.push([rnd() * 760 - 380, rnd() * 760 - 380]);
+    for (let c = -36; c <= 36; c++) for (const e of [-1.5, -1.4999999, -1.125, -1e-9, 0, 1e-9, 1.125, 1.5, 1.5000001]) { pts.push([c * CELL + e, 41.3]); pts.push([-20.7, c * CELL + e]); pts.push([c * CELL + e, c * CELL - e]); }
+    let yes = 0;
+    for (const [m, d] of [[1.5, 1.125], [0, 0], [4, 3]]) for (const [x, z] of pts) {
+      const nine = k.has(x, z) && k.has(x + m, z) && k.has(x - m, z) && k.has(x, z + m) && k.has(x, z - m) && k.has(x + d, z + d) && k.has(x - d, z - d) && k.has(x + d, z - d) && k.has(x - d, z + d);
+      expect(k.hasAround(x, z, m, d), `${x} ${z} ${m}`).toBe(nine); if (nine) yes++;
+    }
+    expect(yes).toBeGreaterThan(1000);
+  });
+});

@@ -5,6 +5,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createBranches, branchesOfTile, REGROW, REGROW_SPREAD } from '../src/game/branches.js';
 import { createWood, dryness } from '../src/game/wood.js';
+import { runMind } from './helpers/mindSim.js';
 
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
@@ -40,4 +41,17 @@ describe('two games on one world object', () => {
     const br2 = createBranches(w);
     expect(br2.piece(b.id).g).toBeUndefined(); expect(br2.onGround(br2.piece(b.id))).toBe(true);
   });
+
+  // 0.30.5 "Quicker": the ten-day lives (helpers/lifeSuite) play their four streams one after the other on one world object. A life played after another one on the same world must be the
+  // very life it is on a freshly generated island (when this was introduced, all four streams of every scenario were compared over ten days and were byte-identical); this is the short check.
+  it('a mind life played after another one on the same world is identical to the same life on a fresh island', async () => {
+    const opts = s => ({ days: 1.5, know: true, stream: s }), json = r => JSON.stringify(r);
+    const first = runMind(w, startSpot(w), opts(0)).game;   // an earlier life on this world: taken wood, piles, grown branches, and (rain is rare in a day and a half) a shower on the start wood at the end
+    for (const l of w.tiles.flatMap(t => t.drift || []).filter(q => Math.hypot(q.x - spawn.x, q.z - spawn.z) < 60)) first.wood.rain(first.clock.total, true, () => false, { x: l.x, z: l.z });
+    expect(w.tiles.flatMap(t => t.drift || []).some(l => l.t !== undefined)).toBe(true);   // the shower did wet the world's own start logs
+    const after = runMind(w, startSpot(w), opts(1)).r;
+    const fresh = await generateWorld(1337), alone = runMind(fresh, startSpot(fresh), opts(1)).r;
+    expect(after.ticks).toBeGreaterThan(1000);
+    expect(json(after)).toBe(json(alone));
+  }, 120000);
 });

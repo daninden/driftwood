@@ -18,6 +18,9 @@
  *   passAt(x, z, L?)   natural passage strengths (see world/terrain)
  *   riverAt(x, z)      null or { d, t, rv, hw, lw } (distance, position, river,
  *                      half width, water level)
+ *   riverNear(x, z, r) false when riverAt is null at every point within r of
+ *                      (x, z) (0.30.5 "Quicker": a 4 m block mask of the river
+ *                      distance grid; true only means "maybe", ask riverAt)
  *   dryOfRiver(x, z, margin)
  *   fallRouteAt(x, z)  0..1 scramble route beside a waterfall
  *   forestB(x, z), forestF(k, b)   forest density field and per-tier mapping
@@ -60,6 +63,17 @@ export async function generateWorld(seed, { progress, heightfield } = {}) {
     const id = fz * NG + fx, d = sampleGrid(RD, x, z); if (d > 12 || !rivers.length) return null;
     const rv = rivers[RI[id]], t = RT[id]; return { d, t, rv, hw: rv.W(t) / 2, lw: rv.LW(t) };
   }
+  // 0.30.5 "Quicker": riverAt is null where its sampled distance is above 12, and a sample is a weighted mean (weights 0..1) of four grid values. So when every grid value a sample in a
+  // square could use is above 12 (with a margin for rounding), riverAt is null everywhere in it. The mask marks the blocks of RB x RB grid values with any value at or below that.
+  const RB = 16, NB = Math.ceil(NG / RB), riverBlock = new Uint8Array(NB * NB);
+  for (let j = 0; j < NG; j++) for (let i = 0; i < NG; i++) if (RD[j * NG + i] <= 12.001) riverBlock[((j / RB) | 0) * NB + ((i / RB) | 0)] = 1;
+  const gridAt = v => Math.max(0, Math.min(NG - 1.001, (v + HALF) / GR));
+  function riverNear(x, z, r) {
+    if (!rivers.length) return false;
+    const i0 = Math.floor(gridAt(x - r)), i1 = Math.floor(gridAt(x + r)) + 1, j0 = Math.floor(gridAt(z - r)), j1 = Math.floor(gridAt(z + r)) + 1;
+    for (let bj = (j0 / RB) | 0; bj <= ((j1 / RB) | 0); bj++) for (let bi = (i0 / RB) | 0; bi <= ((i1 / RB) | 0); bi++) if (riverBlock[bj * NB + bi]) return true;
+    return false;
+  }
   const dryOfRiver = (x, z, m) => { const r = riverAt(x, z); return !r || r.d > r.hw + m; };
   function fallRouteAt(x, z) {
     const r = riverAt(x, z); if (!r) return 0; let b = 0;
@@ -71,7 +85,7 @@ export async function generateWorld(seed, { progress, heightfield } = {}) {
   const forestF = (k, b) => [ss(0.52, 0.64, b) * 0.5, ss(0.5, 0.63, b), ss(0.36, 0.5, b), ss(0.56, 0.68, b) * 0.6, 0][k];
   const rcAt = (x, z) => rockCoast(vnoise, x, z);
 
-  const world = { seed, noise, SC: shp.SC, HL: shp.HL, rivers, H, Lat, slope, tierAt, passAt, riverAt, dryOfRiver, fallRouteAt, forestB, forestF, rcAt };
+  const world = { seed, noise, SC: shp.SC, HL: shp.HL, rivers, H, Lat, slope, tierAt, passAt, riverAt, riverNear, dryOfRiver, fallRouteAt, forestB, forestF, rcAt };
   await p('vegetation', 0);
   world.tiles = scatterTiles(world);
   world.aoAt = buildOcclusion(world.tiles, H);

@@ -15,6 +15,9 @@
 //   - Counted over the streams: nights attempted (every night between the first and the last day: exactly on at least 3 of the 4 streams, so one skipped night on one stream is allowed, two streams are not) and the lean-to (built on at least 3 of 4 streams, and the mean of the days it was
 //     finished on, over the streams that built it, within the bound).
 //   Each assertion message carries the values of all four streams and the full report of the stream concerned (or the brief of every stream for a mean).
+// 0.30.5 "Quicker": ONE generated island per file. The four streams (and the extra tests) play one after the other on the same world object; a new game no longer takes over what an earlier game
+//   did to the world's own pieces (rain on the start wood and branches, a branch grown back: tests/sharedWorld.test.js), so each run is the same as on a freshly generated island. Checked when this
+//   was introduced: the reports of all four streams of every scenario were byte-identical on one shared island and on four fresh ones; tests/sharedWorld.test.js keeps a short check of it.
 // Exports: lifeSuite(seed, { walked, fresh, beach, extra }, part?), SIM_TIMEOUT, STREAMS. Depends on: world/world, world/spots, game/leanto (siteFor, NEED), tests/helpers/mindSim.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../../src/world/world.js';
@@ -33,11 +36,11 @@ const brief = (r, s) => `s${s}: crabs ${r.crabsEaten} nights ${r.nights}/${r.nig
 export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = null) {   // extra: [{ name, part?, run(w, spawn, walkedRuns) }], more tests on the same island (part: the scenario file it runs in, 'walked' by default); walkedRuns() gives the (memoised) walked ten-day runs of all streams, a promise of [{ stream, r, mind }]; part: 'walked' | 'fresh' | 'beach' plays only that scenario (null: all)
   const on = k => !part || part === k;
   let w, spawn; const memo = {};
-  beforeAll(async () => { if (extra.some(e => on(e.part || 'walked'))) { w = await generateWorld(seed); spawn = startSpot(w); } }, 120000);   // the world of the extra tests only; the ten-day runs generate their own
-  const play = kind => memo[kind] ||= (async () => {   // the four streams of a scenario, played once by the first test that asks, each on a world of its own
+  beforeAll(async () => { w = await generateWorld(seed); spawn = startSpot(w); }, 120000);   // 0.30.5: the one world of this file, for the ten-day runs and the extra tests
+  const play = kind => memo[kind] ||= (async () => {   // the four streams of a scenario, played once by the first test that asks, one after the other on the file's world
     const out = [];
     for (const stream of STREAMS) {
-      const world = await generateWorld(seed), sp = startSpot(world);
+      const world = w, sp = startSpot(world);
       const pairs = { n: 0, max: 0 };   // 0.30.5: a drying pile that has a partner pile within 2 m would make the arc offer to build
       const onTick = (game, mind) => { for (const q of mind.dryPiles()) { pairs.max = Math.max(pairs.max, q.logs.length); if (q.logs.length >= NEED && siteFor(game.wood.piles, q)) pairs.n++; } };
       const { r, mind } = runMind(world, sp, { days: 10, know: kind !== 'fresh', beachOnly: kind === 'beach', stream, onTick });

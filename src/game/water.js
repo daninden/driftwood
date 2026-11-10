@@ -13,18 +13,21 @@
  *
  * Pure functions on a world; no DOM, no Three.js.
  *
- * Depends on: game/movement
+ * Depends on: nothing but the world (world.riverAt, world.riverNear, world.H); 0.30.5 "Quicker": no longer
+ * game/movement terrainAt, which computed far more than this needs
  */
-import { terrainAt } from './movement.js';
-
 export const FRESH_MIN = 0.02;   // the river level has to stand this far above the sea at high water
 
-export function freshWater(w, x, z, sea = 0) {
-  const t = terrainAt(w, x, z, sea);
-  return t.inRiver && t.rv.lw > FRESH_MIN;
+// 0.30.5 "Quicker": the same test as terrainAt's `inRiver` (a river point within its half width + 0.1 and below its level), without the slope, terrace and pass lookups terrainAt also does;
+// the answer is identical (tests/water.test.js compares it with terrainAt). `sea` does not take part in `inRiver`.
+export function freshWater(w, x, z, sea = 0) {   // eslint-disable-line no-unused-vars -- kept for the callers
+  const rv = w.riverAt(x, z);
+  if (!rv || !(rv.d < rv.hw + 0.1) || !(rv.lw > FRESH_MIN)) return false;
+  return w.H(x, z) < rv.lw;
 }
 
 export function findWater(w, x, z, radius, sea = 0) {
+  if (w.riverNear && !w.riverNear(x, z, radius + 0.01)) return null;   // 0.30.5 "Quicker": no river anywhere within reach (exact: see world/world riverNear)
   if (freshWater(w, x, z, sea)) return { x, z };
   for (let r = 0.2; r <= radius + 1e-9; r += 0.2) {
     const n = Math.max(8, Math.ceil(2 * Math.PI * r / 0.2));
