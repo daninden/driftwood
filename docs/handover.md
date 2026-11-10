@@ -4,11 +4,15 @@ Where the work stands, for the next session. Read `AGENTS.md`, `docs/design.md` 
 
 ## Status
 
-**Ready to push: 0.30.8 "Morning"** (2026-11-10): a thought above Dave waits while the wake line shows (see `docs/versions.md`). Live on `main`: 0.30.7 "Clearing" at 400043c (Dave sites his lean-to as the real one). The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
+**Ready to push: 0.30.9 "Errands"** (2026-11-10): stock errands finish, the frond loop is gone, a failed roast no longer repeats, and the long-simulation bounds follow the new policy (see `docs/versions.md`). Live on `main`: 0.30.8 "Morning" at 24e080f (a thought waits until the wake line has faded). The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
 
 ## Next, agreed in order
 
-1. **0.30.9 "Errands"**: fix two bugs found by measurement on 0.30.6: about 34% of wet-strip stock errands end unfinished with wood in his arms (average 92 s; suspected the idle-goal time limit, which breaks the 0.29.8 rule that he finishes his task), and a loop where he picks up and drops 3 fronds 8 to 16 times in a row (in 7 of 24 runs); and if roasting a carried crab fails, he eats other food he carries (agreed 2026-11-10). Then measure the wood time again (about 34% of waking time on 0.30.6) before the user decides whether that is too much.
+Agreed with the user on 2026-11-10:
+
+1. **0.30.10 "Torch":** after dusk, standing at a fire with flames and with empty hands, when he starts a trip that leads more than about 15 m away (to drink, to his bed, to search for food), he takes a torch from the fire (the existing action; it costs the fire half a piece, so not when the fire is low). On arrival he plants it (the existing rule: a torch in hand is planted before the next task), and it burns out there. No torch on a wood trip (he needs his hands), in rain, or on a trip through deep water. No new UI or text. Today the habit never takes a torch (`ALLOWED` in `game/mind`, "never the torch").
+
+Not agreed, to do first: **Woodpile was explored and shelved** (two prototypes: feeding from a dry-topped drying pile gave -1.9 points of wood time; two alternating piles gave -9% far fetch and one boxed-in collapse run; the cause is the limited wet-wood supply, about 3 pieces a day against roughly 150 far-fetched pieces a run). Next, a measurement of the fire's wood appetite (burn per day and in the evening, how full he keeps it with `FEED_BELOW` 0.6, what a smaller fire would save, e.g. feeding only when it is nearly out) and a proposal. The long-simulation bounds follow the new policy (`docs/architecture.md`).
 
 ## Not authorised
 

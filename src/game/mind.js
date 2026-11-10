@@ -61,6 +61,7 @@
  * food before the inland), learning what he walks past (`input.learns` true; `mind.searching`), until water he can walk to over known ground, or food, is known; then he is back on known ground only (0.29: water that is known but out of reach does not end a search).
  * A higher need breaks into a lower goal (checked every CHECK seconds), except while an actual material errand is under way: it delivers first. Very thirsty or very hungry needs still break in; a goal keeps going otherwise and a failing one is left alone for a while (`cool`; 0.28.2: 10 to 40 s, a failed
  * light 100 s, or 300 s when one tuft of fibre is left; a failed try keeps the last tuft).
+ * 0.30.9 "Errands": the small stock errand gets +HANDOFF_SECS once per goal and takes its wet load to the lean-to site while `wetForSite` holds (else the drying pile); the upgrade piles search the whole ring finely (`dest()` of `homeNeed`); a failed roast ends the eat goal as failed when hunger is too low for other food.
  * Standing points (0.30.3 "Routes"): every errand at a pile, a fire or a building site goes to a spot where the game really offers the action for that object (game/stand, `goStand`); none reachable is an honest false, no stall. 0.30.7: the walk to a standing point has `settle` (STAND_SETTLE 3 s): a step of a coarse tick is longer than the 0.12 m window the movement takes for arrived, so he could swing across the point for ever; after 3 s within 0.3 m the arrival test (the action is offered at his real place) decides. Frond and stone piles cannot be added to (wider than the join distance): their next pile is a pile of its own on the ring UP_AT round the lean-to. Stock for the next fire never feeds a burning fire.
  * Walking a path (0.30.3 "Routes"): `walk` is a thin wrapper over game/route, the one follower: it pulls the string over the next route points (he heads for the furthest of the next four he can see by the rule of game/walk),
  * closes a segment he made no progress on for 0.7 s and plans again (at most three times: then `stats.stuck` counts each such stall, an event 'stuck' names it, and the walk fails), and reports no way at all as `stats.nopath` and an event 'nopath'.
@@ -539,8 +540,9 @@ export function createMind(world, game, opts = {}) {
 
   function* eatGoal() {
     if (pressKind(['dig'])) { yield* waitIdle(); }   // standing at a hole a crab fled into: dig
-    if (game.crabs.carried.length && game.hunger.days >= CRAB_ROAST_HUNGER && flameFire() && (yield* roastCrab())) return true;   // 0.29.1: supper from the crab he dug, before any nut: a raw crab spoils
-    if (game.hunger.days < (clock.time >= SUPPER_FROM && clock.time < LIGHT_FROM && !game.crabs.carried.length ? BED_HUNGER : HUNGER_GO)) return true;
+    let roastFailed = false;
+    if (game.crabs.carried.length && game.hunger.days >= CRAB_ROAST_HUNGER && flameFire()) { if (yield* roastCrab()) return true; roastFailed = true; }   // 0.29.1: supper from the crab he dug, before any nut: a raw crab spoils
+    if (game.hunger.days < (clock.time >= SUPPER_FROM && clock.time < LIGHT_FROM && !game.crabs.carried.length ? BED_HUNGER : HUNGER_GO)) return !roastFailed;   // 0.30.9: a failed roast at a hunger too low for other food ends the goal as failed (it cools), and does not start again at once
     if (game.berries.carried.length && game.hunger.days > EAT_AT && useRow('berries')) { yield* waitIdle(); return true; }
     if (game.bananas.carried.length && game.hunger.days > EAT_AT && useRow('banana')) { yield* waitIdle(); return true; }
     if (game.shells.nuts > 0 && useRow('nut')) { yield* waitIdle(); return true; }
@@ -1011,8 +1013,8 @@ export function createMind(world, game, opts = {}) {
         if (q && (kind === 'branch' || q.kind === 'driftwood')) return { x: q.x, z: q.z, pile: q };
         // a pile of fronds or stones is wider than the join distance (nothing is added to it from outside): the next one is a pile of its own at the nearest free spot of the ring UP_AT from the middle
         const base = Math.atan2(ux, uz);
-        for (let k = 0; k < 9; k++) {
-          const a = base + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 0.55, x = lt.x + Math.sin(a) * UP_AT, z = lt.z + Math.cos(a) * UP_AT;
+        for (let k = 0; k < 132; k++) {   // 0.30.9: a finer search (0.15 rad steps all round the ring, three radii, all within UP_NEAR): with 0.55 rad steps the old piles blocked every spot and a pile laid beside them fell outside UP_NEAR, so it never counted
+          const ring = [UP_AT, UP_AT + 0.35, UP_AT - 0.2][k % 3], j = (k / 3) | 0, a = base + (j % 2 ? -1 : 1) * Math.ceil(j / 2) * 0.15, x = lt.x + Math.sin(a) * ring, z = lt.z + Math.cos(a) * ring;
           if (!W.piles.some(o => Math.hypot(o.x - x, o.z - z) < 1.5) && openNear(x, z, 0) && !keepFree(lt).touches(x, z, 0.65)) return { x, z, exact: true };
         }
         return q ? { x: q.x, z: q.z, pile: q } : { x: at.x, z: at.z, exact: true };
@@ -1124,9 +1126,11 @@ export function createMind(world, game, opts = {}) {
     const s = dryingSite(), q = s && dryPileAt(s), room = dryCap(s) - (q ? q.logs.length : 0);
     if (!s || room <= 0) return false;
     return yield* errand(function* () {
+      if (cur && !cur.stocked) { cur.stocked = true; cur.limit = (cur.limit || LIMIT[cur.name]) + HANDOFF_SECS; }   // 0.30.9: three pieces and the walk to the pile take 60 to 90 s, as long as the idle limit: the errand gets the time the handoff gets, once per goal
       const taken = yield* collect('strip', { goal: Math.min(CARRY_MAX, room), have: () => W.carried.length, maxCost: STOCK_MAX_COST, think: 'wetwood', wanted: wetWanted, good: fresh => !W.carried.some(l => !wetPiece(l)), onPick: wetPicked, tag: 'dry' });
       if (!taken && !W.carried.length) return false;
-      yield* deliverWet();
+      if (wetForSite()) { const d = siteDest(proj.site, 'driftwood', 'branch'); if (d && (yield* toDest(d))) yield* layAt(d); if (W.load()) yield* deliverWet(); }   // 0.30.9: while the lean-to still needs driftwood at its site, wet logs are its timber (the 0.29.3 rule, as `handoff` and `deliver` have it); the errand ends there
+      else yield* deliverWet();
       stats.drying.stockErrands++;
       return true;
     });
