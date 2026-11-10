@@ -422,7 +422,7 @@ export function createMind(world, game, opts = {}) {
   function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground (o.free: anywhere, for a search). 0.30.3: a thin wrapper over game/route
     // A goal inside a solid (a pile, a fire place) cannot be stood on: the nearest free spot takes its place. Action errands never get here: they go to a standing point (goStand).
     if (game.movement.obstacles.camp.inside(x, z, 0.02) && !game.movement.obstacles.camp.inside(p.x, p.z, 0)) { const q = openNear(x, z, 2); if (q) { x = q.x; z = q.z; } }
-    const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : path);
+    const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : exploring ? pathExplore : path);   // 0.30.5: on an exploring trip every walk (the pick-ups at the far end, a berry bush, a nut) uses the exploring finder, which keeps off climbing routes and steep ground
     let route = null, finalSet = false, last = now;
     const t0 = now;
     for (;;) {
