@@ -112,7 +112,7 @@ import { createThumbStick, touchOnly } from './render/thumbStick.js';
 import { createActionButton } from './render/actionButton.js';
 import { createDevPanel, DEV_PANEL_VISIBLE } from './render/devPanel.js';
 import { createNamePrompt } from './render/namePrompt.js';
-import { createDayLine, createWakeLine } from './render/nameLines.js';
+import { createDayLine, createWakeLine, WAKE_TIME } from './render/nameLines.js';
 import { createInk } from './render/ink.js';
 import { createSoundMark } from './render/soundMark.js';
 import { createVoice, isVoiceKey, isVoiceLogEvent } from './render/voice.js';
@@ -193,7 +193,7 @@ async function boot() {
     if (button) button.update(game.action());
     ink.update(skyAt(info.time).day, now);
     who.update(dayLine(name, day), now);
-    if (wasAsleep && !game.sleep.asleep) wakes.show(wakeLine(name, day), now);   // any end of a sleep
+    if (wasAsleep && !game.sleep.asleep) { wakes.show(wakeLine(name, day), now); voice.hold(now + WAKE_TIME); }   // any end of a sleep
     wasAsleep = game.sleep.asleep;
     wakes.update(now);
     return info;
@@ -278,7 +278,7 @@ async function boot() {
     if (driving) { mind.input.yaw = view.yaw; mind.step(dt); }
     const use = driving ? mind.input : input;   // whose hands the castaway has this frame
     const info = show(game.update(use, dt));
-    view.render(game.player, info, dt); voice.update(dt, game.player, view.camera);
+    view.render(game.player, info, dt); voice.update(dt, game.player, view.camera, performance.now() / 1000);
     if (sound.active) hear(info, dt);
     autosave(dt);
     frames++;

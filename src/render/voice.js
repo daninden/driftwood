@@ -4,7 +4,13 @@
  * Fixed phrases use a separate counter, never the world or mind PRNG. The DOM
  * view projects one fading line over Dave and keeps displayed lines in order.
  *
+ * 0.30.8 "Morning": voice.hold(until) keeps a new line above Dave back until the steady clock `now`
+ * (seconds, the one update is given; main uses the wake line's) reaches `until`, while the wake line (render/nameLines) shows. A line accepted meanwhile is logged at once, with its own time, and shown when the hold ends. The quiet-time
+ * rule (8 s) still applies at the moment it is said, so at most one line can wait through the 5 s wake line;
+ * there is no queue.
+ *
  * Exports: phraseFor, voiceTime, createThoughts, isVoiceKey, isVoiceLogEvent, createVoice
+ *   (createVoice -> { history, announce, hold(until), update(dt, player, camera, now?), toggle, open }; now defaults to a clock of the dts)
  * Depends on: three, render/screenRect
  */
 import * as THREE from 'three';
@@ -71,7 +77,7 @@ export function createVoice(container, logEl) {
   line.className = 'voice'; line.setAttribute('aria-hidden', 'true'); container.appendChild(line);
   const point = new THREE.Vector3(), history = [];
   const thoughts = createThoughts();
-  let text = null, age = Infinity;
+  let text = null, age = Infinity, clock = 0, holdUntil = 0, pending = null;
 
   function append(next, time) {
     const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 2;
@@ -83,11 +89,17 @@ export function createVoice(container, logEl) {
   function announce(kind, time = 0) {
     const next = thoughts.take(kind);
     if (!next) return null;
-    text = next; age = 0; line.textContent = next; append(next, time);
+    append(next, time);   // the log is never held back
+    if (clock < holdUntil) pending = next; else display(next);
     return next;
   }
-  function update(dt, player, camera) {
+  function display(next) { text = next; age = 0; line.textContent = next; }
+  /** Hold new lines above Dave back until the clock reaches `until` (the wake line is showing); a held line is shown then. */
+  function hold(until) { holdUntil = Math.max(holdUntil, until); }
+  function update(dt, player, camera, now = clock + dt) {
     thoughts.update(dt);
+    clock = now;
+    if (pending && clock >= holdUntil) { display(pending); pending = null; }
     age += dt;
     const opacity = age < 3 ? Math.min(1, age / 0.2, (3 - age) / 0.8) : 0;
     line.style.opacity = String(Math.max(0, opacity));
@@ -98,5 +110,5 @@ export function createVoice(container, logEl) {
     const y = Math.max(8, Math.min(rect.height - 8, (1 - point.y) * rect.height / 2));
     line.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px) translate(-50%,-100%)`;
   }
-  return { history, announce, update, toggle() { logEl.hidden = !logEl.hidden; if (!logEl.hidden) logEl.scrollTop = logEl.scrollHeight; }, open: () => !logEl.hidden };
+  return { history, announce, hold, update, toggle() { logEl.hidden = !logEl.hidden; if (!logEl.hidden) logEl.scrollTop = logEl.scrollHeight; }, open: () => !logEl.hidden };
 }

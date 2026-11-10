@@ -1,5 +1,6 @@
 /** Voice phrases are deterministic presentation data and L stays passive. */
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import * as THREE from 'three';
 import { phraseFor, voiceTime, createThoughts, createVoice, isVoiceKey, isVoiceLogEvent } from '../src/render/voice.js';
 import { PASSIVE_CODES, createActing } from '../src/game/input.js';
 
@@ -44,6 +45,29 @@ describe('Voice', () => {
     expect(container.children[0].textContent).toBe('I need some wood.');
     expect(log.children.map(row => row.textContent)).toEqual(['08:05  I need some wood.']);
     expect(voice.history).toEqual(['08:05  I need some wood.']);
+  });
+
+  it('holds a thought back while the wake line shows, logs it at once, and shows it after (0.30.8 "Morning")', () => {
+    const el = () => ({ children: [], style: {}, scrollTop: 0, scrollHeight: 0, clientHeight: 0, setAttribute() {}, appendChild(child) { this.children.push(child); }, getBoundingClientRect: () => ({ width: 800, height: 600 }) });
+    vi.stubGlobal('document', { createElement: el });
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 2, 5); camera.updateMatrixWorld();
+    const player = { x: 0, y: 0, z: 0 };
+    const container = el(), log = el(), voice = createVoice(container, log), line = container.children[0];
+    voice.update(10, player, camera, 10);
+    voice.hold(11 + 5);                              // a sleep ended at 11 s: the wake line shows for 5 s
+    voice.update(1, player, camera, 11);
+    voice.announce('woodIntent', 0.25);
+    expect(log.children.map(r => r.textContent)).toEqual(['06:00  I need some wood.']);   // logged at once
+    expect(line.textContent).toBeUndefined();        // not shown above Dave yet
+    voice.update(3.9, player, camera, 14.9);
+    expect(line.textContent).toBeUndefined();
+    voice.update(1.2, player, camera, 16.1);               // the wake line has faded
+    expect(line.textContent).toBe('I need some wood.');
+    expect(Number(line.style.opacity)).toBeGreaterThan(0);
+    expect(log.children.length).toBe(1);
+    voice.update(10, player, camera, 26.1);
+    voice.announce('foodIntent', 0.3);               // outside the wake window: at once
+    expect(line.textContent).toBe('I need something to eat.');
   });
 
   it('leaves L out of castaway control', () => {

@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30.8 "Morning" — 2026-11-10
+
+A bug: the wake line `Dave wakes. Day N.` (middle of the screen) landed on the same place as Dave's thought above him, and the thought could not be read.
+
+- **The hold** (`render/voice` `hold(until)`): `main` calls `voice.hold(now + WAKE_TIME)` when the wake line is shown. A thought accepted during those 5 seconds is logged at once, with its own island time, and shown above Dave when the wake line has faded.
+- **No queue**: the existing 8 s quiet time (`createThoughts`) still applies when the line is said, so at most one thought can wait through the wake line; later ones are dropped as before. A thought outside the wake window shows at once.
+- Nothing else changes: the wake line, its position and timing, the thought texts, and the log.
+- Test: `tests/voice.test.js` (logged at once, shown after the hold, a line outside the window shown at once).
+
 ## 0.30.7 "Clearing" — 2026-11-10
 
 Dave sites his lean-to as the real one. Until now `leantoSites` looked at 11 sample points, so a palm trunk or a rock between two of them went unseen and a lean-to could end up squeezed between trees; and a lean-to he built opened towards the old fire although its site had been checked for a quarter turn from it. Approved by the user on 2026-11-10 (the quarter turn decided by the user).

@@ -4,12 +4,11 @@ Where the work stands, for the next session. Read `AGENTS.md`, `docs/design.md` 
 
 ## Status
 
-**Ready to push: 0.30.7 "Clearing"** (2026-11-10): Dave sites his lean-to as the real one (see `docs/versions.md` for the decisions and the measured numbers). Live on `main` until then: 0.30.6 "Trust". The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
+**Ready to push: 0.30.8 "Morning"** (2026-11-10): a thought above Dave waits while the wake line shows (see `docs/versions.md`). Live on `main`: 0.30.7 "Clearing" at 400043c (Dave sites his lean-to as the real one). The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
 
 ## Next, agreed in order
 
-1. **0.30.8 "Morning"**: while the wake line "Dave wakes. Day N." is showing, a new thought line above Dave waits until it has faded; the L log gets the line at once with its own time; no other change.
-2. **0.30.9 "Errands"**: fix two bugs found by measurement on 0.30.6: about 34% of wet-strip stock errands end unfinished with wood in his arms (average 92 s; suspected the idle-goal time limit, which breaks the 0.29.8 rule that he finishes his task), and a loop where he picks up and drops 3 fronds 8 to 16 times in a row (in 7 of 24 runs); and if roasting a carried crab fails, he eats other food he carries (agreed 2026-11-10). Then measure the wood time again (about 34% of waking time on 0.30.6) before the user decides whether that is too much.
+1. **0.30.9 "Errands"**: fix two bugs found by measurement on 0.30.6: about 34% of wet-strip stock errands end unfinished with wood in his arms (average 92 s; suspected the idle-goal time limit, which breaks the 0.29.8 rule that he finishes his task), and a loop where he picks up and drops 3 fronds 8 to 16 times in a row (in 7 of 24 runs); and if roasting a carried crab fails, he eats other food he carries (agreed 2026-11-10). Then measure the wood time again (about 34% of waking time on 0.30.6) before the user decides whether that is too much.
 
 ## Not authorised
 
