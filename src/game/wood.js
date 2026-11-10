@@ -84,8 +84,9 @@
  *     total: the days on the clock, for when a branch taken from the ground grows back
  *   wood.consume(pile, n) -> the top n pieces of a pile, taken off the island (to build, game/leanto)
  *   wood.drop(x, z, heading, inWater?, wetAt?, blockedAt?) -> true when something was laid down
- *     (wetAt(x, z) -> true for water, to keep a new pile out of it; 0.30.3 rule (a): blockedAt(x, z) -> true where a pile may not stand, the keep-free region of a lean-to, and the search for
- *     a spot then goes further out, SPOT_STEP (0.6) at a time up to SPOT_FAR (3) m, before wood stays in his arm)
+ *     (wetAt(x, z) -> true for water, to keep a new pile out of it; 0.30.3 rule (a): blockedAt(x, z, rs) -> true where a pile may not stand, the keep-free region of a lean-to and (0.30.10 "Walls") a spot
+ *     that would leave less than CAMP_GAP of walking room to another solid; rs is the walk-blocking radius (`pileSolidRadius`) the new pile will have, so a bigger pile asks for more room; the search for
+ *     a spot then goes further out, SPOT_STEP (0.15, was 0.6) at a time up to SPOT_FAR (3) m, before wood stays in his arm)
  *   wood.washUp(n, avoid?, total?) -> the logs high water number n brought (none
  *     within 2 m of avoid { x, z }, the castaway); deterministic in (seed, n).
  *     Each carries t, the day of that high water (game/tide), for drying. When total (the clock now)
@@ -135,9 +136,9 @@ export const CARRY_SLOW = 0.12;   // per piece: three pieces walk at 64 %
 export const CARRY_STRIDE = 0.07; // per piece: his step gets this much shorter (three pieces: 79 %)
 export const PILE_JOIN = 1.0;     // laying down this close to a pile adds to it
 export const PILE_MAX = 12;       // a pile holds at most this many pieces
-export const PILE_NEXT = 0.95;    // a new pile beside a full one stands this far from it
+export const PILE_NEXT = 0.95;    // a new pile beside a full one is looked for this far from it first (0.30.10: and then farther, until CAMP_GAP of walking room is there, 1.85 m or more for driftwood)
 export const PILE_FRONT = 0.45;   // a first pile is laid this far in front of him
-const SPOT_STEP = 0.6, SPOT_FAR = 3;   // 0.30.3 rule (a): a spot refused for a lean-to's keep-free region is looked for this much further out, in steps, up to this far
+const SPOT_STEP = 0.15, SPOT_FAR = 3;   // 0.30.3 rule (a): a spot refused for a lean-to's keep-free region is looked for this much further out, in steps, up to this far
 const PILE_R = 0.45;              // the smallest visible pile radius (the reach of a short, sparse pile)
 const LOW = -RANGE;                // the sea level at low water
 export const WASH_MAX = 2;        // at most this many new pieces per beach tile and high water
@@ -312,7 +313,8 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     const pieces = [...mine].reverse();
     if (pile) pile.logs.push(...pieces.splice(0, PILE_MAX - pile.logs.length));
     if (pieces.length) {   // a new pile: a step in front, or right next to the pile that was full
-      const c = pile || close, spot = c ? spotAround(c.x, c.z, PILE_NEXT, heading, wetAt, blockedAt) : spotAround(x, z, PILE_FRONT, heading, wetAt, blockedAt);
+      const rs = pileSolidRadius({ kind, logs: pieces });   // 0.30.10: the walk-blocking radius the new pile will have, for the camp's spacing rule (blockedAt)
+      const c = pile || close, spot = c ? spotAround(c.x, c.z, PILE_NEXT, heading, wetAt, blockedAt, rs) : spotAround(x, z, PILE_FRONT, heading, wetAt, blockedAt, rs);
       if (spot) { wood.piles.push({ x: spot.x, z: spot.z, kind, logs: pieces.splice(0) }); }
     }
     return pieces.reverse();
@@ -321,13 +323,13 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
   // a spot for a new pile, dist away from (cx, cz) (a pile, or the castaway): first in the direction he faces, then round it; dry and clear of other piles
   // 0.30.3 rule (a): blockedAt(x, z) -> true where a pile may not stand (the inside of a lean-to and the area in front of its opening, game/leanto keepFree); when a spot was refused for that
   // reason the search goes further out, in steps of SPOT_STEP up to SPOT_FAR, all twelve directions each, so wood laid from the inside lands beside the lean-to
-  function spotAround(cx, cz, dist, heading, wetAt, blockedAt = null) {
+  function spotAround(cx, cz, dist, heading, wetAt, blockedAt = null, rs = PILE_R) {
     let blocked = false;
     for (let extra = 0; extra <= SPOT_FAR + 1e-9; extra += SPOT_STEP) {
       for (let k = 0; k < 12; k++) {
         const a = heading + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 6, sx = cx + Math.sin(a) * (dist + extra), sz = cz + Math.cos(a) * (dist + extra);
         if (wetAt && wetAt(sx, sz)) continue;
-        if (blockedAt && blockedAt(sx, sz)) { blocked = true; continue; }
+        if (blockedAt && blockedAt(sx, sz, rs)) { blocked = true; continue; }
         if (wood.piles.some(q => Math.hypot(q.x - sx, q.z - sz) < PILE_NEXT * 0.9)) continue;
         return { x: sx, z: sz };
       }

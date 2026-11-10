@@ -19,18 +19,18 @@
  *   first), ms() the latest average work time rounded to a whole ms (null
  *   without any). Frames longer than a second (a hidden tab, a pause) are
  *   not counted.
- * devLabel(version, name, fps, ms?, idle?, zoom?, quality?, hands?, habit?) -> string   e.g.
+ * devLabel(version, name, fps, ms?, idle?, zoom?, quality?, hands?, habit?, speed?) -> string   e.g.
  *   'v0.7 · Quiet frames · 30 fps · 9 ms · idle' ('– fps' while there is no
- *   value yet; ' · N ms' only with ms, ' · zoom 18' only when zoom is beyond 10, the normal limit; ' · q1 auto' or ' · q1 fixed' only with a quality state, after zoom; the Hands mode (`self`, `computer`, `auto`), ' · idle' only when idle; ' · habit' last, only when habit). Pure.
+ *   value yet; ' · N ms' only with ms, ' · ×8' only when the test speed (`?speed=N`, game/steps) is above 1, ' · zoom 18' only when zoom is beyond 10, the normal limit; ' · q1 auto' or ' · q1 fixed' only with a quality state, after zoom; the Hands mode (`self`, `computer`, `auto`), ' · idle' only when idle; ' · habit' last, only when habit). Pure.
  * isToggleKey(e) -> bool       true for the backtick key (code 'Backquote',
  *   not repeating, no Shift/Ctrl/Cmd/Alt: Shift+backtick starts the game over, see src/save). Pure.
- * createDevPanel(el, version, name, visible?) -> { frame(dt, workMs?, idle?, zoom?), setQuality({ level, adapt } | level), setHands(mode), setHabit(on), toggle(), visible() }
+ * createDevPanel(el, version, name, visible?) -> { frame(dt, workMs?, idle?, zoom?), setQuality({ level, adapt } | level), setHands(mode), setHabit(on), setSpeed(n), toggle(), visible() }
  *   el: the #dev element (index.html); frame is called for every drawn frame
  *   with the real time since the previous drawn frame, the ms its update and
  *   render took, and whether the pacer is idling; it touches the DOM only when the text changed;
  *   listens for the backtick key on window.
  *
- * Depends on: nothing (main passes it the zoom; the 25 limit while visible is core/view `zoomMax`)
+ * Depends on: nothing (main passes it the zoom and the test speed `setSpeed(n)`, `×N` from game/steps; the 25 limit while visible is core/view `zoomMax`)
  */
 export const DEV_PANEL_VISIBLE = true;
 export const FPS_WINDOW = 0.5;
@@ -53,17 +53,17 @@ export function createFpsMeter(window = FPS_WINDOW) {
   };
 }
 
-export const devLabel = (version, name, fps, ms = null, idle = false, zoom = 0, quality = null, hands = null, habit = false) => {
+export const devLabel = (version, name, fps, ms = null, idle = false, zoom = 0, quality = null, hands = null, habit = false, speed = 1) => {
   if (typeof hands === 'boolean') { habit = hands; hands = null; }   // pre-Hands pure callers
-  return `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (zoom > 10.5 ? ` \u00b7 zoom ${Math.round(zoom)}` : '') + (quality === null || quality === undefined ? '' : ` \u00b7 q${typeof quality === 'object' ? quality.level : quality} ${typeof quality === 'object' && !quality.adapt ? 'fixed' : 'auto'}`) + (hands ? ` \u00b7 ${hands}` : '') + (idle ? ' \u00b7 idle' : '') + (habit ? ' \u00b7 habit' : '');
+  return `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (speed > 1 ? ` \u00b7 \u00d7${Math.round(speed * 100) / 100}` : '') + (zoom > 10.5 ? ` \u00b7 zoom ${Math.round(zoom)}` : '') + (quality === null || quality === undefined ? '' : ` \u00b7 q${typeof quality === 'object' ? quality.level : quality} ${typeof quality === 'object' && !quality.adapt ? 'fixed' : 'auto'}`) + (hands ? ` \u00b7 ${hands}` : '') + (idle ? ' \u00b7 idle' : '') + (habit ? ' \u00b7 habit' : '');
 };
 
 export const isToggleKey = e => e.code === 'Backquote' && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
 
 export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
   const meter = createFpsMeter();
-  let shown = visible, text = null, idling = false, zoomed = 0, quality = null, hands = null, habit = false;
-  const refresh = () => set(devLabel(version, name, meter.fps(), meter.ms(), idling, zoomed, quality, hands, habit));
+  let shown = visible, text = null, idling = false, zoomed = 0, quality = null, hands = null, habit = false, speed = 1;
+  const refresh = () => set(devLabel(version, name, meter.fps(), meter.ms(), idling, zoomed, quality, hands, habit, speed));
   const set = t => { if (t !== text) { text = t; el.textContent = t; } };
   const apply = () => { if (el.hidden === shown) el.hidden = !shown; };
   set(devLabel(version, name, null)); apply();
@@ -77,6 +77,7 @@ export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
     },
     setQuality(q) { if (q !== quality) { quality = q; refresh(); } },
     setHands(mode) { if (mode !== hands) { hands = mode; refresh(); } },
+    setSpeed(n) { if (n !== speed) { speed = n; refresh(); } },
     setHabit(on) { on = !!on; if (on !== habit) { habit = on; refresh(); } },
     toggle,
     visible: () => shown,

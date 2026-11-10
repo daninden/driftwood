@@ -152,13 +152,15 @@
  *
  * 0.30.3 "Routes": a click on a pile or fire, and the walk of a light, build or upgrade, go to a standing point (game/stand) by a route of game/route; a plain click walks round a camp solid that closes the straight line. Rule (b): `buildable` takes any pile within BESIDE. Rule (a): wood is not laid where a pile would touch the keep-free region of a lean-to (game/leanto keepFree), and the leftovers of the building piles are laid beside the new lean-to.
  *
+ * 0.30.10 "Walls": a new pile keeps CAMP_GAP (game/obstacles) of walking room from every other pile, fire place and burnt place (a lean-to's walls excepted): `blockedAt(x, z, rs)` holds the rule for `wood.drop` and for the leftovers of a build (`layLeftovers`). With no such spot within 3.45 m the wood stays in his arms, as on wet ground.
+ *
  * Depends on: game/path, game/route, game/stand, game/known, game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
  *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/water, game/wildlife, game/fireflies, game/weather
  */
-import { createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, canStand, nearestStandable, weariStride, paceOf, paceStride } from './movement.js';
+import { BODY, createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, canStand, nearestStandable, weariStride, paceOf, paceStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
 import { createKnown } from './known.js';
-import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, PILE_NEXT, dryness } from './wood.js';
+import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, PILE_NEXT, dryness, pileSolidRadius } from './wood.js';
 import { seaLevel, highWaters } from './tide.js';
 import { createSleep, isNight } from './sleep.js';
 import { createFibre } from './fibre.js';
@@ -178,7 +180,7 @@ import { createWildlife } from './wildlife.js';
 import { createFireflies } from './fireflies.js';
 import { createWeather, FALLING } from './weather.js';
 import { createFire, full, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH, TORCH_DRY, TORCH_COST, BRANCH_BURN } from './fire.js';
-import { solidObstacles } from './obstacles.js';
+import { solidObstacles, gapFree, sameFirePlace } from './obstacles.js';
 import { createPath } from './path.js';
 import { createRoute } from './route.js';
 import { createStand } from './stand.js';
@@ -226,7 +228,8 @@ export function createGame(world, spawn, opts = {}) {
     return { x: x + dx / d * SIDE, z: z + dz / d * SIDE };
   };
   const PILE_SOLID = 0.65;   // the walk-blocking circle of a pile (game/obstacles PILE_R): a pile whose circle touches a lean-to's keep-free region is laid beside it
-  const blockedAt = (x, z) => leantos.list.some(l => keepFree(l).touches(x, z, PILE_SOLID));   // 0.30.3 rule (a): the inside of a lean-to and the area in front of its opening stay free of wood
+  // 0.30.10 "Walls": and a new pile (its walk-blocking radius rs, default a driftwood pile's core) keeps CAMP_GAP of walking room from every other solid of the camp (game/obstacles `gapFree`), so no ring of solids closes round him
+  const blockedAt = (x, z, rs) => leantos.list.some(l => keepFree(l).touches(x, z, rs === undefined ? PILE_SOLID : rs + BODY)) || !gapFree(movement.obstacles.camp, x, z, rs === undefined ? PILE_SOLID : rs + BODY, sameFirePlace(x, z));   // 0.30.3 rule (a): the inside of a lean-to and the area in front of its opening stay free of wood
   const lay = heading => wood.drop(player.x, player.z, heading, wet(here()), (x, z) => wet(terrainAt(world, x, z, game.sea)), blockedAt);   // a pile never goes in the water
   const meanDry = logs => logs.reduce((s, l) => s + dryness(l, clock.total), 0) / Math.max(1, logs.length);
   const face = th => { player.heading = Math.atan2(th.x - player.x, th.z - player.z) || player.heading; };
@@ -398,7 +401,7 @@ export function createGame(world, spawn, opts = {}) {
         const tries = []; for (let k = 0; k < 24; k++) tries.push(away + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 12);
         for (const a of tries) {
           const x = lt.x + Math.sin(a) * d, z = lt.z + Math.cos(a) * d;
-          if (blockedAt(x, z) || wet(terrainAt(world, x, z, game.sea)) || !canStand(world, x, z, game.sea) || movement.obstacles.camp.inside(x, z, 0.45) || wood.piles.some(q => Math.hypot(q.x - x, q.z - z) < PILE_NEXT)) continue;
+          if (blockedAt(x, z, pileSolidRadius(pile)) || wet(terrainAt(world, x, z, game.sea)) || !canStand(world, x, z, game.sea) || wood.piles.some(q => Math.hypot(q.x - x, q.z - z) < PILE_NEXT)) continue;   // (0.30.10: blockedAt holds the camp's spacing rule, CAMP_GAP from every solid; the 0.45 m test it replaces was weaker)
           spot = { x, z }; break;
         }
       }

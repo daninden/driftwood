@@ -17,7 +17,9 @@
  * loaded or saved.
  * For tests and development only: `?spawn=x,z` starts somewhere else, and
  * `?time=t` starts at another time of day (0 midnight, 0.5 noon), and
- * `?awake=d` as if the castaway had been awake d days.
+ * `?awake=d` as if the castaway had been awake d days, and `?speed=N` (0.30.11 "Hurry", 1 to 16, game/steps) runs the game N times as fast: each frame
+ * game.update and the mind get N * dt in steps of at most 0.1 s, the takeover's quiet wait runs on that faster clock too; drawing, sound, wind, UI fades, the
+ * save timers and the camera stay on real time. Not saved; the dev panel shows `×N`.
  *
  * The name (0.9): at the first start of an island (no test parameters, no save
  * with a name) the loading screen asks "What is your name?" (render/namePrompt,
@@ -123,6 +125,7 @@ import { windState } from './render/wind.js';
 import { skyAt } from './render/sky.js';
 import { shouldAsk, dayNumber, dayLine, wakeLine } from './game/castaway.js';
 import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
+import { parseSpeed, subSteps } from './game/steps.js';
 import { VERSION, NAME } from './version.js';
 import { zoomMax } from './core/view.js';
 import { settingsFor, parseQuality, pickStart, loadPreference, savePreference, cyclePreference, isQualityKey, createGovernor } from './render/quality.js';
@@ -166,6 +169,8 @@ async function boot() {
   const carry = createCarryMark(document.getElementById('carry'), kind => game.use(kind, input));   // a click on a drawing uses it (0.27.2)
   const voice = createVoice(container, document.getElementById('voice-log'));
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
+  const speed = parseSpeed(location.search);   // 0.30.11 ?speed=N: game time N times as fast (tests only, never saved)
+  dev.setSpeed(speed);
   dev.setQuality({ level: start.level, adapt: start.adapt });
   const hands = createHands(loadHands() || 'auto');
   dev.setHands(hands.mode);
@@ -201,14 +206,16 @@ async function boot() {
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
   input.yaw = view.yaw;
-  const mind = createMind(world, game, { onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);   // 0.28 "Habit"
+  const mind = createMind(world, game, { onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);
+  let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
+  const tnow = () => performance.now() / 1000 + hurried;   // 0.28 "Habit"
   game.onAction(({ kind }) => { if (!mind.active) voice.announce(kind, game.clock.time); });   // the habit's thought precedes its errand, not each pickup or retry
   const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
   const poke = e => {
     if (isVoiceLogEvent(e)) return;
     if (!acting.event(e)) return;
     hands.playerAction(); saveHands(hands.mode); dev.setHands(hands.mode);
-    takeover.poke(performance.now() / 1000); mind.release(); dev.setHabit(false);
+    takeover.poke(tnow()); mind.release(); dev.setHabit(false);
   };   // a walk or action takes the castaway back
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'keydown', 'keyup', 'visibilitychange', 'focus']) window.addEventListener(type, poke, { capture: true, passive: true });
   const voiceLog = document.getElementById('voice-log');
@@ -267,17 +274,23 @@ async function boot() {
     const real = (now - last) / 1000, dt = Math.max(0, Math.min(maxDt(idle), real)); last = now;
     const t0 = performance.now();
     view.setZoomMax(zoomMax(dev.visible()));
-    const zoomed = input.takeZoom(), turned = input.takeTurn(dt), nowS = now / 1000;
+    const zoomed = input.takeZoom(), turned = input.takeTurn(dt);
     view.zoomBy(zoomed);
     view.turn(turned);
     input.yaw = view.yaw;
-    if (wantsToMove(input) || input.pressing()) takeover.poke(nowS);   // a held key or a walk still going (not the camera, 0.29.1)
-    takeover.update(nowS);
+    if (wantsToMove(input) || input.pressing()) takeover.poke(tnow());   // a held key or a walk still going (not the camera, 0.29.1)
+    takeover.update(tnow());
     const driving = hands.driving(takeover.active());
     if (driving !== mind.active) { if (driving) mind.engage(); else mind.release(); dev.setHabit(driving); }
-    if (driving) { mind.input.yaw = view.yaw; mind.step(dt); }
     const use = driving ? mind.input : input;   // whose hands the castaway has this frame
-    const info = show(game.update(use, dt));
+    let info = null, walked = 0;
+    for (const h of subSteps(dt, speed)) {   // one step at speed 1; with ?speed=N the frame's game time is N * dt in steps of at most 0.1 s
+      if (driving) { mind.input.yaw = view.yaw; mind.step(h); }
+      info = game.update(use, h); walked += info.distance;
+    }
+    info.distance = walked;   // the footprints get the whole way walked this frame
+    show(info);
+    hurried += (speed - 1) * dt;
     view.render(game.player, info, dt); voice.update(dt, game.player, view.camera, performance.now() / 1000);
     if (sound.active) hear(info, dt);
     autosave(dt);

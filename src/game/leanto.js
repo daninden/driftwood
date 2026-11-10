@@ -22,7 +22,7 @@
  *     FIRE_SHELTER (2), and a cold sleep under it lasts longer, game/sleep), `bed` (4 branches and 4 fronds: a low raised bed under the
  *     roof; he rests 1.25 times as fast, game/sleep BED_REST) and `ring` (8 stones: a ring of stones RING_AT (2.2 m) in front of the open side; a fire
  *     within RING_R (1 m) of its middle burns longer and the rain does not put it out, game/fire). Built like the lean-to itself: he stands
- *     within UP_REACH (2.2 m) of a finished lean-to's centre and the materials lie in piles within UP_NEAR (3 m) of that centre (`upgradeFor`);
+ *     within UP_REACH (2.2 m) of a finished lean-to's centre and the materials lie in piles within UP_NEAR (4 m; 0.30.10 "Walls", was 3: the upgrade piles keep the camp's gap) of that centre (`upgradeFor`);
  *     an icon of the arc builds it in `steps` steps (UP_TIME seconds of work in all, UP_COST days of rest). Each step takes one
  *     of each material out of the piles as it begins (`paidSteps`), so walking off keeps the progress and what was used, and building on
  *     needs only the rest. The first upgrade whose materials are all there is built (walls, bed, ring).
@@ -76,7 +76,7 @@ export const UPGRADES = {
   ring: { steps: 8, per: { stone: 1 } },
 };
 export const UP_ORDER = ['walls', 'bed', 'ring'];
-export const UP_REACH = 2.2, UP_NEAR = 3, UP_TIME = 30, UP_COST = BUILD_COST / 2;
+export const UP_REACH = 2.2, UP_NEAR = 4, UP_TIME = 30, UP_COST = BUILD_COST / 2;
 export const WALLS_WOOD = 2.5, WALLS_FIRE = 3, RING_AT = 2.2, RING_R = 1;
 
 export const paidSteps = (what, p) => p > 0 ? Math.min(UPGRADES[what].steps, Math.floor(p * UPGRADES[what].steps + 1e-9) + 1) : 0;

@@ -14,7 +14,16 @@
  * for 30 to 60 solids; `wood.version` is not used because it also changes when something is carried). A group is one pile, one fire place or one whole
  * lean-to (the unit game/fine builds its nodes for); a circle belongs to a group (`circle.g`). Every radius is the clearance to the castaway's centre.
  *
- * PILE_R, FIRE_R, LEANTO_R, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT
+ * 0.30.10 "Walls": the one spacing rule of the camp. Whatever Dave (or the game for him) lays down, a new pile or a new lean-to, keeps CAMP_GAP of free walking room (from solid edge to solid edge, the
+ * radii already hold the body) from every other pile, fire place and burnt place, so no ring of solids can ever close round him (a ring needs solids that touch one another; the walls of a lean-to, which the
+ * upgrade piles stand against, are open and need no gap: the piles beside them are apart). A fire place and a burnt place under the spot of the pile (the fire's own stock) are the same place
+ * and do not count. The rule is pure geometry on the camp view and is used wherever something is placed: game/wood `drop` (through game's `blockedAt`), the leftovers of a build, the pile places and the
+ * lean-to sites of game/mind.
+ *
+ * PILE_R, FIRE_R, LEANTO_R, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT, CAMP_GAP
+ * gapFree(camp, x, z, r, skip?) -> true when a solid of clearance radius r (body included) at (x, z) keeps CAMP_GAP from every camp circle except a lean-to's (circles for which skip(circle) is true are ignored)
+ * gapFreeAll(camp, circles, skip?) -> the same for every circle { x, z, r } of a hypothetical structure (a lean-to)
+ * sameFirePlace(x, z) -> a skip for gapFree: the fire places and burnt places within FIRE_SAME of (x, z)
  * leantoPoint(l, f, r) -> { x, z }   a point of a lean-to's local frame (f along the heading, the open side; r across)
  * leantoCircles(l) -> [{ x, z, r }]   (0.30.7) the collision circles of a lean-to at { x, z, heading }, real or hypothetical (the one code path `campSolids` and the siting of game/mind share)
  * campSolids(wood, fire, leantos) -> camp
@@ -37,6 +46,10 @@ import { pileSolidRadius } from './wood.js';
 export const PILE_R = 0.45 + BODY;
 export const FIRE_R = 0.5 + BODY;
 export const LEANTO_R = 0.3;
+const PLAN_MARGIN = 0.05;   // the clearance game/walk keeps from a circle when it plans a line (duplicated here: game/walk is the layer above)
+/** 0.30.10: the free walking gap between two camp solids, edge to edge: one body width (2 * BODY) and the planning clearance on both sides (0.5 m). */
+export const CAMP_GAP = 2 * BODY + 2 * PLAN_MARGIN;
+const FIRE_SAME = 0.8;
 
 export const LEANTO_BACK = -0.8, LEANTO_SIDE = 0.92, LEANTO_FRONT = 0.65;
 const LEANTO_STEP = 0.3, BUCKET = 3;
@@ -145,6 +158,17 @@ export function campSolids(wood, fire, leantos) {
   refresh();
   return camp;
 }
+
+/** 0.30.10: may a solid of clearance radius `r` (body included) stand at (x, z)? See the header. */
+export function gapFree(camp, x, z, r, skip = null) {
+  for (const c of camp.near(x, z, r + CAMP_GAP)) {
+    if (c.g.kind === 'leanto' || (skip && skip(c))) continue;   // the walls are the one solid a pile is laid against (the upgrade piles stand beside them; rule (a) keeps the inside and the opening free): a ring needs two solids that touch each other
+    if (Math.hypot(c.x - x, c.z - z) < c.r + r + CAMP_GAP) return false;
+  }
+  return true;
+}
+export function gapFreeAll(camp, circles, skip = null) { return circles.every(h => gapFree(camp, h.x, h.z, h.r, skip)); }
+export const sameFirePlace = (x, z) => c => (c.g.kind === 'fire' || c.g.kind === 'burnt') && Math.hypot(c.x - x, c.z - z) < FIRE_SAME;
 
 /** A read-only nearby-obstacle callback suitable for movement and path options (`.camp`: the cached camp view behind it). */
 export function solidObstacles(wood, fire, leantos) {

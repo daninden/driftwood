@@ -173,9 +173,9 @@ describe('the upgrades: when they can be built', () => {
     expect(bigOf(camp({ fr: 4, br: 4, st: 8 })).what).toBe('bed');
     expect(bigOf(camp({ st: 8, fr: 3 })).what).toBe('ring');
   });
-  it('needs the piles within 3 m of the lean-to and himself beside it, and only once each', () => {
-    expect(UP_NEAR).toBe(3); expect(UP_REACH).toBeGreaterThan(1.7);
-    const farPiles = camp({ fr: 6, far: 3.1 }); expect(bigOf(farPiles) && bigOf(farPiles).kind).not.toBe('upgrade');
+  it('needs the piles within 4 m of the lean-to (0.30.10, was 3: the piles keep the camp\'s gap) and himself beside it, and only once each', () => {
+    expect(UP_NEAR).toBe(4); expect(UP_REACH).toBeGreaterThan(1.7);
+    const farPiles = camp({ fr: 6, far: 4.1 }); expect(bigOf(farPiles) && bigOf(farPiles).kind).not.toBe('upgrade');
     const g = camp({ fr: 6 }); g.player.x = spawn.x + 4; g.player.z = spawn.z; expect(bigOf(g) && bigOf(g).kind).not.toBe('upgrade');
     expect(upgradeFor({ ...LT(), up: { walls: 1, bed: 1, ring: 1 } }, [{ x: spawn.x, z: spawn.z, kind: 'stone', logs: ids(stones, 0, 12) }])).toBeNull();
     const half = { ...LT(), progress: 0.5 }; expect(upgradeFor(half, [{ x: half.x, z: half.z, kind: 'frond', logs: ids(fronds, 0, 6) }])).toBeNull();

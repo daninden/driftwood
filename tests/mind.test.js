@@ -5,7 +5,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, DRY_AT, DRY_MAX, DRY_PAIR, DRY_NEAR, DRY_FIRE, DRY_LT, UP_AT, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, DRY_AT, DRY_MAX, DRY_PAIR, DRY_NEAR, DRY_FIRE, DRY_LT, UP_AT, PAIR_HALF, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, PASSIVE_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { campGame } from './helpers/mindCamp.js';
@@ -573,11 +573,11 @@ describe('his home: the lean-to is sited as the real one (0.30.7 "Clearing")', (
     const g = camp(), m = createMind(w, g); m.engage();
     const ds = m.dryingSite(); expect(ds).not.toBeNull();
     g.wood.piles.push(pileOf('driftwood', 4, ds.x, ds.z, 750000)); expect(m.dryPiles().length).toBe(1);   // the drying pile, on its site
-    const at = (gap, h = 0.5) => { const o = leantoPoint({ x: 0, z: 0, heading: h }, 0, 0.7 + gap); return { x: ds.x - o.x, z: ds.z - o.z, heading: h }; };   // the drying pile lies `gap` m beyond the building pile place at r = 0.7 (and gap + 1.4 from the other)
+    const at = (gap, h = 0.5) => { const o = leantoPoint({ x: 0, z: 0, heading: h }, 0, PAIR_HALF + gap); return { x: ds.x - o.x, z: ds.z - o.z, heading: h }; };   // the drying pile lies `gap` m beyond the building pile place at r = PAIR_HALF (and gap + 1.85 from the other)
     expect(m.siteReason(at(DRY_PAIR - 0.1), spawn)).toBe('drying');
     expect(m.siteReason(at(DRY_PAIR + 0.1), spawn)).not.toBe('drying');
     expect(m.siteReason(at(0.3), spawn)).toBe('drying');
-    for (const c of m.leantoSites(fire())) for (const r of [-0.7, 0.7]) { const b = leantoPoint(c, 0, r); expect(Math.hypot(b.x - ds.x, b.z - ds.z)).toBeGreaterThanOrEqual(DRY_PAIR); }
+    for (const c of m.leantoSites(fire())) for (const r of [-PAIR_HALF, PAIR_HALF]) { const b = leantoPoint(c, 0, r); expect(Math.hypot(b.x - ds.x, b.z - ds.z)).toBeGreaterThanOrEqual(DRY_PAIR); }
   });
   it('adopts a player\'s pair of piles when the lean-to fits, opening a quarter turn from the line to the fire', () => {
     const { c } = best(), g = camp({ piles: pairAt(c) }), m = createMind(w, g), s = m.existingSite(fire());

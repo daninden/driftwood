@@ -101,18 +101,20 @@
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
  *
+ * 0.30.10 "Walls": he is never boxed in by his own camp. Every pile he lays (through the game's lay, `wood.drop`), the pile places of the upgrades (`homeNeed`, a gap from every pile and fire place instead of the 1.5 m from other piles), the drying site (`dryingSite`, `okAt`) and the leftovers of a build keep CAMP_GAP of walking room from the other solids (game/obstacles `gapFree`), so no ring of solids can close round him. The two building piles stand PAIR_HALF (0.925) either side of the site, 1.85 m apart (were 1.3 to 1.4), and the second is laid from beside the first (`siteDest`), so the game puts it 1.85 to 2 m from it: the gap needs 1.8 m, the arc's build pair allows 2 m.
+ *
  * Depends on: game/path, game/route, game/stand (through game.stand), game/movement, game/clock (DAY_SECONDS), game/wildlife and game/crabs (through game), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY), game/leanto (siteFor, UPGRADES), game/shells, game/sleep, game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
 import { createPath } from './path.js';
 import { createRoute } from './route.js';
-import { canStand, terrainAt, obstaclesNear, PACE, WALK_SPEED } from './movement.js';
+import { canStand, terrainAt, obstaclesNear, PACE, WALK_SPEED, BODY } from './movement.js';
 import { asCamp, segmentClear } from './walk.js';
-import { leantoCircles, leantoPoint, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT } from './obstacles.js';
+import { leantoCircles, leantoPoint, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT, PILE_R, gapFree } from './obstacles.js';
 import { DAY_SECONDS } from './clock.js';
 import { freshWater } from './water.js';
-import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX, PILE_FRONT } from './wood.js';
+import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX, PILE_FRONT, pileSolidRadius } from './wood.js';
 import { FIRE_MIN, FUEL_MAX, TORCH_DRY } from './fire.js';
 import { ringCentre, siteFor, keepFree, KEEP, UPGRADES, UP_NEAR, NEED, RING_AT, RING_R, paidSteps } from './leanto.js';
 import { DAWN as SLEEP_DAWN } from './sleep.js';
@@ -141,7 +143,8 @@ export const EXPLORE_REACH0 = 80, EXPLORE_REACH_DAY = 15, EXPLORE_REACH_MAX = 22
 // 0.29.5 "Drying": wet wood from the strip between the tides is laid on a drying pile of its own above the high-water line at his camp (under or beside the lean-to when there is one), and moved to the fire's pile once it is dry enough to burn
 export const DRY_AT = TORCH_DRY, DRY_MAX = PILE_FULL, DRY_PAIR = 2.4, DRY_NEAR = 1.6, DRY_RINGS = [3.6, 4.6], DRY_FIRE = 3.4, DRY_CLEAR = 4.5, DRY_LT = 1.9, DRY_LT_SPOTS = [[0.3, DRY_LT], [1.4, 2.3], [1.7, 2.3]], STOCK_MAX_COST = 90;   // DRY_AT: the dryness the fire and the torch ask for; DRY_MAX: a full pile (0.30.5, was 5); DRY_PAIR: the clearance (more than the 2 m of the arc's build pair, with a margin) from branch piles and from the places where they are laid; the pile lies DRY_RINGS m from the fire, or DRY_LT m from the middle of the lean-to, at least DRY_FIRE from the fire's own pile and DRY_CLEAR from the lean-to's site; the active stock errand stays a short known-ground trip
 export const SET_SPAN = 45, HANDOFF_SECS = 150, HANDOFF_MAX_COST = 150;   // 0.30.4 "Timber": a set of pieces to fetch reaches at most SET_SPAN m of walking beyond the nearest; a goal gets HANDOFF_SECS more on top of its limit for bringing the wood in his arms to camp first, and a camp farther than HANDOFF_MAX_COST of walking is out of reach for it (the wood is laid down where he stands)   // 0.30.4 "Timber": the time a goal gets on top of its limit for bringing the wood in his arms to camp first
-export const UP_AT = 2.1;   // 0.30.3 rule (a): the piles of the upgrades lie this far from the lean-to's middle, beside its keep-free region (a pile's solid is 0.65) and within UP_NEAR (3)
+export const PAIR_HALF = 0.925;   // 0.30.10: the two building piles stand 1.85 m apart (their solids 0.55 m apart: the camp's spacing rule needs 0.5 (CAMP_GAP), the arc's build pair 2 m at most; it was 1.3 to 1.4)
+export const UP_AT = 2.1;   // 0.30.3 rule (a): the piles of the upgrades lie this far from the lean-to's middle, beside its keep-free region (a pile's solid is 0.65) and within UP_NEAR (4, 0.30.10; the ring of piles of a kind searches UP_AT to UP_AT + 1.2)
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
 const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
@@ -896,7 +899,7 @@ export function createMind(world, game, opts = {}) {
     if (!inside(l.x, l.z) || terrainAt(world, l.x, l.z, 0).s >= SITE_SLOPE) return 'ground';
     const nat = naturalNear(l.x, l.z), hyp = leantoCircles(l);
     const cc = game.movement.obstacles.camp.near(l.x, l.z, SITE_REACH).filter(o => !(o.g.kind === 'pile' && ignore.some(q => Math.abs(q.x - o.g.x) < 1e-6 && Math.abs(q.z - o.g.z) < 1e-6)));
-    const drying = W.piles.filter(isDrying), bp = [pt(0, -0.7), pt(0, 0.7), ...ignore.map(q => ({ x: q.x, z: q.z }))];   // 0.30.7: a drying pile within DRY_PAIR of a building pile would pair with it (the arc would offer to build there)
+    const drying = W.piles.filter(isDrying), bp = [pt(0, -PAIR_HALF), pt(0, PAIR_HALF), ...ignore.map(q => ({ x: q.x, z: q.z }))];   // 0.30.7: a drying pile within DRY_PAIR of a building pile would pair with it (the arc would offer to build there)
     for (const q of drying) if (bp.some(b => Math.hypot(q.x - b.x, q.z - b.z) < DRY_PAIR)) return 'drying';
     for (const o of nat) for (const h of hyp) if (Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) return 'footprint';   // a trunk, boulder or crag in the walls (no room for a body between)
     for (const o of nat) if (keep.touches(o.x, o.z, o.r)) return 'keep';                                            // ... or in the room inside and in front of the opening
@@ -972,10 +975,11 @@ export function createMind(world, game, opts = {}) {
     yield* waitActs(40); yield* waitIdle(); headingWanted = null;
     return true;
   }
+  // 0.30.10: the second pile of the pair is laid from beside the first one (within PILE_JOIN): the game then puts it next to that pile at the camp's gap, 1.85 to 2 m away, still a build pair
   function siteDest(sp, kind, other) {   // where the pieces of `kind` ('driftwood' | 'branch') are laid for the building: on the pile there, else across the opening from the pile of the other kind (a metre and a bit apart), else at the site
     const sx = Math.sin(sp.heading), sz = Math.cos(sp.heading), mine = sitePile(kind, sp), twin = sitePile(other, sp);
     if (mine) return { x: mine.x, z: mine.z, pile: mine };
-    for (const sg of twin ? [1, -1] : [kind === 'driftwood' ? -1 : 1]) { const q = twin ? { x: twin.x + sz * 1.3 * sg, z: twin.z - sx * 1.3 * sg } : { x: sp.x + sz * 0.7 * sg, z: sp.z - sx * 0.7 * sg }; const st = standNear(q.x, q.z, 0.5); if (st && Math.hypot(st.x - q.x, st.z - q.z) < 1) return st; }
+    for (const sg of twin ? [1, -1] : [kind === 'driftwood' ? -1 : 1]) { const q = twin ? { x: twin.x + sz * 0.9 * sg, z: twin.z - sx * 0.9 * sg } : { x: sp.x + sz * PAIR_HALF * sg, z: sp.z - sx * PAIR_HALF * sg }; const st = standNear(q.x, q.z, 0.5); if (st && Math.hypot(st.x - q.x, st.z - q.z) < 1) return st; }
     return standNear(sp.x, sp.z, 2);
   }
   // what the next unit of the project is, for `what` ('leanto' | 'walls' | 'ring' | 'bed'): { kind, want, dest } a trip for pieces of that kind to dest(), { build, run } the building, null when there is nothing he can do now
@@ -1012,10 +1016,10 @@ export function createMind(world, game, opts = {}) {
         const q = bigPile(kind, at.x, at.z, 1.5);
         if (q && (kind === 'branch' || q.kind === 'driftwood')) return { x: q.x, z: q.z, pile: q };
         // a pile of fronds or stones is wider than the join distance (nothing is added to it from outside): the next one is a pile of its own at the nearest free spot of the ring UP_AT from the middle
-        const base = Math.atan2(ux, uz);
-        for (let k = 0; k < 132; k++) {   // 0.30.9: a finer search (0.15 rad steps all round the ring, three radii, all within UP_NEAR): with 0.55 rad steps the old piles blocked every spot and a pile laid beside them fell outside UP_NEAR, so it never counted
-          const ring = [UP_AT, UP_AT + 0.35, UP_AT - 0.2][k % 3], j = (k / 3) | 0, a = base + (j % 2 ? -1 : 1) * Math.ceil(j / 2) * 0.15, x = lt.x + Math.sin(a) * ring, z = lt.z + Math.cos(a) * ring;
-          if (!W.piles.some(o => Math.hypot(o.x - x, o.z - z) < 1.5) && openNear(x, z, 0) && !keepFree(lt).touches(x, z, 0.65)) return { x, z, exact: true };
+        const base = Math.atan2(ux, uz), rs = pileSolidRadius({ kind, logs: [{ rad: 0.2 }] });
+        for (let k = 0; k < 176; k++) {   // 0.30.9: a finer search (0.15 rad steps all round the ring, three radii, all within UP_NEAR): with 0.55 rad steps the old piles blocked every spot and a pile laid beside them fell outside UP_NEAR, so it never counted
+          const ring = UP_AT + 0.4 * (k % 4), j = (k / 4) | 0, a = base + (j % 2 ? -1 : 1) * Math.ceil(j / 2) * 0.15, x = lt.x + Math.sin(a) * ring, z = lt.z + Math.cos(a) * ring;
+          if (openNear(x, z, 0) && !keepFree(lt).touches(x, z, rs + BODY) && gapFree(game.movement.obstacles.camp, x, z, rs + BODY)) return { x, z, exact: true };   // 0.30.10: CAMP_GAP from every solid (it was 1.5 m from the other piles)
         }
         return q ? { x: q.x, z: q.z, pile: q } : { x: at.x, z: at.z, exact: true };
       } };
@@ -1054,7 +1058,7 @@ export function createMind(world, game, opts = {}) {
     const okAt = (x, z) => {
       const st = standNear(x, z, 0.5), t = terrainAt(world, x, z, 0);
       return !!st && Math.hypot(st.x - x, st.z - z) < 0.6 && inside(x, z) && canStand(world, x, z, 0) && world.H(x, z) >= SITE_HIGH && t.s < 0.3 && !t.inRiver && world.dryOfRiver(x, z, 1.5)
-        && Math.hypot(x - fs.x, z - fs.z) >= DRY_FIRE && clear(x, z) && !proj.dry.some(q => Math.hypot(q.x - x, q.z - z) < 2.5) && !game.fire.fires.some(f => Math.hypot(f.x - x, f.z - z) < 3.2) && !(proj.site && Math.hypot(x - proj.site.x, z - proj.site.z) < DRY_CLEAR) && !W.piles.some(q => q.kind === 'branch' && Math.hypot(q.x - x, q.z - z) < DRY_PAIR) && !(lean && Math.hypot(x - bx, z - bz) < DRY_PAIR) && path.cost(fs, { x, z }) < 40;
+        && Math.hypot(x - fs.x, z - fs.z) >= DRY_FIRE && gapFree(game.movement.obstacles.camp, x, z, PILE_R) && clear(x, z) && !proj.dry.some(q => Math.hypot(q.x - x, q.z - z) < 2.5) && !game.fire.fires.some(f => Math.hypot(f.x - x, f.z - z) < 3.2) && !(proj.site && Math.hypot(x - proj.site.x, z - proj.site.z) < DRY_CLEAR) && !W.piles.some(q => q.kind === 'branch' && Math.hypot(q.x - x, q.z - z) < DRY_PAIR) && !(lean && Math.hypot(x - bx, z - bz) < DRY_PAIR) && path.cost(fs, { x, z }) < 40;
     };
     let found = null;
     if (lean) for (const [off, rad] of DRY_LT_SPOTS) for (const sg of [1, -1]) {   // behind the lean-to, either side (DRY_LT m), and farther round to its side (2.3 m, still inside the 2.5 m of the walls) when the branch place is too near

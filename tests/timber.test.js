@@ -325,7 +325,7 @@ describe('the handoff: wood in his arms goes to camp first (0.30.4)', () => {
     for (let i = 0; i < 400 && !m.stats.events.some(e => e.type === 'handoff-done'); i++) tick(g, m);
     const far = m.stats.events.find(e => e.type === 'handoff-far'); expect(far).toBeDefined(); expect(far.to).toBe('stock');
     expect(g.wood.load()).toBe(0);
-    const pile = g.wood.piles.find(q => held.every(id => ids(q.logs).includes(id))); expect(pile).toBeDefined(); expect(near(pile, at, 2.5)).toBe(true);
+    const pile = g.wood.piles.find(q => held.every(id => ids(q.logs).includes(id))); expect(pile).toBeDefined(); expect(near(pile, at, 3.5)).toBe(true);   // 0.30.10: the camp's gap keeps it clear of the ring of piles, so it lands up to 3.5 m away (was 2.5)
     expect(m.stats.timber.far).toBe(1); expect(m.stats.timber.handoffs).toBe(1);
   });
   it('very thirsty: the emergency goes first with the wood in his arms; the wood the game laid down for the drink is fetched and taken to camp afterwards', () => {

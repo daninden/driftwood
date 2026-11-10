@@ -42,7 +42,7 @@ LIFE[1337] = {
 // Dave alone for ten game days on island 2024 (game/mind, 0.28 "Habit", the daily rhythm of 0.29 "Daily bread"); the checks and the measured limits are in helpers/lifeSuite.
 // Measured when this was written (10 days, steps of 0.1 s): see docs/handover.md item 17 (walked and fresh: max thirst 0.7, max hunger 0.7, 2.3 meals a day, every night slept, no collapse; coconuts nearly all of the food)
 LIFE[2024] = {
-  walked: { idle: 0.55, collapses: 0, chosenSleeps: 5, warm: 5, stuckSelf: 0, stuckMax: 3, nights: 4, inland: 0, crabs: 2, leanto: 10, upgrades: 1, explores: 1, evenings: 3, dried: 1 },   // 0.30.9: policy of lifeSuite (the history of the old bounds is in docs/versions.md 0.30.4 and 0.30.5)
+  walked: { idle: 0.55, collapses: 0, chosenSleeps: 5, warm: 5, stuckSelf: 0, stuckMax: 3, nights: 4, inland: 0, crabs: 2, leanto: 10, upgrades: 1, explores: 1, grow: 25, evenings: 3, dried: 1 },   // 0.30.10: grow 25 (was the default 40) by the bound policy: cells gained 38, 34, 85, 39 over streams 0-3, mean 49, half of it. 0.30.9: policy of lifeSuite (the history of the old bounds is in docs/versions.md 0.30.4 and 0.30.5)
   fresh: { idle: 0.65, collapses: 0, chosenSleeps: 5, stuckMax: 3, nights: 4, inland: 0, crabs: 1, leanto: 10, explores: 1, grow: 55, evenings: 3, dried: 2 },
 };
 
