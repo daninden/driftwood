@@ -25,7 +25,7 @@
  *     the fine nodes from the start to the goal, the last is the goal point itself (the start is not in it); cost is in seconds of walking at full pace.
  *     With `allow`, every cell and node after the start has to be allowed, and so has the goal's connection (the start may be anywhere). null when there is no way (or more than maxExp, 90000, nodes were looked at)
  *   path.findAny(from, goals, opts?) -> { pts, cost, goal, index } | null   one search to the cheapest of several goal points (goal: the point reached, index into goals)
- *   path.clear(a, b) -> true when the straight line a -> b can be walked at once (game/walk segmentClear: open, no wall, no deep water, no trunk, boulder or crag, no camp circle within the follower's margin) and, with `allow`, stays on allowed ground (checked every 0.75 m after a)
+ *   path.clear(a, b) -> true when the straight line a -> b can be walked at once (game/walk segmentClear: open, no wall, no deep water, no trunk, boulder or crag, no camp circle within the follower's margin) and, with `allow`, stays on allowed ground (checked every 0.5 m after a)
  *   path.open(a, b) -> true when no camp circle closes the line a -> b (planning margin, a's escape rule): the camp part of the rule only, for the follower after a camp change
  *   path.cost(from, to) -> cost | Infinity
  *   path.campKey() -> the camp view's key now (a number), or null without a camp
@@ -77,13 +77,14 @@ export function createPath(world, opts = {}) {
   const fine = path.fine = camp && camp.groups ? createFine(world, grid) : null;
   const ok = (ix, iz) => !path.allow || path.allow(centre(ix), centre(iz));
   const okAt = (x, z) => !path.allow || path.allow(x, z);
+  const STEP = 0.5;   // 0.30.5: a line is checked against `allow` every STEP m (the finder's own allow is quantised at 0.5 m in game/mind), so no stretch of it is left unasked
+  const lineOk = (a, b, skipEnd = false) => { if (!path.allow) return true; const n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / STEP); for (let i = 1; i <= n - (skipEnd ? 1 : 0); i++) if (!path.allow(a.x + (b.x - a.x) * i / n, a.z + (b.z - a.z) * i / n)) return false; return true; };
   const refresh = () => { if (camp) { camp.refresh(); if (fine) fine.sync(camp); } };
   function campKey() { if (!camp) return null; camp.refresh(); return camp.key; }
   function clear(a, b) {
     if (!segmentClear(world, a, b, camp)) return false;
-    if (path.allow) {   // a shortcut stays on allowed ground too (known ground, or ground an exploring trip may use): checked every 0.75 m, the start itself may be anywhere
-      const len = Math.hypot(b.x - a.x, b.z - a.z), n = Math.ceil(len / 0.75);
-      for (let i = 1; i <= n; i++) if (!path.allow(a.x + (b.x - a.x) * i / n, a.z + (b.z - a.z) * i / n)) return false;
+    if (path.allow) {   // a shortcut stays on allowed ground too (known ground, or ground an exploring trip may use): checked every 0.5 m (`lineOk`), the start itself may be anywhere
+      if (!lineOk(a, b)) return false;
     }
     return true;
   }
@@ -132,7 +133,8 @@ export function createPath(world, opts = {}) {
       const d = Math.hypot(centre(cx) - pt.x, centre(cz) - pt.z); if (d <= CONN) list.push([cx, cz, d]);
     }
     list.sort((p, q) => p[2] - q[2]);
-    const line = (a, b) => (camp && camp.count && !campOpen(camp, a, b, PLAN_MARGIN, leave && (lenient ? 'lenient' : true)) ? 0 : staticFactor(world, a, b, natural));
+    const startOk = leave && okAt(pt.x, pt.z);   // 0.30.5: the line between a start or goal and the cell or node it joins stays on allowed ground too (a start that is itself outside may leave as before; the goal point itself is not asked, as before)
+    const line = (a, b) => ((!leave || startOk) && !lineOk(a, b, !leave) ? 0 : camp && camp.count && !campOpen(camp, a, b, PLAN_MARGIN, leave && (lenient ? 'lenient' : true)) ? 0 : staticFactor(world, a, b, natural));
     let taken = 0;
     for (const [cx, cz] of list) {
       if (taken >= CONN_CELLS) break;
@@ -219,12 +221,12 @@ export function createPath(world, opts = {}) {
         const ix = k % N, iz = (k - ix) / N, x = centre(ix), z = centre(iz);
         for (let d = 0; d < 8; d++) {
           const nx = ix + DIRS[d][0], nz = iz + DIRS[d][1], nk = nz * N + nx;
-          if (nx < 0 || nz < 0 || nx >= N || nz >= N || closed.has(nk) || banned.has(nk) || !ok(nx, nz)) continue;
+          if (nx < 0 || nz < 0 || nx >= N || nz >= N || closed.has(nk) || banned.has(nk) || !ok(nx, nz) || (path.allow && !lineOk({ x, z }, { x: centre(nx), z: centre(nz) }))) continue;   // 0.30.5: and the edge between two allowed cells stays on allowed ground (a closed band narrower than a cell is not jumped)
           const f = gridEdge(ix, iz, d); if (f <= MIN) continue;
           relax(k, g0, nk, centre(nx), centre(nz), d < 4 ? C : C * 1.414, f);
         }
         if (fine && fine.nodes.length) for (const n of fine.near(x, z, FINE_LINK)) {
-          if (closed.has(n.id) || !okAt(n.x, n.z)) continue;
+          if (closed.has(n.id) || !okAt(n.x, n.z) || (path.allow && !lineOk({ x, z }, n))) continue;
           const f = fine.cellLinks(n, camp).get(k); if (f === undefined) continue;
           relax(k, g0, n.id, n.x, n.z, Math.hypot(n.x - x, n.z - z), f);
         }
@@ -232,11 +234,11 @@ export function createPath(world, opts = {}) {
         const n = fine.byId.get(k); if (!n) continue;
         for (const [ck, f] of fine.cellLinks(n, camp)) {
           if (closed.has(ck) || banned.has(ck)) continue;
-          const ix = ck % N, iz = (ck - ix) / N; if (!ok(ix, iz)) continue;
+          const ix = ck % N, iz = (ck - ix) / N; if (!ok(ix, iz) || (path.allow && !lineOk(n, { x: centre(ix), z: centre(iz) }))) continue;
           relax(k, g0, ck, centre(ix), centre(iz), Math.hypot(centre(ix) - n.x, centre(iz) - n.z), f);
         }
         for (const [m, f] of fine.nodeLinks(n, camp)) {
-          if (closed.has(m.id) || !okAt(m.x, m.z)) continue;
+          if (closed.has(m.id) || !okAt(m.x, m.z) || (path.allow && !lineOk(n, m))) continue;
           relax(k, g0, m.id, m.x, m.z, Math.hypot(m.x - n.x, m.z - n.z), f);
         }
       }

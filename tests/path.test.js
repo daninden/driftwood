@@ -49,4 +49,22 @@ describe('path finding', () => {
     expect(path.centre(path.cell(12.3))).toBeCloseTo(Math.floor((12.3 + 360) / C) * C + C / 2 - 360, 6);
     expect(path.nearestCell(spawn.x, spawn.z)).not.toBeNull(); expect(path.nearestCell(-350, -350, 2)).toBeNull();
   });
+  it('keeps the last stretch to a goal on allowed ground too (0.30.5): no shortcut from a cell across a closed band to the goal', () => {
+    const open = createPath(w);
+    for (let a = 0; a < 6.28; a += 0.3) {
+      const ux = Math.sin(a), uz = Math.cos(a), to = { x: spawn.x + ux * 14, z: spawn.z + uz * 14 };
+      if (!canStand(w, to.x, to.z, 0) || !open.find(spawn, to)) continue;
+      const bx = to.x - ux * 2.2, bz = to.z - uz * 2.2;   // a closed band 0.8 m wide across the way, 2.2 m before the goal, 12 m long (the way round is open)
+      const inBand = (x, z) => Math.abs((x - bx) * ux + (z - bz) * uz) < 0.4 && Math.abs((x - bx) * uz - (z - bz) * ux) < 6;
+      const path = createPath(w, { allow: (x, z) => !inBand(x, z) }), r = path.find(spawn, to);
+      if (!r) continue;
+      const line = [spawn, ...r.pts, to];
+      for (let i = 1; i < line.length; i++) {
+        const d = Math.hypot(line[i].x - line[i - 1].x, line[i].z - line[i - 1].z);
+        for (let k = 0; k <= Math.ceil(d / 0.05); k++) { const f = k / Math.ceil(d / 0.05) || 0; expect(inBand(line[i - 1].x + (line[i].x - line[i - 1].x) * f, line[i - 1].z + (line[i].z - line[i - 1].z) * f), `heading ${a.toFixed(1)}: the way crosses the closed band`).toBe(false); }
+      }
+      return;
+    }
+    throw new Error('no heading with a way to test');
+  });
 });
