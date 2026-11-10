@@ -50,7 +50,7 @@ LIFE[2024] = {
 // Until 0.28.1 "Scramble" the walked start was a known bug (the water lies up a steep scramble where he stalled). Measured now (10 days, steps of 0.1 s): see docs/handover.md item 17
 // (walked: max thirst 0.7, hunger 0.7, hungry 13 % of the waking time because of the long way to the water, every night slept, no collapse; fresh: max thirst 0.7, hunger 0.75)
 LIFE[7] = {
-  walked: { idle: 0.4, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 5, hungry: 0.25, crabs: 2, evenings: 6 },
+  walked: { idle: 0.4, maxThirst: 1, maxHunger: 1, collapses: 0, chosenSleeps: 9, warm: 3, stuckSelf: 0, stuckMax: 3, nights: 7, inland: 4, hungry: 0.25, crabs: 2, evenings: 6 },   // 0.30.4: inland 4 (was 5, measured on stream 0 alone, where it was 9), agreed with the user: the mean over streams 0-3 is 4.25 now and 4.5 before Timber (per stream 8, 3, 4, 2)
   extra: [{
     // 0.29: standing at (-254.3, -35.7) at 0.59 of day 0 (as after the playtest's save and reload), thirsty at 0.25, he searched for water, saw some above a wall at (-214, -74)
     // (known, but no way to it over known ground), stopped searching there, and stood by the wall for days (the playtest on seed 7 showed 5 thirst collapses in 3 days). Now a search only
