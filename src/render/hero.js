@@ -32,7 +32,7 @@
  * hands tearing at it in turn; to drink (and, since 0.25, to fill a shell or sip from one) he kneels low over the water and brings his cupped hands to his mouth now and then; to make fire he kneels and twirls his staff
  * upright between his palms as a fire drill, the hands rubbing back and
  * forth; to dig for a crab he kneels the same way, hands forward and scraping, and he kneels the same way at a fire to roast one (0.22). A burning torch (player.torch) he holds up in front of him in his
- * left hand.
+ * left hand. Since 0.30.17 "Spear" (player.spear) the spear is in his right hand in place of the staff; to fish (player.work 'fish') he stands, leans over the water, peers with the spear forward and down, and thrusts in the last third.
  *
  * SIL_OPACITY   opacity of the silhouette (0..1)
  * SIT, sitEase(f), sitPose(f)   the sitting pose at full, its easing and the angles at a transition value f (pure; tests/hero.test.js)
@@ -47,13 +47,14 @@
  *   space (null without a torch), for the light of render/fire.
  *   The figure faces +z in its own space.
  *
- * Depends on: three, render/materials, render/palette, render/fire, game/wood (CARRY_STRIDE)
+ * Depends on: three, render/materials, render/palette, render/fire, render/spear, game/wood (CARRY_STRIDE)
  */
 import * as THREE from 'three';
 import { toon, wetToon, outlineMat } from './materials.js';
 import { CARRY_STRIDE } from '../game/wood.js';
 import { HERO } from './palette.js';
 import { makeTorch, flameWorld } from './fire.js';
+import { makeSpear } from './spear.js';
 
 // Drawn where something is in front of the figure (inverted depth test). The
 // stencil lets each pixel be painted once, so overlapping parts of the body
@@ -133,6 +134,7 @@ export function createHero(scene) {
   const wp = new THREE.Vector3(), wt = new THREE.Vector3(), wq = new THREE.Quaternion(), wr = new THREE.Quaternion(), LAID = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0.12, 0));   // for laying the staff down when he sits
   const staffGeo = new THREE.CylinderGeometry(0.018, 0.022, 1.35, 6), staffMat = toon(HERO.staff);
   const staff = part(shR, staffGeo, staffMat, 0.06, -0.3, 0.1);
+  const spear = makeSpear(); spear.scale.setScalar(1 / 0.62); spear.position.set(0.06, -0.3, 0.1); spear.rotation.x = 0.3; spear.visible = false; shR.add(spear);   // 0.30.17: the fishing spear in his right hand, in place of the staff
   const drill = joint(0, 0.2, 0.34, body);   // the staff upright as a fire drill, its foot on the hearth in front of his knees
   part(drill, staffGeo, staffMat, 0, 0.62, 0); drill.visible = false;
 
@@ -174,8 +176,9 @@ export function createHero(scene) {
 
   function update(p, wade = 0, load = []) {
     setLoad(load); clock += 1 / 60;
-    const wk = p.work, kneel = wk ? Math.min(1, wk.f * (wk.kind === 'drill' || wk.kind === 'build' ? 14 : wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip' || wk.kind === 'dig' ? 4 : wk.kind === 'roast' ? 6 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && (wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip');
-    staff.visible = !drilling; drill.visible = drilling;
+    const wk = p.work, kneel = wk && wk.kind !== 'fish' ? Math.min(1, wk.f * (wk.kind === 'drill' || wk.kind === 'build' ? 14 : wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip' || wk.kind === 'dig' ? 4 : wk.kind === 'roast' ? 6 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && (wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip');
+    const holding = !!p.spear && !(p.lie > 0), fishing = holding && !!wk && wk.kind === 'fish';   // 0.30.17: he stands and peers, then strikes in the last third
+    staff.visible = !drilling && !holding; drill.visible = drilling; spear.visible = holding;
     const lit = !!p.torch && !(p.lie > 0); torch.visible = lit; if (lit) torch.userData.flicker(clock);
     group.position.set(p.x, p.y - Math.min(0.35, wade * 0.6), p.z); group.rotation.y = p.heading;
     const tired = p.tired || 0, thirsty = p.thirsty || 0, lie = p.lie || 0, ly = lie * lie * (3 - 2 * lie);
@@ -188,7 +191,8 @@ export function createHero(scene) {
     for (const k of knees) { k.knee.rotation.x = sp.knee; k.ankle.rotation.x = sp.ankle; }
     hipL.rotation.z = -SIT.spread * sp.e; hipR.rotation.z = SIT.spread * sp.e;   // the knees a little apart
     lean += (LEAN * load.length - lean) * 0.12;   // the weight pulls him forward a little
-    upper.rotation.x = lean * (1 - ly) + sp.lean + bend * 0.9 + tired * 0.18 * (1 - ly) + kn * (drilling ? 0.3 : drinking ? 0.9 - 0.35 * sip : 0.6);
+    const peer = fishing ? 0.25 : 0;   // leans over the water
+    upper.rotation.x = peer + lean * (1 - ly) + sp.lean + bend * 0.9 + tired * 0.18 * (1 - ly) + kn * (drilling ? 0.3 : drinking ? 0.9 - 0.35 * sip : 0.6);
     neck.rotation.x += (HANG * thirsty * (1 - ly) + sp.head + (drinking ? -0.5 * kn * (1 - sip) + 0.3 * kn * sip : 0) - neck.rotation.x) * 0.2;   // head down with thirst; looks ahead at the water
     body.rotation.x = -Math.PI / 2 * ly;   // on his back, face up, head away from where he faced
     hat.position.set(0, 1.13 - NECK - 0.1 * ly, 0.13 * ly); hat.rotation.x = Math.PI / 2 * ly;
@@ -202,7 +206,9 @@ export function createHero(scene) {
       shR.rotation.z = -0.2 * sp.e;
       shL.rotation.z = (carry ? -0.35 : lit ? -0.15 : 0) * (1 - sp.e) + 0.2 * sp.e;
       shL.rotation.x += (((carry ? -0.35 : lit ? -1.0 - sw * 0.1 : -sw * 0.8) - bend * 0.5) * (1 - sp.e) + sp.arm - shL.rotation.x) * 0.4;   // the left arm holds the bundle, or the torch up in front
-      shR.rotation.x += ((sw * 0.5 - 0.15 - bend * 0.6) * (1 - sp.e) + sp.arm - shR.rotation.x) * 0.4;
+      const strike = fishing ? Math.min(1, Math.max(0, (wk.f - 0.7) / 0.12)) * (wk.f < 0.95 ? 1 : 0.4) : 0;   // peering (spear held ready, forward and down), then the thrust
+      shR.rotation.x += ((fishing ? -1.1 - 0.6 * strike : sw * 0.5 - 0.15 - bend * 0.6) * (1 - sp.e) + sp.arm - shR.rotation.x) * (fishing ? 0.5 : 0.4);
+      spear.rotation.x += ((fishing ? 0.9 : 0.3) - spear.rotation.x) * 0.3;
     }
     drill.rotation.y = clock * 22;   // spinning
     body.position.y = (p.moving ? Math.abs(Math.cos(p.phase)) * 0.03 : 0) - bend * 0.12 + ly * 0.07 - kn * 0.13 - sp.drop;

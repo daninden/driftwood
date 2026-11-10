@@ -55,6 +55,13 @@
  *   With no spot at hand (he stands in the camp) wet wood in his arms goes to the nearest known strip (`stripPoint`) and is laid up the beach there, never as a pile at the camp. A pile is a stop of a fetch only with empty arms (`selectStops`: the game offers no pickup from a pile with wood under his arm).
  *   THE DAILY ROUND (`tideRound`, `rngTide`, TIDE_ROUND_*): once a day, by day (TIDE_ROUND_FROM 0.22 to TIDE_ROUND_TO 0.5, chance 0.85), when calm (idle, thirst below EXPLORE_THIRST, hunger below EXPLORE_HUNGER, no crab trip possible, and after the morning's home work, which comes first in `idleGoal`), he walks to the nearest strip he knows (`tideTarget`: wet wood on known ground, a way of at most TIDE_ROUND_COST 150 s) and is home before dark (`exploreLate`, like an exploring trip); up to three pieces, and a second load when more lies there and there is time; to the lean-to site while `wetForSite` holds, else to the beach edge. FIREWOOD: a dry pile at a beach edge that is not his own counts TIDE_BONUS (0.7) times its walking cost against loose wood and other piles (`nearestBy`, `selectStops`).
  *   (`pileFinds`: its top pieces must be dry). While the lean-to still needs driftwood at its site (`wetForSite`) wet wood goes there instead, as timber. Wet wood in his arms at the start of another task is laid at such a spot too (`handoff`, `deliver`), else where he stands (never in the strip); it never goes on the fire's pile.
+ * 0.30.17 "Spear": THE SPEAR AND FISHING. He makes ONE spear, once (`spearMakeOk`, `makeSpearTrip`): at an idle moment by day (DAY_FROM to EVENING, thirst and hunger low) when he has none at all, his lean-to stands (or it is day SPEAR_DAY 6: the home comes first, the spear takes a branch the lean-to needs) and a loose branch and a loose stone lie within SPEAR_RANGE (60 m) of home on known ground, he takes the nearest
+ *   branch up, goes to the nearest stone and presses the arc's 'makeSpear' (10 s of kneeling); the spear is then laid at the camp. It is KEPT at the camp: `spearSpot`, beside the lean-to (3.2 to 4.8 m round its middle) or round the fire when there is no lean-to (2.6 to 4.2 m), the nearest spot to the fire spot where
+ *   a body keeps CAMP_GAP from every solid (`gapFree`), outside the lean-to's keep-free region and on open known ground; the game keeps new piles 1.1 m or more from a lying spear. He fetches it only to fish (`fetchSpear`: walks to where it lies, 'takeSpear') and lays it back (`returnSpear`: 'laySpear')
+ *   when the fishing is done, and every goal but eat (and the two emergencies) starts by laying a spear still in his hand at the camp (`withHandoff`), so that no wood task ever meets a full hand. FISHING (`fishTrip`, an errand): to a place in the shallows he knows (`fishSpots`: within FISH_RANGE 80 m of home,
+ *   game/fish `fishableAt` at the sea as it is now, a way of at most STROLL_MAX_COST), up to FISH_TRIES (8) presses of the arc's/ring's 'fish' until FISH_WANT (1) fish is carried; the spear goes back and a fish waits for flames like a crab (`chooseGoal`: a fish counts with the crabs). FOOD: fish is an
+ *   ordinary option of the eat goal (`fishOption`, `fishFoodOk`: a spear exists, room for a fish, flames burning to roast it at, by day until FISH_FOOD_TO 0.8), weighed like the others by walking cost: the way to the spear if it lies at the camp, on to the water, back to the flames, and FISH_EXTRA (20) seconds for the tries and the roast.
+ *   PASTIME (`fishChance`, a stream of its own, `rngFish`): once a day in the afternoon (FISH_FROM 0.42 to FISH_TO 0.6) at an idle moment, chance FISH_IDLE_CHANCE (0.35), when nothing is urgent (thirst under FISH_THIRST 0.3, hunger under FISH_HUNGER 0.35), nothing is carried to roast and no crab trip is possible now, and he can be home before dark (`exploreLate`); the catch is the evening fire's supper.
  * 0.30.4 "Timber": FETCHING AND HANDOFF. Wood is fetched far to near: `selectStops` picks the nearest pieces from where he stands (normally three, fewer when the errand needs fewer; the finder's walking cost, as `nearestBy` weighs it; at most SET_SPAN 45 m of walking beyond the nearest piece),
  *   `collect` fetches the farthest of them first, then the nearer, and chooses again only when a chosen piece is gone or cannot be had (fire stock, home materials, the wet reserve trips and the wet pieces of a shore stroll all use it). Wet wood for the tideline: up to CARRY_MAX (3, was two) per trip, fewer when fewer are in reach. (The drying
  *   pile of 0.30.4 to 0.30.12 is gone.) HANDOFF: before another task (drink, meal, bed, the fire, a nut, the morning at home, a stroll, an exploring walk) with wood in his arms he first lays it on the pile it belongs to (`handoff`: dry firewood on the fire's stock, wet wood at the tideline, building
@@ -76,6 +83,7 @@
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
  * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now (s.pileLogs: pieces in the biggest pile there)
  * exploreChance(s), exploreReach(day), exploreWhere(missing, trips), exploreLate(time, secs, speed?), crabDue(s)   pure (0.29.4; crabDue 0.30.16): whether, how far, where to and when to turn back, tested in tests/mind.test.js
+ * fishChance(s), fishFoodOk(s), spearMakeOk(s)   pure (0.30.17): the pastime's chance, may he fish for food, may he make the spear now (see above; tested in tests/spear.test.js)
  * crabTripOk(s), crabFoodOk(s)   pure (0.29.1): may he go for crabs now (s.sea, time, crabs carried, flames, canLight, fibre, pileDry, cool)
  * huskWanted(s), restSeconds(r1, r2), strollKind(avail, last, r), strollNow(s, r)   pure; the choices of the pastimes (0.28.2), tested in tests/mind.test.js
  * sitKind(s) -> 'gaze' | 'fire' | 'rest' | null   pure (0.29.2): whether he sits while he rests (s: time, long, fireNear, gazing)
@@ -93,7 +101,7 @@
  *                     A kneeling job already begun is left to finish (the player's own input stops it as usual)
  *   mind.step(dt)     once per game.update while in charge, before it: decides and fills mind.input
  *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set), mind.searching (learning on a search for water or food), mind.exploring (on an exploring trip, 0.29.4)
- *   mind.stats        { goals: {name: n}, home, timber: { plans, replans, loads[0..3] (pieces in his arms after a fetch), wetLoads[0..3], handoffs, handoffPieces, fallbacks, far, skipped, owed, retrieved } (0.30.4), stuck, nopath, idleSecs, sitSecs (seconds he sat), sits: {gaze, fire, rest: how often he sat down}, lightRefused, gazes, strolls, strollKinds: {kind: n}, explores (trips made), exploreSecs, tide: { rounds, picked, laid, trips, noSpot, burned, wetBurned } (0.30.13: pieces taken from the strip, laid above the high-water line, trips, trips with no spot, rescued pieces later burned, and burned wetter than 0.5), torch: { taken } (0.30.14), crabTrips, crabDigs, crabTripDigsMax, crabsCaught, events: [..] } for tests and the playtest bot (searches: how many searches he began)
+ *   mind.stats        { goals: {name: n}, home, timber: { plans, replans, loads[0..3] (pieces in his arms after a fetch), wetLoads[0..3], handoffs, handoffPieces, fallbacks, far, skipped, owed, retrieved } (0.30.4), stuck, nopath, idleSecs, sitSecs (seconds he sat), sits: {gaze, fire, rest: how often he sat down}, lightRefused, gazes, strolls, strollKinds: {kind: n}, explores (trips made), exploreSecs, tide: { rounds, picked, laid, trips, noSpot, burned, wetBurned } (0.30.13: pieces taken from the strip, laid above the high-water line, trips, trips with no spot, rescued pieces later burned, and burned wetter than 0.5), torch: { taken } (0.30.14), crabTrips, crabDigs, crabTripDigsMax, crabsCaught, spearsMade, spearStuck, fishTrips, fishTries, fishTripTriesMax, fishCaught, fishEaten (0.30.17), events: [..] } for tests and the playtest bot (searches: how many searches he began)
  *   mind.chose()      true while a sleep he chose himself is being started (the tests tell it from a collapse); mind.lastKind() the kind of the last button he used; mind.path the path finder
  *   opts.stream       a number to vary the chance (default 0)
  *   opts.onIntent     optional presentation callback before a situation-led errand, once per thought kind per goal; it changes no game state or decisions (0.30.1)
@@ -108,7 +116,7 @@
  *
  * 0.30.10 "Walls": he is never boxed in by his own camp. Every pile he lays (through the game's lay, `wood.drop`), the pile places of the upgrades (`homeNeed`, a gap from every pile and fire place instead of the 1.5 m from other piles), the tideline spot (`tideSpot`) and the leftovers of a build keep CAMP_GAP of walking room from the other solids (game/obstacles `gapFree`), so no ring of solids can close round him. The two building piles stand PAIR_HALF (0.925) either side of the site, 1.85 m apart (were 1.3 to 1.4), and the second is laid from beside the first (`siteDest`), so the game puts it 1.85 to 2 m from it: the gap needs 1.8 m, the arc's build pair allows 2 m.
  *
- * Depends on: game/path, game/route, game/stand (through game.stand), game/movement, game/clock (DAY_SECONDS), game/wildlife and game/crabs (through game), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (siteFor, UPGRADES), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
+ * Depends on: game/path, game/route, game/stand (through game.stand), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (siteFor, UPGRADES), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -125,6 +133,7 @@ import { ringCentre, siteFor, keepFree, KEEP, UPGRADES, UP_NEAR, NEED, RING_AT, 
 import { DAWN as SLEEP_DAWN, isNight } from './sleep.js';
 import { seaLevel } from './tide.js';
 import { EAT_AT } from './shells.js';
+import { fishableAt, CARRY_FISH, FISH_DEPTH } from './fish.js';
 
 export const THIRST_GO = 0.35, THIRST_TOPUP = 0.2, THIRST_SIP = 0.15, NEAR_WATER = 40;   // 0.29 "Daily bread": a drink every 8 hours or so (thirsty is 12), three or four times a day with the shells and the evening's
 export const HUNGER_GO = 0.4, TIRED_GO = 1;   // a meal at hunger 0.4 (a coconut takes 0.5 off); a nap by day only when he has been awake a whole day
@@ -156,10 +165,12 @@ export const TORCH_TRIP = 15, TORCH_FUEL = 2 * BURN;
 export const SET_SPAN = 45, HANDOFF_SECS = 150, HANDOFF_MAX_COST = 150;   // 0.30.4 "Timber": a set of pieces to fetch reaches at most SET_SPAN m of walking beyond the nearest; a goal gets HANDOFF_SECS more on top of its limit for bringing the wood in his arms to camp first, and a camp farther than HANDOFF_MAX_COST of walking is out of reach for it (the wood is laid down where he stands)   // 0.30.4 "Timber": the time a goal gets on top of its limit for bringing the wood in his arms to camp first
 export const PAIR_HALF = 0.925;   // 0.30.10: the two building piles stand 1.85 m apart (their solids 0.55 m apart: the camp's spacing rule needs 0.5 (CAMP_GAP), the arc's build pair 2 m at most; it was 1.3 to 1.4)
 export const UP_AT = 2.1;   // 0.30.3 rule (a): the piles of the upgrades lie this far from the lean-to's middle, beside its keep-free region (a pile's solid is 0.65) and within UP_NEAR (4, 0.30.10; the ring of piles of a kind searches UP_AT to UP_AT + 1.2)
+// 0.30.17 "Spear": making the one spear (a branch and a stone at hand), fishing for food (flames burning) and as an afternoon pastime, the spear kept at the camp
+export const SPEAR_DAY = 6, SPEAR_RANGE = 60, SPEAR_LIMIT = 300, FISH_FROM = 0.42, FISH_TO = 0.6, FISH_FOOD_TO = 0.8, FISH_IDLE_CHANCE = 0.35, FISH_THIRST = 0.3, FISH_HUNGER = 0.35, FISH_RANGE = 80, FISH_TRIES = 8, FISH_WANT = 1, FISH_LIMIT = 420, FISH_EXTRA = 20;   // FISH_EXTRA: seconds a fish costs on top of the walk when it is weighed against a nut (the tries and the roast)
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
-const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
-const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light', 'build', 'upgrade', 'torch'];   // the kinds of the arc / ring he ever chooses (the torch only from a fire, `torchFor`, 0.30.14); build and upgrade only in the home project (0.29.3)
+const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600, fish: 240, spear: 300 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
+const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light', 'build', 'upgrade', 'torch', 'makeSpear', 'takeSpear', 'laySpear', 'fish'];   // the kinds of the arc / ring he ever chooses (the torch only from a fire, `torchFor`, 0.30.14); build and upgrade only in the home project (0.29.3)
 
 export function fireStep(s) {
   const t = s.time;
@@ -214,6 +225,21 @@ export function crabDue(s) {
   return false;
 }
 /** Where he expects what is missing: 'coast' (driftwood and coconuts wash up and grow there) or 'forest' (branches, berries); nothing missing: the coast and the forest in turn (trips = trips so far). */
+/** 0.30.17 "Spear": the chance, at an idle moment, that he goes fishing as a pastime now (pure). Only when a spear exists, nothing is carried to roast (a crab or a fish), in the afternoon (FISH_FROM to FISH_TO), once a day,
+ *  with nothing urgent (thirst under FISH_THIRST, hunger under FISH_HUNGER: a little short of the points where he goes for a drink or a meal) and no crab trip possible now (the tide's crabs come first). The catch is roasted at the evening fire
+ *  (a fish spoils in a day; the evening fire is lit on about nine evenings in ten, so no fire is asked for now).
+ *  s: { time, day, last (the day of the last fishing), spear, crabs, fish, thirst, hunger, crab (a crab trip is possible now), cool } */
+export function fishChance(s) {
+  if (!s.spear || (s.crabs || 0) + (s.fish || 0) >= FISH_WANT || (s.cool && s.cool.fish) || s.day === s.last || s.crab) return 0;
+  if (!(s.time >= FISH_FROM && s.time < FISH_TO) || s.thirst >= FISH_THIRST || s.hunger >= FISH_HUNGER) return 0;
+  return FISH_IDLE_CHANCE;
+}
+/** 0.30.17: may he go fishing for food now (pure)? A spear exists, room for a fish, flames to roast it at, by day (DAY_FROM to FISH_FOOD_TO). */
+export function fishFoodOk(s) { return !!s.spear && (s.fish || 0) < CARRY_FISH && !!s.flames && s.time >= DAY_FROM && s.time < FISH_FOOD_TO && !(s.cool && s.cool.fish); }
+/** 0.30.17: does he go and make the spear now (pure)? He has none at all, it is day (DAY_FROM to EVENING), nothing urgent, and the home comes first: his lean-to stands (s.lean 'done'), or it is day SPEAR_DAY.
+ *  (Measured: made on day 0 or 1 it takes one of the few branches near the camp that the lean-to needs and the lean-to came a day or three later in 6 of 24 lives; made after the lean-to, or from day 6, the lean-tos came as before.) */
+export function spearMakeOk(s) { return !s.spear && s.time >= DAY_FROM && s.time < EVENING && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !(s.cool && s.cool.spear) && (s.lean === 'done' || s.day >= SPEAR_DAY); }
+
 export function exploreWhere(missing, trips) {
   if (missing && missing.length) return missing.includes('wood') || missing.includes('nuts') ? (missing.includes('branches') && trips % 2 ? 'forest' : 'coast') : 'forest';
   return trips % 2 ? 'forest' : 'coast';
@@ -259,7 +285,8 @@ export function chooseGoal(s) {
   const t = s.time, cool = s.cool || {};
   const late = t >= SUPPER_FROM && t < LIGHT_FROM;   // supper and a drink before the night
   if (!cool.drink && (s.thirst >= (late ? BED_THIRST : THIRST_GO) || (s.shellsEmpty > 0 && s.waterNear && s.thirst >= THIRST_TOPUP))) return 'drink';
-  if (!cool.eat && (s.hunger >= (late && !s.crabs ? BED_HUNGER : HUNGER_GO) || (s.crabs > 0 && s.flames && s.hunger >= CRAB_ROAST_HUNGER))) return 'eat';   // 0.29.1: with a crab carried he waits for the fire's flames to have it for supper
+  const catchN = (s.crabs || 0) + (s.fish || 0);   // 0.30.17: a fish waits for the flames like a crab
+  if (!cool.eat && (s.hunger >= (late && !catchN ? BED_HUNGER : HUNGER_GO) || (catchN > 0 && s.flames && s.hunger >= CRAB_ROAST_HUNGER))) return 'eat';   // 0.29.1: with a crab carried he waits for the fire's flames to have it for supper
   if (!cool.sleep && s.canLie && (t >= BED_FROM || t < DAWN || s.awake >= TIRED_GO)) return 'sleep';
   if (!cool.fire && fireStep({ ...s, cool })) return 'fire';
   if (!cool.stores && storesStep({ ...s, cool })) return 'stores';
@@ -281,14 +308,14 @@ export function exactPileDrop(from, to) {
 export function createMind(world, game, opts = {}) {
   const onIntent = typeof opts.onIntent === 'function' ? opts.onIntent : null;
   const p = game.player, clock = game.clock, W = game.wood, known = game.known;
-  const rng = mulberry32(hashInt(world.seed + 28, opts.stream || 0, 1)), rngEx = mulberry32(hashInt(world.seed + 29, opts.stream || 0, 2)), rngTide = mulberry32(hashInt(world.seed + 30, opts.stream || 0, 3));   // exploring (0.29.4) draws from a stream of its own, so that the days without a trip stay as they were
+  const rng = mulberry32(hashInt(world.seed + 28, opts.stream || 0, 1)), rngEx = mulberry32(hashInt(world.seed + 29, opts.stream || 0, 2)), rngTide = mulberry32(hashInt(world.seed + 30, opts.stream || 0, 3)), rngFish = mulberry32(hashInt(world.seed + 31, opts.stream || 0, 4));   // exploring (0.29.4) draws from a stream of its own, so that the days without a trip stay as they were
   // ground he may be taken over: known all round, MARGIN (1.5 m) inside the edge of what he knows, so that sliding past a trunk or a bush never carries him into a cell he has not been to
   const MARGIN = 1.5, DIAG = MARGIN * 0.75;
   const inside = (x, z) => known.hasAround(x, z, MARGIN, DIAG);   // the nine points: (x, z), MARGIN along the axes, DIAG on the diagonals (0.30.5 "Quicker": one lookup where they share a cell)
   const path = createPath(world, { allow: inside, allowVersion: () => known.count, obstacles: game.movement.obstacles }), pathFree = createPath(world, { obstacles: game.movement.obstacles });   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
-  const stats = { tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, events: [] };
+  const stats = { tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, spearsMade: 0, spearStuck: 0, fishTrips: 0, fishTries: 0, fishTripTriesMax: 0, fishCaught: 0, fishEaten: 0, events: [] };
   const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
-  let exploring = false, exploredDay = -9, fullPace = false, now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
+  let fishedDay = -9, exploring = false, exploredDay = -9, fullPace = false, now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
   let pressed = null, choice = null, sleepKey = false, sinceCheck = 0, builtDay = -1, headingWanted = null, errands = 0;   // headingWanted: the way a lean-to being started should face (a player turns the view)
   const proj = { site: null };   // 0.29.3: the lean-to's site, chosen once and kept
   const coolUntil = {}, bad = new Map();
@@ -419,7 +446,7 @@ export function createMind(world, game, opts = {}) {
     let near = false; for (const q of wp) if (Math.hypot(q.x - p.x, q.z - p.z) < NEAR_WATER) { near = true; break; }
     const cool = {}; for (const k of Object.keys(COOL)) cool[k] = isCool(k);
     return {
-      sea: game.sea, crabs: game.crabs.carried.length, flames: !!flameFire(),
+      sea: game.sea, crabs: game.crabs.carried.length, fish: game.fish.carried.length, spear: game.spear.has(), flames: !!flameFire(),
       asleep: game.sleep.asleep || p.lie > 0, time: clock.time, thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake, canLie: game.sleep.canLie(clock.time),
       water: wp.length > 0, waterNear: near, shellsEmpty: game.shells.empty(), shellsFull: game.shells.full(), nuts: game.shells.nuts, fibre: game.fibre.carried, torch: !!game.fire.torch,
       fireLit: !!f, fireFuel: f ? f.fuel / FUEL_MAX : 0, stock: st, pileLogs: best ? best.logs.length : 0, spare: piles.reduce((n, q) => n + fuelOfPile(q), 0) - st,
@@ -562,8 +589,8 @@ export function createMind(world, game, opts = {}) {
   function* eatGoal() {
     if (pressKind(['dig'])) { yield* waitIdle(); }   // standing at a hole a crab fled into: dig
     let roastFailed = false;
-    if (game.crabs.carried.length && game.hunger.days >= CRAB_ROAST_HUNGER && flameFire()) { if (yield* roastCrab()) return true; roastFailed = true; }   // 0.29.1: supper from the crab he dug, before any nut: a raw crab spoils
-    if (game.hunger.days < (clock.time >= SUPPER_FROM && clock.time < LIGHT_FROM && !game.crabs.carried.length ? BED_HUNGER : HUNGER_GO)) return !roastFailed;   // 0.30.9: a failed roast at a hunger too low for other food ends the goal as failed (it cools), and does not start again at once
+    if (catchCarried() && game.hunger.days >= CRAB_ROAST_HUNGER && flameFire()) { if (yield* roastCatch()) return true; roastFailed = true; }   // 0.29.1: supper from the crab he dug, before any nut: a raw crab spoils
+    if (game.hunger.days < (clock.time >= SUPPER_FROM && clock.time < LIGHT_FROM && !catchCarried() ? BED_HUNGER : HUNGER_GO)) return !roastFailed;   // 0.30.9: a failed roast at a hunger too low for other food ends the goal as failed (it cools), and does not start again at once
     if (game.berries.carried.length && game.hunger.days > EAT_AT && useRow('berries')) { yield* waitIdle(); return true; }
     if (game.bananas.carried.length && game.hunger.days > EAT_AT && useRow('banana')) { yield* waitIdle(); return true; }
     if (game.shells.nuts > 0 && useRow('nut')) { yield* waitIdle(); return true; }
@@ -578,13 +605,23 @@ export function createMind(world, game, opts = {}) {
       const best = crabCands(p, STROLL_RANGE).map(c => ({ c, cost: path.cost(p, c) })).filter(q => q.cost < STROLL_MAX_COST).sort((a, q) => a.cost - q.cost)[0];
       if (best && (!cs.length || best.cost < Math.min(...cs.map(q => q.t.cost)) && cs.every(q => q.t.cost > NUT_FAR))) {
         yield* crabTrip(best.c);
-        if (game.crabs.carried.length && flameFire() && (yield* roastCrab())) return true;
+        if (catchCarried() && flameFire() && (yield* roastCatch())) return true;
         cs = foods();
       }
     }
+    // 0.30.17: a fish, weighed by its walking cost (to the spear, if it lies at the camp, and on to the water) like the nuts and the berries; flames are burning to roast it at
+    const fo = fishOption();
+    if (fo) cs.push(fo);
     if (!cs.length) { if (yield* searchFor('food')) cs = foods(); }   // hungry, nothing carried and no food known: he goes looking
     if (!cs.length) { ev('no-food'); return false; }
-    cs.sort((a, q) => a.w - q.w); const pick = cs[0], t = pick.t, want = pick.kind === 'coco' ? ['husk'] : pick.kind === 'berry' ? ['berries'] : ['bananas'];
+    cs.sort((a, q) => a.w - q.w); let pick = cs[0];
+    if (pick.kind === 'fish') {
+      yield* fishTrip(pick.t);
+      if (catchCarried() && flameFire() && (yield* roastCatch())) return true;
+      cs = foods(); if (!cs.length) return false;   // no fish after all: the nuts and the berries
+      cs.sort((a, q) => a.w - q.w); pick = cs[0];
+    }
+    const t = pick.t, want = pick.kind === 'coco' ? ['husk'] : pick.kind === 'berry' ? ['berries'] : ['bananas'];
     const near = () => { const a = game.action().tap; return !!a && want.includes(a.kind) && !!a.thing && Math.hypot((a.thing.x ?? t.x) - t.x, (a.thing.z ?? t.z) - t.z) < 3; };
     yield* torchFor(t);
     yield* walk(t.x, t.z, { tap: pick.kind === 'coco', stop: 0.4, until: near, hurry: hurry() });
@@ -595,10 +632,12 @@ export function createMind(world, game, opts = {}) {
     return true;
   }
 
-  function* roastCrab() {   // to the fire with flames and the row's crab: kneels ROAST_TIME and eats it
+  const catchCarried = () => game.crabs.carried.length + game.fish.carried.length;   // 0.30.17: what is carried raw and has to be roasted
+  function* roastCatch() {   // to the fire with flames and the row's crab or fish (the one caught first, as the game's roast does): kneels ROAST_TIME and eats it
     const f = flameFire(); if (!f) return false;
     if (!(yield* goStand('nearFire', f))) return false;
-    if (useRow('crab')) { yield* waitIdle(); return true; }
+    const F = game.fish.carried, C = game.crabs.carried, kind = F.length && (!C.length || F[0] < C[0]) ? 'fish' : 'crab', n0 = F.length;
+    if (useRow(kind)) { yield* waitIdle(); if (kind === 'fish' && game.fish.carried.length < n0) stats.fishEaten++; return true; }
     return false;
   }
 
@@ -640,6 +679,111 @@ export function createMind(world, game, opts = {}) {
     const caught = game.crabs.carried.length - got0; stats.crabsCaught += Math.max(0, caught);
     ev('crab-trip-end', { digs, caught });
     if (caught <= 0) cool('crabs');
+    return true;
+    });
+  }
+
+  // ---------- the spear and fishing (0.30.17 "Spear") ----------
+  // One spear, made once (`makeSpearTrip`: a loose branch and a loose stone on known ground), kept lying at the camp (`spearSpot`: beside the lean-to, or round the fire when there is no lean-to, where a body keeps CAMP_GAP from every solid, clear of the lean-to's
+  // keep-free region) and fetched only to fish (`fetchSpear`); afterwards he lays it back there (`returnSpear`) before he takes up wood (every goal but eat begins with it, `withHandoff`). Fishing (`fishTrip`) is the player's own action in shallow sea water (game/fish
+  // `fishableAt`): up to FISH_TRIES tries, until FISH_WANT fish is carried. A fish is roasted like a crab.
+  const S = game.spear, offered = kind => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === kind); };
+  const campView = game.movement.obstacles.camp;
+  let spearHome = null;
+  const spearOk = (x, z) => !!openNear(x, z, 0) && gapFree(campView, x, z, BODY) && !game.leantos.list.some(l => keepFree(l).touches(x, z, BODY));
+  function spearSpot() {   // where the spear lies at camp: the last spot while it is still good, else the nearest good one to the fire spot round the lean-to (or the fire)
+    if (spearHome && spearOk(spearHome.x, spearHome.z)) return spearHome;
+    const h = homeSpot(), fs = fireSpot(h), centre = h.kind === 'leanto' ? h.lt : h, cands = [];
+    for (const r of h.kind === 'leanto' ? [3.2, 4, 4.8] : [2.6, 3.4, 4.2]) for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8; cands.push({ x: centre.x + Math.sin(a) * r, z: centre.z + Math.cos(a) * r }); }
+    cands.sort((a, b) => dist(a, fs) - dist(b, fs));
+    spearHome = cands.find(q => spearOk(q.x, q.z)) || null;
+    return spearHome;
+  }
+  function* fetchSpear() {   // the spear into his hand, from where it lies
+    if (S.hand) return true;
+    if (!S.at || W.load() || game.fire.torch) return false;
+    const q = { x: S.at.x, z: S.at.z };
+    yield* walk(q.x, q.z, { stop: 0.3, until: () => offered('takeSpear') });
+    if (!S.hand) { if (!offered('takeSpear')) yield* walk(q.x, q.z, { stop: 0.1 }); if (pressKind(['takeSpear'])) yield* waitIdle(); }
+    return S.hand;
+  }
+  function* returnSpear() {   // lays the spear down at its place at camp (the one thing he does with it besides fishing)
+    if (!S.hand) return true;
+    const q = spearSpot();
+    if (q && (yield* walk(q.x, q.z, { stop: 0.15, settle: 3 })) && pressKind(['laySpear'])) yield* waitIdle();
+    if (S.hand) { const o = standNear(p.x, p.z, 4); if (o) yield* walk(o.x, o.z, { stop: 0.3 }); if (pressKind(['laySpear'])) yield* waitIdle(); }   // no way to the camp: where he can
+    if (S.hand) { stats.spearStuck++; ev('spear-stuck'); }
+    return !S.hand;
+  }
+  let fishMemo = null;
+  function fishSpots() {   // the places he knows in shallow sea water (the sea as it is now) within FISH_RANGE of home; looked at again when he knows more, the tide has moved or 20 s have passed
+    const key = known.count + ':' + Math.round(game.sea * 40) + ':' + Math.floor(now / 20);
+    if (fishMemo && fishMemo.key === key) return fishMemo.list;
+    const h = homeSpot(), list = [];
+    for (let r = 4; r <= FISH_RANGE; r += 2) for (let i = 0; i < 36; i++) {
+      const a = (i + (r / 2 % 2) * 0.5) * Math.PI / 18, x = h.x + Math.sin(a) * r, z = h.z + Math.cos(a) * r;
+      if (!(Math.abs(x) < HALF - 8 && Math.abs(z) < HALF - 8)) continue;
+      const t = terrainAt(world, x, z, game.sea);
+      if (fishableAt(t) && t.depth >= FISH_DEPTH[0] + 0.04 && t.depth <= FISH_DEPTH[1] - 0.04 && inside(x, z) && canStand(world, x, z, game.sea)) list.push({ x, z });   // the middle of the band: a step either way is still shallows
+    }
+    fishMemo = { key, list }; return list;
+  }
+  function bestFishSpot(maxCost) {   // the cheapest of the nearest few: { x, z, cost } where cost is the walk from here, by the spear when it lies at the camp
+    const from = S.hand ? p : S.at; if (!from) return null;
+    const first = S.hand ? 0 : path.cost(p, from); if (!(first < Infinity)) return null;
+    let best = null;
+    for (const c of fishSpots().map(q => ({ ...q, d: dist(q, from) })).sort((a, b) => a.d - b.d).slice(0, 5)) {
+      const cost = first + path.cost(from, c);
+      if (cost < maxCost && (!best || cost < best.cost)) best = { x: c.x, z: c.z, cost };
+    }
+    return best;
+  }
+  function fishOption() {   // fish as a food: its walking cost (the spear, the water, back to the flames) and FISH_EXTRA for the tries and the roast
+    const s = senses(); if (!fishFoodOk(s)) return null;
+    const f = flameFire(), o = f ? bestFishSpot(STROLL_MAX_COST) : null;
+    return o ? { kind: 'fish', t: o, w: o.cost + dist(o, f) * 1.3 / WALK_SPEED + FISH_EXTRA } : null;
+  }
+  function* fishTrip(c) {   // the spear from the camp, into the shallows, up to FISH_TRIES tries until FISH_WANT fish is carried, the spear back at the camp
+    return yield* errand(function* () {
+    if (cur) cur.limit = FISH_LIMIT;
+    if (W.load()) yield* handoff('fish');
+    if (!S.hand && !(yield* fetchSpear())) { cool('fish'); return false; }
+    stats.fishTrips++; ev('fish-trip', { to: [+c.x.toFixed(1), +c.z.toFixed(1)] });
+    const got0 = game.fish.carried.length; let tries = 0;
+    try {
+      yield* walk(c.x, c.z, { stop: 0.3, until: () => offered('fish') });
+      if (!offered('fish')) yield* walk(c.x, c.z, { stop: 0.1, until: () => offered('fish'), settle: 3 });   // the follower stops a little short of a point on a shore: the last step in
+      if (!offered('fish')) { const o = bestFishSpot(STROLL_MAX_COST); if (o) yield* walk(o.x, o.z, { stop: 0.3, until: () => offered('fish') }); }   // the tide has moved the shallows: once more
+      while (tries < FISH_TRIES && game.fish.carried.length - got0 < FISH_WANT && offered('fish')) {
+        if (!pressKind(['fish'])) break;
+        tries++; stats.fishTries++; yield* waitIdle(); yield;
+      }
+    } finally { idleInput(); }
+    stats.fishTripTriesMax = Math.max(stats.fishTripTriesMax, tries);
+    const caught = game.fish.carried.length - got0; stats.fishCaught += Math.max(0, caught);
+    ev('fish-trip-end', { tries, caught });
+    if (caught <= 0) cool('fish');
+    yield* returnSpear();
+    return true;
+    });
+  }
+  function* makeSpearTrip() {   // a loose branch under his arm, to a loose stone, kneel: the spear is made; it goes to the camp
+    return yield* errand(function* () {
+    if (cur) cur.limit = SPEAR_LIMIT;
+    const cost = list => { for (const c of list.slice(0, 3)) { const k = path.cost(p, c); if (k < Infinity) return { ...c, cost: k }; } return null; };
+    const b = cost(scan('branch', p.x, p.z, SPEAR_RANGE)), st = b ? cost(scan('stone', b.x, b.z, SPEAR_RANGE)) : null;
+    if (!b || !st) { cool('spear'); return false; }
+    ev('spear-trip', { branch: [+b.x.toFixed(1), +b.z.toFixed(1)], stone: [+st.x.toFixed(1), +st.z.toFixed(1)] });
+    const pickOffered = () => { const a = game.action().tap; return !!a && a.kind === 'pickup' && !!a.thing && a.thing.kind === 'log' && !!a.thing.log.branch && Math.hypot(a.thing.x - b.x, a.thing.z - b.z) < 1.5; };
+    yield* walk(b.x, b.z, { tap: true, stop: 0.4, until: pickOffered });
+    let k = pressKind(['pickup']); if (k) yield* waitIdle();
+    if (!W.carried.some(l => l.branch) || W.load() !== 1) { markBad('branch', b.o, 600); cool('spear'); return false; }
+    yield* walk(st.x, st.z, { tap: true, stop: 0.4, until: () => offered('makeSpear') });
+    if (!offered('makeSpear')) yield* walk(st.x, st.z, { stop: 0.2 });
+    k = pressKind(['makeSpear']); if (k) yield* waitIdle();
+    if (!S.has()) { markBad('stone', st.o, 600); cool('spear'); return false; }
+    stats.spearsMade++; ev('spear-made');
+    yield* returnSpear();
     return true;
     });
   }
@@ -1417,12 +1561,21 @@ export function createMind(world, game, opts = {}) {
     if (W.load() && !(need && need.kind && need.kind === carriedKind())) yield* handoff('idle');   // 0.30.4: wood left in his arms goes to camp, to the pile it belongs to (wet to drying, building timber to the site), before anything else; what the next home trip needs he keeps
     const s = senses();
     if (need && !crabTripOk(s)) return yield* homeGoal(step, need);
+    if (spearMakeOk({ ...s, day: clock.day, lean: homeSnap().lean })) { if (scan('branch', h.x, h.z, SPEAR_RANGE).length && scan('stone', h.x, h.z, SPEAR_RANGE).length) return yield* makeSpearTrip(); cool('spear', 120); }   // 0.30.17: he has no spear and a branch and a stone are at hand
     if (clock.day !== tideDay && clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crabTripOk(s)) { if (yield* tideRound()) return true; }   // 0.30.13: the daily round to the strip
     if (clock.day > exploredDay && clock.time >= EXPLORE_EARLY && clock.time < EXPLORE_TO) {   // 0.29.4: now and then he goes exploring
       // 0.30.16: before EXPLORE_FROM only when calm: the home project has nothing to do today (its next piece, as at HOME_FROM, is none: built today, finished, cooling, no camp) and no crab trip is possible or due
       const calm = clock.time < EXPLORE_FROM ? !homeNext({ ...homeSnap(), time: HOME_FROM }) && !crabTripOk(s) && !crabDue({ ...s, total: clock.total }) : undefined;
       const missing = exploreMissing(h), chance = exploreChance({ time: clock.time, day: clock.day, thirst: s.thirst, hunger: s.hunger, last: exploredDay, missing: missing.length, cool: s.cool, crab: crabTripOk(s), calm });
       if (chance > 0 && rngEx() < chance) return yield* exploreTrip(missing);
+    }
+    {   // 0.30.17: fishing as an afternoon pastime, once a day, its own stream; home before dark
+      const chance = fishChance({ ...s, day: clock.day, last: fishedDay, crab: crabTripOk(s) });
+      if (chance > 0 && rngFish() < chance) {
+        fishedDay = clock.day;
+        const o = bestFishSpot(STROLL_MAX_COST);
+        if (o && !exploreLate(clock.time, o.cost * 2 + 40)) return yield* fishTrip(o);
+      }
     }
     if (strollNow(s, rand())) {
       const cands = strollCands(h), kind = strollKind({ shore: cands.shore.length > 0, river: cands.river.length > 0, palms: cands.palms.length > 0, forest: cands.forest.length > 0, crabs: cands.crabs.length > 0 && crabTripOk(s) }, lastStroll, rand());
@@ -1463,6 +1616,7 @@ export function createMind(world, game, opts = {}) {
   const withHandoff = (name, run) => function* () {
     const emergency = (name === 'drink' && game.thirst.days >= VERY_AT) || (name === 'eat' && game.hunger.days >= VERY_HUNGER_AT);
     if (game.fire.torch && name !== 'fire') yield* plantTorch();   // 0.30.14: a torch left in his hand (a trip cut short) is stuck in the ground first
+    if (S.hand && !emergency && name !== 'eat') yield* returnSpear();   // 0.30.17: the spear lies at the camp before he takes up wood (a fishing trip cut short leaves it in his hand)
     if (emergency) { if (W.load()) { owed = { ids: new Set([...W.carried, ...W.stones].map(l => l.id)), t: now }; stats.timber.skipped++; stats.timber.owed += W.load(); ev('handoff-skipped', { goal: name, ids: [...owed.ids] }); } }
     else if (name === 'idle') { if (!W.load()) yield* fetchOwed(); }
     else if (!usesLoad(name)) { yield* handoff(name); if (name !== 'sleep') yield* fetchOwed(); }

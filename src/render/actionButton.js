@@ -31,7 +31,7 @@
  * torch with a stroke of ground (plant), the drop (drink), a flame (light), a small lean-to (build), the
  * crescent moon (sleep) and, since 0.22, a hand with claws over a
  * hole (dig) and a crab over a flame (roast), and since 0.25 a half shell with a drop over it
- * (fill) and a tilted half shell with water in it (sip). Eating a carried nut uses the half coconut (husk). Since 0.26 (game/forage) a cluster of berries with an arrow up (berries: picks them, or eats them on the spot when he is hungry), a bunch with an arrow up (bananas), and the plain cluster or bunch for eating a carried one (eatBerries, eatBanana). Since 0.27 "Home" (game/leanto): an upgrade (kind 'upgrade', `what`) shows what will be built: a roof with fronds hanging down its side (walls), a low frame with a frond laid on it (bed) or a ring of stones round a small flame (ring).
+ * (fill) and a tilted half shell with water in it (sip). Since 0.30.17 "Spear" a spear (makeSpear), a spear lying with an arrow up (takeSpear) or down (laySpear), a fish over a line of water (fish) and a fish over a flame (the roast of a fish, `roastFish`, chosen by the option's `food`). Eating a carried nut uses the half coconut (husk). Since 0.26 (game/forage) a cluster of berries with an arrow up (berries: picks them, or eats them on the spot when he is hungry), a bunch with an arrow up (bananas), and the plain cluster or bunch for eating a carried one (eatBerries, eatBanana). Since 0.27 "Home" (game/leanto): an upgrade (kind 'upgrade', `what`) shows what will be built: a roof with fronds hanging down its side (walls), a low frame with a frond laid on it (bed) or a ring of stones round a small flame (ring).
  *
  * The pointer handling is the button's own: a finger or the mouse on it goes
  * to input.actionStart/actionEnd and never reaches the world (no walk tap, no
@@ -53,7 +53,7 @@
  *
  * Depends on: render/carryMark, render/thirstMark, render/hungerMark
  */
-import { DRAWINGS, CRAB_PATHS } from './carryMark.js';
+import { DRAWINGS, CRAB_PATHS, FISH_PATHS } from './carryMark.js';
 import { DROP_PATH } from './thirstMark.js';
 import { SHELL_PATH, RIM_PATH } from './hungerMark.js';
 
@@ -63,6 +63,8 @@ export const OPT_SIZE = 44, ARC_R = 70, ARC_STEP = 42, ARC_LEAN = -18, ARC_BOX =
 
 const LOG = '<path d="M-9.56 7.08L7.44 2.08A2 2 0 0 1 8.56 5.92L-8.44 10.92A2 2 0 0 1 -9.56 7.08Z"/>';
 const FLAME = '<path d="M0 -11C1 -7 5 -5 5 -0.5A5 5 0 0 1 -5 -0.5C-5 -3 -3 -4.5 -2 -7C-1 -5.5 -0.5 -4 0 -4C1 -6 1 -8.5 0 -11Z"/>';
+const SPEAR = '<path d="M-9.5 10.5L6.6 -6.4"/><path d="M4.4 -4.6C5.4 -8 7.6 -10.6 11 -11.8C10.8 -8.2 9.2 -5.6 6.6 -4Z"/><path d="M2.6 -2.8L5 -1.2"/>';
+const SPEAR_LYING = '<path d="M-11 6.5L5 3.8"/><path d="M4.2 3.9C6.2 1.6 8.6 0.8 11.4 1.4C10.8 4 9.2 5.8 6.6 6.4Z"/><path d="M1.2 4.4L1.8 6.6"/>';
 const TORCH_HEAD = '<g transform="translate(0 -6.5) scale(0.8)">' + FLAME + '</g>';
 
 export const ICONS = {
@@ -78,6 +80,12 @@ export const ICONS = {
   leanto: '<path d="M-11 11H11"/><path d="M-7 -6V11M6 6.3V11"/><path d="M-11 -9L11 4V8L-11 -5Z"/>',
   dig: '<ellipse cx="0" cy="9" rx="9.5" ry="2.8"/><path d="M-5.5 -4C-5 -7 -4.5 -9 -4.5 -10.5M-2 -5C-1.8 -8 -1.6 -10.5 -1.6 -12M1.8 -5C2 -8 2.2 -10.5 2.2 -12M5.5 -4C5.2 -7 5 -9 5 -10.5"/><path d="M-5.5 -4C-6 0 -4 4 0 4.5C4 4 6 0 5.5 -4"/><path d="M-12 1L-9.5 3.2M12 1L9.5 3.2M-10 -3L-8 -2M10 -3L8 -2"/>',
   roast: `<g transform="translate(0 -5.5) scale(0.9)">${CRAB_PATHS}</g><g transform="translate(0 8.5) scale(0.58)">${FLAME}</g><path d="M-8 11.5H8"/>`,
+  // 0.30.17 "Spear": a spear (make it), the same lying with an arrow up (take it up) or down (lay it down), a fish over a line of water (fish) and a fish over a flame (roast the fish)
+  spear: SPEAR,
+  takeSpear: `<g transform="translate(0 4)">${SPEAR_LYING}</g><path d="M0 1V-11M-3.5 -7.5L0 -11L3.5 -7.5"/>`,
+  laySpear: `<g transform="translate(0 4)">${SPEAR_LYING}</g><path d="M0 -11V0M-3.5 -3.5L0 0L3.5 -3.5"/>`,
+  fish: `<g transform="translate(0 -2) scale(1.1)">${FISH_PATHS}</g><path d="M-10.5 9.5C-8 8 -5.5 11 -3 9.5C-0.5 8 2 11 4.5 9.5C6.5 8.4 8.5 10.4 10.5 9.5"/>`,
+  roastFish: `<g transform="translate(0 -5.5) scale(0.9)">${FISH_PATHS}</g><g transform="translate(0 8.5) scale(0.58)">${FLAME}</g><path d="M-8 11.5H8"/>`,
   fill: `<g transform="translate(-9.5 -8.5) scale(0.95)">${DRAWINGS.shell}</g><g transform="translate(-3.2 -12.4) scale(0.45)"><path d="${DROP_PATH}"/></g>`,
   sip: `<g transform="rotate(-38) translate(-10 -13.5)">${DRAWINGS.water}</g>`,
   berries: `<g transform="translate(-7.2 -5.5) scale(0.72)">${DRAWINGS.berries}</g><path d="M0 -3V-11M-3.5 -7.5L0 -11L3.5 -7.5"/>`,
@@ -89,11 +97,12 @@ export const ICONS = {
   ring: '<g transform="translate(0 -3.5) scale(0.62)">' + FLAME + '</g><circle cx="-8.4" cy="6" r="2.5"/><circle cx="-4.4" cy="9.4" r="2.5"/><circle cx="2.4" cy="9.8" r="2.5"/><circle cx="8.2" cy="6.6" r="2.5"/><circle cx="7" cy="1" r="2.2"/><circle cx="-7.6" cy="0.6" r="2.2"/>',
   moon: '<path d="M3 -10.5A10 10 0 1 0 10.5 3A7.5 7.5 0 0 1 3 -10.5Z"/>',
 };
-export const ICON_OF = { pickup: 'pickup', lay: 'lay', fill: 'fill', sip: 'sip', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon', dig: 'dig', roast: 'roast', berries: 'berries', bananas: 'bananas', eatBerries: 'eatBerries', eatBanana: 'eatBanana' };
-export const LABEL_OF = { pickup: 'Pick up', lay: 'Lay down', fill: 'Fill the shell', sip: 'Sip water', husk: 'Husk and eat the coconut', feed: 'Feed the fire', torch: 'Take the torch', plant: 'Plant the torch', drink: 'Drink', light: 'Light the fire', build: 'Build a lean-to', sleep: 'Sleep', dig: 'Dig for the crab', roast: 'Roast the crab', berries: 'Pick berries', bananas: 'Pick bananas', eatBerries: 'Eat berries', eatBanana: 'Eat the banana', walls: 'Build the side walls', bed: 'Build a bed', ring: 'Build a stone ring' };
+export const ICON_OF = { pickup: 'pickup', lay: 'lay', fill: 'fill', sip: 'sip', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon', dig: 'dig', roast: 'roast', berries: 'berries', bananas: 'bananas', eatBerries: 'eatBerries', eatBanana: 'eatBanana', makeSpear: 'spear', takeSpear: 'takeSpear', laySpear: 'laySpear', fish: 'fish' };
+export const LABEL_OF = { pickup: 'Pick up', lay: 'Lay down', fill: 'Fill the shell', sip: 'Sip water', husk: 'Husk and eat the coconut', feed: 'Feed the fire', torch: 'Take the torch', plant: 'Plant the torch', drink: 'Drink', light: 'Light the fire', build: 'Build a lean-to', sleep: 'Sleep', dig: 'Dig for the crab', roast: 'Roast the crab', berries: 'Pick berries', bananas: 'Pick bananas', eatBerries: 'Eat berries', eatBanana: 'Eat the banana', makeSpear: 'Make a spear', takeSpear: 'Take up the spear', laySpear: 'Lay the spear down', fish: 'Fish with the spear', roastFish: 'Roast the fish', walls: 'Build the side walls', bed: 'Build a bed', ring: 'Build a stone ring' };
 
-const iconKey = a => a ? (a.kind === 'upgrade' ? a.what : ICON_OF[a.kind]) || null : null;   // an upgrade shows what it builds
-const labelOf = a => LABEL_OF[a.kind === 'upgrade' ? a.what : a.kind] || '';
+const roastsFish = a => a.kind === 'roast' && a.food === 'fish';   // 0.30.17: the roast of a fish has its own drawing
+const iconKey = a => a ? (a.kind === 'upgrade' ? a.what : roastsFish(a) ? 'roastFish' : ICON_OF[a.kind]) || null : null;   // an upgrade shows what it builds
+const labelOf = a => LABEL_OF[a.kind === 'upgrade' ? a.what : roastsFish(a) ? 'roastFish' : a.kind] || '';
 
 export function buttonIcons(action) {
   const options = action && action.options ? action.options.map(o => ({ key: iconKey(o), label: labelOf(o) })).filter(o => o.key) : [];

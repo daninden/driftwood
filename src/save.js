@@ -35,6 +35,8 @@
  * before they grew stays off them after a load).
  * Since 0.22 a save may also carry `crabs: { carried: [total], gone: [[crabId, back]], digs }` (the crabs he carries with the
  * moment each was caught, the caught crabs with the day they return to their colony, and the number of digs); optional, older saves have none.
+ * Since 0.30.17 a save may also carry `spear: { hand, at }` (the one spear: in his hand, or lying at { x, z }; game/spear) and `fish: { carried: [total], tries }` (the fish he carries with the moment each
+ * was caught, and the number of tries, game/fish); optional, older saves have neither (no spear, no fish).
  * Since 0.25 a save may also carry `shells: { full: [boolean], nuts }` (the half shells he keeps, at most 2, each full of water or not, and the
  * whole coconuts he carries, 0 to 2); optional, older saves have none (no shells, no nuts).
  * Since 0.26 a save may also carry `berries` and `bananas`, each `{ carried: [total], picked: [[plantId, total]] }` (the handfuls / the bunch he carries with the moment
@@ -62,7 +64,7 @@
  *   while turning or zooming. The first pose it sees is the baseline.
  * momentKey(game) -> string           changes when something worth saving
  *   happens: wood laid down or taken from a pile, a lean-to started or finished, a fire lit or gone out, a
- *   torch stuck in the ground or taken up, falling asleep or waking up, a crab caught or eaten or gone bad, a shell kept, filled or drunk, a coconut picked up or eaten, berries or a banana bunch picked, eaten or gone bad
+ *   torch stuck in the ground or taken up, falling asleep or waking up, a crab caught or eaten or gone bad, a fish caught or eaten or gone bad, the spear made, taken up or laid down, a shell kept, filled or drunk, a coconut picked up or eaten, berries or a banana bunch picked, eaten or gone bad
  * MOMENT_EVERY (0.5), createMomentWatcher(game, every?) -> { update(dt) -> bool }   true when momentKey changed since the last look; it only looks every `every` seconds (0.27.7), not every frame
  * parseAddress(search) -> { seed, fresh }  from the address query (0.30.15 "Address": `?seed=<n>` and/or `new`,
  *   joined with `&`: `?new`, `?seed=2024`, `?seed=2024&new`); seed defaults to 1337
@@ -113,6 +115,8 @@ function valid(s, seed) {
   if (w.stones !== undefined && !(arr(w.stones) && w.stones.length <= 2 && w.stones.every(Number.isInteger))) return false;
   if (s.leantos !== undefined && !(obj(s.leantos) && arr(s.leantos.list) && s.leantos.list.length <= 64 && s.leantos.list.every(l => obj(l) && [l.id, l.x, l.z, l.heading, l.progress].every(num) && (l.up === undefined || (obj(l.up) && Object.values(l.up).every(num)))) && (s.leantos.nextId === undefined || num(s.leantos.nextId)))) return false;
   if (s.crabs !== undefined && !(obj(s.crabs) && arr(s.crabs.carried) && s.crabs.carried.length <= 2 && s.crabs.carried.every(num) && arr(s.crabs.gone) && s.crabs.gone.length <= 4096 && s.crabs.gone.every(t => arr(t) && t.length === 2 && num(t[0]) && num(t[1])) && num(s.crabs.digs))) return false;
+  if (s.spear !== undefined && !(obj(s.spear) && typeof s.spear.hand === 'boolean' && (s.spear.at === null || s.spear.at === undefined || (obj(s.spear.at) && num(s.spear.at.x) && num(s.spear.at.z))))) return false;
+  if (s.fish !== undefined && !(obj(s.fish) && arr(s.fish.carried) && s.fish.carried.length <= 2 && s.fish.carried.every(num) && num(s.fish.tries))) return false;
   if (s.shells !== undefined && !(obj(s.shells) && arr(s.shells.full) && s.shells.full.length <= 2 && s.shells.full.every(f => typeof f === 'boolean') && Number.isInteger(s.shells.nuts) && s.shells.nuts >= 0 && s.shells.nuts <= 2)) return false;
   for (const [key, max] of [['berries', 2], ['bananas', 1]]) {
     const q = s[key];
@@ -158,7 +162,7 @@ export function createViewSaver(settle = VIEW_SETTLE) {
 
 export function momentKey(game) {
   const f = game.fire;
-  return [game.wood.piles.length, game.wood.piles.reduce((n, p) => n + p.logs.length, 0), f.fires.length, f.torches.length, game.sleep.asleep ? 1 : 0, game.leantos.list.length, game.leantos.list.filter(l => l.progress >= 1).length, game.leantos.list.map(l => Object.keys(l.up || {}).filter(k => l.up[k] >= 1).length).join(''), game.crabs.carried.length, game.crabs.gone.size, game.shells.list.map(f => (f ? 1 : 0)).join(''), game.shells.nuts, game.berries.carried.length, game.berries.picked.size, game.bananas.carried.length, game.bananas.picked.size].join(',');
+  return [game.wood.piles.length, game.wood.piles.reduce((n, p) => n + p.logs.length, 0), f.fires.length, f.torches.length, game.sleep.asleep ? 1 : 0, game.leantos.list.length, game.leantos.list.filter(l => l.progress >= 1).length, game.leantos.list.map(l => Object.keys(l.up || {}).filter(k => l.up[k] >= 1).length).join(''), game.crabs.carried.length, game.crabs.gone.size, game.fish.carried.length, game.spear.hand ? 1 : game.spear.at ? 2 : 0, game.shells.list.map(f => (f ? 1 : 0)).join(''), game.shells.nuts, game.berries.carried.length, game.berries.picked.size, game.bananas.carried.length, game.bananas.picked.size].join(',');
 }
 
 export const MOMENT_EVERY = 0.5;   // seconds between looks at momentKey

@@ -8,7 +8,7 @@
  * the rivers (game/thirst, game/water), and sleeping now and then (game/sleep). The state is kept small and plain so it can be saved later
  * (see docs/architecture.md, "Saving").
  *
- * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire, thirst, hunger, branches, fronds, stones, leantos, crabs, shells, berries, bananas, known }?) -> game
+ * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire, thirst, hunger, branches, fronds, stones, leantos, crabs, spear, fish, shells, berries, bananas, known }?) -> game
  *   The options are what state() returns, so restoring a save is
  *   createGame(world, spawn, saved) (see save.js): each part starts from its
  *   saved state. A saved player { x, z, heading } stays exactly where he
@@ -29,7 +29,7 @@
  *     running: true while he runs this frame; winded: true while he is out of breath (game/breath; for the footsteps and the panting)
  *     work: null, or { kind: 'husk' | 'drill', f: 0..1 } (0.25: 'fill' FILL_TIME and 'sip' SIP_TIME too) while kneeling to
  *     husk a coconut (HUSK_TIME) or to drill fire (game/fire DRILL_TIME); 0.22: 'dig' (DIG_TIME) and 'roast' (ROAST_TIME) too
- *     torch: true while he carries a burning torch (game/fire)
+ *     torch: true while he carries a burning torch (game/fire); spear: true while the spear is in his hand (0.30.17; work kinds 'make' MAKE_TIME and 'fish' FISH_TIME too)
  *   game.clock                  { time, day, total } (game/clock)
  *   game.wood                   carried pieces, piles, washed-up wood (game/wood)
  *   game.sleep                  awake, asleep, rest (game/sleep)
@@ -42,6 +42,8 @@
  *   game.thirst                 days since he drank (game/thirst)
  *   game.hunger                 days since he ate (game/hunger)
  *   game.breath                 how long he can still run (game/breath); out of breath he walks even when run is asked
+ *   game.spear                  the one spear: in his hand or lying where he laid it (game/spear, 0.30.17 "Spear")
+ *   game.fish                   the fish he carries and the tries made (game/fish, 0.30.17)
  *   game.shells                 the half shells he keeps (empty or full of water) and the coconuts he carries (game/shells, 0.25)
  *   game.crabs                  the crabs he carries and the caught ones missing from their colonies (game/crabs, 0.22)
  *   game.berries                the berry bushes picked and the handfuls he carries (game/forage, 0.26)
@@ -150,12 +152,15 @@
  *   In the sleep a lean-to's upgrades count (walls: a longer cold sleep, bed: faster rest, game/sleep); the walls widen where wood and fires stay dry
  *   (leantos.dry) and a stone ring holds a fire and keeps the rain off it (fire.update).
  *
+ * 0.30.17 "Spear" (game/spear, game/fish): `makeSpear` (a small kind, after 'lay', so the arc and not the ring: no spear exists, exactly one branch under his arm and nothing else carried, a stone loose within REACH or a pile of stones within BESIDE, on dry ground; MAKE_TIME of kneeling, the branch is used up, the stone stays; the spear is in his hand), `fish` (the spear in his hand, standing in shallow sea water, `fishableAt`, fewer than 2 fish carried: the ring; FISH_TIME standing, a fish with the seed's chance),
+ *   `takeSpear` (empty arms and hands, the lying spear within REACH, nearest first with the other small kinds) and `laySpear` (the spear in his hand, on dry ground; always offered after the nearer things, so the arc keeps it within reach; it lies at his feet). A spear in his hand fills it like a torch: no pickup of wood, fronds or stones, no torch taken, no sitting; it goes down beside him when he sleeps. 'roast' takes a crab or a fish (`food`: whichever was caught first), game.use('fish') roasts a fish from the row. A new pile keeps 0.55 m + its own radius + BODY from a lying spear.
+ *
  * 0.30.3 "Routes": a click on a pile or fire, and the walk of a light, build or upgrade, go to a standing point (game/stand) by a route of game/route; a plain click walks round a camp solid that closes the straight line. Rule (b): `buildable` takes any pile within BESIDE. Rule (a): wood is not laid where a pile would touch the keep-free region of a lean-to (game/leanto keepFree), and the leftovers of the building piles are laid beside the new lean-to.
  *
  * 0.30.10 "Walls": a new pile keeps CAMP_GAP (game/obstacles) of walking room from every other pile, fire place and burnt place (a lean-to's walls excepted): `blockedAt(x, z, rs)` holds the rule for `wood.drop` and for the leftovers of a build (`layLeftovers`). With no such spot within 3.45 m the wood stays in his arms, as on wet ground.
  *
  * Depends on: game/path, game/route, game/stand, game/known, game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
- *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/water, game/wildlife, game/fireflies, game/weather
+ *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/spear, game/fish, game/water, game/wildlife, game/fireflies, game/weather
  */
 import { BODY, createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, canStand, nearestStandable, weariStride, paceOf, paceStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
@@ -175,6 +180,8 @@ import { createThirst } from './thirst.js';
 import { createHunger } from './hunger.js';
 import { createBreath } from './breath.js';
 import { createCrabs, DIG_TIME, ROAST_TIME, CRAB_FOOD } from './crabs.js';
+import { createSpear, MAKE_TIME } from './spear.js';
+import { createFish, fishableAt, FISH_TIME, FISH_FOOD } from './fish.js';
 import { findWater } from './water.js';
 import { createWildlife } from './wildlife.js';
 import { createFireflies } from './fireflies.js';
@@ -207,14 +214,14 @@ export function createGame(world, spawn, opts = {}) {
   const clock = createClock(opts.time, opts.day);
   const sea0 = seaLevel(clock.total), saved = opts.player && (canOccupy(world, opts.player.x, opts.player.z, sea0) ? { x: opts.player.x, z: opts.player.z } : nearestStandable(world, opts.player.x, opts.player.z, sea0));
   const player = createPlayer(saved ? { x: saved.x, z: saved.z, y: world.H(saved.x, saved.z) } : spawn), branches = createBranches(world, opts.branches), fronds = createFronds(world, opts.fronds), stones = createStones(world, opts.stones), wood = createWood(world, opts.wood, branches, fronds, stones), leantos = createLeantos(world, opts.leantos), sleep = createSleep(opts.sleep);
-  const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger), breath = createBreath(), crabs = createCrabs(world.seed, opts.crabs), shells = createShells(opts.shells), berries = createForage(world, BERRIES, opts.berries), bananas = createForage(world, BANANAS, opts.bananas), known = createKnown(opts.known), movement = { obstacles: solidObstacles(wood, fire, leantos) };
+  const fibre = createFibre(world, opts.fibre), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger), breath = createBreath(), crabs = createCrabs(world.seed, opts.crabs), spear = createSpear(opts.spear), fish = createFish(world.seed, opts.fish), shells = createShells(opts.shells), berries = createForage(world, BERRIES, opts.berries), bananas = createForage(world, BANANAS, opts.bananas), known = createKnown(opts.known), movement = { obstacles: solidObstacles(wood, fire, leantos) };
   if (!known.count) known.visit(player.x, player.z);   // no memory saved (a new game, an older save): the ground round him is known
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
-  player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.thirsty = thirst.level(); player.hungry = hunger.level();
+  player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.spear = spear.hand; player.thirsty = thirst.level(); player.hungry = hunger.level();
   const voiceListeners = new Set();
   const notifyAction = kind => { for (const listener of voiceListeners) listener({ kind, x: player.x, z: player.z }); };
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
   const stand = game.stand = createStand(game, world, { BESIDE });   // 0.30.3 "Routes": standing points (game/stand), asked by the click on a pile or fire and by the walk to the spot of a light, a build or an upgrade
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
@@ -229,7 +236,7 @@ export function createGame(world, spawn, opts = {}) {
   };
   const PILE_SOLID = 0.65;   // the walk-blocking circle of a pile (game/obstacles PILE_R): a pile whose circle touches a lean-to's keep-free region is laid beside it
   // 0.30.10 "Walls": and a new pile (its walk-blocking radius rs, default a driftwood pile's core) keeps CAMP_GAP of walking room from every other solid of the camp (game/obstacles `gapFree`), so no ring of solids closes round him
-  const blockedAt = (x, z, rs) => leantos.list.some(l => keepFree(l).touches(x, z, rs === undefined ? PILE_SOLID : rs + BODY)) || !gapFree(movement.obstacles.camp, x, z, rs === undefined ? PILE_SOLID : rs + BODY, sameFirePlace(x, z));   // 0.30.3 rule (a): the inside of a lean-to and the area in front of its opening stay free of wood
+  const blockedAt = (x, z, rs) => leantos.list.some(l => keepFree(l).touches(x, z, rs === undefined ? PILE_SOLID : rs + BODY)) || (!!spear.at && Math.hypot(x - spear.at.x, z - spear.at.z) < (rs === undefined ? PILE_SOLID : rs) + BODY + 0.55) || !gapFree(movement.obstacles.camp, x, z, rs === undefined ? PILE_SOLID : rs + BODY, sameFirePlace(x, z));   // 0.30.3 rule (a): the inside of a lean-to and the area in front of its opening stay free of wood
   const lay = heading => wood.drop(player.x, player.z, heading, wet(here()), (x, z) => wet(terrainAt(world, x, z, game.sea)), blockedAt);   // a pile never goes in the water
   const meanDry = logs => logs.reduce((s, l) => s + dryness(l, clock.total), 0) / Math.max(1, logs.length);
   const face = th => { player.heading = Math.atan2(th.x - player.x, th.z - player.z) || player.heading; };
@@ -309,6 +316,11 @@ export function createGame(world, spawn, opts = {}) {
   const sleepable = (px = player.x, pz = player.z) => { const t = hereAt(px, pz); return !wet(t) && t.climb <= 0.25; };
   const sitOk = () => { const t = here(); return !wet(t) && t.depth <= 0.05 && t.climb <= 0.25 && t.s < SIT_SLOPE; };   // 0.29.2: level dry ground, no climbing route
 
+  // 0.30.17 "Spear": he can make the spear when no spear exists, one branch is under his arm and nothing else is carried, and a stone (loose, or a pile of stones) lies beside him, on dry ground
+  const stoneBeside = (px, pz) => wood.findAll(px, pz, REACH, 'log').some(c => c.log.stone) || wood.findAll(px, pz, BESIDE, 'pile').some(c => c.pile.kind === 'stone');
+  const makeable = (px, pz) => !spear.has() && !fire.torch && wood.load() === 1 && wood.carried.length === 1 && !!wood.carried[0].branch && !wet(hereAt(px, pz)) && stoneBeside(px, pz);
+  const roastFood = () => (fish.carried.length && (!crabs.carried.length || fish.carried[0] < crabs.carried[0]) ? 'fish' : 'crab');   // the one that was caught first goes first
+
   /** Everything he could do now, as a flat list (pure, changes nothing): the small actions first, nearest first (the first is the main one the ring
    *  and Space do), then the big ones, each marked `big: true` (build, upgrade, light, sleep). See the header for the kinds. */
   function actions() { return actionsAt(player.x, player.z); }
@@ -316,12 +328,12 @@ export function createGame(world, spawn, opts = {}) {
    *  `actions()` is `actionsAt` at his feet, and game/stand asks it at the spots it considers, so the standing points never disagree with the game. */
   function actionsAt(px, pz) {
     if (sleep.asleep || sleep.lie > 0 || work) return [];
-    const load = wood.load(), torch = !!fire.torch, swim = wet(hereAt(px, pz));
+    const load = wood.load(), torch = !!fire.torch, swim = wet(hereAt(px, pz)), hand = spear.hand;   // 0.30.17: a spear in his hand fills it like a torch (no wood, no stone, no torch)
     const small = [];
     const blaze = load ? fire.find(px, pz, BESIDE, 'fire') : null;
     if (blaze && dryPiece() && !full(blaze.fire)) small.push({ kind: 'feed', fire: blaze.fire, thing: blaze });   // dry wood beside a fire feeds it, whatever else is near
     const cands = [];   // what else he could do; the nearest first
-    if (!torch) {   // stones go in his hands (at most STONE_MAX), everything else under his arm (at most CARRY_MAX)
+    if (!torch && !hand) {   // stones go in his hands (at most STONE_MAX), everything else under his arm (at most CARRY_MAX)
       const room = l => l.stone ? wood.stones.length < STONE_MAX : wood.carried.length < CARRY_MAX;
       const log = wood.find(px, pz, REACH, 'log', room), pile = load ? null : wood.find(px, pz, BESIDE, 'pile');   // with wood in his arm a pile is laid on, not taken from
       if (log) cands.push({ d: log.d, a: { kind: 'pickup', thing: log } });
@@ -334,12 +346,17 @@ export function createGame(world, spawn, opts = {}) {
       if (p && (eat || !f.full())) cands.push({ d: p.d, a: { kind, eat, thing: p } });
     }
     if (!torch && !swim) {   // 0.22: crabs; the roast comes before the torch at the same fire (equal distances keep their order)
-      const f = crabs.carried.length ? fire.find(px, pz, BESIDE, 'fire') : null;
-      if (f && fire.strength(f.fire) > 0) cands.push({ d: f.d, a: { kind: 'roast', fire: f.fire, thing: f } });
+      const f = crabs.carried.length || fish.carried.length ? fire.find(px, pz, BESIDE, 'fire') : null;
+      if (f && fire.strength(f.fire) > 0) cands.push({ d: f.d, a: { kind: 'roast', fire: f.fire, thing: f, food: roastFood() } });   // 0.30.17: a crab or a fish, whichever would spoil first
       const h = crabs.full() ? null : wildlife.hiding(px, pz, DIG_REACH);
       if (h) cands.push({ d: h.d, a: { kind: 'dig', thing: h } });
     }
-    if (!load && !torch) {
+    if (!load && !torch && !hand && spear.at) {   // 0.30.17: the spear lying within reach is taken up (empty arms and hands)
+      const d = Math.hypot(spear.at.x - px, spear.at.z - pz);
+      if (d <= REACH) cands.push({ d, a: { kind: 'takeSpear', thing: { kind: 'spear', x: spear.at.x, z: spear.at.z } } });
+    }
+    if (hand && fishableAt(hereAt(px, pz)) && !fish.full()) cands.push({ d: 0, a: { kind: 'fish' } });   // 0.30.17: shallow sea water, the spear in his hand
+    if (!load && !torch && !hand) {
       const f = fire.find(px, pz, BESIDE, 'fire'), t = fire.find(px, pz, REACH, 'torch');
       if (f && f.fire.fuel > TORCH_COST) cands.push({ d: f.d, a: { kind: 'torch', fire: f.fire, thing: f } });   // flames, not embers
       if (t) cands.push({ d: t.d, a: { kind: 'torch', torch: t.torch, thing: t } });
@@ -350,6 +367,7 @@ export function createGame(world, spawn, opts = {}) {
     for (const c of cands) if (!small.some(x => x.kind === c.a.kind)) small.push(c.a);   // one of each kind (the nearest): two icons alike would say nothing
     if (!small.length) {   // nothing near to do: what is in his hands, then a carried bite
       if (torch) { if (plantSpot(px, pz)) small.push({ kind: 'plant' }); }
+      else if (hand) { /* the spear is laid down below */ }
       else if (load) { if (!swim) small.push({ kind: 'lay' }); }
       else if (!swim) {   // empty hands: a full shell when thirsty, else something carried when hungry
         if (shells.full() && thirst.days > SIP_AT) small.push({ kind: 'sip' });
@@ -358,6 +376,8 @@ export function createGame(world, spawn, opts = {}) {
         else if (shells.nuts && hunger.days > EAT_AT) small.push({ kind: 'husk', carried: true });
       }
     }
+    if (hand && !swim) small.push({ kind: 'laySpear' });   // 0.30.17: always, whatever else is near: the arc keeps it within reach
+    if (makeable(px, pz)) small.push({ kind: 'makeSpear' });   // 0.30.17: a branch in his arms and a stone beside him (after 'lay', so the ring keeps doing what it did)
     const b = buildable(px, pz), u = b ? null : upgradable(px, pz), l = b || u ? null : lightable(px, pz), big = b || u || l;
     if (big) small.push({ ...big, big: true });
     if (sleepable(px, pz) && sleep.canLie(clock.time)) small.push({ kind: 'sleep', big: true });
@@ -432,10 +452,10 @@ export function createGame(world, spawn, opts = {}) {
     else if (kind === 'berries' || kind === 'banana') {
       if (!(kind === 'berries' ? berries : bananas).eat()) return false;
       hunger.eat(kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); stoop();
-    } else if (kind === 'crab') {
-      const f = crabs.carried.length ? fire.find(player.x, player.z, BESIDE, 'fire') : null;
+    } else if (kind === 'crab' || kind === 'fish') {   // 0.30.17: a fish is roasted like a crab
+      const f = (kind === 'crab' ? crabs : fish).carried.length ? fire.find(player.x, player.z, BESIDE, 'fire') : null;
       if (!f || !(fire.strength(f.fire) > 0)) return false;
-      work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: f.fire }; face(f);
+      work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: f.fire, food: kind }; face(f);
     } else return false;
     notifyAction(kind === 'nut' ? 'eatNut' : kind === 'water' ? 'sip' : kind === 'banana' ? 'eatBanana' : kind === 'berries' ? 'eatBerries' : 'roast'); if (input && input.clearTarget) input.clearTarget();
     return true;
@@ -454,7 +474,11 @@ export function createGame(world, spawn, opts = {}) {
     }
     else if (a.kind === 'sip') { work = { kind: 'sip', t: 0, dur: SIP_TIME, thing: null }; notifyAction('sip'); }
     else if (a.kind === 'dig') { work = { kind: 'dig', t: 0, dur: DIG_TIME, thing: a.thing.id }; notifyAction('dig'); }
-    else if (a.kind === 'roast') { work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: a.fire }; notifyAction('roast'); }
+    else if (a.kind === 'roast') { work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: a.fire, food: a.food || 'crab' }; notifyAction('roast'); }
+    else if (a.kind === 'makeSpear') { if (makeable(player.x, player.z)) { work = { kind: 'make', t: 0, dur: MAKE_TIME, thing: null }; notifyAction('makeSpear'); } }
+    else if (a.kind === 'fish') { work = { kind: 'fish', t: 0, dur: FISH_TIME, thing: null }; notifyAction('fish'); }
+    else if (a.kind === 'takeSpear') { if (spear.take()) { stoop(); notifyAction('takeSpear'); } }
+    else if (a.kind === 'laySpear') { if (!wet(here()) && spear.lay(player.x, player.z)) { stoop(); notifyAction('laySpear'); } }
     else if (a.kind === 'feed') {   // only a piece dry enough to burn goes on; wet wood stays in his arm
       const l = wood.giveOne(fuel);
       if (l) { fire.feed(a.fire, dryness(l, clock.total), l.branch ? BRANCH_BURN : 1); stoop(); notifyAction('feed'); }
@@ -512,7 +536,13 @@ export function createGame(world, spawn, opts = {}) {
     if (wk.kind === 'fill') { shells.fill(); return; }
     if (wk.kind === 'sip') { if (shells.pour()) thirst.sip(SIP_DRINK); return; }
     if (wk.kind === 'dig') { if (wildlife.isHiding(wk.thing) && !crabs.dig(wk.thing, clock.total)) wildlife.escape(wk.thing); return; }   // the crab is caught, or it ran out of the back
-    if (wk.kind === 'roast') { if (fire.fires.includes(wk.thing) && fire.strength(wk.thing) > 0 && crabs.eat()) hunger.eat(CRAB_FOOD); return; }
+    if (wk.kind === 'roast') {
+      if (!fire.fires.includes(wk.thing) || !(fire.strength(wk.thing) > 0)) return;
+      if (wk.food === 'fish') { if (fish.eat()) hunger.eat(FISH_FOOD); } else if (crabs.eat()) hunger.eat(CRAB_FOOD);
+      return;
+    }
+    if (wk.kind === 'make') { if (makeable(player.x, player.z) && wood.giveOne(l => !!l.branch)) spear.make(); return; }   // the branch is used up, the stone stays
+    if (wk.kind === 'fish') { if (spear.hand && fishableAt(here())) fish.fishTry(clock.total); return; }
     const pile = wk.thing; if (!wood.piles.includes(pile) || !fibre.use()) return;
     const lit = fire.attempt(pile.x, pile.z, pile.logs, meanDry(pile.logs), sleep.tired(), clock.total);
     if (lit) wood.takePile(pile);
@@ -539,6 +569,7 @@ export function createGame(world, spawn, opts = {}) {
     if (sleep.asleep) { if (wantWake && sleep.lie > 0.5) { sleep.wake(); if (input.cancelAction) input.cancelAction(); } }   // the press that woke him does nothing more
     else if (wantSleep && canSleep()) { work = null; queued = null; sleep.start(isNight(clock.time)); notifyAction('sleep'); }   // by day only a nap
     if (sleep.asleep && fire.torch && !plantTorch()) fire.douse();   // he sticks the torch in the ground before he lies down
+    if (sleep.asleep && spear.hand) spear.lay(player.x, player.z);   // 0.30.17: and lays the spear down beside him
     settle();
     const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z), { drain: thirst.drain() * hunger.drain(), faint: thirst.faint() }, (lt => lt ? { walls: leantos.has(lt, 'walls'), bed: leantos.has(lt, 'bed') } : false)(leantos.home(player.x, player.z)));
     settle();
@@ -547,7 +578,7 @@ export function createGame(world, spawn, opts = {}) {
     if (queued && (sleep.asleep || wantsToMove(input))) queued = null;
 
     // 0.29.2 "Amble": sitting on the ground, only when the mind asks (input.sit); anything he does or the player asks for gets him up
-    const sitWant = !!input.sit && !sleep.asleep && !(sleep.lie > 0) && !work && !queued && !(player.stoop > 0) && !fire.torch && !wood.load() && !wantsToMove(input) && !pick && !light && !wantSleep && sitOk();
+    const sitWant = !!input.sit && !sleep.asleep && !(sleep.lie > 0) && !work && !queued && !(player.stoop > 0) && !fire.torch && !spear.hand && !wood.load() && !wantsToMove(input) && !pick && !light && !wantSleep && sitOk();
     if (sitWant) { const lk = input.sit; if (lk && Number.isFinite(lk.x) && Number.isFinite(lk.z) && Math.hypot(lk.x - player.x, lk.z - player.z) > 0.2) { let d = Math.atan2(lk.x - player.x, lk.z - player.z) - player.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); player.heading += d * Math.min(1, dt * 6); } }
     const sitDown = dt / SIT_TIME;
     player.sitting = sitWant ? Math.min(1, player.sitting + sitDown) : Math.max(0, player.sitting - (wantsToMove(input) || pick || light ? 2 : 1) * sitDown);
@@ -609,7 +640,7 @@ export function createGame(world, spawn, opts = {}) {
     breath.update(dt, ran, res.moved, strain); player.running = ran; player.winded = breath.winded;
     player.work = work ? { kind: work.kind, f: Math.min(1, work.t / work.dur) } : null;
     if (fire.torch && here().depth > DOUSE_DEPTH) fire.douse();   // wading too deep puts the torch out
-    player.torch = !!fire.torch;
+    player.torch = !!fire.torch; player.spear = spear.hand;
 
     clock.advance(gameDt);
     game.sea = seaLevel(clock.total);
@@ -629,6 +660,7 @@ export function createGame(world, spawn, opts = {}) {
     berries.update(clock.total);
     bananas.update(clock.total);
     crabs.update(clock.total);
+    fish.update(clock.total);
     branches.update(clock.total);
     fronds.update(clock.total);
     if (sleep.asleep && wet(here())) sleep.wake();   // the flood wakes him
@@ -638,7 +670,7 @@ export function createGame(world, spawn, opts = {}) {
     return { distance: res.distance, terrain: here(), time: clock.time, total: clock.total, sea: game.sea, rest: sleep.rest() };
   }
   function state() {
-    return { seed: world.seed, time: clock.time, day: clock.day, player: { x: player.x, z: player.z, heading: player.heading }, sleep: sleep.state(), wood: wood.state(), fibre: fibre.state(), fire: fire.state(), thirst: thirst.state(), hunger: hunger.state(), branches: branches.state(), fronds: fronds.state(), stones: stones.state(), leantos: leantos.state(), crabs: crabs.state(), shells: shells.state(), berries: berries.state(), bananas: bananas.state(), known: known.state() };
+    return { seed: world.seed, time: clock.time, day: clock.day, player: { x: player.x, z: player.z, heading: player.heading }, sleep: sleep.state(), wood: wood.state(), fibre: fibre.state(), fire: fire.state(), thirst: thirst.state(), hunger: hunger.state(), branches: branches.state(), fronds: fronds.state(), stones: stones.state(), leantos: leantos.state(), crabs: crabs.state(), spear: spear.state(), fish: fish.state(), shells: shells.state(), berries: berries.state(), bananas: bananas.state(), known: known.state() };
   }
   return game;
 }

@@ -23,11 +23,13 @@
 // 0.30.5 "Quicker": ONE generated island per file. The four streams (and the extra tests) play one after the other on the same world object; a new game no longer takes over what an earlier game
 //   did to the world's own pieces (rain on the start wood and branches, a branch grown back: tests/sharedWorld.test.js), so each run is the same as on a freshly generated island. Checked when this
 //   was introduced: the reports of all four streams of every scenario were byte-identical on one shared island and on four fresh ones; tests/sharedWorld.test.js keeps a short check of it.
+// 0.30.17 "Spear": the report also has the spear and the fish (see mindSim): the safety checks above (one spear, never stuck in his hand, at most FISH_TRIES tries a trip, few spoiled fish) and the quantities of `rhythm` (spear made, fishing trips, fish caught and eaten).
 // Exports: lifeSuite(seed, { walked, fresh, beach, extra }, part?), SIM_TIMEOUT, STREAMS. Depends on: world/world, world/spots, game/leanto (siteFor, NEED), tests/helpers/mindSim.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../../src/world/world.js';
 import { startSpot } from '../../src/world/spots.js';
 import { runMind } from './mindSim.js';
+import { FISH_TRIES } from '../../src/game/mind.js';
 
 export const SIM_TIMEOUT = 600000;   // ms for one test that plays four times ten game days (see the header)
 export const STREAMS = [0, 1, 2, 3];
@@ -77,6 +79,9 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
     check(r.maxThirst, 'maximum thirst').toBeLessThan(MAX_THIRST); check(r.maxHunger, 'maximum hunger').toBeLessThan(MAX_HUNGER);   // 0.30.9: clearly below a collapse, on every stream
     // 0.29.1 "Low water": at low water he digs for crabs at colonies he knows and roasts them at the evening fire; a trip is at most CRAB_DIGS (4) digs, and a crab seldom spoils uneaten (0.29.3: at most 3, was 2; whether the evening fire catches on the first tries is luck of the drill, fixed by the attempt count, and two bad evenings in a row spoil two crabs whatever he does)
     check(r.crabTripDigsMax, 'maximum crab-trip digs').toBeLessThanOrEqual(4); check(r.crabsSpoiled, 'spoiled crabs').toBeLessThanOrEqual(3);
+    // 0.30.17 "Spear": one spear, made once and never left in his hand (a spear stuck in his hand would block every wood task); a fishing trip is at most FISH_TRIES tries; a fish seldom spoils uneaten (like a crab)
+    check(r.spearsMade, 'spears made (once, it lasts)').toBeLessThanOrEqual(1); check(r.spearStuck, 'times he could not lay the spear down').toBe(0);
+    check(r.fishTripTriesMax, 'maximum tries on a fishing trip').toBeLessThanOrEqual(FISH_TRIES); check(r.fishSpoiled, 'spoiled fish').toBeLessThanOrEqual(3);
   });
   // 0.29 "Daily bread": a human rhythm. He sleeps every night, drinks three or four times a day (a drink at the river or a shell), eats about two meals a day (a meal = half a day of hunger),
   // is hungry (half a day or more) only now and then. On the mean of the streams (see the header).
@@ -88,6 +93,8 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
     c.min(r => (r.drinks + r.sips) / r.days, k.drinksMin ?? 1.4, 'drinks per day'); c.max(r => (r.drinks + r.sips) / r.days, 5, 'drinks per day');
     c.min(r => r.mix.berries + r.mix.banana, k.inland ?? 0, 'inland food');   // some of the food is from inland
     c.min(r => r.crabsEaten, k.crabs ?? 0, 'crabs eaten');
+    // 0.30.17 "Spear" (quantities by the policy: about half the mean of 0.30.17 on the scenario, whole counts rounded down, at least 1 where above 0; a bound met on fewer than 2 streams is left out, as `burned` is): he makes the spear, goes fishing, catches and eats a fish
+    c.min(r => r.spearsMade, 1, 'spears made'); c.min(r => r.fishTrips, k.fishTrips ?? 1, 'fishing trips'); c.min(r => r.fishCaught, k.fishCaught ?? 1, 'fish caught'); c.min(r => r.fishEaten, k.fishEaten ?? 1, 'fish eaten');
   };
   describe(`Dave alone on island ${seed}`, () => {
     if (on('walked')) it('lives ten days on the ground a first day would have shown him (streams 0 to 3)', async () => {

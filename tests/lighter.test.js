@@ -152,7 +152,7 @@ describe('damp patches', () => {
 });
 
 describe('the carry row without garbage', () => {
-  const game = (o = {}) => ({ wood: { carried: o.carried || [], stones: o.stones || [] }, fibre: { carried: o.fibre || 0 }, crabs: { carried: [] }, shells: { nuts: 1, empty: () => 0, full: () => 1 }, berries: { carried: [1, 2] }, bananas: { carried: [] } });
+  const game = (o = {}) => ({ wood: { carried: o.carried || [], stones: o.stones || [] }, fibre: { carried: o.fibre || 0 }, crabs: { carried: [] }, fish: { carried: [] }, shells: { nuts: 1, empty: () => 0, full: () => 1 }, berries: { carried: [1, 2] }, bananas: { carried: [] } });
   it('counts what is carried by the flag on each piece, into the object it is given', () => {
     const out = {}, g = game({ carried: [{}, { branch: true }, { frond: true }, {}], stones: [{}], fibre: 2 });
     expect(carryState(g, out)).toBe(out);
@@ -170,7 +170,7 @@ describe('the carry row without garbage', () => {
 });
 
 describe('the save moment watcher', () => {
-  const game = () => ({ fire: { fires: [], torches: [] }, wood: { piles: [] }, sleep: { asleep: false }, leantos: { list: [] }, crabs: { carried: [], gone: new Set() }, shells: { list: [], nuts: 0 }, berries: { carried: [], picked: new Set() }, bananas: { carried: [], picked: new Set() } });
+  const game = () => ({ fire: { fires: [], torches: [] }, wood: { piles: [] }, sleep: { asleep: false }, leantos: { list: [] }, crabs: { carried: [], gone: new Set() }, fish: { carried: [] }, spear: { hand: false, at: null }, shells: { list: [], nuts: 0 }, berries: { carried: [], picked: new Set() }, bananas: { carried: [], picked: new Set() } });
   it('looks only every half second and says true once for each change', () => {
     const g = game(), m = createMomentWatcher(g, 0.5);
     expect(m.update(0.1)).toBe(false);

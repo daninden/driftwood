@@ -470,9 +470,9 @@ describe('the action input', () => {
 
 describe('the button: icons, opacity and the DOM', () => {
   it('has a drawing and plain words for every kind of action, in the ink', () => {
-    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(LABEL_OF[kind]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'build', 'sleep', 'dig', 'roast', 'fill', 'sip', 'berries', 'bananas', 'eatBerries', 'eatBanana']).toContain(kind); }
+    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(LABEL_OF[kind]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'build', 'sleep', 'dig', 'roast', 'fill', 'sip', 'berries', 'bananas', 'eatBerries', 'eatBanana', 'makeSpear', 'takeSpear', 'laySpear', 'fish']).toContain(kind); }
     for (const what of ['walls', 'bed', 'ring']) { expect(ICONS[what]).toBeTruthy(); expect(LABEL_OF[what]).toBeTruthy(); }
-    expect(Object.keys(ICON_OF).length).toBe(18);
+    expect(Object.keys(ICON_OF).length).toBe(22);
     expect(buttonIcons({ tap: null, options: [{ kind: 'build', big: true }] })).toEqual({ main: null, options: [{ key: 'leanto', label: 'Build a lean-to' }] });
     for (const svg of Object.values(ICONS)) expect(svg).not.toMatch(/fill="(?!none)/);
   });
