@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30.4 "Timber" — 2026-11-10
+
+Dave handles wood more sensibly, and the ten-day lives are judged over four random streams. Released together with 0.30.2 "Checks" and 0.30.3 "Routes".
+
+- **Far to near:** when he fetches wood he picks the nearest pieces (normally three, by walking from where he stands) and collects the farthest of them first, keeping that order.
+- **Three wet logs a trip:** wet wood for drying comes three pieces at a time, fewer when the pile is nearly full. The drying pile now holds up to a full pile of 12 (was 5); its site keeps clear of branch piles, so a full drying pile never makes the arc offer to build. Wet wood still never goes to the fire.
+- **Wood home first:** before he starts something else (a drink, a meal, bed, a stroll, exploring) he brings the wood in his arms to the pile it belongs to: dry wood to the fire's stock, wet wood to drying, wood for his lean-to to its site (wet logs from a stroll too, while the lean-to still needs them). Very thirsty or very hungry, he goes at once with the wood and takes it home afterwards. More than 150 m of walking from camp, he lays it down where he stands instead.
+- **Allowed ground on every line:** a route now keeps to the finder's allowed ground along every line, not only at its points (an exploring trip once stepped onto a climbing route for a moment).
+- **Four streams:** each ten-day life plays four random streams on freshly generated islands; safety is checked on every stream, quantities on the mean (nights and the lean-to on at least three of four). Two bounds measured on a single stream were re-set with the user: seed 7 walked inland food 4 (was 5), seed 2024 walked crabs 2 (was 3). The full suite takes about 9 minutes on four cores; making it quicker is the next task (0.30.5 "Quicker").
+- **Measured** (48 runs before the four-stream tests): crabs 151 before against 162, stuck 259 against 179, lean-tos 39 against 42, dried wood moved to the fire 879 against 1136, collapses 0 and 0.
+
 ## 0.30.3 "Routes" — 2026-11-09
 
 Dave (and a click on a pile or a fire) now finds his way round the camp and stands where the work can be done. Designed and measured first (`docs/architecture.md`, "Routes (0.30.3)").
