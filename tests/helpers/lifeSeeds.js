@@ -27,7 +27,7 @@ LIFE[1337] = {
       expect(r.drying.moved).toBeGreaterThan(0);
       expect(r.drying.laid).toBeLessThanOrEqual(r.drying.wetTaken);
       expect(r.drying.moved).toBeLessThanOrEqual(r.drying.laid);
-      expect(mind.dryPiles().every(q => q.logs.length <= 5)).toBe(true);
+      expect(mind.dryPiles().every(q => q.logs.length <= DRY_MAX)).toBe(true);
       expect(moved.length).toBeGreaterThan(0);
       expect(moved.every(e => e.n > 0 && e.ids.length === e.n && e.destination === 'fire' && !e.drying && Math.hypot(e.from[0] - e.to[0], e.from[1] - e.to[1]) > 0.2)).toBe(true);
       const ids = moved.flatMap(e => e.ids);

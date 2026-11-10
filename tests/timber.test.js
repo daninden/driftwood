@@ -121,8 +121,8 @@ const stripMorning = ({ pile = 0, wetN = 8, time = 0.45, extra = {}, ...o } = {}
 const dryingPile = (g, m) => g.wood.piles.find(q => m.dryPiles().includes(q));
 
 describe('wet wood for the drying pile: up to three at a time (0.30.4)', () => {
-  it('a reserve trip carries three wet logs, then the two that the five-piece reserve still has room for, never more, and none goes anywhere but the drying pile', () => {
-    const { g, m, wet } = stripMorning({ wetN: 8 }); expect(wet.length).toBeGreaterThanOrEqual(6);
+  it('a reserve trip carries three wet logs, then the two that the reserve (a full pile of twelve, seven there already) still has room for, never more, and none goes anywhere but the drying pile', () => {
+    const { g, m, wet } = stripMorning({ pile: 7, wetN: 8 }); expect(wet.length).toBeGreaterThanOrEqual(6);
     let maxCarried = 0, maxPile = 0, wetOnFire = 0; const trips = [];
     for (let i = 0; i < 9000 && g.clock.time < 0.58; i++) {
       tick(g, m);
@@ -136,16 +136,24 @@ describe('wet wood for the drying pile: up to three at a time (0.30.4)', () => {
     expect(maxCarried).toBe(CARRY_MAX); expect(maxPile).toBeLessThanOrEqual(DRY_MAX); expect(dp.logs.length).toBe(DRY_MAX); expect(wetOnFire).toBe(0);
     expect(trips.map(t => t.max).slice(0, 2)).toEqual([3, 2]);
     expect(m.stats.timber.wetLoads[3]).toBeGreaterThanOrEqual(1); expect(m.stats.timber.wetLoads[2]).toBeGreaterThanOrEqual(1);
-    expect(ids(dp.logs).every(id => id >= WET_ID && id < WET_ID + 100)).toBe(true);
-    expect(m.stats.drying.laid).toBe(DRY_MAX);
+    expect(ids(dp.logs).filter(id => id >= WET_ID && id < WET_ID + 100).length).toBe(DRY_MAX - 7);   // the five he fetched joined the seven that lay there
+    expect(m.stats.drying.laid).toBe(DRY_MAX - 7);
   });
-  it('near a full drying pile he brings fewer: three there means two more, four means one, five means none', () => {
-    for (const [pile, more] of [[3, 2], [4, 1], [5, 0]]) {
+  it('near a full drying pile he brings fewer: nine there means three more, ten means two, eleven means one, twelve means none', () => {
+    expect(DRY_MAX).toBe(PILE_FULL);
+    for (const [pile, more] of [[9, 3], [10, 2], [11, 1], [12, 0]]) {
       const { g, m } = stripMorning({ pile, wetN: 6 });
       let maxCarried = 0, maxPile = 0;
       for (let i = 0; i < 3500 && g.clock.time < 0.58; i++) { tick(g, m); maxCarried = Math.max(maxCarried, g.wood.carried.length); maxPile = Math.max(maxPile, dryingPile(g, m)?.logs.length ?? 0); }
       expect(maxCarried).toBe(more); expect(dryingPile(g, m).logs.length).toBe(pile + more); expect(maxPile).toBeLessThanOrEqual(DRY_MAX);
     }
+  });
+  it('never fills the drying pile to six or more beside a pile of six or more branches (the arc would offer to build): it stays at five', () => {
+    const { g, m } = stripMorning({ pile: 3, wetN: 6 });
+    const s = m.dryingSite(); g.wood.piles.push({ x: s.x + 1.5, z: s.z, kind: 'branch', logs: Array.from({ length: 6 }, (_, i) => logAt(703000 + i, s.x + 1.5, s.z)) });
+    let maxPile = 0;
+    for (let i = 0; i < 3500 && g.clock.time < 0.58; i++) { tick(g, m); maxPile = Math.max(maxPile, dryingPile(g, m)?.logs.length ?? 0); }
+    expect(maxPile).toBe(5); expect(dryingPile(g, m).logs.length).toBe(5);
   });
   it('delivers exactly the logs he took, the farthest taken first, and fewer when fewer wet logs can be reached', () => {
     const { g, m } = stripMorning({ wetN: 2 });
