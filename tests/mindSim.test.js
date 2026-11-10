@@ -85,6 +85,21 @@ describe('exploring: the trip (with a game)', () => {
     const g2 = createGame(w, spawn, { day: 3, time: 0.56, thirst: { days: 0.05 }, hunger: { days: 0.05 }, sleep: { awake: 0.1 } }); walkFirstDay(w, g2, spawn);
     for (const g of [g1, g2]) { const m = createMind(w, g); m.engage(); for (let i = 0; i < 300; i++) { m.step(0.1); g.update(m.input, 0.1); } expect(m.stats.explores).toBe(0); }
   });
+  it('0.30.16: the 220 m cap is gone: a target beyond it is chosen when the reach allows it and home is reachable in time, and not otherwise', () => {
+    const aim = (day, time, avail) => { const g = camp({ day, time, know: true }); g.known.visit(spawn.x, spawn.z, 225); const m = createMind(w, g); m.engage(); const c = m.exploreAim(day, time, 'coast', avail); return c && Math.hypot(c.x - m.home().x, c.z - m.home().z); };
+    expect(aim(20, 0.25, 2000)).toBeGreaterThan(220);     // day 20: the reach is 380 m, and with the time for it he goes past the old cap
+    expect(aim(9, 0.25, 2000)).toBeNull();                // day 9: the reach (215 m) does not go past the known ground (225 m)
+    expect(aim(20, 0.25)).toBeNull();                     // the real time to dark is far too short for the way there and back at the amble (home before dark is the limit)
+    expect(aim(20, 0.5)).toBeNull();
+  });
+  it('0.30.16: a trip starts in the early morning (before EXPLORE_FROM) only when home and the crabs have nothing to do', () => {
+    const done = { list: [{ id: 0, x: spawn.x + 6, z: spawn.z + 2, heading: 0.7, progress: 1, up: { walls: 1, ring: 1, bed: 1 } }], nextId: 1 };
+    // how many of 24 streams set out before EXPLORE_FROM (the chance is 0.3 at each idle moment, so some do when it is allowed)
+    const early = o => { let n = 0; for (let st = 0; st < 24; st++) { const g = camp({ day: 3, time: 0.18, know: true, ...o }); const m = createMind(w, g, { stream: st }); m.engage(); for (let i = 0; i < 200 && g.clock.time < EXPLORE_FROM; i++) { m.step(0.1); g.update(m.input, 0.1); if (m.exploring) { n++; break; } } } return n; };
+    expect(early({ leantos: done, stocked: false })).toBeGreaterThan(0);   // home finished, no fibre to roast a crab: calm, the morning is open
+    expect(early({ stocked: false })).toBe(0);                             // the lean-to is still to build (the project would have its step at HOME_FROM)
+    expect(early({ leantos: done })).toBe(0);                              // a crab trip is due later (fibre, dry wood): the morning is not open
+  });
   it('is repeatable: the same island and the same start give the same trips', () => {
     const a = trip(true, { stream: 2 }), b = trip(true, { stream: 2 });
     expect(a.m.stats.explores).toBe(b.m.stats.explores); expect(a.known1).toBe(b.known1);

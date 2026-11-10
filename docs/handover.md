@@ -4,15 +4,15 @@ Where the work stands, for the next session. Read `AGENTS.md`, `docs/design.md` 
 
 ## Status
 
-**Live on `main`: 0.30.14 "Torch".** **Ready to push: 0.30.15 "Address"** (see `docs/versions.md`). The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
+**Live on `main`: 0.30.15 "Address" (282ac7e).** **Ready to push: 0.30.16 "Reach"** (see `docs/versions.md`). The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
 
 ## Next, agreed in order
 
-1. **0.30.16 "Reach"** (agreed 2026-11-10): the exploring cap of 220 m from home goes away; his reach keeps growing (80 m + 15 m a day) up to the whole island; "home before dark" stays and is the real limit; a long trip may start in the morning when nothing at home is urgent. Measure how far he gets, and that safety, lean-tos and nights hold.
+1. *(nothing agreed is waiting; 0.30.16 "Reach" is built and ready, see above.)* Measured: 0.30.16 changes none of the 24 ten-day lives, because the way home before dark (`EXPLORE_BACK` 0.6, path cost) allows only about 150 to 170 m from home whatever the reach, and the early morning hardly opens (few idle moments before 0.2, the home project has a piece to build almost every day). To decide with the user: whether the trips should be allowed to take more of the day (a later `EXPLORE_BACK`, or a rule for a day of its own), or whether 0.30.16 is enough as it is.
 
 Later, agreed in principle, to work out first: **fishing close to home** (in his river or the sea off his own coast, e.g. with a spear made from a branch; a new way to get food, not a reason for a far trip).
 
-**Milk explored and not built (2026-11-10):** a coconut already quenches 0.15 day of thirst since 0.15; a drink rule that preferred carried nuts made seed 7 walked collapse twice and lose its lean-to (nuts eaten for drink, none left for fibre and food); trips never needed a drink (they start with thirst under 0.25 and are short). The range of exploring is limited by its own rules (reach 80 m + 15 m a day, at most 220 m from home, home before dark), not by water. Still open: a reason for long trips across the island (the user wants something repeatable; not outposts, not storm wrack, not a one-off goal).
+**Milk explored and not built (2026-11-10):** a coconut already quenches 0.15 day of thirst since 0.15; a drink rule that preferred carried nuts made seed 7 walked collapse twice and lose its lean-to (nuts eaten for drink, none left for fibre and food); trips never needed a drink (they start with thirst under 0.25 and are short). The range of exploring is limited by its own rules (reach 80 m + 15 m a day, since 0.30.16 with no cap, and home before dark, which binds first), not by water. Still open: a reason for long trips across the island (the user wants something repeatable; not outposts, not storm wrack, not a one-off goal).
 
 The long-simulation bounds follow the policy in `docs/architecture.md`. (The "Woodpile" idea was explored and shelved on 2026-11-10; see *Drying, the way ahead* in `docs/design.md`.)
 

@@ -5,7 +5,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_REACH_MAX, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, UP_AT, PAIR_HALF, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_EARLY, crabDue, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, UP_AT, PAIR_HALF, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, PASSIVE_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { campGame } from './helpers/mindCamp.js';
@@ -646,10 +646,32 @@ describe('exploring: when he goes out (exploreChance, pure)', () => {
     expect(exploreChance(ex({ last: 4, missing: 3 }))).toBe(0);   // but once a day at most
     expect(EXPLORE_MISSING_CHANCE).toBeGreaterThan(2 * EXPLORE_CHANCE);
   });
-  it('goes a little further each day, up to a limit', () => {
+  it('0.30.16: a trip may start in the morning (from EXPLORE_EARLY) only when calm: nothing at home is urgent', () => {
+    expect(EXPLORE_EARLY).toBeCloseTo(0.18, 5); expect(EXPLORE_EARLY).toBeLessThan(EXPLORE_FROM);
+    const t = (EXPLORE_EARLY + EXPLORE_FROM) / 2;
+    expect(exploreChance(ex({ time: t, last: -9 }))).toBe(0);                                  // not calm: the old window
+    expect(exploreChance(ex({ time: t, last: -9, calm: false }))).toBe(0);
+    expect(exploreChance(ex({ time: t, last: -9, calm: true }))).toBe(EXPLORE_CHANCE);       // calm: the morning is open, the chance per idle moment is the same
+    expect(exploreChance(ex({ time: t, last: 4, missing: 1, calm: true }))).toBe(0);          // still once a day at most
+    expect(exploreChance(ex({ time: t, last: -9, calm: true, thirst: EXPLORE_THIRST }))).toBe(0);   // the other start conditions stay
+    expect(exploreChance(ex({ time: EXPLORE_EARLY - 0.001, last: -9, calm: true }))).toBe(0);
+    expect(exploreChance(ex({ time: EXPLORE_FROM, last: -9 }))).toBe(EXPLORE_CHANCE);          // after EXPLORE_FROM nothing changed
+  });
+  it('0.30.16: a crab trip is due later today when the tide will be low in the crab window and he could go', () => {
+    const base = { time: 0.6, total: 3.6, sea: 0, crabs: 0, flames: false, canLight: true, fibre: 3, pileDry: true, cool: {} };
+    let low = null, high = null;   // from 0.6 on only the last of the window is left: some days the tide is low then, some days it is not
+    for (let d = 0; d < 40 && !(low && high); d++) { const s = { ...base, total: d + 0.6 }; if (crabDue(s)) low = low || s; else high = high || s; }
+    expect(low).not.toBeNull(); expect(high).not.toBeNull();
+    expect(crabDue(low)).toBe(true); expect(crabDue(high)).toBe(false);
+    expect(crabDue({ ...low, time: CRAB_TO, total: low.total - 0.6 + CRAB_TO })).toBe(false);   // the window is over
+    expect(crabDue({ ...low, canLight: false, fibre: 0 })).toBe(false);   // no way to roast it: not due
+    expect(crabDue({ ...low, cool: { crabs: true } })).toBe(false);
+  });
+  it('goes a little further each day (no limit since 0.30.16)', () => {
     expect(exploreReach(0)).toBe(EXPLORE_REACH0);
     for (let d = 1; d < 30; d++) expect(exploreReach(d)).toBeGreaterThanOrEqual(exploreReach(d - 1));
-    expect(exploreReach(5)).toBeGreaterThan(exploreReach(1)); expect(exploreReach(100)).toBe(EXPLORE_REACH_MAX);
+    expect(exploreReach(5)).toBeGreaterThan(exploreReach(1)); expect(exploreReach(100)).toBe(EXPLORE_REACH0 + 15 * 100);   // 0.30.16: no cap (it was 220 m)
+    expect(exploreReach(12)).toBeGreaterThan(220); expect(exploreReach(20)).toBe(380);
   });
   it('looks for what is missing where he expects it: coast for wood and nuts, forest for branches, the two in turn when all is well', () => {
     expect(exploreWhere(['wood'], 0)).toBe('coast'); expect(exploreWhere(['nuts'], 1)).toBe('coast'); expect(exploreWhere(['branches'], 0)).toBe('forest');

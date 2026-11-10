@@ -41,9 +41,11 @@
  *   from the fire (so the stone ring comes to stand about 5 m from it, not on it), preferring ground near fresh water he knows; the piles for the building (6 driftwood and 6 branches, within 2 m of each other) are laid there.
  *   Never a second lean-to: with one (also a player's) the project only adds the upgrades to it, and a half-built one is built on. Materials only from known ground, within HOME_MAX_COST of walking; piles for the upgrades lie
  *   beside the lean-to (fronds on one side, stones on the other, branches behind).
+ * 0.30.16 "Reach": the 220 m cap of the exploring reach is gone (`exploreReach`: 80 m + 15 m a day, up to the whole island; the island's edge and the way home before dark are the limits), and a trip may start from EXPLORE_EARLY (just after dawn)
+ *   when `calm` (idleGoal: the home project has nothing to do today and no crab trip is possible or due: `crabDue`, pure); otherwise from EXPLORE_FROM as before.
  * 0.29.4 "Wander": EXPLORING, a pastime of the idle goal. Now and then (`exploreChance`, pure: by day, EXPLORE_FROM 0.2 to EXPLORE_TO 0.52, thirst and hunger well below the point where he goes for them, no crab trip to make; at most one trip a day, one in
  *   EXPLORE_GAP 2 days when nothing is missing, every day with chance 0.8 when wood (fewer than 6 loose logs known within 70 m of home), branches (fewer than 4) or nuts (fewer than 2) are short, or a lately failed search for them left a mark (`lack`)) he walks to the edge of what he knows
- *   (`exploreTarget`: the farthest unknown spot within `exploreReach(day)` of home (80 m on day 0, 15 m more a day, at most 220 m) that borders known ground, which he can reach and be home from before EXPLORE_BACK 0.6, preferably on the coast (wood and coconuts) or at a forest edge (branches, berries),
+ *   (`exploreTarget`: the farthest unknown spot within `exploreReach(day)` of home (80 m on day 0, 15 m more a day, no cap since 0.30.16) that borders known ground, which he can reach and be home from before EXPLORE_BACK 0.6, preferably on the coast (wood and coconuts) or at a forest edge (branches, berries),
  *   `exploreWhere`; the PRNG of its own, `rngEx`), at the amble, learning what he walks past (`input.learns` true; `mind.exploring`, not `mind.searching`), looks about, picks up what is within reach of the far end (the arrive kinds shore, palms, forest), (also straight from the stores goal, `exploreForLack`: wood or a nut he went for and could not find on known ground sends him out at once when a trip is allowed, without waiting for an idle moment that the stores and the fire may never leave him) and turns back in time (`exploreLate`: the walk home, measured by the finder every 10 m,
  *   and the margin, against EXPLORE_BACK; at the normal pace when it is late) to lay down what he carries at home. His own terrace and ordinary ground only: the finder `pathExplore` closes climbing routes (climb above EXPLORE_ROUTE) and steep ground (slope 0.45 and more), and a trip is only made from a place from which home can be reached that way.
  * 0.29.5 "Drying" (until 0.30.12; replaced in 0.30.13 "Tideline"): the camp's drying pile, its stock errand and the transfer to the fire's pile are gone. A pile of that time in an old save is an ordinary pile now.
@@ -73,7 +75,7 @@
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
  * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now (s.pileLogs: pieces in the biggest pile there)
- * exploreChance(s), exploreReach(day), exploreWhere(missing, trips), exploreLate(time, secs, speed?)   pure (0.29.4): whether, how far, where to and when to turn back, tested in tests/mind.test.js
+ * exploreChance(s), exploreReach(day), exploreWhere(missing, trips), exploreLate(time, secs, speed?), crabDue(s)   pure (0.29.4; crabDue 0.30.16): whether, how far, where to and when to turn back, tested in tests/mind.test.js
  * crabTripOk(s), crabFoodOk(s)   pure (0.29.1): may he go for crabs now (s.sea, time, crabs carried, flames, canLight, fibre, pileDry, cool)
  * huskWanted(s), restSeconds(r1, r2), strollKind(avail, last, r), strollNow(s, r)   pure; the choices of the pastimes (0.28.2), tested in tests/mind.test.js
  * sitKind(s) -> 'gaze' | 'fire' | 'rest' | null   pure (0.29.2): whether he sits while he rests (s: time, long, fireNear, gazing)
@@ -121,6 +123,7 @@ import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX, PILE_FRONT, pi
 import { FIRE_MIN, FUEL_MAX, TORCH_DRY, BURN, DOUSE_DEPTH } from './fire.js';
 import { ringCentre, siteFor, keepFree, KEEP, UPGRADES, UP_NEAR, NEED, RING_AT, RING_R, paidSteps } from './leanto.js';
 import { DAWN as SLEEP_DAWN, isNight } from './sleep.js';
+import { seaLevel } from './tide.js';
 import { EAT_AT } from './shells.js';
 
 export const THIRST_GO = 0.35, THIRST_TOPUP = 0.2, THIRST_SIP = 0.15, NEAR_WATER = 40;   // 0.29 "Daily bread": a drink every 8 hours or so (thirsty is 12), three or four times a day with the shells and the evening's
@@ -142,7 +145,8 @@ export const SITE_RINGS = [5, 6.2, 7.5], SITE_HIGH = 0.8, SITE_LEVEL = 0.3, SITE
 // 0.29.4 "Wander": now and then, by day and when nothing presses, he goes exploring to the edge of what he knows, on his own terrace, and is home well before dark
 export const EXPLORE_FROM = 0.2, EXPLORE_TO = 0.52, EXPLORE_BACK = 0.6, EXPLORE_MARGIN = 0.012, EXPLORE_DETOUR = 1.5, EXPLORE_SPARE = 45, EXPLORE_LIMIT = 900, EXPLORE_ROUTE = 0.12;   // starts between FROM and TO, is home by BACK (where the evening's chores begin), with a margin; ground with a climbing route of more than EXPLORE_ROUTE is closed
 export const EXPLORE_THIRST = 0.25, EXPLORE_HUNGER = 0.3, EXPLORE_GAP = 2, EXPLORE_CHANCE = 0.3, EXPLORE_MISSING_CHANCE = 0.8, LACK_DAYS = 2;   // nothing urgent; every EXPLORE_GAP-th day, or every day when something is missing at home
-export const EXPLORE_REACH0 = 80, EXPLORE_REACH_DAY = 15, EXPLORE_REACH_MAX = 220, EXPLORE_EDGE = 18, EXPLORE_SLOPE = 0.45;   // how far from home a trip may go: 80 m on the first day, 15 m more each day, at most 220 m
+export const EXPLORE_REACH0 = 80, EXPLORE_REACH_DAY = 15, EXPLORE_EDGE = 18, EXPLORE_SLOPE = 0.45;   // how far from home a trip may go: 80 m on the first day, 15 m more each day (0.30.16: no cap; the island's edge and the way home before dark are the limits)
+export const EXPLORE_EARLY = SLEEP_DAWN + 0.01;   // 0.30.16 "Reach": a trip may start this early (just after dawn, instead of EXPLORE_FROM) when nothing at home is urgent: the home project has nothing to do today and no crab trip is possible or due (`calm`)
 // 0.30.13 "Tideline": wet wood from the strip between the tides is carried to a spot just above the high-water line (TIDE_LAND: ground height, TIDE_NEAR: metres from where he stands), at least TIDE_CAMP (11 m: it covers every place the lean-to's site, ring and upgrade piles may come, 6 m left lean-tos with no site on some islands) from the fire, the lean-to and its site, TIDE_APART from other piles (a driftwood pile of fewer than TIDE_JOIN_MAX may be joined), by a way of at most TIDE_COST seconds
 export const DRY_AT = TORCH_DRY, TIDE_LAND = [0.15, 0.8], TIDE_NEAR = [2, 9], TIDE_CAMP = 11, TIDE_APART = 3, TIDE_JOIN_MAX = 9, TIDE_COST = 30, STOCK_MAX_COST = 90;   // DRY_AT: the dryness the fire and the torch ask for; STOCK_MAX_COST: the longest walk to a pile of his own wood he left behind (fetchOwed)
 // 0.30.14 "Torch": after dusk a trip of more than TORCH_TRIP m from a fire with at least TORCH_FUEL (two pieces) of fuel takes a torch
@@ -194,15 +198,21 @@ export function homeNext(s) {
 }
 
 /** 0.29.4 "Wander": the chance, at an idle moment, that he sets out exploring now (pure). s: { time, day, thirst, hunger, last (the day of the last trip), missing (how many of wood, branches, nuts are short at home), cool, crab (a crab trip is possible now) }.
- *  Never when a need is coming up (thirst, hunger), a crab trip is on, or outside EXPLORE_FROM to EXPLORE_TO; at most one trip a day, one in EXPLORE_GAP days when nothing is missing, every day when something is. */
+ *  Never when a need is coming up (thirst, hunger), a crab trip is on, or outside EXPLORE_FROM to EXPLORE_TO (0.30.16: from EXPLORE_EARLY when s.calm: nothing at home is urgent); at most one trip a day, one in EXPLORE_GAP days when nothing is missing, every day when something is. */
 export function exploreChance(s) {
-  if (!(s.time >= EXPLORE_FROM && s.time < EXPLORE_TO) || (s.cool && s.cool.explore) || s.crab) return 0;
+  if (!(s.time >= (s.calm ? EXPLORE_EARLY : EXPLORE_FROM) && s.time < EXPLORE_TO) || (s.cool && s.cool.explore) || s.crab) return 0;
   if (s.thirst >= EXPLORE_THIRST || s.hunger >= EXPLORE_HUNGER) return 0;
   if (s.day - s.last < (s.missing > 0 ? 1 : EXPLORE_GAP)) return 0;
   return s.missing > 0 ? EXPLORE_MISSING_CHANCE : EXPLORE_CHANCE;
 }
 /** How far from home a trip may go on this day (metres): grows a little each day. */
-export function exploreReach(day) { return Math.min(EXPLORE_REACH_MAX, EXPLORE_REACH0 + EXPLORE_REACH_DAY * Math.max(0, day)); }
+export function exploreReach(day) { return EXPLORE_REACH0 + EXPLORE_REACH_DAY * Math.max(0, day); }   // 0.30.16: no cap (it was 220 m)
+
+/** 0.30.16 "Reach": is a crab trip due later today? (pure) Some moment of the crab window from now on (a quarter of an hour of game time apart) at which `crabTripOk` would say yes, with the sea as the tide will have it then. s: as for crabTripOk, with s.total (days since the start). */
+export function crabDue(s) {
+  for (let t = Math.max(s.time, CRAB_FROM); t < CRAB_TO; t += 0.02) if (crabTripOk({ ...s, time: t, sea: seaLevel(s.total - s.time + t) })) return true;
+  return false;
+}
 /** Where he expects what is missing: 'coast' (driftwood and coconuts wash up and grow there) or 'forest' (branches, berries); nothing missing: the coast and the forest in turn (trips = trips so far). */
 export function exploreWhere(missing, trips) {
   if (missing && missing.length) return missing.includes('wood') || missing.includes('nuts') ? (missing.includes('branches') && trips % 2 ? 'forest' : 'coast') : 'forest';
@@ -1408,8 +1418,10 @@ export function createMind(world, game, opts = {}) {
     const s = senses();
     if (need && !crabTripOk(s)) return yield* homeGoal(step, need);
     if (clock.day !== tideDay && clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crabTripOk(s)) { if (yield* tideRound()) return true; }   // 0.30.13: the daily round to the strip
-    if (clock.day > exploredDay && clock.time >= EXPLORE_FROM && clock.time < EXPLORE_TO) {   // 0.29.4: now and then he goes exploring
-      const missing = exploreMissing(h), chance = exploreChance({ time: clock.time, day: clock.day, thirst: s.thirst, hunger: s.hunger, last: exploredDay, missing: missing.length, cool: s.cool, crab: crabTripOk(s) });
+    if (clock.day > exploredDay && clock.time >= EXPLORE_EARLY && clock.time < EXPLORE_TO) {   // 0.29.4: now and then he goes exploring
+      // 0.30.16: before EXPLORE_FROM only when calm: the home project has nothing to do today (its next piece, as at HOME_FROM, is none: built today, finished, cooling, no camp) and no crab trip is possible or due
+      const calm = clock.time < EXPLORE_FROM ? !homeNext({ ...homeSnap(), time: HOME_FROM }) && !crabTripOk(s) && !crabDue({ ...s, total: clock.total }) : undefined;
+      const missing = exploreMissing(h), chance = exploreChance({ time: clock.time, day: clock.day, thirst: s.thirst, hunger: s.hunger, last: exploredDay, missing: missing.length, cool: s.cool, crab: crabTripOk(s), calm });
       if (chance > 0 && rngEx() < chance) return yield* exploreTrip(missing);
     }
     if (strollNow(s, rand())) {
@@ -1531,6 +1543,7 @@ export function createMind(world, game, opts = {}) {
   mind.chose = () => chose;
   mind.lastKind = () => lastKind;
   mind.path = path; mind.strollCands = strollCands; mind.leantoSites = leantoSites; mind.tideSpot = tideSpot; mind.materialFind = (kind, range) => nearestBy(kind, range); mind.timberPlan = (src, n, o) => selectStops(src, n, o).sort((a, b) => b.cost - a.cost);
+  mind.exploreAim = (day, time, where = 'coast', avail = (EXPLORE_BACK - time) * DAY_SECONDS) => { const home = fireSpot(homeSpot()); exo.x = home.x; exo.z = home.z; exo.reach = exploreReach(day); return exploreTarget(home, exploreReach(day), where, avail); };   // 0.30.16: the spot a trip would aim for on that day at that time of day (tests; no side effects but the trip's own bookkeeping of exo)
   mind.siteReason = siteReason; mind.existingSite = existingSite; mind.homePlan = () => { const h = homeSpot(), sn = { ...homeSnap(), time: HOME_FROM, day: Math.max(clock.day, HOME_DAY), builtDay: -1, cool: {} }, step = homeNext(sn); return { step, need: step ? homeNeed(step, h) : null, site: proj.site, snap: sn }; };
   return mind;
 }
