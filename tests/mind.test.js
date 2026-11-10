@@ -539,9 +539,9 @@ describe('drying wood: the site (0.29.5)', () => {
   it('is behind the lean-to once there is one (farther round to its side where the branch place is too near), outside its keep-free region (rule (a), 0.30.3), dry once it has walls, and clear of the stone ring and the fire', () => {
     const g = camp({ leantos: LT() }), m = createMind(w, g), s = m.dryingSite(), lt = g.leantos.list[0];
     expect(s).not.toBeNull(); expect(s.lean).toBe(true);
-    expect(Math.hypot(s.x - lt.x, s.z - lt.z)).toBeCloseTo(DRY_LT, 3);
+    expect(Math.hypot(s.x - lt.x, s.z - lt.z)).toBeLessThanOrEqual(2.3 + 1e-6); expect(Math.hypot(s.x - lt.x, s.z - lt.z)).toBeGreaterThanOrEqual(DRY_LT - 1e-6);   // 1.9 m behind it, or 2.3 m round at its side (the branch place for the upgrades lies 2.1 m straight behind)
     expect(keepFree(lt).touches(s.x, s.z, 0.65)).toBe(false);   // a pile laid there is not pushed away from the lean-to
-    expect(g.leantos.dry(s.x, s.z, 'wood')).toBe(false);        // 1.9 m is beyond the 1.5 m the bare roof keeps dry ...
+    expect(g.leantos.dry(s.x, s.z, 'wood')).toBe(false);        // 1.9 m and more is beyond the 1.5 m the bare roof keeps dry ...
     const g2 = camp({ leantos: LT({ up: { walls: 1 } }) }), s2 = createMind(w, g2).dryingSite();
     expect(g2.leantos.dry(s2.x, s2.z, 'wood')).toBe(true);      // ... and inside the 2.5 m of a lean-to with side walls
     const rc = ringCentre(lt); expect(Math.hypot(s.x - rc.x, s.z - rc.z)).toBeGreaterThanOrEqual(DRY_FIRE);
@@ -551,7 +551,7 @@ describe('drying wood: the site (0.29.5)', () => {
     expect(DRY_PAIR).toBeGreaterThan(2);
     for (const withLeanto of [false, true]) {
       const g = camp(withLeanto ? { leantos: LT({ up: { walls: 1 } }) } : {}), m = createMind(w, g), s = m.dryingSite(), h = m.home();
-      const branchSpots = [{ x: h.x, z: h.z }];   // the fire's own stock lies on the fire place
+      const branchSpots = [withLeanto ? ringCentre(g.leantos.list[0]) : { x: h.x, z: h.z }];   // the fire's own stock lies on the fire place (with a lean-to: its stone ring)
       if (withLeanto) { const lt = g.leantos.list[0]; branchSpots.push({ x: lt.x - Math.sin(lt.heading) * UP_AT, z: lt.z - Math.cos(lt.heading) * UP_AT }); }   // and the upgrade branches behind the lean-to
       for (const b of branchSpots) expect(Math.hypot(s.x - b.x, s.z - b.z)).toBeGreaterThanOrEqual(DRY_PAIR);
       // the real thing: a full drying pile of 12 driftwood, a pile of 12 branches on each of those places: the drying pile has no partner within 2 m, so the game never offers to build there

@@ -1,9 +1,9 @@
 // The configurations of the ten-day lives of Dave alone (0.30.2 "Checks": moved here from tests/mindLife1337/2024/7.test.js, unchanged, so that each scenario can have a test file of its own).
 // The checks and what each number means are in helpers/lifeSuite; the numbers are measured, not wished for.
-// Exports: LIFE { 1337, 2024, 7 }: { walked, fresh, beach?, extra? }. Depends on: game/game, game/mind (the seed-7 water-search extra), vitest (expect).
+// Exports: LIFE { 1337, 2024, 7 }: { walked, fresh, beach?, extra? }. Depends on: game/game, game/mind (the seed-7 water-search extra), DRY_MAX, vitest (expect).
 import { expect } from 'vitest';
 import { createGame } from '../../src/game/game.js';
-import { createMind } from '../../src/game/mind.js';
+import { createMind, DRY_MAX } from '../../src/game/mind.js';
 
 export const LIFE = {};
 
@@ -18,21 +18,23 @@ LIFE[1337] = {
   extra: [{
     // Dry stock (0.29.15): an actual game and mind run keeps the small wet reserve finite and never counts a drying log as moved more than once.
     name: 'dry stock: uses finite stock errands and never repeats a drying transfer in the walked seed-1337 run',
-    run: (w, spawn, walkedRun) => {
-      const { r, mind } = walkedRun();
-      const moved = mind.stats.events.filter(e => e.type === 'dry-moved');
-      expect(mind.stats.drying.stockErrands).toBeGreaterThan(0);
-      expect(r.drying.wetTaken).toBeGreaterThan(0);
-      expect(r.drying.laid).toBeGreaterThan(0);
-      expect(r.drying.moved).toBeGreaterThan(0);
-      expect(r.drying.laid).toBeLessThanOrEqual(r.drying.wetTaken);
-      expect(r.drying.moved).toBeLessThanOrEqual(r.drying.laid);
-      expect(mind.dryPiles().every(q => q.logs.length <= DRY_MAX)).toBe(true);
-      expect(moved.length).toBeGreaterThan(0);
-      expect(moved.every(e => e.n > 0 && e.ids.length === e.n && e.destination === 'fire' && !e.drying && Math.hypot(e.from[0] - e.to[0], e.from[1] - e.to[1]) > 0.2)).toBe(true);
-      const ids = moved.flatMap(e => e.ids);
-      expect(new Set(ids).size).toBe(ids.length);
-      expect(moved.reduce((n, e) => n + e.n, 0)).toBe(r.drying.moved);
+    run: async (w, spawn, walkedRuns) => {   // 0.30.5: on each stream's walked run
+      for (const { r, mind, stream } of await walkedRuns()) {
+        const at = (what, actual) => expect(actual, `seed 1337 walked stream ${stream}: ${what}; drying=${JSON.stringify(r.drying)}`);
+        const moved = mind.stats.events.filter(e => e.type === 'dry-moved');
+        at('stock errands', mind.stats.drying.stockErrands).toBeGreaterThan(0);
+        at('wet taken', r.drying.wetTaken).toBeGreaterThan(0);
+        at('laid', r.drying.laid).toBeGreaterThan(0);
+        at('moved', r.drying.moved).toBeGreaterThan(0);
+        at('laid no more than taken', r.drying.laid).toBeLessThanOrEqual(r.drying.wetTaken);
+        at('moved no more than laid', r.drying.moved).toBeLessThanOrEqual(r.drying.laid);
+        at('every drying pile holds at most a full pile', mind.dryPiles().every(q => q.logs.length <= DRY_MAX)).toBe(true);
+        at('some move happened', moved.length).toBeGreaterThan(0);
+        at('every move is a real move from the drying pile to the fire', moved.every(e => e.n > 0 && e.ids.length === e.n && e.destination === 'fire' && !e.drying && Math.hypot(e.from[0] - e.to[0], e.from[1] - e.to[1]) > 0.2)).toBe(true);
+        const ids = moved.flatMap(e => e.ids);
+        at('no piece moved twice', new Set(ids).size).toBe(ids.length);
+        at('the moves add up', moved.reduce((n, e) => n + e.n, 0)).toBe(r.drying.moved);
+      }
     },
   }],
 };

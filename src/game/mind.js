@@ -73,7 +73,7 @@
  * crabTripOk(s), crabFoodOk(s)   pure (0.29.1): may he go for crabs now (s.sea, time, crabs carried, flames, canLight, fibre, pileDry, cool)
  * huskWanted(s), restSeconds(r1, r2), strollKind(avail, last, r), strollNow(s, r)   pure; the choices of the pastimes (0.28.2), tested in tests/mind.test.js
  * sitKind(s) -> 'gaze' | 'fire' | 'rest' | null   pure (0.29.2): whether he sits while he rests (s: time, long, fireNear, gazing)
- * DRY_AT, DRY_MAX, DRY_PAIR, DRY_NEAR, DRY_RINGS, DRY_FIRE, DRY_CLEAR, DRY_LT, DRY_LT_OFFS, STOCK_MAX_COST   (0.29.5 / 0.29.15) the numbers of the drying pile and small stock errand
+ * DRY_AT, DRY_MAX, DRY_PAIR, DRY_NEAR, DRY_RINGS, DRY_FIRE, DRY_CLEAR, DRY_LT, DRY_LT_SPOTS, STOCK_MAX_COST   (0.29.5 / 0.29.15) the numbers of the drying pile and small stock errand
  * homeNext(s) -> 'leanto' | 'walls' | 'ring' | 'bed' | null   pure (0.29.3): the next piece of his home now (s: day, time, fire (he has a camp), lean ('none' | 'half' | 'done' | 'other'), up {walls, ring, bed: 0..1}, builtDay, cool)
  * SET_SPAN, HANDOFF_SECS   (0.30.4) the reach of a set of pieces to fetch (m of walking beyond the nearest) and the time a goal gets on top of its limit for the handoff
  * RANK   the priority of each goal (lower wins)
@@ -136,7 +136,7 @@ export const EXPLORE_FROM = 0.2, EXPLORE_TO = 0.52, EXPLORE_BACK = 0.6, EXPLORE_
 export const EXPLORE_THIRST = 0.25, EXPLORE_HUNGER = 0.3, EXPLORE_GAP = 2, EXPLORE_CHANCE = 0.3, EXPLORE_MISSING_CHANCE = 0.8, LACK_DAYS = 2;   // nothing urgent; every EXPLORE_GAP-th day, or every day when something is missing at home
 export const EXPLORE_REACH0 = 80, EXPLORE_REACH_DAY = 15, EXPLORE_REACH_MAX = 220, EXPLORE_EDGE = 18, EXPLORE_SLOPE = 0.45;   // how far from home a trip may go: 80 m on the first day, 15 m more each day, at most 220 m
 // 0.29.5 "Drying": wet wood from the strip between the tides is laid on a drying pile of its own above the high-water line at his camp (under or beside the lean-to when there is one), and moved to the fire's pile once it is dry enough to burn
-export const DRY_AT = TORCH_DRY, DRY_MAX = PILE_FULL, DRY_PAIR = 2.4, DRY_NEAR = 1.6, DRY_RINGS = [3.6, 4.6], DRY_FIRE = 3.4, DRY_CLEAR = 4.5, DRY_LT = 1.9, DRY_LT_OFFS = [0.3, 0.8, 1.1, 1.4], STOCK_MAX_COST = 90;   // DRY_AT: the dryness the fire and the torch ask for; DRY_MAX: a full pile (0.30.5, was 5); DRY_PAIR: the clearance (more than the 2 m of the arc's build pair, with a margin) from branch piles and from the places where they are laid; the pile lies DRY_RINGS m from the fire, or DRY_LT m from the middle of the lean-to, at least DRY_FIRE from the fire's own pile and DRY_CLEAR from the lean-to's site; the active stock errand stays a short known-ground trip
+export const DRY_AT = TORCH_DRY, DRY_MAX = PILE_FULL, DRY_PAIR = 2.4, DRY_NEAR = 1.6, DRY_RINGS = [3.6, 4.6], DRY_FIRE = 3.4, DRY_CLEAR = 4.5, DRY_LT = 1.9, DRY_LT_SPOTS = [[0.3, DRY_LT], [1.4, 2.3], [1.7, 2.3]], STOCK_MAX_COST = 90;   // DRY_AT: the dryness the fire and the torch ask for; DRY_MAX: a full pile (0.30.5, was 5); DRY_PAIR: the clearance (more than the 2 m of the arc's build pair, with a margin) from branch piles and from the places where they are laid; the pile lies DRY_RINGS m from the fire, or DRY_LT m from the middle of the lean-to, at least DRY_FIRE from the fire's own pile and DRY_CLEAR from the lean-to's site; the active stock errand stays a short known-ground trip
 export const SET_SPAN = 45, HANDOFF_SECS = 150, HANDOFF_MAX_COST = 150;   // 0.30.4 "Timber": a set of pieces to fetch reaches at most SET_SPAN m of walking beyond the nearest; a goal gets HANDOFF_SECS more on top of its limit for bringing the wood in his arms to camp first, and a camp farther than HANDOFF_MAX_COST of walking is out of reach for it (the wood is laid down where he stands)   // 0.30.4 "Timber": the time a goal gets on top of its limit for bringing the wood in his arms to camp first
 export const UP_AT = 2.1;   // 0.30.3 rule (a): the piles of the upgrades lie this far from the lean-to's middle, beside its keep-free region (a pile's solid is 0.65) and within UP_NEAR (3)
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
@@ -275,7 +275,7 @@ export function createMind(world, game, opts = {}) {
     takeWake: () => false, takeLight: () => false, pressing: () => false, cancelAction() { pressed = null; }, clearTarget() { inp.target = null; },
     takeAction: () => { const k = pressed; pressed = null; return k; }, takeChoice: () => { const k = choice; choice = null; return k; }, takeSleep: () => { const k = sleepKey; sleepKey = false; return k; },
   };
-  const ev = (type, data) => { if (stats.events.length < (type.startsWith('home') ? 900 : 400)) stats.events.push({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); };
+  const ev = (type, data) => { if (stats.events.length < (type.startsWith('home') || type.startsWith('dry') ? 900 : 400)) stats.events.push({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); };
   const idleInput = () => { inp.target = null; inp.run = false; };
   const busy = () => game.sleep.asleep || p.lie > 0 || !!p.work || p.stoop > 0 || (p.sitting > 0 && !inp.sit);   // (0.29.2: getting up is not done until he stands)
   const cool = (name, secs = COOL[name] || 60) => { coolUntil[name] = now + secs; };
@@ -980,7 +980,7 @@ export function createMind(world, game, opts = {}) {
   function dryingSite() {   // the place of the drying pile for his camp as it is now; kept while the camp is the same (a new one when the lean-to is finished), null when there is none
     const h = homeSpot(), lean = h.kind === 'leanto', fs = fireSpot(h), of = lean ? { x: h.x, z: h.z } : { x: fs.x, z: fs.z };
     const cur = proj.dry.at(-1), clear = (x, z) => !W.piles.some(q => q.kind === 'driftwood' && !isDrying(q) && Math.hypot(q.x - x, q.z - z) < 2.5);   // no other pile of driftwood near: a wet piece laid there would join it
-    if (cur && cur.lean === lean && dist(cur.of, of) < 3 && clear(cur.x, cur.z)) return cur;
+    if (cur && cur.lean === lean && dist(cur.of, of) < 3 && !W.piles.some(q => q.kind === 'driftwood' && !isDrying(q) && Math.hypot(q.x - cur.x, q.z - cur.z) < DRY_NEAR + 0.2)) return cur;
     const no = proj.dryNo; if (no && no.lean === lean && dist(no.of, of) < 1 && no.count === known.count) return null;
     const lt0 = lean ? h.lt : null, bx = lt0 ? lt0.x - Math.sin(lt0.heading) * UP_AT : 0, bz = lt0 ? lt0.z - Math.cos(lt0.heading) * UP_AT : 0;   // the place where the branches of the upgrades are piled (behind the lean-to, see `homePlan`)
     const okAt = (x, z) => {
@@ -989,8 +989,8 @@ export function createMind(world, game, opts = {}) {
         && Math.hypot(x - fs.x, z - fs.z) >= DRY_FIRE && clear(x, z) && !proj.dry.some(q => Math.hypot(q.x - x, q.z - z) < 2.5) && !game.fire.fires.some(f => Math.hypot(f.x - x, f.z - z) < 3.2) && !(proj.site && Math.hypot(x - proj.site.x, z - proj.site.z) < DRY_CLEAR) && !W.piles.some(q => q.kind === 'branch' && Math.hypot(q.x - x, q.z - z) < DRY_PAIR) && !(lean && Math.hypot(x - bx, z - bz) < DRY_PAIR) && path.cost(fs, { x, z }) < 40;
     };
     let found = null;
-    if (lean) for (const off of DRY_LT_OFFS) for (const sg of [1, -1]) {   // behind the lean-to, either side, and farther round to its side when the branch place is too near (beside its keep-free region)
-      const a = h.lt.heading + Math.PI + sg * off, x = h.x + Math.sin(a) * DRY_LT, z = h.z + Math.cos(a) * DRY_LT;
+    if (lean) for (const [off, rad] of DRY_LT_SPOTS) for (const sg of [1, -1]) {   // behind the lean-to, either side (DRY_LT m), and farther round to its side (2.3 m, still inside the 2.5 m of the walls) when the branch place is too near
+      const a = h.lt.heading + Math.PI + sg * off, x = h.x + Math.sin(a) * rad, z = h.z + Math.cos(a) * rad;
       if (!found && !keepFree(h.lt).touches(x, z, 0.65) && okAt(x, z)) found = { x, z, ux: Math.sin(a), uz: Math.cos(a) };
     }
     for (const r of DRY_RINGS) for (let i = 0; i < 16 && !found; i++) {   // else beside the camp, nearest ring first
