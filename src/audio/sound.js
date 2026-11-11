@@ -27,9 +27,12 @@
  *   sound.context            the AudioContext, or null before the first gesture
  *   sound.enabled
  *
- * Depends on: audio/mix (MASTER)
+ * 0.31 "Axe": felling (player.work 'fell') is a soft, rhythmic chop, one blow every CHOP_PERIOD (render/chop, the rhythm of the figure's blows), the first after CHOP_STRIKE of a period.
+ *
+ * Depends on: audio/mix (MASTER), render/chop (pure)
  */
 import { MASTER, LEVELS } from './mix.js';
+import { CHOP_PERIOD, CHOP_STRIKE } from '../render/chop.js';
 
 const NOISE_SECONDS = 5, FADE = 0.35, LOOK_AHEAD = 0.3;
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -135,7 +138,7 @@ export function createSound({ enabled = true } = {}) {
 
   function work(w, dt) {
     const key = w ? w.kind : '';
-    if (key !== workLast) { workLast = key; clocks.work = 0; }
+    if (key !== workLast) { workLast = key; clocks.work = key === 'fell' ? CHOP_PERIOD * CHOP_STRIKE : 0; }   // the first blow lands where the arm has come down
     if (!w) return;
     clocks.work -= dt;
     if (clocks.work > 0) return;
@@ -156,6 +159,9 @@ export function createSound({ enabled = true } = {}) {
     } else if (w.kind === 'roast') {   // a sizzle: many tiny bright pops
       clocks.work = rand(0.05, 0.12);
       grain(d, { freq: rand(4500, 8500), q: 0.8, dur: rand(0.05, 0.14), gain: rand(0.12, 0.3), attack: 0.002 });
+    } else if (w.kind === 'fell') {   // 0.31: a soft, rhythmic chop: a woody thock with a short dry crack, once per blow (the rhythm of render/hero chopPose)
+      clocks.work = CHOP_PERIOD;
+      tone(d, { type: 'triangle', points: [[0, 175], [1, 85]], dur: 0.13, gain: 0.55 }); grain(d, { freq: 650, to: 420, q: 1.3, dur: 0.07, gain: 0.35 }); grain(d, { freq: 2300, q: 0.9, dur: 0.03, gain: 0.1, attack: 0.002 });
     } else clocks.work = 1;   // drinking and the rest: quiet
   }
 

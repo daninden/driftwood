@@ -25,7 +25,7 @@
  *     of the rain forest (game/forage, render/bananas), and the fires
  *     (game/fire, render/fire), the branches under the trees (game/branches,
  *     render/branches), the fallen palm fronds and the stones on the ground (game/fronds, game/stones, render/finds), the lean-tos with their upgrades (game/leanto, render/leanto), with the tally marks of piles and fires while
- *     he stands beside them (render/tallyMarks), the spear lying on the ground (game/spear, render/spear), and the crabs, fish and birds near him (game/wildlife, render/wildlife), and the fireflies at night (game/fireflies, render/fireflies)
+ *     he stands beside them (render/tallyMarks), the spear and the axe lying on the ground (game/spear, game/axe, render/spear, render/axe), the logs lying on the ground, the cut marks and the fall of a felled tree (game/logs, game/felled, render/timber, render/felling), and the crabs, fish and birds near him (game/wildlife, render/wildlife), and the fireflies at night (game/fireflies, render/fireflies)
  *   view.pickGround(clientX, clientY, touch?) -> { x, z } | null
  *     the ground under the screen point; on a piece of beach driftwood as drawn (its trunk, a branch or the
  *     roots standing up, with a finger a little wider) a point on that piece,
@@ -57,8 +57,9 @@ import { buildWater } from './water.js';
 import { buildFarTiles, pumpFarTiles, updateFarTiles } from './farTiles.js';
 import { SUMMIT_MAX } from './camera.js';
 import { T, HALF, NT } from '../world/constants.js';
-import { buildNearTile, disposeGroup } from './nearTile.js';
-import { poolsOf } from './batch.js';
+import { buildNearTile, disposeGroup, rebuildTrees } from './nearTile.js';
+import { poolsOf, releaseGroup } from './batch.js';
+import { rebuildTiles } from './tileRebuild.js';
 import { createStreamer, tileInView } from './streaming.js';
 import { createHero } from './hero.js';
 import { createFootprints } from './footprints.js';
@@ -74,6 +75,9 @@ import { createBananaView } from './bananas.js';
 import { createLeantoView } from './leanto.js';
 import { createFireView } from './fire.js';
 import { createSpearView } from './spear.js';
+import { createAxeView } from './axe.js';
+import { createTimberView } from './timber.js';
+import { createFellingView } from './felling.js';
 import { createTallyView } from './tallyMarks.js';
 import { createWildlifeView } from './wildlife.js';
 import { createFireflyView } from './fireflies.js';
@@ -101,12 +105,16 @@ export async function createIslandView(world, container, progress, start, opts =
   const near = new Map();   // tile -> { group }
   const pools = poolsOf(scene);   // the shared instanced pools of the near tiles and of what lies on the ground (render/batch)
   const startLights = opts.settings ? opts.settings.fireLights : undefined; let fireLights = startLights;   // the pool of fire lights is sized once, by the quality at the start
-  let woodView = null, cocoView = null, branchView = null, findsView = null, leantoView = null, berryView = null, bananaView = null, fireView = null, tallyView = null, wildView = null, flyView = null, spearView = null, lightLayer = null, game = null, building = false;
+  let woodView = null, cocoView = null, branchView = null, findsView = null, leantoView = null, berryView = null, bananaView = null, fireView = null, tallyView = null, wildView = null, flyView = null, spearView = null, axeView = null, timberView = null, fellingView = null, lightLayer = null, game = null, building = false;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso, pools),
-    onReady: (tile, v) => { stage.tagTerrain(v.group); scene.add(v.group); near.set(tile, v); if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); } },
-    onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); findsView.dropTile(tile); berryView.dropTile(tile); bananaView.dropTile(tile); } },
+    onReady: (tile, v) => {
+      stage.tagTerrain(v.group); scene.add(v.group); near.set(tile, v);
+      if (game && v.fv !== game.felled.version) rebuildTrees(world, kit, tile, v.group, pools);   // a tree was felled while the tile was being built
+      if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); timberView.addTile(tile); }
+    },
+    onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); findsView.dropTile(tile); berryView.dropTile(tile); bananaView.dropTile(tile); timberView.dropTile(tile); } },
   });
   // what he carries, as the hero draws it: rebuilt only when a piece, or the look of its dryness, changes (nothing carried is the usual case)
   const NO_LOAD = [];
@@ -133,13 +141,20 @@ export async function createIslandView(world, container, progress, start, opts =
   window.addEventListener('resize', stage.resize);
 
 
+  /** Trees felled since the last frame: the tree groups of the detailed tiles are drawn again and the crowns of the far tiles in view are filled again (render/nearTile, render/farTiles). */
+  function refreshTrees() {
+    const d = game.felled.dirty; if (!d.size) return;
+    for (const k of d) { const tile = world.tiles[k], g = tile && far.map.get(tile); if (g && g.userData.slots) { releaseGroup(g); g.userData.fill(); } }
+    rebuildTiles(near, d, world.tiles, (tile, v) => rebuildTrees(world, kit, tile, v.group, pools));
+  }
+
   function render(player, info, dt) {
     const t = info.terrain, aspect = window.innerWidth / window.innerHeight, sea = info.sea || 0;
     cam.follow(player, dt, t.L > 4.25);
     water.setSea(sea);
     const total = game ? game.clock.total : 0;
-    if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); findsView.update(); berryView.update(); bananaView.update(); leantoView.update(); }
-    hero.update(player, t.depth, game ? loadOf(game.wood, total) : NO_LOAD);
+    if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); findsView.update(); berryView.update(); bananaView.update(); leantoView.update(); refreshTrees(); fellingView.update(dt); timberView.update(); }
+    hero.update(player, t.depth, game ? loadOf(game.wood, total) : NO_LOAD, game ? game.wood.log : null);
     steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver, info.total);
     steps.wash(sea);
     const { yaw, pitch } = cam;
@@ -156,6 +171,7 @@ export async function createIslandView(world, container, progress, start, opts =
     if (tallyView) tallyView.update(dt, { game, camera: cam.camera, H: world.H, player });
     if (wildView) wildView.update(dt, sky.day);
     if (spearView) spearView.update();
+    if (axeView) axeView.update();
     if (flyView) flyView.update(dt, cam.camera);
     if (lightLayer) lightLayer.end();
     stage.followSun({ target: cam.target, yaw, pitch, zoom: cam.zoom, aspect }, sky.light.dir, sky.shadows);
@@ -168,12 +184,18 @@ export async function createIslandView(world, container, progress, start, opts =
     game = g;
     woodView = createWoodView(scene, world, kit, g.wood); cocoView = createCocoView(scene, world, kit, g.fibre);
     branchView = createBranchView(scene, world, kit, g.branches); findsView = createFindsView(scene, world, kit, g.fronds, g.stones); berryView = createBerryView(scene, world, kit, g.berries); bananaView = createBananaView(scene, world, kit, g.bananas); leantoView = createLeantoView(scene, world, kit, g.leantos);
-    near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); });
+    timberView = createTimberView(scene, world, kit, g.logs); fellingView = createFellingView(scene, world, kit, g, timberView);
+    near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); timberView.addTile(tile); });
+    if (g.felled.ids.size) {   // trees felled in a saved game: the tiles built before the game was there still draw them
+      g.felled.dirty.clear(); near.forEach((v, tile) => rebuildTrees(world, kit, tile, v.group, pools));
+      far.map.forEach(grp => { if (grp.userData.slots) { releaseGroup(grp); grp.userData.fill(); } });
+    }
     lightLayer = createLightLayer(container);   // the glow of the fires and the fireflies share one small canvas
     fireView = createFireView(scene, container, g.fire, { pool: startLights, active: fireLights, layer: lightLayer });
     tallyView = createTallyView(container);
     wildView = createWildlifeView(scene, g.wildlife);
     spearView = createSpearView(scene, g.spear, world.H);   // 0.30.17: the spear lying on the ground
+    axeView = createAxeView(scene, g.axe, world.H);   // 0.31: the axe lying on the ground
     flyView = createFireflyView(container, g.fireflies, lightLayer);
   }
 

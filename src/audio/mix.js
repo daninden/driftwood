@@ -18,7 +18,7 @@
  * coastDistance(world, x, z, sea) -> metres to the nearest sea (0 in it), looked for along 16 rays
  * riverNear(world, x, z) -> null | { edge, ford, fall }   metres to the water's edge (0 in it), how much of a
  *   ford (0..1) and of a fall (0..1) the nearest river point is; null beyond 12 m of a river's axis
- * leavesNear(world, x, z) -> { leaves, forest } 0..1: palms, trees and pines round him weighted by distance
+ * leavesNear(world, x, z) -> { leaves, forest } 0..1: palms, trees and pines round him weighted by distance, the trees he has felled (game/felled) left out
  *   (leaves: for the rustle, forest: broadleaf and pines only, for the crickets)
  * senseAround(world, x, z, sea) -> { coast, river, leaves, forest }
  * surfLevel(coast) -> 0..1, riverLevel(near) -> 0..1, fireLevel(fire, x, z, held) -> 0..1
@@ -35,12 +35,13 @@
  *   rain put out since the last call (s.fire.hissed counted up, heard from s.fire.hissAt; none on the first call);
  *   pant: LEVELS.pant while he is out of breath (player.winded, game/breath), else 0; a run (player.running) is a louder step
  *
- * Depends on: core/math, render/wind, render/water (breath), world/constants
+ * Depends on: core/math, render/wind, render/water (breath), world/constants, game/felled (read only: felled trees give no rustle and no cricket cover)
  */
 import { ss, clamp } from '../core/math.js';
 import { windLevel, tierStrength } from '../render/wind.js';
 import { breath } from '../render/water.js';
 import { HALF, T, NT } from '../world/constants.js';
+import { felledOf, treeId } from '../game/felled.js';
 
 export const MASTER = 0.5;
 export const LEVELS = { surf: 0.34, river: 0.17, wind: 0.14, rustle: 0.07, howl: 0.05, fire: 0.15, crickets: 0.06, gulls: 0.08, steps: 0.2, work: 0.22, rain: 0.16, hiss: 0.3, pant: 0.05 };
@@ -77,10 +78,11 @@ const tileOf = (w, x, z) => {
 export function leavesNear(w, x, z) {
   if (!w.tiles) return { leaves: 0, forest: 0 };
   let leaves = 0, forest = 0;
-  const R = 14, add = (list, tree) => { for (const t of list) { const d = Math.hypot(t.x - x, t.z - z); if (d < R) { const q = 1 - d / R; leaves += q; if (tree) forest += q; } } };
+  const fl = felledOf(w);   // 0.31: a felled tree rustles no more
+  const R = 14, add = (tile, name, tree) => { const list = tile[name]; for (let k = 0; k < list.length; k++) { const t = list[k], d = Math.hypot(t.x - x, t.z - z); if (d < R && !(fl && fl.has(treeId(tile, name, k)))) { const q = 1 - d / R; leaves += q; if (tree) forest += q; } } };
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
     const tile = tileOf(w, x + i * T, z + j * T); if (!tile) continue;
-    add(tile.palms, false); add(tile.trees, true); add(tile.pines, true);
+    add(tile, 'palms', false); add(tile, 'trees', true); add(tile, 'pines', true);
   }
   return { leaves: ss(0.3, 3.5, leaves), forest: ss(1.5, 6, forest) };
 }

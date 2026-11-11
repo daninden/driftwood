@@ -16,6 +16,7 @@
     "smoke:hands": "node scripts/hands-smoke.js",
     "smoke:voice": "node scripts/voice-smoke.js",
     "smoke:full": "node scripts/smoke.js --full",
+    "smoke:axe": "node scripts/axe-smoke.js",
     "smoke:moonless": "node scripts/moonless-smoke.js",
     "playtest": "node scripts/playtest.js"
   },

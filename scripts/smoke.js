@@ -74,7 +74,9 @@ const rendererOf = async b => {
   } finally { await p.close(); }
 };
 let browser = null, renderer = '';
-try {
+const own = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] } : null;   // CHROME_PATH: a Chromium that Playwright did not install itself (software drawing)
+if (own) { browser = await chromium.launch(own); renderer = await rendererOf(browser); }
+else try {
   browser = await chromium.launch({ channel: 'chromium' });
   renderer = await rendererOf(browser);
   if (/swiftshader|llvmpipe|software|no webgl/i.test(renderer)) { await browser.close(); browser = null; }

@@ -31,7 +31,7 @@ export function createCocoView(scene, w, kit, fibre) {
   const tiles = new Map();   // tile -> group of its coconuts
   let seen = fibre.version;
   const tileGroup = tile => { const g = new THREE.Group(), B = new Batch(outlineMat, poolsOf(scene)); for (const c of fibre.groundCocos(tile)) addCoconut(B, kit, w.H, c); B.build(g); scene.add(g); return g; };
-  function addTile(tile) { if (tile.cocos && tile.cocos.length && !tiles.has(tile)) tiles.set(tile, tileGroup(tile)); }
+  function addTile(tile) { if (!tiles.has(tile)) tiles.set(tile, tileGroup(tile)); }   // (0.31: every tile: a felled palm leaves nuts on the ground)
   function dropTile(tile) { const g = tiles.get(tile); if (g) { disposeGroup(g); tiles.delete(tile); } }
   function update() {
     if (fibre.version === seen) return;

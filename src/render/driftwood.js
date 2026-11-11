@@ -37,7 +37,7 @@
  * dryStep(dry) -> dry rounded down to DRY_STEPS steps a day
  * DAMP_BUCKETS (8), dampBucket(opacity) -> 1..DAMP_BUCKETS the opacity step of a damp patch (rounded to the nearest, at least 1), dampOpacity(bucket) -> its opacity; pure
  * mergeGeometries(list) -> one BufferGeometry (position, uv, normal, index) from the list, which is disposed
- * Piles of fronds and of stones (game/wood kinds 'frond' and 'stone', 0.27) are drawn by render/finds; driftColor gives a carried frond or stone its colour.
+ * Piles of fronds and of stones (game/wood kinds 'frond' and 'stone', 0.27) are drawn by render/finds, piles of logs (kind 'log', 0.31) by render/timber; driftColor gives a carried frond or stone its colour.
  * A branch (game/branches, `log.branch`) is dark bark whatever its dryness (driftColor) and
  * is drawn thin in piles; on the ground and under the arm see render/branches and render/hero.
  * driftLook(log) -> { col, branch, roots }   pure; branch and roots are
@@ -54,7 +54,7 @@
  *     (wood.version, or a step of drying) and fades in freshly washed-up
  *     wood (dt in real seconds, total the days on the clock)
  *
- * Depends on: three, core/noise, core/math, render/geometry, render/batch, render/finds, render/nearTile (disposeGroup), render/tileRebuild,
+ * Depends on: three, core/noise, core/math, render/geometry, render/batch, render/finds, render/timber, render/nearTile (disposeGroup), render/tileRebuild,
  *   render/palette, render/materials (wetToon), game/wood (dryness, stillWet, read only), world/constants,
  *   game/fire (TORCH_DRY), game/tide (to see whether any wood is still wet)
  */
@@ -69,6 +69,7 @@ import { dryness, stillWet, DRY_DAYS } from '../game/wood.js';
 import { rebuildTiles } from './tileRebuild.js';
 import { NT } from '../world/constants.js';
 import { frondColor, stoneColor, addFrondPile, addStonePile } from './finds.js';
+import { addTimberPile } from './timber.js';
 import { TORCH_DRY } from '../game/fire.js';
 import { ss } from '../core/math.js';
 import { wetToon } from './materials.js';
@@ -148,6 +149,7 @@ export function addBeachLog(B, kit, H, log, dry = 1) {
 export function addPile(B, kit, H, pile, total = 0) {
   if (pile.kind === 'frond') return addFrondPile(B, kit, H, pile);
   if (pile.kind === 'stone') return addStonePile(B, kit, H, pile);
+  if (pile.kind === 'log') return addTimberPile(B, H, pile);   // 0.31: timber, a neat stack (render/timber)
   const a0 = (hashInt(Math.round(pile.x * 64), Math.round(pile.z * 64), 59) / 4294967296) * Math.PI;
   const g = H(pile.x, pile.z);
   pile.logs.forEach((log, i) => {
