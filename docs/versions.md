@@ -2,6 +2,30 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30.21 "Practice" — 2026-11-11
+
+Agreed with the user on 2026-11-11. **Everything with a chance of failure gets easier with practice: Dave gets better at it.** Exactly three actions: lighting a fire with the drill, digging a crab, fishing with the spear. Nothing is shown; no new line, no new picture, no save change.
+
+- **The rule:** `practised(start, top, n) = start + (top - start) * (1 - exp(-n / PRACTICE))`, `PRACTICE` 10 (pure, in `core/math`): halfway after about 7 attempts, nearly at the ceiling after 20 to 25. `n` is the count of earlier attempts, so the first ever attempt has the beginner's chance; failed attempts count too; skill never fades. The counters are the saved ones that already existed (`fire.attempts`, `crabs.digs`, `fish.tries`).
+- **Ceilings:** fire `CATCH` 0.6 -> `CATCH_TOP` 0.9 (dryness squared and the tiredness factor still apply on top; wet wood never catches; the torch rule is unchanged); crab `DIG_CHANCE` 0.5 -> `DIG_TOP` 0.8; fish `FISH_CHANCE` 0.45 -> `FISH_TOP` 0.75. `catchChance(dry, tired, attempts = 0)` gained the attempts (default 0: the beginner's chance); `fire.attempt` passes `fire.attempts`, the only caller that rolls. The rolls are the same seeded draws as before; only the threshold changes. `game/mind` is unchanged.
+- **Tests:** `tests/core.test.js` (`practised`: start at 0, rising, ever slower, never past the top), `tests/fire.test.js` (beginner equals `CATCH`, monotonic, halfway after about 7, under `CATCH_TOP`, tiredness and dryness still count, wet wood 0 at any practice, determinism, attempts counted failed or not), `tests/crab.test.js` and `tests/spear.test.js` (first-attempt rate near the beginner's chance and the rate after 60 attempts near the ceiling over 400 or 600 seeds, deterministic). The old statistical checks (a long run of digs or tries near the beginner's chance) now only require a rate between the beginner's chance and the ceiling. `tests/world.test.js` is unchanged.
+- **Fixed:** on seed 1337 beach stream 2, on day 6 Dave's journey bed lay on a climbing route (the fire stood at the edge of one); `sleepable()` (`game/game`) refuses sleep on routes, so he was refused all night and collapsed from exhaustion on day 7. The cause was `journeyBed` in `game/mind`, which took the spot 1.4 m beside the fire without asking whether it was ordinary ground. Now `journeyBed` tries the four spots beside the fire (east, north, west, south) and takes the first that is `ordinary` (not on a climbing route, not steep), then the camp spot as before; and the refusal fallback in `sleepGoal` (`ringSpot`) prefers ring spots on ordinary ground too, keeping the old spot if none qualifies. No game rule changed. Test: `journeyBed` is a closure inside `createMind` and not testable on its own without changing the interface, so it is covered by the long beach life suite (`tests/mindLife1337.beach.test.js`: no collapse, every night slept), which failed on that stream before.
+- **Bounds (policy of 0.30.9):** after this change the quantity bound "upgrades finished >= 1" on seed 1337 walked is met on 1 of 4 streams only (0, 1, 0, 0), fewer than `OFTEN` (2), so it is left out for that scenario by the policy (as the fish bounds were in 0.30.19 "Journey"; `tests/helpers/lifeSeeds.js`). All other bounds are unchanged.
+- **Measured** (24 ten-day lives: seeds 1337, 2024, 7, walked and fresh, streams 0 to 3; 0.30.20 at e02202c in a scratch copy against 0.30.21; totals over the 24 lives):
+
+| | 0.30.20 | 0.30.21 |
+|---|---|---|
+| fires lit / failed lights | 101 / 49 | 108 / 38 |
+| crabs caught (digs) / eaten | 93 (167) / 75 | 98 (164) / 83 |
+| fish caught (tries) / eaten | 23 (36) / 20 | 24 (40) / 21 |
+| lean-tos by day 10 (mean day) | 18 (5.0) | 18 (5.3) |
+| max thirst / max hunger | 0.86 / 0.86 | 0.86 / 0.86 |
+| collapses / errors | 0 / 0 | 0 / 0 |
+| stuck / nopath | 80 / 0 | 80 / 0 |
+| evenings without a fire | 51 | 44 |
+
+  Ten days is short for practice (a life makes about 6 attempts at the fire, 7 digs and 1.7 tries), so the gain is modest: fewer failed lights and fewer evenings without a fire. Every life plays differently once one roll changes, so the small differences in the other rows are chance, not a rule.
+
 ## 0.30.20 "Words" — 2026-11-11
 
 Agreed with the user on 2026-11-11. **Actions never speak; only intentions (reasons) do.** Dave's lines become a small, calm set of reasons with several wordings each, his own silent errands get a reason of their own, and when the player stands still where something is almost possible he says what is missing.

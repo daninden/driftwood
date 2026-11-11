@@ -9,7 +9,7 @@ import { startSpot } from '../src/world/spots.js';
 import { createGame, HUSK_TIME } from '../src/game/game.js';
 import { createWood, dryness, DRY_DAYS } from '../src/game/wood.js';
 import { createFibre, FIBRE_MAX, REGROW, REGROW_SPREAD, NUT_SHARE, nutsOfTile } from '../src/game/fibre.js';
-import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, BURN, EMBERS, WARM_EMBERS, FUEL_MAX, TORCH_DAYS, TORCH_COST, WARM_R, RAIN_OUT, RING_BURN } from '../src/game/fire.js';
+import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, CATCH_TOP, BURN, EMBERS, WARM_EMBERS, FUEL_MAX, TORCH_DAYS, TORCH_COST, WARM_R, RAIN_OUT, RING_BURN } from '../src/game/fire.js';
 import { COLD_SLEEP, SLEEP_DAYS } from '../src/game/sleep.js';
 import { createInput } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
@@ -106,6 +106,23 @@ describe('the chance that it catches', () => {
     expect(catchChance(1, 1)).toBeLessThan(CATCH * 0.6);
     expect(catchChance(0.5, 0)).toBeCloseTo(CATCH / 4);
     expect(catchChance(0, 0)).toBe(0);
+  });
+  it('rises with practice (0.30.21): a beginner has CATCH, it grows fast then slowly, never past CATCH_TOP, wet wood never catches', () => {
+    expect(catchChance(1, 0, 0)).toBeCloseTo(CATCH); expect(catchChance(1, 0)).toBe(catchChance(1, 0, 0));
+    let prev = catchChance(1, 0, 0);
+    for (let n = 1; n <= 200; n++) { const c = catchChance(1, 0, n); expect(c).toBeGreaterThan(prev - 1e-12); expect(c).toBeLessThanOrEqual(CATCH_TOP); prev = c; }
+    expect(catchChance(1, 0, 7)).toBeGreaterThan((CATCH + CATCH_TOP) / 2 - 0.02);   // halfway after about 7
+    expect(catchChance(1, 0, 25)).toBeGreaterThan(CATCH_TOP - 0.03); expect(catchChance(1, 0, 25)).toBeLessThan(CATCH_TOP);
+    expect(CATCH_TOP).toBeCloseTo(0.9);
+    expect(catchChance(1, 1, 50)).toBeLessThan(CATCH_TOP * 0.6);          // tiredness still counts
+    expect(catchChance(0.5, 0, 50)).toBeCloseTo(catchChance(1, 0, 50) / 4);   // so does dryness squared
+    for (const n of [0, 5, 50, 500]) expect(catchChance(0, 0, n)).toBe(0);
+  });
+  it('uses the attempts so far, failed ones too, and is the same every game', () => {
+    const f = createFire(w, { fires: [], attempts: 40, nextId: 1 }), g = createFire(w, { fires: [], attempts: 40, nextId: 1 });
+    const a = Array.from({ length: 20 }, () => !!f.attempt(0, 0, logs.slice(0, 4), 1, 0, 0)), b = Array.from({ length: 20 }, () => !!g.attempt(0, 0, logs.slice(0, 4), 1, 0, 0));
+    expect(a).toEqual(b); expect(f.attempts).toBe(60);
+    const wet = createFire(w, { fires: [], attempts: 500, nextId: 1 }); for (let i = 0; i < 20; i++) expect(wet.attempt(0, 0, logs.slice(0, 4), 0, 0, 0)).toBeNull();
   });
   it('fails now and then even with dry wood, the same way every game', () => {
     const results = k => { const f = createFire(w); return Array.from({ length: k }, () => !!f.attempt(0, 0, logs.slice(0, 4), 1, 0, 0)); };

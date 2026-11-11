@@ -3,7 +3,7 @@
  *
  * Rules
  *   - Standing in shallow sea water (`fishableAt`: the sea, not a river, from FISH_DEPTH[0] to FISH_DEPTH[1] deep: about to his knee) with the spear in his hand (game/spear) he peers and strikes,
- *     FISH_TIME (3 s) a try. A little under one try in two (FISH_CHANCE 0.45; 1/3 before 0.30.18 "Catch") brings a fish. Whether it does is fixed by the seed and the number of tries so far, like a dig for a crab
+ *     FISH_TIME (3 s) a try. A little under one try in two (FISH_CHANCE 0.45; 1/3 before 0.30.18 "Catch") brings a fish at first; with practice more (0.30.21: every earlier try counts, up to FISH_TOP 0.75). Whether it does is fixed by the seed and the number of tries so far, like a dig for a crab
  *     (game/crabs) or lighting a fire (game/fire), so a try cannot be repeated for luck; a failed try counts too. The chance depends on the place only through the rule above:
  *     no fish that is drawn in the water has to match.
  *   - He carries at most CARRY_FISH (2) fish; they are not wood and do not slow him. With two he cannot fish.
@@ -11,7 +11,7 @@
  *   - A raw fish carried SPOIL_AFTER (game/crabs: one game day) goes bad and is gone.
  *   - The sea does not run out of fish: nothing grows back, nothing is counted.
  *
- * FISH_TIME, FISH_CHANCE, CARRY_FISH, FISH_FOOD, FISH_DEPTH
+ * FISH_TIME, FISH_CHANCE (a beginner's), FISH_TOP (after much practice, 0.30.21: `practised` of core/math over the tries so far), CARRY_FISH, FISH_FOOD, FISH_DEPTH
  * fishableAt(t) -> bool   pure; t: game/movement terrainAt(world, x, z, sea): shallow sea water of the right depth
  * createFish(seed, saved?) -> fish
  *   fish.carried           [total]   the game clock (days) at which each fish carried was caught, oldest first
@@ -25,13 +25,14 @@
  *
  * Pure data; no DOM, no Three.js.
  *
- * Depends on: core/noise, game/crabs (SPOIL_AFTER, CRAB_FOOD)
+ * Depends on: core/noise, core/math, game/crabs (SPOIL_AFTER, CRAB_FOOD)
  */
 import { mulberry32, hashInt } from '../core/noise.js';
+import { practised } from '../core/math.js';
 import { SPOIL_AFTER, CRAB_FOOD } from './crabs.js';
 
 export const FISH_TIME = 3;
-export const FISH_CHANCE = 0.45;   // 0.30.18 "Catch": was 1 / 3
+export const FISH_CHANCE = 0.45, FISH_TOP = 0.75;   // a beginner's chance (0.30.18 "Catch": was 1 / 3) and the ceiling of practice (0.30.21)
 export const CARRY_FISH = 2;
 export const FISH_FOOD = CRAB_FOOD;       // a roasted fish feeds like a roasted crab
 export const FISH_DEPTH = [0.08, 0.3];    // metres of sea water he stands in: above the ankle, up to the knee (the depth that puts out a torch)
@@ -45,8 +46,9 @@ export function createFish(seed, saved) {
     fishTry(total) {
       const r = mulberry32(hashInt(seed + 97, fish.tries, 17)); r();
       const luck = r();
+      const chance = practised(FISH_CHANCE, FISH_TOP, fish.tries);
       fish.tries++;
-      if (luck >= FISH_CHANCE || fish.full()) return false;
+      if (luck >= chance || fish.full()) return false;
       fish.carried.push(total);
       return true;
     },

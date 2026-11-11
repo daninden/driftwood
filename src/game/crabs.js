@@ -3,7 +3,8 @@
  *
  * Rules
  *   - At a hole a crab has just fled into (game/wildlife `hiding`) the castaway can dig,
- *     DIG_TIME (5 s) of kneeling. About half the time (DIG_CHANCE) he gets the crab. Whether
+ *     DIG_TIME (5 s) of kneeling. About half the time (DIG_CHANCE) he gets the crab
+ *     at first; with practice more often (0.30.21: every earlier dig counts, `practised` of core/math, up to DIG_TOP; skill never fades). Whether
  *     he does is fixed by the seed and the number of digs so far, like lighting a fire
  *     (game/fire), so a dig cannot be repeated for luck; a failed dig counts too.
  *   - He carries at most CARRY_CRABS (2) crabs; they are not wood and do not slow him.
@@ -13,7 +14,7 @@
  *   - A crab that was caught is gone from its colony and comes back REGROW (5 to 8) days
  *     later, so a colony caught empty grows back, one crab at a time.
  *
- * DIG_TIME, ROAST_TIME, DIG_CHANCE, CARRY_CRABS, CRAB_FOOD, SPOIL_AFTER, REGROW
+ * DIG_TIME, ROAST_TIME, DIG_CHANCE (a beginner's), DIG_TOP (after much practice), CARRY_CRABS, CRAB_FOOD, SPOIL_AFTER, REGROW
  * createCrabs(seed, saved?) -> crabs
  *   crabs.carried            [total]   the game clock (days) at which each crab carried was caught, oldest first
  *   crabs.gone               Map crabId -> total at which the crab is back in its colony
@@ -28,12 +29,13 @@
  *
  * Pure data; no DOM, no Three.js.
  *
- * Depends on: core/noise
+ * Depends on: core/noise, core/math
  */
 import { mulberry32, hashInt } from '../core/noise.js';
+import { practised } from '../core/math.js';
 
 export const DIG_TIME = 5, ROAST_TIME = 8;
-export const DIG_CHANCE = 0.5;
+export const DIG_CHANCE = 0.5, DIG_TOP = 0.8;   // a beginner's chance, and the ceiling of practice (0.30.21)
 export const CARRY_CRABS = 2;
 export const CRAB_FOOD = 0.5;     // days of hunger one roasted crab takes away (a meal, like a coconut)
 export const SPOIL_AFTER = 1;     // a raw crab goes bad after this many game days
@@ -47,8 +49,9 @@ export function createCrabs(seed, saved) {
     dig(id, total) {
       const r = mulberry32(hashInt(seed + 91, crabs.digs, 13)); r();
       const luck = r(), back = REGROW[0] + r() * (REGROW[1] - REGROW[0]);
+      const chance = practised(DIG_CHANCE, DIG_TOP, crabs.digs);
       crabs.digs++;
-      if (luck >= DIG_CHANCE || crabs.full()) return false;
+      if (luck >= chance || crabs.full()) return false;
       crabs.carried.push(total); crabs.gone.set(id, total + back);
       return true;
     },

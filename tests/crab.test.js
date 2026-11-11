@@ -7,7 +7,7 @@ import { nutsOfTile } from '../src/game/fibre.js';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, wantsToMove } from '../src/game/game.js';
-import { createCrabs, DIG_TIME, ROAST_TIME, DIG_CHANCE, CARRY_CRABS, CRAB_FOOD, SPOIL_AFTER, REGROW } from '../src/game/crabs.js';
+import { createCrabs, DIG_TIME, ROAST_TIME, DIG_CHANCE, DIG_TOP, CARRY_CRABS, CRAB_FOOD, SPOIL_AFTER, REGROW } from '../src/game/crabs.js';
 import { createHunger, NUT_FOOD } from '../src/game/hunger.js';
 import { coloniesOfTile, COLONY_MAX } from '../src/game/habitats.js';
 import { SAFE, ESC_RUN, HIDE } from '../src/game/wildlife.js';
@@ -60,12 +60,20 @@ function fireScene({ crabs = 1, fuel = 4 * BURN, fire = true, carried = [], hung
 }
 
 describe('the crab state', () => {
-  it('catches about half of the digs, fixed by the seed and the number of digs', () => {
+  it('gets better with practice: a beginner catches DIG_CHANCE, never past DIG_TOP, nothing fades, the rolls stay fixed', () => {
+    const rate = (seed, from, k) => { const c = createCrabs(seed, { carried: [], gone: [], digs: from }); let n = 0; for (let i = 0; i < k; i++) { if (c.dig(i, 0)) n++; c.carried.length = 0; c.gone.clear(); } return n / k; };
+    let first = 0, late = 0; for (let s = 1; s <= 400; s++) { first += createCrabs(s).dig(0, 0) ? 1 : 0; late += createCrabs(s, { carried: [], gone: [], digs: 60 }).dig(0, 0) ? 1 : 0; }
+    expect(first / 400).toBeGreaterThan(DIG_CHANCE - 0.09); expect(first / 400).toBeLessThan(DIG_CHANCE + 0.09);
+    expect(late / 400).toBeGreaterThan(DIG_TOP - 0.09); expect(late / 400).toBeLessThan(DIG_TOP + 0.05);
+    expect(rate(1337, 0, 40)).toBe(rate(1337, 0, 40));
+    expect(DIG_TOP).toBeCloseTo(0.8);
+  });
+  it('catches about half of the first digs, fixed by the seed and the number of digs', () => {
     const outcome = seed => { const c = createCrabs(seed), r = []; for (let i = 0; i < 400; i++) { r.push(c.dig(i, 0)); c.carried.length = 0; c.gone.clear(); } return r; };
     const a = outcome(1337), b = outcome(1337), o = outcome(7);
     expect(a).toEqual(b);
     const n = a.filter(Boolean).length;
-    expect(n).toBeGreaterThan(400 * DIG_CHANCE - 50); expect(n).toBeLessThan(400 * DIG_CHANCE + 50);
+    expect(n).toBeGreaterThan(400 * DIG_CHANCE); expect(n).toBeLessThan(400 * DIG_TOP + 20);   // 0.30.21: the chance rises from DIG_CHANCE to DIG_TOP
     expect(o).not.toEqual(a);
   });
   it('does not depend on which crab is dug for: a dig is decided by its number', () => {

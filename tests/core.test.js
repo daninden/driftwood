@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createNoise, mulberry32, hashInt } from '../src/core/noise.js';
-import { ss, lerp, hex, mix } from '../src/core/math.js';
+import { ss, lerp, hex, mix, practised, PRACTICE } from '../src/core/math.js';
 import { createSlicer, drain } from '../src/core/slicer.js';
 import { toView, screenUp, groundDepth, basis, CAMDIR, RIGHT, YAW, PITCH_MIN, PITCH_MAX } from '../src/core/view.js';
 
@@ -27,6 +27,15 @@ describe('core/noise', () => {
 });
 
 describe('core/math', () => {
+  it('practised: the start at n = 0, rising fast then slowly, towards the top and never past it', () => {
+    expect(PRACTICE).toBe(10);
+    expect(practised(0.5, 0.8, 0)).toBe(0.5);
+    let prev = 0.5, gain = Infinity;
+    for (let n = 1; n <= 300; n++) { const c = practised(0.5, 0.8, n); expect(c).toBeGreaterThan(prev); expect(c).toBeLessThanOrEqual(0.8); expect(c - prev).toBeLessThan(gain + 1e-12); gain = c - prev; prev = c; }
+    expect(practised(0.5, 0.8, 7)).toBeGreaterThan(0.65);
+    expect(practised(0.5, 0.8, 25)).toBeGreaterThan(0.77);
+    expect(practised(0.5, 0.8, -3)).toBe(0.5);
+  });
   it('smoothsteps both ways', () => {
     expect(ss(0, 1, -1)).toBe(0); expect(ss(0, 1, 2)).toBe(1); expect(ss(0, 1, 0.5)).toBe(0.5);
     expect(ss(1, 0, 0)).toBe(1);

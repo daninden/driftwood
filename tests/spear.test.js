@@ -7,7 +7,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createSpear, MAKE_TIME } from '../src/game/spear.js';
-import { createFish, fishableAt, FISH_TIME, FISH_CHANCE, CARRY_FISH, FISH_FOOD, FISH_DEPTH } from '../src/game/fish.js';
+import { createFish, fishableAt, FISH_TIME, FISH_CHANCE, FISH_TOP, CARRY_FISH, FISH_FOOD, FISH_DEPTH } from '../src/game/fish.js';
 import { ROAST_TIME, SPOIL_AFTER, CRAB_FOOD } from '../src/game/crabs.js';
 import { createMind, fishChance, fishFoodOk, spearMakeOk, chooseGoal, FISH_FROM, FISH_TO, FISH_IDLE_CHANCE, FISH_TRIES, SPEAR_DAY } from '../src/game/mind.js';
 import { stonesOfTile } from '../src/game/stones.js';
@@ -199,12 +199,20 @@ describe('fishing', () => {
     const g2 = fisher(); g2.act({ kind: 'fish' }); run(g2, makeInput(), 1); run(g2, makeInput({ left: true }), 0.2);
     expect(g2.fish.tries).toBe(0);   // walking off stops it
   });
-  it('catches about 45 tries in a hundred, fixed by the seed and the number of tries', () => {
+  it('gets better with practice: 0.45 for a beginner, never past FISH_TOP, the rolls stay fixed', () => {
+    expect(FISH_TOP).toBeCloseTo(0.75);
+    let first = 0, late = 0; for (let s = 1; s <= 600; s++) { first += createFish(s).fishTry(0) ? 1 : 0; late += createFish(s, { carried: [], tries: 60 }).fishTry(0) ? 1 : 0; }
+    expect(first / 600).toBeGreaterThan(FISH_CHANCE - 0.08); expect(first / 600).toBeLessThan(FISH_CHANCE + 0.08);
+    expect(late / 600).toBeGreaterThan(FISH_TOP - 0.08); expect(late / 600).toBeLessThan(FISH_TOP + 0.05);
+    const run = () => { const f = createFish(1337), r = []; for (let i = 0; i < 50; i++) { r.push(f.fishTry(0)); f.carried.length = 0; } return r; };
+    expect(run()).toEqual(run());
+  });
+  it('catches about 45 tries in a hundred at the start, fixed by the seed and the number of tries', () => {
     expect(FISH_CHANCE).toBeCloseTo(0.45);
     const outcome = seed => { const f = createFish(seed), r = []; for (let i = 0; i < 600; i++) { r.push(f.fishTry(0)); f.carried.length = 0; } return r; };
     const a = outcome(1337), b = outcome(1337), o = outcome(7);
     expect(a).toEqual(b); expect(o).not.toEqual(a);
-    const n = a.filter(Boolean).length; expect(n).toBeGreaterThan(600 * FISH_CHANCE - 60); expect(n).toBeLessThan(600 * FISH_CHANCE + 60);
+    const n = a.filter(Boolean).length; expect(n).toBeGreaterThan(600 * FISH_CHANCE); expect(n).toBeLessThan(600 * FISH_TOP + 30);   // 0.30.21: rises from FISH_CHANCE to FISH_TOP
     const x = createFish(1337), y = createFish(1337, { carried: [], tries: 0 });
     for (let i = 0; i < 20; i++) { expect(x.fishTry(i)).toBe(y.fishTry(i)); x.carried.length = 0; y.carried.length = 0; }
   });

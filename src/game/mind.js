@@ -51,6 +51,7 @@
  *   JOURNEY_RIM within 2 m, near known fresh water), husks a nut for fibre if he has none (`journeyHusk`), gathers wood nearby (`journeyWood`: loose driftwood or branches through `gather`, at most JOURNEY_WOOD_COST of walking each way, a pile of JOURNEY_WOOD pieces' fuel) and lights a small fire at LIGHT_FROM with the fibre and the drill
  *   (`journeyLight`: `goStand('light')` and the arc's light, up to the tufts he has); he builds nothing and sleeps on the ground by it. If there is no wood, no fibre or the lighting fails, he sleeps cold. In the morning he walks home by the planner (a fall back to the known ground and then to `pathFree`) and the journey ends when he is home. He turns back at once
  *   at thirst VERY_AT or hunger VERY_HUNGER_AT or when rain comes (`journeyBrake`, pure). `mind.stats.journey` counts them; `mind.journeyAim` is the test hook for the target.
+ * 0.30.21: journey beds and the sleep fallback are never on a climbing route (the sleep key is refused there): `journeyBed` takes a spot beside the fire on ordinary ground, and the refusal fallback of `sleepGoal` (`ringSpot`) prefers ordinary ring spots, keeping the old one if none qualifies.
  * 0.29.4 "Wander": EXPLORING, a pastime of the idle goal. Now and then (`exploreChance`, pure: by day, EXPLORE_FROM 0.2 to EXPLORE_TO 0.52, thirst and hunger well below the point where he goes for them, no crab trip to make; at most one trip a day, one in
  *   EXPLORE_GAP 2 days when nothing is missing, every day with chance 0.8 when wood (fewer than 6 loose logs known within 70 m of home), branches (fewer than 4) or nuts (fewer than 2) are short, or a lately failed search for them left a mark (`lack`)) he walks to the edge of what he knows
  *   (`exploreTarget`: the farthest unknown spot within `exploreReach(day)` of home (80 m on day 0, 15 m more a day, no cap since 0.30.16) that borders known ground, which he can reach and be home from before EXPLORE_BACK 0.6, preferably on the coast (wood and coconuts) or at a forest edge (branches, berries),
@@ -1041,6 +1042,12 @@ export function createMind(world, game, opts = {}) {
     return true;
   }
 
+  function ringSpot(s, ang, r) {   // 0.30.21: a spot on the ring round the bed for a refused sleep: the first of four angles on ordinary ground (no climbing route: sleep is refused there), else the plain one as before
+    let first = null;
+    for (let k = 0; k < 4; k++) { const a = ang + k * Math.PI / 2, q = standNear(s.x + Math.sin(a) * r, s.z + Math.cos(a) * r); if (k === 0) first = q; if (q && ordinary(q.x, q.z)) return q; }
+    return first;
+  }
+
   function* sleepGoal() {
     const s = journey ? journeyBed() : sleepSpot();   // 0.30.19: on a journey he sleeps at the camp
     yield* torchFor(s);
@@ -1050,7 +1057,7 @@ export function createMind(world, game, opts = {}) {
       if (!game.sleep.canLie(clock.time)) return false;
       chose = true; sleepKey = true; yield; yield;
       if (game.sleep.asleep || p.lie > 0) return true;
-      chose = false; const ang = i * 2.1 + 0.5, s2 = standNear(s.x + Math.sin(ang) * (1 + i), s.z + Math.cos(ang) * (1 + i)); if (s2) yield* walk(s2.x, s2.z, { stop: 0.3 });
+      chose = false; const ang = i * 2.1 + 0.5, s2 = ringSpot(s, ang, 1 + i); if (s2) yield* walk(s2.x, s2.z, { stop: 0.3 });
     }
     chose = false; ev('sleep-refused'); return false;
   }
@@ -1781,7 +1788,9 @@ export function createMind(world, game, opts = {}) {
     const C = journey && journey.camp;
     if (!C || Math.hypot(p.x - C.x, p.z - C.z) > 80) return { x: p.x, z: p.z };
     const f = campFire(C);
-    return (f && (standNear(f.x + 1.4, f.z) || standNear(f.x, f.z - 1.4))) || standNear(C.x, C.z) || { x: p.x, z: p.z };
+    const flat = q => q && ordinary(q.x, q.z);   // (a climbing route is no place to lie down: the sleep key is refused there; the fire may stand at the edge of one)
+    if (f) for (const [dx, dz] of [[1.4, 0], [0, -1.4], [-1.4, 0], [0, 1.4]]) { const q = standNear(f.x + dx, f.z + dz); if (flat(q)) return q; }
+    return standNear(C.x, C.z) || { x: p.x, z: p.z };
   }
   let lastStroll = null;
   // Embers are a small exception to the daytime fire rule: while idle, Dave

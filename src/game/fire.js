@@ -9,7 +9,8 @@
  *     It is hard work: a whole attempt costs DRILL_COST days of rest
  *     (game/sleep). Stopping before the end keeps the fibre.
  *   - At the end the fibre is used up, and the fire catches or it does not.
- *     The chance is CATCH at best, falls steeply with wet wood (the mean
+ *     The chance is CATCH at best for a beginner and grows with practice (0.30.21: every earlier attempt, failed ones too,
+ *     counts; `practised` of core/math rises from CATCH to CATCH_TOP, fast at first, then slower; skill never fades), falls steeply with wet wood (the mean
  *     dryness of the pile, game/wood `dryness`, squared) and with tiredness
  *     (down to TIRED_CATCH of it at the limit). Wet wood never catches. A
  *     failed attempt leaves only a puff of smoke.
@@ -49,11 +50,11 @@
  *
  * Pure data; no DOM, no Three.js.
  *
- * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, TIRED_CATCH, BURN, FUEL_MAX, EMBERS, WARM_EMBERS,
+ * FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, CATCH_TOP, TIRED_CATCH, BURN, FUEL_MAX, EMBERS, WARM_EMBERS,
  * BRANCH_BURN, fuelOf(logs) -> the fuel in days of a list of pieces (a branch counts BRANCH_BURN of a piece)
  * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS, RAIN_BURN, RAIN_OUT, TORCH_RAIN, RING_BURN
  * full(f) -> true when fire f holds as much as it can (FUEL_MAX)
- * catchChance(dry, tired) -> 0..CATCH   dry: mean dryness 0..1, tired 0..1 (game/sleep)
+ * catchChance(dry, tired, attempts = 0) -> 0..CATCH_TOP   dry: mean dryness 0..1, tired 0..1 (game/sleep), attempts: the attempts made before (fire.attempts)
  * createFire(world, saved?) -> fire
  *   fire.fires             [{ id, x, z, fuel, embers, emberAge, lit, fed, rained? }]  fuel and embers in
  *                          days left; emberAge: days since its current ember stage began; lit: the day it was lit;
@@ -89,14 +90,15 @@
  *   fire.state() -> { fires, attempts, nextId, torch, torches, burnt }   plain, for saving
  *   saved: such a state, to start from
  *
- * Depends on: core/noise
+ * Depends on: core/noise, core/math
  */
 import { mulberry32, hashInt } from '../core/noise.js';
+import { practised } from '../core/math.js';
 
 export const FIRE_MIN = 4;
 export const DRILL_TIME = 14;                 // seconds of twirling
 export const DRILL_COST = 0.08;               // days of rest a whole attempt costs
-export const CATCH = 0.6, TIRED_CATCH = 0.5;  // the best chance, and how much of it is left worn out
+export const CATCH = 0.6, CATCH_TOP = 0.9, TIRED_CATCH = 0.5;  // the best chance of a beginner, the best after much practice (0.30.21), and how much of it is left worn out
 export const BURN = 2.5 / 24;                 // a dry piece burns two and a half hours
 export const BRANCH_BURN = 0.5;                // a branch burns half as long as a piece of driftwood
 export const fuelOf = logs => logs.reduce((s, l) => s + (l.branch ? BRANCH_BURN : 1), 0) * BURN;
@@ -120,7 +122,7 @@ const BURNT_MAX = 32;                         // at most this many burnt places 
 const BURNT_R = 0.7;                          // a new fire this close to a burnt place replaces it
 
 export const full = f => f.fuel >= FUEL_MAX - 1e-9;
-export const catchChance = (dry, tired = 0) => CATCH * Math.max(0, Math.min(1, dry)) ** 2 * (1 - (1 - TIRED_CATCH) * Math.max(0, Math.min(1, tired)));
+export const catchChance = (dry, tired = 0, attempts = 0) => practised(CATCH, CATCH_TOP, attempts) * Math.max(0, Math.min(1, dry)) ** 2 * (1 - (1 - TIRED_CATCH) * Math.max(0, Math.min(1, tired)));
 /** The visual heat left in an ember stage: warm at first, a few red points at its end. */
 export const emberGlow = f => Math.max(0, Math.min(1, f.embers / EMBERS)) ** 1.7;
 
@@ -169,8 +171,9 @@ export function createFire(w, saved) {
   function warm(x, z) { return fire.fires.some(f => (f.fuel > 0 || f.emberAge < WARM_EMBERS) && Math.hypot(f.x - x, f.z - z) < WARM_R); }
   function attempt(x, z, logs, dry, tired, total) {
     const r = mulberry32(hashInt(w.seed + 71, fire.attempts, 7)); r();
+    const chance = catchChance(dry, tired, fire.attempts);
     fire.attempts++;
-    if (r() >= catchChance(dry, tired)) {
+    if (r() >= chance) {
       fire.puffs.push({ x, z, at: total }); if (fire.puffs.length > PUFFS) fire.puffs.shift();
       fire.version++; return null;
     }
