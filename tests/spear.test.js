@@ -9,7 +9,7 @@ import { createGame } from '../src/game/game.js';
 import { createSpear, MAKE_TIME } from '../src/game/spear.js';
 import { createFish, fishableAt, FISH_TIME, FISH_CHANCE, CARRY_FISH, FISH_FOOD, FISH_DEPTH } from '../src/game/fish.js';
 import { ROAST_TIME, SPOIL_AFTER, CRAB_FOOD } from '../src/game/crabs.js';
-import { createMind, fishChance, fishFoodOk, spearMakeOk, chooseGoal, FISH_FROM, FISH_TO, FISH_TRIES, SPEAR_DAY } from '../src/game/mind.js';
+import { createMind, fishChance, fishFoodOk, spearMakeOk, chooseGoal, FISH_FROM, FISH_TO, FISH_IDLE_CHANCE, FISH_TRIES, SPEAR_DAY } from '../src/game/mind.js';
 import { stonesOfTile } from '../src/game/stones.js';
 import { branchesOfTile } from '../src/game/branches.js';
 import { terrainAt, canStand } from '../src/game/movement.js';
@@ -199,8 +199,8 @@ describe('fishing', () => {
     const g2 = fisher(); g2.act({ kind: 'fish' }); run(g2, makeInput(), 1); run(g2, makeInput({ left: true }), 0.2);
     expect(g2.fish.tries).toBe(0);   // walking off stops it
   });
-  it('catches about one try in three, fixed by the seed and the number of tries', () => {
-    expect(FISH_CHANCE).toBeCloseTo(1 / 3);
+  it('catches about 45 tries in a hundred, fixed by the seed and the number of tries', () => {
+    expect(FISH_CHANCE).toBeCloseTo(0.45);
     const outcome = seed => { const f = createFish(seed), r = []; for (let i = 0; i < 600; i++) { r.push(f.fishTry(0)); f.carried.length = 0; } return r; };
     const a = outcome(1337), b = outcome(1337), o = outcome(7);
     expect(a).toEqual(b); expect(o).not.toEqual(a);
@@ -306,6 +306,7 @@ describe('Dave and the spear: the pure rules', () => {
   const calm = (o = {}) => ({ time: 0.5, day: 3, last: 2, spear: true, crabs: 0, fish: 0, thirst: 0.1, hunger: 0.1, flames: true, canLight: false, fibre: 0, pileDry: true, crab: false, cool: {}, ...o });
   it('fishes now and then on a calm afternoon, never when something is urgent', () => {
     expect(fishChance(calm())).toBeGreaterThan(0); expect(fishChance(calm())).toBeLessThan(1);
+    expect(FISH_IDLE_CHANCE).toBe(0.5); expect(fishChance(calm())).toBe(0.5);   // 0.30.18 "Catch": half the days, was 0.35
     expect(FISH_FROM).toBeLessThan(FISH_TO);
     for (const o of [{ spear: false }, { time: FISH_FROM - 0.01 }, { time: FISH_TO }, { time: 0.9 }, { thirst: 0.3 }, { hunger: 0.35 }, { last: 3 }, { crab: true }, { crabs: 1 }, { fish: 1 }, { cool: { fish: true } }]) expect(fishChance(calm(o)), JSON.stringify(o)).toBe(0);
     expect(fishChance(calm({ flames: false }))).toBeGreaterThan(0);   // the evening fire is lit later: no fire is asked for now

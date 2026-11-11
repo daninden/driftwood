@@ -2,6 +2,32 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.30.18 "Catch" — 2026-11-11
+
+A small tuning, agreed with the user on 2026-11-11: Dave catches more of the fish he tries for, and goes fishing on more afternoons. Nothing else changed.
+
+- **The catch chance per try** goes from 1/3 to 0.45 (`FISH_CHANCE` in `game/fish`; still fixed by the seed and the number of tries).
+- **Dave's afternoon fishing pastime** goes from 0.35 to 0.5 a day (`FISH_IDLE_CHANCE` in `game/mind`; same window, same conditions, same stream `rngFish`).
+- **Tests:** `tests/spear.test.js` pins both numbers (the catch rate over 600 tries around 0.45; `fishChance` is exactly 0.5 on a calm afternoon); `tests/devPanel.test.js` has the new version. The fish quantity bounds in `tests/helpers/lifeSeeds.js` are set again by the policy (below).
+- **Fish bounds, by the policy** (each met on at least 2 of the 4 streams, at about half the mean of the scenario, whole counts rounded down, at least 1 where above 0; none where met on fewer than 2): fishing trips, fish caught and fish eaten are 1 on every scenario, except that seed 1337 walked now has the default bounds for fish caught and eaten (it had none: 0, 2, 0, 0 before, now caught 1, 2, 3, 2 and eaten 1, 2, 3, 2) and seed 7 walked has no fish-eaten bound (it was 1, 1, 0, 0, now 1, 0, 0, 0: met on 1 of 4). Seed 7 fresh stays without one (0, 1, 0, 0). Safety bounds unchanged (one spear, never stuck, at most `FISH_TRIES` tries a trip, at most 3 spoiled fish).
+
+**Measurement** (24 ten-day lives: seeds 1337, 2024 and 7, walked and fresh, streams 0 to 3; 0.30.17 measured again in a scratch worktree of c0b6e8a, against 0.30.18):
+
+| | 0.30.17 | 0.30.18 |
+|---|---|---|
+| fishing sessions per life | 1.25 | 1.88 |
+| tries per life | 1.75 | 2.79 |
+| fish caught / eaten per life | 1.08 / 1.00 | 1.63 / 1.50 |
+| spoiled fish (total, of 24 lives) | 2 | 3 |
+| maximum hunger / thirst (days), max and mean | 0.79 and 0.69 / 0.78 and 0.66 | 0.86 and 0.70 / 0.78 and 0.67 |
+| collapses, stuck by himself (longest stand-still 1.20 s), errors | 0, 0, 0 | 0, 0, 0 |
+| no path (`nopath`), steps outside known ground | 1, 0 | 0, 0 |
+| lean-tos built by day 10, mean day | 19 of 24, 5.26 | 18 of 24, 5.00 |
+| nights of 5 hours or more (of 9) | 8.67 | 8.67 |
+| spears made per life, spear stuck in his hand | 1.00, 0 | 1.00, 0 |
+
+All safety bounds hold on every stream. The fish are still a modest part of his food (about one and a half a life, from one). One lean-to is missing by day 10 (seed 7 walked, stream 1: day 10 before, none now; the other lives' lean-to days are as before, the mean is lower because the one late lean-to is gone); the lean-to is not a safety bound. Per scenario (streams 0 to 3), fishing trips: 1337 walked 2, 3, 3, 3; 1337 fresh 1, 1, 0, 2; 2024 walked 3, 4, 5, 2; 2024 fresh 3, 3, 2, 3; 7 walked 1, 1, 0, 0; 7 fresh 2, 1, 0, 0. (Tries per life on 0.30.17 measure 1.75 here against 1.88 in its entry; every other 0.30.17 number agrees with that entry.)
+
 ## 0.30.17 "Spear" — 2026-11-10
 
 A new way to get food close to home, agreed with the user on 2026-11-10: a spear, made from a branch and a stone, and fish speared in the shallow sea. Nothing else is new (no smoking of fish, no river fishing, no drawn fish as a target, no wear).

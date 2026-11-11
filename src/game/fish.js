@@ -3,7 +3,7 @@
  *
  * Rules
  *   - Standing in shallow sea water (`fishableAt`: the sea, not a river, from FISH_DEPTH[0] to FISH_DEPTH[1] deep: about to his knee) with the spear in his hand (game/spear) he peers and strikes,
- *     FISH_TIME (3 s) a try. About one try in three (FISH_CHANCE) brings a fish. Whether it does is fixed by the seed and the number of tries so far, like a dig for a crab
+ *     FISH_TIME (3 s) a try. A little under one try in two (FISH_CHANCE 0.45; 1/3 before 0.30.18 "Catch") brings a fish. Whether it does is fixed by the seed and the number of tries so far, like a dig for a crab
  *     (game/crabs) or lighting a fire (game/fire), so a try cannot be repeated for luck; a failed try counts too. The chance depends on the place only through the rule above:
  *     no fish that is drawn in the water has to match.
  *   - He carries at most CARRY_FISH (2) fish; they are not wood and do not slow him. With two he cannot fish.
@@ -31,7 +31,7 @@ import { mulberry32, hashInt } from '../core/noise.js';
 import { SPOIL_AFTER, CRAB_FOOD } from './crabs.js';
 
 export const FISH_TIME = 3;
-export const FISH_CHANCE = 1 / 3;
+export const FISH_CHANCE = 0.45;   // 0.30.18 "Catch": was 1 / 3
 export const CARRY_FISH = 2;
 export const FISH_FOOD = CRAB_FOOD;       // a roasted fish feeds like a roasted crab
 export const FISH_DEPTH = [0.08, 0.3];    // metres of sea water he stands in: above the ankle, up to the knee (the depth that puts out a torch)

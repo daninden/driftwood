@@ -4,11 +4,11 @@ Where the work stands, for the next session. Read `AGENTS.md`, `docs/design.md` 
 
 ## Status
 
-**Live on `main`: 0.30.16 "Reach" (3e427bc).** **Ready to push: 0.30.17 "Spear"** (see `docs/versions.md`). The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
+**Live on `main`: 0.30.17 "Spear" (c0b6e8a).** **Ready to push: 0.30.18 "Catch"** (see `docs/versions.md`). The full `npm test` runs once, as the last step after the last code change before every push to `main`, and must be green (working agreement in `AGENTS.md`); it takes about 180 to 280 s on four cores.
 
 ## Next, agreed in order
 
-1. *(nothing agreed is waiting; 0.30.17 "Spear" is built and ready, see above.)* Measured: 0.30.17 adds one spear and about one fish eaten per ten-day life; all safety bounds hold; the lean-to is as before (19 of 24 by day 10, mean day 5.26 against 18 and 5.06); the spear is made once his lean-to stands or from day 6, because a spear made on day 0 or 1 took a branch the lean-to needs and delayed it (see `docs/versions.md`).
+1. *(nothing agreed is waiting; 0.30.18 "Catch" is built and ready, see above.)* A small tuning agreed on 2026-11-11: the catch chance per try is 0.45 (was 1/3) and the afternoon fishing pastime 0.5 a day (was 0.35). Measured: about 1.5 fish eaten per ten-day life (1.0 before); all safety bounds hold; one lean-to fewer by day 10 (18 of 24, mean day 5.00; 19 and 5.26 before: seed 7 walked, stream 1, 10 became none; a lean-to is not a safety bound). See `docs/versions.md`.
 
 Later, agreed in principle, to work out first: **more on fishing** (smoking fish, fishing in the river, a fish that is drawn and is the target, wear of the spear). Not agreed in detail; 0.30.17 has none of them.
 

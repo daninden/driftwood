@@ -24,6 +24,7 @@
 //   did to the world's own pieces (rain on the start wood and branches, a branch grown back: tests/sharedWorld.test.js), so each run is the same as on a freshly generated island. Checked when this
 //   was introduced: the reports of all four streams of every scenario were byte-identical on one shared island and on four fresh ones; tests/sharedWorld.test.js keeps a short check of it.
 // 0.30.17 "Spear": the report also has the spear and the fish (see mindSim): the safety checks above (one spear, never stuck in his hand, at most FISH_TRIES tries a trip, few spoiled fish) and the quantities of `rhythm` (spear made, fishing trips, fish caught and eaten).
+// 0.30.18 "Catch": the catch chance is 0.45 and the afternoon pastime 0.5 a day; the fish quantity bounds are set again by the policy in tests/helpers/lifeSeeds (fish caught and eaten on seed 1337 walked now have the default bound; fish eaten on seed 7 walked has none).
 // Exports: lifeSuite(seed, { walked, fresh, beach, extra }, part?), SIM_TIMEOUT, STREAMS. Depends on: world/world, world/spots, game/leanto (siteFor, NEED), tests/helpers/mindSim.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../../src/world/world.js';
