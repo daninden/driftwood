@@ -25,6 +25,8 @@
 //   was introduced: the reports of all four streams of every scenario were byte-identical on one shared island and on four fresh ones; tests/sharedWorld.test.js keeps a short check of it.
 // 0.30.17 "Spear": the report also has the spear and the fish (see mindSim): the safety checks above (one spear, never stuck in his hand, at most FISH_TRIES tries a trip, few spoiled fish) and the quantities of `rhythm` (spear made, fishing trips, fish caught and eaten).
 // 0.30.18 "Catch": the catch chance is 0.45 and the afternoon pastime 0.5 a day; the fish quantity bounds are set again by the policy in tests/helpers/lifeSeeds (fish caught and eaten on seed 1337 walked now have the default bound; fish eaten on seed 7 walked has none).
+// 0.30.19 "Journey": every 5 to 7 days from day 4 he may go on a journey (a night away). Safety, on every stream: a leg on the journey finder runs only inside a journey (`legOutside`: the climbing routes are open to journeys and to nothing else; daily exploring stays at `exploreRoute` 0), his journey ticks are on ground he knows,
+//   no journey ends stranded, at most one is unfinished at the end of the run; the collapse and thirst and hunger maxima cover the journeys too. Quantities, by the policy and only for the scenarios where a journey happens on at least 2 of the 4 streams (`journeys`, `journeyNights`, `journeyFires` of lifeSeeds): journeys, nights away, nights away by a fire.
 // Exports: lifeSuite(seed, { walked, fresh, beach, extra }, part?), SIM_TIMEOUT, STREAMS. Depends on: world/world, world/spots, game/leanto (siteFor, NEED), tests/helpers/mindSim.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../../src/world/world.js';
@@ -69,7 +71,9 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
     if (d.leanto !== undefined) check(d.leanto, 'lean-to completion day').toBeGreaterThanOrEqual(2);
     for (const [a, b] of [['leanto', 'walls'], ['walls', 'ring'], ['ring', 'bed']]) if (d[b] !== undefined) { check(d[a], `${a} before ${b}`).toBeDefined(); check(d[b], `${b} completion after ${a}`).toBeGreaterThan(d[a]); }
     check(r.outside, 'ticks outside known ground').toBe(0); // outside a search for water or food or an exploring trip (0.29.4), never a step on ground he does not know
-    check(r.exploreRoute, 'exploring ticks on climbing routes').toBe(0); // 0.29.4: and exploring never takes him onto a climbing route
+    check(r.exploreRoute, 'daily exploring ticks on climbing routes').toBe(0); // 0.29.4: and exploring never takes him onto a climbing route (0.30.19: a journey is not exploring: `mind.exploring` is false on it)
+    check(r.legOutside, 'journey-finder legs outside a journey').toBe(0); check(r.journeyOutside, 'journey ticks outside known ground').toBe(0);   // 0.30.19: climbing routes are used only on journeys
+    check(r.journey.stranded, 'journeys that ended stranded').toBe(0); check(r.journey.started - r.journey.completed, 'journeys started and not finished').toBeLessThanOrEqual(1);   // a journey ends at home (one may be on at the end of the run)
     check(r.knownAt[1], 'known cells at day 1').toBeGreaterThan(0);        // (the cells known at the start of day 1, 5 and 10 are in the report)
     check(r.tide.laid, 'rescued pieces laid no more than picked').toBeLessThanOrEqual(r.tide.picked);   // 0.30.13: only what he took out of the strip is laid above the high-water line
     check(r.tide.burned, 'rescued pieces burned no more than laid').toBeLessThanOrEqual(r.tide.laid);
@@ -95,6 +99,9 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
     c.min(r => r.mix.berries + r.mix.banana, k.inland ?? 0, 'inland food');   // some of the food is from inland
     c.min(r => r.crabsEaten, k.crabs ?? 0, 'crabs eaten');
     // 0.30.17 "Spear" (quantities by the policy: about half the mean of 0.30.17 on the scenario, whole counts rounded down, at least 1 where above 0; a bound met on fewer than 2 streams is left out, as `burned` is): he makes the spear, goes fishing, catches and eats a fish
+    if (k.journeys) c.min(r => r.journey.started, k.journeys, 'journeys');   // 0.30.19 "Journey" (by the policy; only where a journey happens on at least 2 of the 4 streams)
+    if (k.journeyNights) c.min(r => r.journey.nights, k.journeyNights, 'nights away on a journey');
+    if (k.journeyFires) c.min(r => r.journey.fires, k.journeyFires, 'nights away by a small fire');
     c.min(r => r.spearsMade, 1, 'spears made'); c.min(r => r.fishTrips, k.fishTrips ?? 1, 'fishing trips'); c.min(r => r.fishCaught, k.fishCaught ?? 1, 'fish caught'); c.min(r => r.fishEaten, k.fishEaten ?? 1, 'fish eaten');
   };
   describe(`Dave alone on island ${seed}`, () => {

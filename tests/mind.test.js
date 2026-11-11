@@ -168,7 +168,7 @@ describe('pastimes (0.28.2 "Pastime")', () => {
   });
   it('leaves a failed goal alone only a third as long as before, and a failed light waits longer when one tuft is left', async () => {
     const src = (await import('node:fs')).readFileSync(new URL('../src/game/mind.js', import.meta.url), 'utf8');
-    expect(src).toMatch(/const COOL = \{ crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600, fish: 240, spear: 300 \}/);
+    expect(src).toMatch(/const COOL = \{ crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600, fish: 240, spear: 300, journey: 600 \}/);
     expect(src).toMatch(/cool\('light', game\.fibre\.carried <= 1 \? COOL\.light \* 3 : COOL\.light\)/);
   });
   it('chooses stroll places only on known ground, 1.5 m inside its edge, and standable', () => {

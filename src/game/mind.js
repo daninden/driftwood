@@ -43,6 +43,14 @@
  *   beside the lean-to (fronds on one side, stones on the other, branches behind).
  * 0.30.16 "Reach": the 220 m cap of the exploring reach is gone (`exploreReach`: 80 m + 15 m a day, up to the whole island; the island's edge and the way home before dark are the limits), and a trip may start from EXPLORE_EARLY (just after dawn)
  *   when `calm` (idleGoal: the home project has nothing to do today and no crab trip is possible or due: `crabDue`, pure); otherwise from EXPLORE_FROM as before.
+ * 0.30.19 "Journey": now and then (about once every 5 to 7 days from day 4, `journeyGap` / `journeyOk`, pure; the PRNG of its own, `rngJourney`) he goes on a JOURNEY: out in the morning (JOURNEY_FROM to JOURNEY_TO), only when calm at home (the lean-to stands, the day's piece of the home is done, no crab trip
+ *   is due, thirst under 0.25 and hunger under 0.3, no rain now and none forecast for today, tonight and the next morning: `journeyRain`, pure on game/weather) to a spot he does not know yet, 200 to 420 m from home, on the coast or at a forest edge (`journeyTarget`: chosen like the exploring goals, and only when
+ *   the planner finds a way there and back, `pathJourney`). The finder `pathJourney` is the exploring finder with the climbing routes opened for journeys only: route cells (climb above EXPLORE_ROUTE) of slope under JOURNEY_SLOPE 3.2 are allowed (daily exploring stays on ordinary ground; `mind.exploring` is false on a journey,
+ *   `mind.journeying` true). On the way `input.learns` is true, everything he sees is known, and he eats and drinks what he finds by the ordinary goals (drink, eat: the known ground grows with him; the full shells he has are with him). The journey is a state that survives goals and sleep (`journey`: phase 'out', 'camp', 'home');
+ *   the fire and stores goals wait while it lasts, the sleep goal sleeps at the camp (`journeyBed`). Before dusk (JOURNEY_CAMP, or on arrival) he picks a camp spot (`journeySpot`: known, standable, JOURNEY_HIGH above the sea, ordinary ground off any route, out of the river, no trunk or boulder near, no drop of
+ *   JOURNEY_RIM within 2 m, near known fresh water), husks a nut for fibre if he has none (`journeyHusk`), gathers wood nearby (`journeyWood`: loose driftwood or branches through `gather`, at most JOURNEY_WOOD_COST of walking each way, a pile of JOURNEY_WOOD pieces' fuel) and lights a small fire at LIGHT_FROM with the fibre and the drill
+ *   (`journeyLight`: `goStand('light')` and the arc's light, up to the tufts he has); he builds nothing and sleeps on the ground by it. If there is no wood, no fibre or the lighting fails, he sleeps cold. In the morning he walks home by the planner (a fall back to the known ground and then to `pathFree`) and the journey ends when he is home. He turns back at once
+ *   at thirst VERY_AT or hunger VERY_HUNGER_AT or when rain comes (`journeyBrake`, pure). `mind.stats.journey` counts them; `mind.journeyAim` is the test hook for the target.
  * 0.29.4 "Wander": EXPLORING, a pastime of the idle goal. Now and then (`exploreChance`, pure: by day, EXPLORE_FROM 0.2 to EXPLORE_TO 0.52, thirst and hunger well below the point where he goes for them, no crab trip to make; at most one trip a day, one in
  *   EXPLORE_GAP 2 days when nothing is missing, every day with chance 0.8 when wood (fewer than 6 loose logs known within 70 m of home), branches (fewer than 4) or nuts (fewer than 2) are short, or a lately failed search for them left a mark (`lack`)) he walks to the edge of what he knows
  *   (`exploreTarget`: the farthest unknown spot within `exploreReach(day)` of home (80 m on day 0, 15 m more a day, no cap since 0.30.16) that borders known ground, which he can reach and be home from before EXPLORE_BACK 0.6, preferably on the coast (wood and coconuts) or at a forest edge (branches, berries),
@@ -83,6 +91,7 @@
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
  * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now (s.pileLogs: pieces in the biggest pile there)
  * exploreChance(s), exploreReach(day), exploreWhere(missing, trips), exploreLate(time, secs, speed?), crabDue(s)   pure (0.29.4; crabDue 0.30.16): whether, how far, where to and when to turn back, tested in tests/mind.test.js
+ * journeyGap(r), journeyOk(s), journeyRain(weather, total), journeyBrake(s)   pure (0.30.19): the days to the next journey (5 to 7), whether one may start now, whether rain is forecast for it, whether it turns back (tested in tests/journey.test.js)
  * fishChance(s), fishFoodOk(s), spearMakeOk(s)   pure (0.30.17): the pastime's chance, may he fish for food, may he make the spear now (see above; tested in tests/spear.test.js)
  * crabTripOk(s), crabFoodOk(s)   pure (0.29.1): may he go for crabs now (s.sea, time, crabs carried, flames, canLight, fibre, pileDry, cool)
  * huskWanted(s), restSeconds(r1, r2), strollKind(avail, last, r), strollNow(s, r)   pure; the choices of the pastimes (0.28.2), tested in tests/mind.test.js
@@ -102,6 +111,7 @@
  *   mind.step(dt)     once per game.update while in charge, before it: decides and fills mind.input
  *   mind.active, mind.goal (name or null), mind.resting (true while standing still after a task), mind.walking (a walk target is set), mind.searching (learning on a search for water or food), mind.exploring (on an exploring trip, 0.29.4)
  *   mind.stats        { goals: {name: n}, home, timber: { plans, replans, loads[0..3] (pieces in his arms after a fetch), wetLoads[0..3], handoffs, handoffPieces, fallbacks, far, skipped, owed, retrieved } (0.30.4), stuck, nopath, idleSecs, sitSecs (seconds he sat), sits: {gaze, fire, rest: how often he sat down}, lightRefused, gazes, strolls, strollKinds: {kind: n}, explores (trips made), exploreSecs, tide: { rounds, picked, laid, trips, noSpot, burned, wetBurned } (0.30.13: pieces taken from the strip, laid above the high-water line, trips, trips with no spot, rescued pieces later burned, and burned wetter than 0.5), torch: { taken } (0.30.14), crabTrips, crabDigs, crabTripDigsMax, crabsCaught, spearsMade, spearStuck, fishTrips, fishTries, fishTripTriesMax, fishCaught, fishEaten (0.30.17), events: [..] } for tests and the playtest bot (searches: how many searches he began)
+ *   mind.journeying   true from the start of a journey until he is home again (0.30.19); mind.journeyLeg true while he walks one of its two legs (out, home) on the journey finder; mind.journey the state { phase, to, home, camp, ... } or null; mind.stats.journey { started, completed, nights, fires, cold, noTarget, back: {thirst, hunger, rain, nopath, late}, wood, husked, list: [per journey] }; mind.journeyAim(day, time, where?, avail?) the target a journey would aim for (tests)
  *   mind.chose()      true while a sleep he chose himself is being started (the tests tell it from a collapse); mind.lastKind() the kind of the last button he used; mind.path the path finder
  *   opts.stream       a number to vary the chance (default 0)
  *   opts.onIntent     optional presentation callback before a situation-led errand, once per thought kind per goal; it changes no game state or decisions (0.30.1)
@@ -116,7 +126,7 @@
  *
  * 0.30.10 "Walls": he is never boxed in by his own camp. Every pile he lays (through the game's lay, `wood.drop`), the pile places of the upgrades (`homeNeed`, a gap from every pile and fire place instead of the 1.5 m from other piles), the tideline spot (`tideSpot`) and the leftovers of a build keep CAMP_GAP of walking room from the other solids (game/obstacles `gapFree`), so no ring of solids can close round him. The two building piles stand PAIR_HALF (0.925) either side of the site, 1.85 m apart (were 1.3 to 1.4), and the second is laid from beside the first (`siteDest`), so the game puts it 1.85 to 2 m from it: the gap needs 1.8 m, the arc's build pair allows 2 m.
  *
- * Depends on: game/path, game/route, game/stand (through game.stand), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (siteFor, UPGRADES), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
+ * Depends on: game/path, game/route, game/stand (through game.stand), game/weather (through game.weather: the forecast and the rain of a journey), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (siteFor, UPGRADES), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -156,6 +166,11 @@ export const EXPLORE_FROM = 0.2, EXPLORE_TO = 0.52, EXPLORE_BACK = 0.6, EXPLORE_
 export const EXPLORE_THIRST = 0.25, EXPLORE_HUNGER = 0.3, EXPLORE_GAP = 2, EXPLORE_CHANCE = 0.3, EXPLORE_MISSING_CHANCE = 0.8, LACK_DAYS = 2;   // nothing urgent; every EXPLORE_GAP-th day, or every day when something is missing at home
 export const EXPLORE_REACH0 = 80, EXPLORE_REACH_DAY = 15, EXPLORE_EDGE = 18, EXPLORE_SLOPE = 0.45;   // how far from home a trip may go: 80 m on the first day, 15 m more each day (0.30.16: no cap; the island's edge and the way home before dark are the limits)
 export const EXPLORE_EARLY = SLEEP_DAWN + 0.01;   // 0.30.16 "Reach": a trip may start this early (just after dawn, instead of EXPLORE_FROM) when nothing at home is urgent: the home project has nothing to do today and no crab trip is possible or due (`calm`)
+// 0.30.19 "Journey": every 5 to 7 days (from day 4), when calm, a journey of a night to a far spot; the way over climbing routes of slope under JOURNEY_SLOPE is open to it (and only to it)
+export const JOURNEY_DAY = 4, JOURNEY_GAP_MIN = 5, JOURNEY_GAP_MAX = 7, JOURNEY_FROM = EXPLORE_EARLY, JOURNEY_TO = 0.4, JOURNEY_RAIN_UNTIL = 0.3;   // the first day, the days to the next, the morning window (it leaves at the latest at JOURNEY_TO), and how far into the next morning a shower forecast keeps him at home
+export const JOURNEY_THIRST = EXPLORE_THIRST, JOURNEY_HUNGER = EXPLORE_HUNGER;   // calm at home: thirst under 0.25 and hunger under 0.3 (the exploring points)
+export const JOURNEY_MIN = 160, JOURNEY_MAX = 420, JOURNEY_MIN_COST = 220, JOURNEY_REAL = 0.5, JOURNEY_ARRIVE = 0.62, JOURNEY_CAMP = 0.66, JOURNEY_SLOPE = 3.2, JOURNEY_SPARE = 60;   // the target lies 160 to 420 m from home and a way of at least 220 s by the planner (a day trip's way is under 175 s: well beyond it); he walks it at the amble and should be there by JOURNEY_ARRIVE (the planner's cost is about three times the real walk, measured: JOURNEY_REAL 0.5 of it is counted) and starts the camp at JOURNEY_CAMP at the latest; route cells up to slope 3.2 are walkable on a journey
+export const JOURNEY_HIGH = 1.0, JOURNEY_RIM = 0.8, JOURNEY_BARE = 1.8, JOURNEY_WATER = 70, JOURNEY_WOOD = 5, JOURNEY_WOOD_COST = 120, JOURNEY_LIMIT = 1500, JOURNEY_START_NEAR = 90, JOURNEY_COOL = 90, JOURNEY_HURRY = 0.5;   // the camp: ground at least 1 m above the sea, no drop or rise of 0.8 m within 2 m, 1.8 m clear of any trunk or boulder, fresh water within 70 m preferred; fuel of 5 pieces of driftwood (a branch counts half), fetched from at most 120 s of the planner's walking away; the goal limit
 // 0.30.13 "Tideline": wet wood from the strip between the tides is carried to a spot just above the high-water line (TIDE_LAND: ground height, TIDE_NEAR: metres from where he stands), at least TIDE_CAMP (11 m: it covers every place the lean-to's site, ring and upgrade piles may come, 6 m left lean-tos with no site on some islands) from the fire, the lean-to and its site, TIDE_APART from other piles (a driftwood pile of fewer than TIDE_JOIN_MAX may be joined), by a way of at most TIDE_COST seconds
 export const DRY_AT = TORCH_DRY, TIDE_LAND = [0.15, 0.8], TIDE_NEAR = [2, 9], TIDE_CAMP = 11, TIDE_APART = 3, TIDE_JOIN_MAX = 9, TIDE_COST = 30, STOCK_MAX_COST = 90;   // DRY_AT: the dryness the fire and the torch ask for; STOCK_MAX_COST: the longest walk to a pile of his own wood he left behind (fetchOwed)
 // 0.30.14 "Torch": after dusk a trip of more than TORCH_TRIP m from a fire with at least TORCH_FUEL (two pieces) of fuel takes a torch
@@ -169,7 +184,7 @@ export const UP_AT = 2.1;   // 0.30.3 rule (a): the piles of the upgrades lie th
 export const SPEAR_DAY = 6, SPEAR_RANGE = 60, SPEAR_LIMIT = 300, FISH_FROM = 0.42, FISH_TO = 0.6, FISH_FOOD_TO = 0.8, FISH_IDLE_CHANCE = 0.5, FISH_THIRST = 0.3, FISH_HUNGER = 0.35, FISH_RANGE = 80, FISH_TRIES = 8, FISH_WANT = 1, FISH_LIMIT = 420, FISH_EXTRA = 20;   // FISH_EXTRA: seconds a fish costs on top of the walk when it is weighed against a nut (the tries and the roast)
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
-const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600, fish: 240, spear: 300 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
+const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600, fish: 240, spear: 300, journey: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
 const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light', 'build', 'upgrade', 'torch', 'makeSpear', 'takeSpear', 'laySpear', 'fish'];   // the kinds of the arc / ring he ever chooses (the torch only from a fire, `torchFor`, 0.30.14); build and upgrade only in the home project (0.29.3)
 
 export function fireStep(s) {
@@ -224,6 +239,19 @@ export function crabDue(s) {
   for (let t = Math.max(s.time, CRAB_FROM); t < CRAB_TO; t += 0.02) if (crabTripOk({ ...s, time: t, sea: seaLevel(s.total - s.time + t) })) return true;
   return false;
 }
+/** 0.30.19 "Journey": the days from the start of one journey to the earliest start of the next: 5, 6 or 7 (r in [0, 1), the PRNG of the journeys). */
+export function journeyGap(r) { return JOURNEY_GAP_MIN + Math.min(JOURNEY_GAP_MAX - JOURNEY_GAP_MIN, Math.floor(r * (JOURNEY_GAP_MAX - JOURNEY_GAP_MIN + 1))); }
+/** 0.30.19: is rain forecast that would keep him at home (pure)? A shower under way now, or one that starts before the end of tonight and the next morning (JOURNEY_RAIN_UNTIL into the next day). `weather` is game/weather's; total the days on the clock. */
+export function journeyRain(weather, total) { const n = weather.next(total); return !!n && n.start < Math.floor(total) + 1 + JOURNEY_RAIN_UNTIL; }
+/** 0.30.19: may a journey start now (pure)? s: { day, time, due (the first day of the next journey), lean ('done' when his lean-to stands), raining (now), rainSoon (journeyRain), thirst, hunger, cool }.
+ *  From day JOURNEY_DAY and `due`, in the morning (JOURNEY_FROM to JOURNEY_TO), the lean-to standing, no rain now or forecast, thirst under JOURNEY_THIRST and hunger under JOURNEY_HUNGER. */
+export function journeyOk(s) {
+  if (s.day < JOURNEY_DAY || s.day < s.due || s.lean !== 'done' || s.raining || s.rainSoon || (s.cool && s.cool.journey)) return false;
+  return s.time >= JOURNEY_FROM && s.time < JOURNEY_TO && s.thirst < JOURNEY_THIRST && s.hunger < JOURNEY_HUNGER;
+}
+/** 0.30.19: does a journey turn back now (pure)? Very thirsty (VERY_AT), very hungry (VERY_HUNGER_AT) or rain falling. s: { thirst, hunger, raining }. */
+export function journeyBrake(s) { return s.thirst >= VERY_AT || s.hunger >= VERY_HUNGER_AT || !!s.raining; }
+
 /** Where he expects what is missing: 'coast' (driftwood and coconuts wash up and grow there) or 'forest' (branches, berries); nothing missing: the coast and the forest in turn (trips = trips so far). */
 /** 0.30.17 "Spear": the chance, at an idle moment, that he goes fishing as a pastime now (pure). Only when a spear exists, nothing is carried to roast (a crab or a fish), in the afternoon (FISH_FROM to FISH_TO), once a day,
  *  with nothing urgent (thirst under FISH_THIRST, hunger under FISH_HUNGER: a little short of the points where he goes for a drink or a meal) and no crab trip possible now (the tide's crabs come first). The catch is roasted at the evening fire
@@ -288,8 +316,8 @@ export function chooseGoal(s) {
   const catchN = (s.crabs || 0) + (s.fish || 0);   // 0.30.17: a fish waits for the flames like a crab
   if (!cool.eat && (s.hunger >= (late && !catchN ? BED_HUNGER : HUNGER_GO) || (catchN > 0 && s.flames && s.hunger >= CRAB_ROAST_HUNGER))) return 'eat';   // 0.29.1: with a crab carried he waits for the fire's flames to have it for supper
   if (!cool.sleep && s.canLie && (t >= BED_FROM || t < DAWN || s.awake >= TIRED_GO)) return 'sleep';
-  if (!cool.fire && fireStep({ ...s, cool })) return 'fire';
-  if (!cool.stores && storesStep({ ...s, cool })) return 'stores';
+  if (!cool.fire && !s.journey && fireStep({ ...s, cool })) return 'fire';   // 0.30.19: on a journey the home fire and the stores wait (the camp's fire is the journey's own)
+  if (!cool.stores && !s.journey && storesStep({ ...s, cool })) return 'stores';
   return 'idle';
 }
 
@@ -309,12 +337,14 @@ export function createMind(world, game, opts = {}) {
   const onIntent = typeof opts.onIntent === 'function' ? opts.onIntent : null;
   const p = game.player, clock = game.clock, W = game.wood, known = game.known;
   const rng = mulberry32(hashInt(world.seed + 28, opts.stream || 0, 1)), rngEx = mulberry32(hashInt(world.seed + 29, opts.stream || 0, 2)), rngTide = mulberry32(hashInt(world.seed + 30, opts.stream || 0, 3)), rngFish = mulberry32(hashInt(world.seed + 31, opts.stream || 0, 4));   // exploring (0.29.4) draws from a stream of its own, so that the days without a trip stay as they were
+  const rngJourney = mulberry32(hashInt(world.seed + 32, opts.stream || 0, 5));   // 0.30.19: the target's rings and the days to the next journey draw from a stream of their own
   // ground he may be taken over: known all round, MARGIN (1.5 m) inside the edge of what he knows, so that sliding past a trunk or a bush never carries him into a cell he has not been to
   const MARGIN = 1.5, DIAG = MARGIN * 0.75;
   const inside = (x, z) => known.hasAround(x, z, MARGIN, DIAG);   // the nine points: (x, z), MARGIN along the axes, DIAG on the diagonals (0.30.5 "Quicker": one lookup where they share a cell)
   const path = createPath(world, { allow: inside, allowVersion: () => known.count, obstacles: game.movement.obstacles }), pathFree = createPath(world, { obstacles: game.movement.obstacles });   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
-  const stats = { tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, spearsMade: 0, spearStuck: 0, fishTrips: 0, fishTries: 0, fishTripTriesMax: 0, fishCaught: 0, fishEaten: 0, events: [] };
-  const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
+  const stats = { tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, spearsMade: 0, spearStuck: 0, fishTrips: 0, fishTries: 0, fishTripTriesMax: 0, fishCaught: 0, fishEaten: 0, journey: { started: 0, completed: 0, nights: 0, fires: 0, cold: 0, noTarget: 0, back: { thirst: 0, hunger: 0, rain: 0, nopath: 0, late: 0 }, stranded: 0, wood: 0, husked: 0, list: [] }, events: [] };
+  const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring && !journeyLeg; }, get journeying() { return !!journey; }, get journeyLeg() { return journeyLeg; }, get journey() { return journey; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
+  let journey = null, journeyLeg = false, journeyDue = JOURNEY_DAY, journeyTried = -9;   // 0.30.19: the journey in hand (it outlasts goals and sleep), the first day of the next one, the day a start was last tried
   let fishedDay = -9, exploring = false, exploredDay = -9, fullPace = false, now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
   let pressed = null, choice = null, sleepKey = false, sinceCheck = 0, builtDay = -1, headingWanted = null, errands = 0;   // headingWanted: the way a lean-to being started should face (a player turns the view)
   const proj = { site: null };   // 0.29.3: the lean-to's site, chosen once and kept
@@ -324,7 +354,7 @@ export function createMind(world, game, opts = {}) {
     takeWake: () => false, takeLight: () => false, pressing: () => false, cancelAction() { pressed = null; }, clearTarget() { inp.target = null; },
     takeAction: () => { const k = pressed; pressed = null; return k; }, takeChoice: () => { const k = choice; choice = null; return k; }, takeSleep: () => { const k = sleepKey; sleepKey = false; return k; },
   };
-  const ev = (type, data) => { if (stats.events.length < (type.startsWith('home') || type.startsWith('tide') ? 900 : 400)) stats.events.push({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); };
+  const ev = (type, data) => { if (stats.events.length < (type.startsWith('home') || type.startsWith('tide') || type.startsWith('journey') ? 900 : 400)) stats.events.push({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); };
   const idleInput = () => { inp.target = null; inp.run = false; };
   const busy = () => game.sleep.asleep || p.lie > 0 || !!p.work || p.stoop > 0 || (p.sitting > 0 && !inp.sit);   // (0.29.2: getting up is not done until he stands)
   const cool = (name, secs = COOL[name] || 60) => { coolUntil[name] = now + secs; };
@@ -414,7 +444,8 @@ export function createMind(world, game, opts = {}) {
   const ownPile = q => {
     const fs = fireSpot();
     return firePiles(fs).includes(q) || (proj.site && Math.hypot(q.x - proj.site.x, q.z - proj.site.z) <= 2.2)
-      || game.leantos.list.some(l => Math.hypot(q.x - l.x, q.z - l.z) <= UP_NEAR);
+      || game.leantos.list.some(l => Math.hypot(q.x - l.x, q.z - l.z) <= UP_NEAR)
+      || (!!journey && !!journey.camp && Math.hypot(q.x - journey.camp.x, q.z - journey.camp.z) <= 2.6);   // 0.30.19: the camp's pile on a journey is not wood to fetch
   };
   const pileFinds = (kind, x, z, r) => W.piles.filter(q => q.kind === pileKind(kind) && q.logs.length && inside(q.x, q.z) && !ownPile(q) && !isBad(kind, q) && Math.hypot(q.x - x, q.z - z) <= r)
     .map(q => {
@@ -446,7 +477,7 @@ export function createMind(world, game, opts = {}) {
     let near = false; for (const q of wp) if (Math.hypot(q.x - p.x, q.z - p.z) < NEAR_WATER) { near = true; break; }
     const cool = {}; for (const k of Object.keys(COOL)) cool[k] = isCool(k);
     return {
-      sea: game.sea, crabs: game.crabs.carried.length, fish: game.fish.carried.length, spear: game.spear.has(), flames: !!flameFire(),
+      journey: !!journey, sea: game.sea, crabs: game.crabs.carried.length, fish: game.fish.carried.length, spear: game.spear.has(), flames: !!flameFire(),
       asleep: game.sleep.asleep || p.lie > 0, time: clock.time, thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake, canLie: game.sleep.canLie(clock.time),
       water: wp.length > 0, waterNear: near, shellsEmpty: game.shells.empty(), shellsFull: game.shells.full(), nuts: game.shells.nuts, fibre: game.fibre.carried, torch: !!game.fire.torch,
       fireLit: !!f, fireFuel: f ? f.fuel / FUEL_MAX : 0, stock: st, pileLogs: best ? best.logs.length : 0, spare: piles.reduce((n, q) => n + fuelOfPile(q), 0) - st,
@@ -470,7 +501,7 @@ export function createMind(world, game, opts = {}) {
   function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground (o.free: anywhere, for a search). 0.30.3: a thin wrapper over game/route
     // A goal inside a solid (a pile, a fire place) cannot be stood on: the nearest free spot takes its place. Action errands never get here: they go to a standing point (goStand).
     if (game.movement.obstacles.camp.inside(x, z, 0.02) && !game.movement.obstacles.camp.inside(p.x, p.z, 0)) { const q = openNear(x, z, 2); if (q) { x = q.x; z = q.z; } }
-    const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : exploring ? pathExplore : path);   // 0.30.5: on an exploring trip every walk (the pick-ups at the far end, a berry bush, a nut) uses the exploring finder, which keeps off climbing routes and steep ground
+    const tap = !!o.tap, stop = o.stop ?? 1.0, fd = o.finder || (o.free ? pathFree : exploring ? (journeyLeg ? pathJourney : pathExplore) : path);   // 0.30.5: on an exploring trip every walk (the pick-ups at the far end, a berry bush, a nut) uses the exploring finder, which keeps off climbing routes and steep ground
     let route = null, finalSet = false, last = now;
     const t0 = now;
     for (;;) {
@@ -1008,7 +1039,7 @@ export function createMind(world, game, opts = {}) {
   }
 
   function* sleepGoal() {
-    const s = sleepSpot();
+    const s = journey ? journeyBed() : sleepSpot();   // 0.30.19: on a journey he sleeps at the camp
     yield* torchFor(s);
     const ok = yield* walk(s.x, s.z, { stop: 0.5 });
     if (!ok && dist(p, s) > 6) return false;
@@ -1541,6 +1572,210 @@ export function createMind(world, game, opts = {}) {
     const missing = exploreMissing(homeSpot());
     if (missing.length && exploreChance({ time: clock.time, day: clock.day, thirst: game.thirst.days, hunger: game.hunger.days, last: exploredDay, missing: missing.length, cool: { explore: isCool('explore') }, crab: crabTripOk(senses()) }) > 0) yield* exploreTrip(missing);
   }
+
+  // ---------- the journey (0.30.19 "Journey") ----------
+  // Every 5 to 7 days from day 4, in the morning, when calm: a night away at a spot he does not know, far from home (see the header). The state `journey` outlives the goals (a drink or a meal breaks into it, sleep ends the goal it is in): the idle goal
+  // carries it on from whatever phase it is in. 'out' and 'home' are legs on the finder `pathJourney` (the exploring finder with climbing routes of slope under JOURNEY_SLOPE opened: for journeys only), learning what he sees; 'camp' is on ground he knows by then.
+  const jo = { x: 0, z: 0, reach: 0 }, jMemo = new Map(), journeyPts = [];
+  const journeyGround = (x, z) => { const k = Math.round(x * 2) * 100003 + Math.round(z * 2); let v = jMemo.get(k); if (v === undefined) { const t = terrainAt(world, x, z, 0); v = t.climb <= EXPLORE_ROUTE ? t.s < EXPLORE_SLOPE : t.s < JOURNEY_SLOPE; jMemo.set(k, v); } return v; };
+  const pathJourney = createPath(world, { allow: (x, z) => journeyGround(x, z) && Math.hypot(x - jo.x, z - jo.z) <= jo.reach + 20, obstacles: game.movement.obstacles });
+  const brakeNow = () => journeyBrake({ thirst: game.thirst.days, hunger: game.hunger.days, raining: game.weather.raining(clock.total) });
+  const brakeWhy = () => game.weather.raining(clock.total) ? 'rain' : game.thirst.days >= VERY_AT ? 'thirst' : 'hunger';
+  const legBegin = () => { exploring = true; journeyLeg = true; inp.learns = true; fullPace = false; };
+  const legEnd = () => { exploring = false; journeyLeg = false; fullPace = false; inp.learns = false; idleInput(); };
+  function journeyTarget(home, where, avail) {   // the farthest unknown spot 200 to 420 m from home (coast or forest edge by `where`, as the exploring goals) with a way there that is done by JOURNEY_ARRIVE at the amble and a way back (the planner both ways)
+    jo.x = home.x; jo.z = home.z; jo.reach = JOURNEY_MAX + JOURNEY_SPARE;
+    const cands = [];
+    for (let r = JOURNEY_MIN; r <= JOURNEY_MAX; r += 20) for (let i = 0; i < 24; i++) {
+      const a = i * Math.PI / 12 + (r / 20 % 2) * Math.PI / 24, x = home.x + Math.sin(a) * r, z = home.z + Math.cos(a) * r;
+      if (!(Math.abs(x) < HALF - 8 && Math.abs(z) < HALF - 8) || known.has(x, z) || !canStand(world, x, z, 0) || !journeyGround(x, z)) continue;
+      if (journeyPts.some(q => Math.hypot(q.x - x, q.z - z) < 40)) continue;
+      const y = world.H(x, z); if (y < 0.5) continue;
+      let bias = 0;
+      if (where === 'coast') { if (y < 3) for (let k = 0; k < 8; k++) if (world.H(x + Math.sin(k * Math.PI / 4) * 15, z + Math.cos(k * Math.PI / 4) * 15) < 0.2) { bias = 30; break; } }
+      else if (y >= 1 && world.forestB(x, z) >= 0.55) bias = 30;
+      if (waterAll.some(q => Math.hypot(q.x - x, q.z - z) < JOURNEY_WATER)) bias += 500;   // fresh water near comes first: a night away is spent by a river (the drink before bed, the drink in the morning), so the candidates near water are tried before the rest
+      cands.push({ x, z, r, score: r + bias + 8 * rngJourney() });
+    }
+    for (const q of waterAll) {   // and the banks of the rivers: a night away is spent by fresh water (the drink before bed and the one in the morning)
+      const r = Math.hypot(q.x - home.x, q.z - home.z), st = r >= JOURNEY_MIN && r <= JOURNEY_MAX ? { x: q.x, z: q.z } : null;
+      if (!st || known.has(st.x, st.z) || !journeyGround(st.x, st.z) || world.H(st.x, st.z) < 0.5 || journeyPts.some(o => Math.hypot(o.x - st.x, o.z - st.z) < 40)) continue;
+      cands.push({ x: st.x, z: st.z, r, score: r + 500 + 8 * rngJourney() });
+    }
+    cands.sort((u, v) => v.score - u.score);
+    const real = cost => cost * JOURNEY_REAL / PACE + JOURNEY_SPARE, homeAvail = (EXPLORE_BACK - JOURNEY_FROM) * DAY_SECONDS;   // the walk at the amble, as it takes in fact (the planner's cost is pessimistic: about three times)
+    const cheap = c => dist(p, c) * 1.15 * JOURNEY_REAL / PACE + JOURNEY_SPARE <= avail;   // a first look at the straight line (the planner's way is 1.15 s a metre at the least), then the way itself for the best few
+    let tried = 0;
+    for (const c of cands.filter(cheap)) {
+      if (tried++ >= 12) break;
+      const out = pathJourney.find(p, c, 60000);   // (a steep stretch between two cell centres can leave a walk without a plan: then another target)
+      if (!out || out.cost < JOURNEY_MIN_COST || real(out.cost) > avail) continue;
+      const back = pathJourney.find(c, home, 60000);
+      if (back && real(back.cost) <= homeAvail) return { x: c.x, z: c.z, r: c.r, out: out.cost, back: back.cost };
+    }
+    return null;
+  }
+  function* journeyBegin() {   // true when a journey is on
+    journeyTried = clock.day;
+    if (W.load()) yield* handoff('journey');
+    const home = fireSpot(homeSpot()), avail = (JOURNEY_ARRIVE - clock.time) * DAY_SECONDS;
+    jo.x = home.x; jo.z = home.z; jo.reach = JOURNEY_MAX + JOURNEY_SPARE;
+    if (dist(p, home) > JOURNEY_START_NEAR || !pathJourney.find(p, home, 20000)) { cool('journey', 300); ev('journey-none', { why: 'start', away: +dist(p, home).toFixed(0) }); return false; }
+    const c = journeyTarget(home, exploreWhere([], stats.journey.started), avail);
+    if (!c) { stats.journey.noTarget++; cool('journey', 300); ev('journey-none', { why: 'no-target' }); return false; }
+    journeyDue = clock.day + journeyGap(rngJourney()); journeyPts.push(c); exploredDay = clock.day;
+    journey = { day0: clock.day, t0: clock.total, phase: 'out', to: c, home, camp: null, max: 0, fails: 0, why: null };
+    stats.journey.started++; ev('journey', { to: [+c.x.toFixed(1), +c.z.toFixed(1)], dist: +dist(home, c).toFixed(0), out: +c.out.toFixed(0), back: +c.back.toFixed(0), next: journeyDue });
+    return true;
+  }
+  function journeyEnd(why) {
+    const J = journey; if (!J) return;
+    const hours = +((clock.total - J.t0) * 24).toFixed(1);
+    stats.journey.list.push({ day: J.day0, to: [+J.to.x.toFixed(0), +J.to.z.toFixed(0)], dist: +dist(J.home, J.to).toFixed(0), max: +J.max.toFixed(0), hours, nights: J.nights || 0, fire: !!J.fire, wood: J.wood || 0, end: why, endDay: clock.day });
+    if (why === 'home') stats.journey.completed++;
+    ev('journey-end', { why, hours });
+    journey = null; exploredDay = Math.max(exploredDay, clock.day);
+  }
+  const turnBack = (J, why) => { J.phase = 'home'; J.why = why; stats.journey.back[why]++; ev('journey-back', { why }); };
+  function* pauseJourney(secs) { const until = now + secs; while (now < until) yield; }   // a look about (no chance involved: the stream of the strolls stays as it was)
+  function* journeyOut(J) {
+    legBegin();
+    try {
+      const ok = yield* walk(J.to.x, J.to.z, { stop: 2, finder: pathJourney, until: () => brakeNow() || clock.time >= JOURNEY_CAMP });
+      if (brakeNow()) { turnBack(J, brakeWhy()); return; }
+      if (ok && dist(p, J.to) <= 3) { ev('journey-there', { secs: +((clock.total - J.t0) * DAY_SECONDS).toFixed(0), planned: +J.to.out.toFixed(0) }); J.phase = 'camp'; yield* pauseJourney(4); }
+      else if (clock.time >= JOURNEY_CAMP || clock.time >= 0.45) { J.phase = 'camp'; ev('journey-camp-early', { late: clock.time >= JOURNEY_CAMP }); }   // dusk comes (or the way is shut late in the day): the camp is made where he is
+      else turnBack(J, 'nopath');
+    } finally { legEnd(); }
+  }
+  // the camp spot near c: known, standable, JOURNEY_HIGH above the sea, ordinary ground (no route, no steep slope), out of the river, clear of trunks and boulders, no drop or rise of JOURNEY_RIM within 2 m (not on a rim), by preference near fresh water he knows
+  function journeySpot(c) {
+    const wp = waterPts(), cands = [];
+    for (let r = 0; r <= 36; r += 3) for (let i = 0; i < (r ? 16 : 1); i++) {
+      const a = i * Math.PI / 8 + r * 0.3, x = c.x + Math.sin(a) * r, z = c.z + Math.cos(a) * r;
+      if (!inside(x, z) || !canStand(world, x, z, 0) || !ordinary(x, z) || !world.dryOfRiver(x, z, 2)) continue;
+      const y = world.H(x, z); if (y < JOURNEY_HIGH) continue;
+      if (obstaclesNear(world, x, z).some(o => Math.hypot(o.x - x, o.z - z) < o.r + JOURNEY_BARE)) continue;
+      let rim = false;
+      for (let k = 0; k < 8 && !rim; k++) for (const d of [1, 2]) if (Math.abs(world.H(x + Math.cos(k * Math.PI / 4) * d, z + Math.sin(k * Math.PI / 4) * d) - y) > JOURNEY_RIM) { rim = true; break; }
+      if (rim) continue;
+      let wd = Infinity; for (const q of wp) { const d = Math.hypot(q.x - x, q.z - z); if (d < wd) wd = d; }
+      cands.push({ x, z, water: wd, score: r + (wd <= JOURNEY_WATER ? wd * 0.5 : 60 + Math.min(wd, 200) * 0.5) });
+    }
+    cands.sort((u, v) => u.score - v.score);
+    const top = cands.slice(0, 10);
+    for (const q of top) q.score -= 5 * Math.min(8, scan('drift', q.x, q.z, 40).length + 0.5 * scan('branch', q.x, q.z, 40).length);   // wood to hand: loose driftwood or branches within 40 m
+    top.sort((u, v) => u.score - v.score);
+    for (const q of top.slice(0, 6)) if (path.cost(p, q) < Infinity) return q;
+    return null;
+  }
+  const campPile = C => W.piles.filter(q => q.kind === C.pk && Math.hypot(q.x - C.x, q.z - C.z) <= 2.4).sort((a, b) => b.logs.length - a.logs.length)[0] || null;
+  const campFire = C => game.fire.fires.find(f => Math.hypot(f.x - C.x, f.z - C.z) < 3.5 && (f.fuel > 0.005 || f.embers > 0.005)) || null;
+  function* journeyHusk() {   // a nut husked for the fibre of the drill (as `huskGoal`, with none of its marks: a journey is no lack at home)
+    return yield* errand(function* () {
+      const c = nearestBy('coco', 60); if (!c) return false;
+      const near = () => { const a = game.action().tap; return !!a && a.kind === 'husk' && !a.carried; };
+      yield* walk(c.x, c.z, { tap: true, stop: 0.4, until: near });
+      let k = pressKind(['husk']); if (k) yield* waitIdle();
+      if (!k) { yield* walk(c.x, c.z, { stop: 0.2 }); k = pressKind(['husk']); if (k) yield* waitIdle(); }
+      if (!k) { markBad('coco', c.o, 600); return false; }
+      stats.journey.husked++; return true;
+    });
+  }
+  function woodSupply(kind) {   // the pieces of a kind within reach of the camp job (a way of at most JOURNEY_WOOD_COST), as fuel in pieces of driftwood
+    let n = 0;
+    for (const c of scan(kind, p.x, p.z, 90).slice(0, 12)) if (path.cost(p, c) <= JOURNEY_WOOD_COST) n++;
+    return n * (kind === 'branch' ? 0.5 : 1);
+  }
+  function* journeyWood(J) {   // a little wood from nearby, laid in a pile at the camp spot (one kind: the arc lights a pile of FIRE_MIN pieces): the kind of which more is near
+    const C = J.camp;
+    for (let trip = 0; trip < 5; trip++) {
+      const have = campPile(C);
+      if (have && fuelOfPile(have) >= JOURNEY_WOOD) return;
+      let kind = C.pk === 'branch' ? 'branch' : C.pk === 'driftwood' ? 'drift' : null;
+      if (!kind) { const d = woodSupply('drift'), b = woodSupply('branch'); if (d <= 0 && b <= 0) return; kind = d >= b ? 'drift' : 'branch'; }
+      const near = nearestBy(kind, 45, 4); if (!near || near.cost > JOURNEY_WOOD_COST) return;
+      C.pk = kind === 'branch' ? 'branch' : 'driftwood';
+      const dest = () => { const q = campPile(C); return q ? { x: q.x, z: q.z, pile: q, room: PILE_FULL - q.logs.length } : { x: C.x, z: C.z, exact: true, pile: null, room: PILE_FULL }; };
+      const n0 = campPile(C) ? campPile(C).logs.length : 0;
+      const ok = yield* gather(kind, dest, CARRY_MAX, JOURNEY_WOOD_COST, kind);
+      const q = campPile(C); J.wood = q ? q.logs.length : 0; stats.journey.wood += Math.max(0, J.wood - n0);
+      if (!ok || J.wood <= n0) return;
+    }
+  }
+  function* journeyLight(J) {   // the small fire: fibre and the drill at the pile, as at home; a try may fail, and each costs a tuft
+    const C = J.camp;
+    if (C.lit) return !!C.fire;
+    C.lit = true;
+    const pile = campPile(C);
+    if (!pile || pile.logs.length < FIRE_MIN || !(game.fibre.carried || game.fire.torch)) { ev('journey-cold', { wood: pile ? pile.logs.length : 0, fibre: game.fibre.carried }); return false; }
+    if (pile.logs.reduce((n, l) => n + dryness(l, clock.total), 0) / pile.logs.length < 0.6) { ev('journey-cold', { why: 'wet' }); return false; }
+    for (let k = 0; k < 3 && (game.fibre.carried || game.fire.torch) && !campFire(C); k++) {
+      if (!(yield* goStand('light', pile)) || !pressKind(['light'])) { ev('journey-cold', { why: 'not-offered' }); break; }
+      yield* waitActs(30); yield* waitIdle();
+    }
+    const f = campFire(C);
+    if (f) { C.fire = f; J.fire = true; stats.journey.fires++; ev('journey-fire', { pieces: pile.logs.length }); }
+    else { ev('journey-cold', { why: 'failed' }); }
+    return !!f;
+  }
+  function* journeyCamp(J) {   // the night: a spot, fibre, wood, a small fire at dusk, the evening by it (the sleep goal puts him to bed there), and in the morning the way home
+    if (cur) cur.limit = JOURNEY_LIMIT;
+    if (J.camp && clock.day > J.camp.day && clock.time >= JOURNEY_FROM) {   // slept, and the day is here: home (no turning back: the plan)
+      if (!J.camp.fire) { stats.journey.cold++; ev('journey-cold-night'); }
+      J.phase = 'home'; J.why = 'morning'; ev('journey-morning', { fire: !!J.camp.fire }); return;
+    }
+    if (!J.camp) {
+      const sp = journeySpot(p);
+      J.camp = { x: sp ? sp.x : p.x, z: sp ? sp.z : p.z, day: clock.day, pk: null, fire: null, lit: false, husked: false };
+      J.nights = (J.nights || 0) + 1; stats.journey.nights++;
+      ev('journey-camp', { at: [+J.camp.x.toFixed(1), +J.camp.z.toFixed(1)], spot: !!sp, water: sp ? +sp.water.toFixed(0) : null, fibre: game.fibre.carried });
+    }
+    const C = J.camp;
+    if (Math.hypot(p.x - C.x, p.z - C.z) > 1.5) { fullPace = clock.time >= EVENING; if (!(yield* walk(C.x, C.z, { stop: 1.0 }))) { C.x = p.x; C.z = p.z; } fullPace = false; }   // (no way to the spot: here, then; in the evening, with the fire still to light, at the normal pace)
+    if (!C.husked && !game.fibre.carried) { C.husked = true; yield* journeyHusk(); }
+    if (!C.lit) yield* journeyWood(J);
+    const look = lookAt();
+    while (clock.time < LIGHT_FROM && clock.day === C.day) {   // the afternoon at the camp: he sits and looks out
+      if (Math.hypot(p.x - C.x, p.z - C.z) > 6) { if (!(yield* walk(C.x, C.z, { stop: 1.5 }))) return true; }
+      setSit(look, 'rest'); yield;
+    }
+    if (clock.day === C.day && clock.time >= LIGHT_FROM && !C.lit) { inp.sit = false; yield* journeyLight(J); }
+    const f = campFire(C);
+    while (clock.day === C.day && clock.time < BED_FROM) {   // the evening by the fire (or where the fire would be)
+      if (f && Math.hypot(p.x - f.x, p.z - f.z) > SIT_FIRE) { const a = Math.atan2(p.x - f.x, p.z - f.z), q = standNear(f.x + Math.sin(a) * SIT_AT_FIRE, f.z + Math.cos(a) * SIT_AT_FIRE, 1); if (q) { inp.sit = false; yield* walk(q.x, q.z, { stop: 0.5 }); } }
+      if (f && Math.hypot(p.x - f.x, p.z - f.z) <= SIT_FIRE) setSit(lookAt(), 'fire'); else setSit(look, 'rest');
+      yield;
+    }
+    return true;
+  }
+  function* journeyHome(J) {   // the walk home by the planner; the journey ends when he is there
+    if (cur) cur.limit = JOURNEY_LIMIT;
+    const home = fireSpot(homeSpot());
+    legBegin();
+    try {
+      let ok = yield* walk(home.x, home.z, { stop: 3, finder: pathJourney, until: () => { fullPace = game.thirst.days >= JOURNEY_HURRY || clock.time >= EXPLORE_BACK - 0.15; return clock.time >= JOURNEY_CAMP && dist(p, home) > 40; } });   // (thirsty, or late: at the normal pace)
+      if (clock.time >= JOURNEY_CAMP && dist(p, home) > 40) { J.camp = null; J.phase = 'camp'; ev('journey-camp-again'); return; }   // dusk catches him on the way: another night out
+      if (!ok && dist(p, home) > 6) ok = yield* walk(home.x, home.z, { stop: 3, finder: path });
+      if (!ok && dist(p, home) > 6) ok = yield* walk(home.x, home.z, { stop: 3, free: true });
+      if (dist(p, home) <= 6) journeyEnd('home');
+      else if (++J.fails >= 3) { stats.journey.stranded++; journeyEnd('stranded'); }
+    } finally { legEnd(); }
+  }
+  function* journeyGoal() {   // the idle goal while a journey is on: carries it on from whatever phase it is in
+    const J = journey;
+    if (cur) cur.limit = JOURNEY_LIMIT;
+    if (J.phase === 'out') yield* journeyOut(J);
+    if (journey === J && J.phase === 'camp') yield* journeyCamp(J);
+    if (journey === J && J.phase === 'home') yield* journeyHome(J);
+    return true;
+  }
+  function journeyBed() {   // where he sleeps on a journey: by the camp's fire, else at the camp spot, else where he stands
+    const C = journey && journey.camp;
+    if (!C || Math.hypot(p.x - C.x, p.z - C.z) > 80) return { x: p.x, z: p.z };
+    const f = campFire(C);
+    return (f && (standNear(f.x + 1.4, f.z) || standNear(f.x, f.z - 1.4))) || standNear(C.x, C.z) || { x: p.x, z: p.z };
+  }
   let lastStroll = null;
   // Embers are a small exception to the daytime fire rule: while idle, Dave
   // uses a dry piece already under his arm if he passes his own home fire.
@@ -1554,12 +1789,17 @@ export function createMind(world, game, opts = {}) {
     return !!k;
   }
   function* idleGoal() {
+    if (journey) return yield* journeyGoal();   // 0.30.19: a journey is on: nothing else is an idle pastime
     const h = homeSpot(), t = clock.time;
     if (t >= GAZE_FROM && t < GAZE_TO && gazedDay !== clock.day) { gazedDay = clock.day; yield* handoff('gaze'); return yield* gaze(); }
     const step = homeNext(homeSnap()), need = step ? homeNeed(step, h) : null;   // 0.29.3: the next piece of his home
     if (feedPassingEmber()) { yield; return true; }
     if (W.load() && !(need && need.kind && need.kind === carriedKind())) yield* handoff('idle');   // 0.30.4: wood left in his arms goes to camp, to the pile it belongs to (wet to drying, building timber to the site), before anything else; what the next home trip needs he keeps
     const s = senses();
+    if (clock.day >= journeyDue && clock.day !== journeyTried && clock.time >= JOURNEY_FROM && clock.time < JOURNEY_TO && !isCool('journey')) {   // 0.30.19: now and then a journey (calm at home, in the morning, the weather fair)
+      const sn = homeSnap();
+      if (journeyOk({ day: clock.day, time: clock.time, due: journeyDue, lean: sn.lean, raining: game.weather.raining(clock.total), rainSoon: journeyRain(game.weather, clock.total), thirst: s.thirst, hunger: s.hunger, cool: s.cool }) && (yield* journeyBegin())) return yield* journeyGoal();
+    }
     if (need && !crabTripOk(s)) return yield* homeGoal(step, need);
     if (spearMakeOk({ ...s, day: clock.day, lean: homeSnap().lean })) { if (scan('branch', h.x, h.z, SPEAR_RANGE).length && scan('stone', h.x, h.z, SPEAR_RANGE).length) return yield* makeSpearTrip(); cool('spear', 120); }   // 0.30.17: he has no spear and a branch and a stone are at hand
     if (clock.day !== tideDay && clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crabTripOk(s)) { if (yield* tideRound()) return true; }   // 0.30.13: the daily round to the strip
@@ -1639,7 +1879,7 @@ export function createMind(world, game, opts = {}) {
   }
   function endGoal(why, failed) {
     if (cur && why) { ev('goal-dropped', { goal: cur.name, why }); }
-    if (cur && (failed || why === 'timeout') && cur.name !== 'idle') cool(cur.name);
+    if (cur && (failed || why === 'timeout') && cur.name !== 'idle') cool(cur.name, journey && (cur.name === 'drink' || cur.name === 'eat') ? JOURNEY_COOL : undefined);   // 0.30.19: on a journey a drink or a meal that cannot be had (no water he can reach, no food) is not tried again at once: each try costs the walk its rest
     try { if (cur) cur.it.return(); } catch (e) { /* the generator is gone anyway */ }
     cur = null; mind.goal = null; idleInput(); chose = false; fullPace = false;
   }
@@ -1650,12 +1890,13 @@ export function createMind(world, game, opts = {}) {
   }
   function release() {
     if (!mind.active) return;
-    endGoal(); headingWanted = null; mind.active = false; mind.resting = false; pressed = null; choice = null; sleepKey = false; inp.up = inp.down = inp.left = inp.right = false; idleInput(); inp.sit = false; inp.pace = 1;
+    endGoal(); journey = null; journeyLeg = false; headingWanted = null; mind.active = false; mind.resting = false; pressed = null; choice = null; sleepKey = false; inp.up = inp.down = inp.left = inp.right = false; idleInput(); inp.sit = false; inp.pace = 1;
   }
 
   function step(dt) {
     if (!mind.active) return;
     now += dt;
+    if (journey) journey.max = Math.max(journey.max, Math.hypot(p.x - journey.home.x, p.z - journey.home.z));
     if (headingWanted !== null) inp.yaw = headingWanted;   // a lean-to being started opens the way its site was validated (main sets the view's yaw each frame, before this)
     if (p.sitting > 0.5) stats.sitSecs += dt;
     if (game.sleep.asleep || p.lie > 0) {   // never wakes him, never acts in his sleep
@@ -1698,6 +1939,7 @@ export function createMind(world, game, opts = {}) {
   mind.lastKind = () => lastKind;
   mind.path = path; mind.strollCands = strollCands; mind.leantoSites = leantoSites; mind.tideSpot = tideSpot; mind.materialFind = (kind, range) => nearestBy(kind, range); mind.timberPlan = (src, n, o) => selectStops(src, n, o).sort((a, b) => b.cost - a.cost);
   mind.exploreAim = (day, time, where = 'coast', avail = (EXPLORE_BACK - time) * DAY_SECONDS) => { const home = fireSpot(homeSpot()); exo.x = home.x; exo.z = home.z; exo.reach = exploreReach(day); return exploreTarget(home, exploreReach(day), where, avail); };   // 0.30.16: the spot a trip would aim for on that day at that time of day (tests; no side effects but the trip's own bookkeeping of exo)
+  mind.journeyAim = (day, time, where = 'coast', avail = (JOURNEY_ARRIVE - time) * DAY_SECONDS) => { const home = fireSpot(homeSpot()); return journeyTarget(home, where, avail); };   // 0.30.19: the spot a journey would aim for (tests; the rings it looks at are the PRNG's)
   mind.siteReason = siteReason; mind.existingSite = existingSite; mind.homePlan = () => { const h = homeSpot(), sn = { ...homeSnap(), time: HOME_FROM, day: Math.max(clock.day, HOME_DAY), builtDay: -1, cool: {} }, step = homeNext(sn); return { step, need: step ? homeNeed(step, h) : null, site: proj.site, snap: sn }; };
   return mind;
 }
