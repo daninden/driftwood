@@ -6,7 +6,7 @@
  * beside it) costs its length divided by its pace, so steep scrambles, bushes and wading are dearer than open ground. The line between two cells is
  * checked by game/walk (steps of 0.25 m, the probe of `stepPlayer`): a wall, or water deeper than WADE_MAX, anywhere on it closes the edge; a trunk,
  * boulder or crag on the line makes it four times dearer (he slides round it, and can stick between two). Standability and these edge factors depend
- * on the island only, so they are cached for the life of the finder, with or without a camp.
+ * on the island only, so they are cached for the life of the finder, with or without a camp (0.31 "Axe": until a tree is felled, game/felled `felledStamp`; then the caches start over).
  * Camp layer: an optional `obstacles` option supplies the changing solids of the camp (game/obstacles: piles, fires, lean-tos) without making this
  * module depend on game state; it is read through the cached camp view (`obstacles.camp`). A grid edge that comes nearer to a camp circle than its
  * radius (plus the planning margin), and every edge that ends in one, is closed on the fly (never cached). Where the grid is too coarse, the fine layer
@@ -40,12 +40,13 @@
  *
  * Pure functions on a world; no DOM, no Three.js.
  *
- * Depends on: game/movement, game/walk, game/fine, world/constants
+ * Depends on: game/movement, game/walk, game/fine, game/felled, world/constants
  */
 import { canStand } from './movement.js';
 import { HALF } from '../world/constants.js';
 import { staticFactor, campOpen, segmentClear, asCamp, PLAN_MARGIN } from './walk.js';
 import { createFine, FINE_LINK } from './fine.js';
+import { felledStamp } from './felled.js';
 
 export const C = 1.5, N = Math.round(2 * HALF / C);
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
@@ -64,7 +65,10 @@ export function createPath(world, opts = {}) {
   const stand = new Map(), banned = new Set(), efs = new Map(), neg = new Map();
   const camp = asCamp(opts.obstacles), dynamic = !!camp, stats = { finds: 0, nulls: 0, cached: 0, expanded: 0 };
   const centre = i => (i + 0.5) * C - HALF, cell = v => Math.floor((v + HALF) / C);
-  const standT = (ix, iz) => {   // the island only: cached for good
+  let stamp = felledStamp(world);
+  const sync = () => { const s = felledStamp(world); if (s !== stamp) { stamp = s; stand.clear(); efs.clear(); neg.clear(); } };   // 0.31 "Axe": a tree was felled (or another game's overlay took over): what was cached about the trunks is thrown away
+  const standT = (ix, iz) => {   // the island only: cached until a tree is felled
+    sync();
     if (ix < 0 || iz < 0 || ix >= N || iz >= N) return false;
     const k = iz * N + ix; let v = stand.get(k);
     if (v === undefined) { v = canStand(world, centre(ix), centre(iz), 0) ? 1 : 0; stand.set(k, v); }
@@ -92,6 +96,7 @@ export function createPath(world, opts = {}) {
 
   // the island-only factor of the grid edge from (ix, iz) in direction d (cached): 0 closed, else pace x (0.25 for a trunk on it)
   const staticEdge = (ix, iz, d) => {
+    sync();
     const k = (iz * N + ix) * 8 + d; let f = efs.get(k);
     if (f === undefined) {
       const [dx, dz] = DIRS[d];
@@ -167,6 +172,7 @@ export function createPath(world, opts = {}) {
 
   function search(from, goals, o) {
     stats.finds++;
+    sync();
     refresh();
     const maxExp = o.maxExp ?? 90000, closedSet = o.closed && o.closed.size ? o.closed : null;
     // the memory of failures: only when nothing outside the key can change the answer

@@ -17,9 +17,9 @@
  *
  * Pure data on a world; no DOM, no Three.js.
  *
- * FROND_ID0, FROND_SHARE, REGROW, REGROW_SPREAD, FROND_LEN
+ * FROND_ID0, EXTRA_ID0, FROND_SHARE, REGROW, REGROW_SPREAD, FROND_LEN
  * frondsOfTile(world, tile) -> [frond]   all the fronds of a tile (taken or not)
- * createFronds(world, saved?) -> fronds
+ * createFronds(world, saved?, felled?) -> fronds   felled: game/felled; a frond under a felled palm is not grown again once it is taken
  *   fronds.version          goes up with every change, for the renderer
  *   fronds.dirty            a Set of the indices of the tiles (world.tiles) whose pieces changed since the view last looked (taken, grown back), so the view
  *                           rebuilds just those; the view empties it. Not saved
@@ -29,17 +29,20 @@
  *   fronds.piece(id)        the frond with that id (taken or not), or null
  *   fronds.take(f, total)   -> true when it was taken off the ground (false: gone already); total: the days on the clock
  *   fronds.update(total)    lets taken fronds fall again when their time has come
- *   fronds.state() -> { taken: [[id, total]] }   plain, for saving
+ *   fronds.addExtra({ x, z, len, a, rad? }) -> frond   (0.31 "Axe") a loose frond a felled palm leaves: an id from EXTRA_ID0 up, `extra: true`, never grows back once taken
+ *   fronds.state() -> { taken: [[id, total]], extra?: [[id, x, z, len, a, rad]] }   plain, for saving
  *   saved: such a state, to start from
  *
- * Depends on: core/noise, world/constants
+ * Depends on: core/noise, world/constants, game/felled (treeId)
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
+import { treeId } from './felled.js';
 
 export const FROND_ID0 = 2 << 24;          // frond ids start here, above the branch ids
 const TILE_SPAN = 4096;
 const tileOfId = id => Math.floor((id - FROND_ID0) / TILE_SPAN);   // the index in world.tiles that a frond's id points to
+export const EXTRA_ID0 = FROND_ID0 + NT * NT * TILE_SPAN;   // 0.31 "Axe": the fronds a felled palm leaves get ids from here
 export const FROND_SHARE = 1 / 3;
 export const REGROW = 4, REGROW_SPREAD = 2;   // days before a taken frond lies there again
 export const FROND_LEN = [1.4, 1.8];
@@ -56,40 +59,60 @@ export function frondsOfTile(w, tile) {
     const r = mulberry32(hashInt(w.seed + 603, tile.tz * NT + tile.tx, k)), ang = r() * Math.PI * 2, d = 0.9 + r() * 1.0, len = FROND_LEN[0] + r() * (FROND_LEN[1] - FROND_LEN[0]), a = r() * Math.PI;
     const x = p.x + Math.cos(ang) * d, z = p.z + Math.sin(ang) * d, y = w.H(x, z);
     if (!(y > 0.55) || list.length >= TILE_SPAN) return;   // on dry ground
-    list.push({ id: base + list.length, x, y, z, len, a, rad: 0.03, frond: true });
+    list.push({ id: base + list.length, x, y, z, len, a, rad: 0.03, frond: true, palm: k });   // palm: the index of the palm in tile.palms
   });
   return list;
 }
 
-export function createFronds(w, saved) {
+export function createFronds(w, saved, felled = null) {
   const taken = new Map();   // id -> the day it was taken
-  const fronds = { version: 0, dirty: new Set(), groundFronds, near, onGround, piece, take, update, state };
+  const extras = new Map();   // id -> a frond a felled palm left (never grows back)
+  const fronds = { version: 0, dirty: new Set(), groundFronds, near, onGround, piece, take, update, addExtra, state };
+  const tileOf = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
+  if (saved) for (const e of saved.extra || []) if (Array.isArray(e) && e.length === 6 && e.every(Number.isFinite) && e[0] >= EXTRA_ID0 && !extras.has(e[0])) extras.set(e[0], { id: e[0], x: e[1], y: w.H(e[1], e[2]), z: e[2], len: e[3], a: e[4], rad: e[5], frond: true, extra: true });
   if (saved) for (const [id, at] of saved.taken || []) if (piece(id)) taken.set(id, at);
   const back = (id, at) => at + REGROW + REGROW_SPREAD * (hashInt(id, Math.floor(at * 1000), 607) / 4294967296);
 
+  const treeFelled = id => {   // the palm this frond lay under is gone
+    if (!felled || id >= EXTRA_ID0) return false;
+    const s = id - FROND_ID0, tile = w.tiles[Math.floor(s / TILE_SPAN)], f = tile && frondsOfTile(w, tile)[s % TILE_SPAN];
+    return !!f && f.palm !== undefined && felled.has(treeId(tile, 'palms', f.palm));
+  };
+  const tileIdx = f => f.extra ? tileOf(f.x, f.z) : tileOfId(f.id);
+  /** A loose frond a felled palm leaves at (x, z): a new piece with an id of its own, never growing back. */
+  function addExtra(s) {
+    const id = EXTRA_ID0 + extras.size, f = { id, x: s.x, y: w.H(s.x, s.z), z: s.z, len: s.len, a: s.a, rad: s.rad || 0.03, frond: true, extra: true };
+    extras.set(id, f); fronds.dirty.add(tileOf(f.x, f.z)); fronds.version++; return f;
+  }
   function piece(id) {
+    if (id >= EXTRA_ID0) return extras.get(id) || null;
     const s = id - FROND_ID0; if (!Number.isInteger(s) || s < 0) return null;
     const tile = w.tiles[Math.floor(s / TILE_SPAN)]; if (!tile) return null;
     return frondsOfTile(w, tile)[s % TILE_SPAN] || null;
   }
   function onGround(f) { return !taken.has(f.id); }
-  function groundFronds(tile) { return frondsOfTile(w, tile).filter(onGround); }
+  function groundFronds(tile) {
+    const out = frondsOfTile(w, tile).filter(onGround), k = tile.tz * NT + tile.tx;
+    for (const f of extras.values()) if (!taken.has(f.id) && tileOf(f.x, f.z) === k) out.push(f);
+    return out;
+  }
   function near(x, z, reach) {
     const out = [], m = reach + 3;   // a frond reaches 0.9 from its centre and lies up to 1.9 from its palm
     const t0x = Math.max(0, Math.floor((x - m + HALF) / T)), t1x = Math.min(NT - 1, Math.floor((x + m + HALF) / T));
     const t0z = Math.max(0, Math.floor((z - m + HALF) / T)), t1z = Math.min(NT - 1, Math.floor((z + m + HALF) / T));
     for (let tz = t0z; tz <= t1z; tz++) for (let tx = t0x; tx <= t1x; tx++) { const t = w.tiles[tz * NT + tx]; if (t && t.palms.length) for (const f of frondsOfTile(w, t)) if (!taken.has(f.id)) out.push(f); }
+    for (const f of extras.values()) if (!taken.has(f.id) && Math.abs(f.x - x) <= m && Math.abs(f.z - z) <= m) out.push(f);
     return out;
   }
   function take(f, total = 0) {
     if (!f || !f.frond || taken.has(f.id) || !piece(f.id)) return false;
-    taken.set(f.id, total); fronds.dirty.add(tileOfId(f.id)); fronds.version++; return true;
+    taken.set(f.id, total); fronds.dirty.add(tileIdx(f)); fronds.version++; return true;
   }
   function update(total) {
     let n = 0;
-    taken.forEach((at, id) => { if (total >= back(id, at)) { taken.delete(id); n++; fronds.dirty.add(tileOfId(id)); } });
+    taken.forEach((at, id) => { if (total >= back(id, at) && id < EXTRA_ID0 && !treeFelled(id)) { taken.delete(id); n++; fronds.dirty.add(tileOfId(id)); } });
     if (n) fronds.version++;
   }
-  function state() { return { taken: [...taken] }; }
+  function state() { return { taken: [...taken], ...(extras.size ? { extra: [...extras.values()].map(f => [f.id, f.x, f.z, f.len, f.a, f.rad]) } : {}) }; }
   return fronds;
 }

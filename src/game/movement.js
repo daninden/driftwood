@@ -34,7 +34,7 @@
  *   is allowed when it would be allowed onto the ground at either end (each judged by its own slope, the step's grade,
  *   and the climbing route there), so a step you took up into a steep pocket can always be taken back out. Water is
  *   not symmetric on purpose (only going deeper is blocked).
- * obstaclesNear(world, x, z, opts?) -> [{ x, z, r }] blocking circles from the tiles
+ * obstaclesNear(world, x, z, opts?) -> [{ x, z, r }] blocking circles from the tiles (0.31: not the trunks of felled trees, game/felled; a tree circle carries its `tree` id)
  *   around (x, z); r already includes the castaway's own radius (BODY)
  * bushFactor(world, x, z) -> speed factor 0..1 from bushes at (x, z)
  * pushOut(world, from, x, z, opts?) -> { x, z } moved back onto the rim of any
@@ -62,11 +62,12 @@
  *
  * An ejection by pushOut (from inside a solid) never carries him farther than the step he took, where pushOut's own rule allows that point.
  *
- * Depends on: core/view, world/constants, world/vegetation
+ * Depends on: core/view, world/constants, world/vegetation, game/felled
  */
 import { YAW, basis } from '../core/view.js';
 import { HALF, T, NT } from '../world/constants.js';
-import { bushSize, treeScale } from '../world/vegetation.js';
+import { bushSize } from '../world/vegetation.js';
+import { felledOf, treeId, trunkRadius, sizeKind } from './felled.js';
 
 export const WALK_SPEED = 2.9;
 export const RUN_SPEED = 5.5;   // a run is short: game/breath limits it
@@ -100,9 +101,7 @@ function tileObstacles(w, tile) {
   if (list) return list;
   list = [];
   const onRoute = t => terrainAt(w, t.x, t.z).climb > 0.25;   // stones on a climbing route are scrambled over
-  for (const t of tile.trees) list.push({ x: t.x, z: t.z, r: (t.jungle ? 0.18 : 0.13) * Math.sqrt(treeScale(t, t.jungle ? 'jungle' : 'tree')) + BODY });
-  for (const t of tile.pines) list.push({ x: t.x, z: t.z, r: 0.09 * Math.sqrt(treeScale(t, 'pine')) + BODY });
-  for (const t of tile.palms) list.push({ x: t.x, z: t.z, r: 0.1 * Math.sqrt(treeScale(t, 'palm')) + BODY });
+  for (const ln of ['trees', 'pines', 'palms']) tile[ln].forEach((t, i) => list.push({ x: t.x, z: t.z, r: trunkRadius(t, sizeKind(ln, t)) + BODY, tree: treeId(tile, ln, i) }));   // 0.31: `tree` is the stable id a felled tree is known by (game/felled)
   for (const t of tile.rocks) if (t.s >= STONE_MIN && !onRoute(t)) list.push({ x: t.x, z: t.z, r: t.s * 0.9 + BODY });
   for (const t of tile.crags) if (!onRoute(t)) list.push({ x: t.x, z: t.z, r: t.s * 1.1 + BODY });
   cache.set(tile, list);
@@ -138,11 +137,12 @@ function neighbours(w, tile, x, z) {
 
 const REACH = 1.6;   // larger than any obstacle radius
 export function obstaclesNear(w, x, z, opts = null) {
+  const fo = felledOf(w), fel = fo && fo.ids;   // 0.31 "Axe": a felled trunk is no obstacle (the tile lists are shared by every game on the world; the overlay of the game made last is asked)
   const out = [], t0x = Math.floor((x - REACH + HALF) / T), t1x = Math.floor((x + REACH + HALF) / T);
   const t0z = Math.floor((z - REACH + HALF) / T), t1z = Math.floor((z + REACH + HALF) / T);
   for (let tz = Math.max(0, t0z); tz <= Math.min(NT - 1, t1z); tz++) for (let tx = Math.max(0, t0x); tx <= Math.min(NT - 1, t1x); tx++) {
     const tile = w.tiles[tz * NT + tx];
-    if (tile) for (const o of tileObstacles(w, tile)) if (Math.abs(o.x - x) < REACH && Math.abs(o.z - z) < REACH) out.push(o);
+    if (tile) for (const o of tileObstacles(w, tile)) if (Math.abs(o.x - x) < REACH && Math.abs(o.z - z) < REACH && !(fel && fel.size && o.tree !== undefined && fel.has(o.tree))) out.push(o);
   }
   if (opts && typeof opts.obstacles === 'function') out.push(...opts.obstacles(x, z, REACH));
   return out;

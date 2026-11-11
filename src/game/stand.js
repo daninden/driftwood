@@ -14,7 +14,7 @@
  *   - Arrival: only when `offered` is true at his real position (the follower's stop and the action being offered are two different things).
  *
  * Kinds (obj): 'take' (a pile: the arc's pickup names it), 'add' (a pile: wood laid down joins it and lay is what is offered), 'light' (a pile: the light action for it, not shadowed by build),
- * 'feed' (a fire: feeding goes on it), 'build' (the option object of game.buildable: { leanto } or { site }), 'upgrade' (a finished lean-to), 'nearPile' and 'nearFire' (only beside the pile or fire,
+ * 'feed' (a fire: feeding goes on it), 'build' (the option object of game.buildable: { leanto } or { site }), 'upgrade' (a finished lean-to), 'fell' (0.31 "Axe": a standing tree `{ id, x, z, r }` of game/felled, offered while the axe is in his hand within FELL_REACH of its trunk's edge), 'nearPile' and 'nearFire' (only beside the pile or fire,
  * for a click: wood.find / fire.find within BESIDE name it). No reach and no radius is changed: the standing points live inside the reaches of game/game.
  *
  * createStand(game, world, { BESIDE }) -> stand
@@ -28,12 +28,13 @@
  *
  * Pure; no DOM, no Three.js.
  *
- * Depends on: game/movement, game/wood, game/obstacles, game/leanto
+ * Depends on: game/movement, game/wood, game/obstacles, game/leanto, game/axe
  */
 import { canStand, obstaclesNear, BODY } from './movement.js';
 import { pileVisibleRadius, pileSolidRadius, PILE_JOIN } from './wood.js';
 import { FIRE_R } from './obstacles.js';
 import { UP_REACH, REACH as LEANTO_REACH } from './leanto.js';
+import { FELL_REACH } from './axe.js';
 
 export const TOL = 0.12, CLEAR = 0.06;
 const STEP = 0.15, ANGLES = 24, KEEP_NEAR = 14, KEEP_SECTORS = 12;
@@ -57,6 +58,7 @@ export function createStand(game, world, { BESIDE = 1.2 } = {}) {
       case 'feed': return offers.some(o => o.kind === 'feed' && o.fire === obj);
       case 'build': return offers.some(o => o.kind === 'build' && (obj.leanto ? o.leanto === obj.leanto : !!o.site && !!obj.site && o.site.drift === obj.site.drift && o.site.branch === obj.site.branch));
       case 'upgrade': return offers.some(o => o.kind === 'upgrade' && o.leanto === obj);
+      case 'fell': return offers.some(o => o.kind === 'fell' && o.tree && o.tree.id === obj.id);   // 0.31: obj is a tree ({ id, x, z, r }, game/felled `nearest` or `treeInfo`)
     }
     return false;
   }
@@ -68,6 +70,7 @@ export function createStand(game, world, { BESIDE = 1.2 } = {}) {
       case 'take': case 'light': case 'nearPile': return { x: obj.x, z: obj.z, rim: pileSolidRadius(obj) + BODY, reach: pileVisibleRadius(obj) + BESIDE };
       case 'add': return { x: obj.x, z: obj.z, rim: pileSolidRadius(obj) + BODY, reach: PILE_JOIN };
       case 'upgrade': return { x: obj.x, z: obj.z, rim: 0, reach: UP_REACH };
+      case 'fell': return { x: obj.x, z: obj.z, rim: obj.r + BODY, reach: obj.r + FELL_REACH };
       case 'build': return obj.leanto
         ? { x: obj.leanto.x, z: obj.leanto.z, rim: 0, reach: LEANTO_REACH }
         : { x: (obj.site.drift.x + obj.site.branch.x) / 2, z: (obj.site.drift.z + obj.site.branch.z) / 2, rim: 0, reach: BESIDE + 0.5 + Math.hypot(obj.site.drift.x - obj.site.branch.x, obj.site.drift.z - obj.site.branch.z) / 2 + 0.45 };
