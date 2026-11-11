@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
-import { createMind, axeNext, HOME_FROM, HOME_TO, AXE_CLEAR_R, AXE_OUT_R, AXE_LOGS, AXE_THIRST, AXE_HUNGER, LOG_RING } from '../src/game/mind.js';
+import { createMind, axeNext, HOME_FROM, AXE_TO, AXE_CLEAR_R, AXE_OUT_R, AXE_LOGS, AXE_THIRST, AXE_HUNGER, LOG_RING } from '../src/game/mind.js';
 import { LISTS, treeId, trunkRadius, sizeKind, isGiant } from '../src/game/felled.js';
 import { PILE_MAX } from '../src/game/wood.js';
 import { campGame } from './helpers/mindCamp.js';
@@ -49,7 +49,7 @@ describe('axeNext (pure): the axe project has its turn', () => {
     expect(axeNext(base)).toBe(true);
     expect(axeNext({ ...base, done: false })).toBe(false);                       // the home is not finished: lean-to, walls, ring and bed
     expect(axeNext({ ...base, time: HOME_FROM - 0.01 })).toBe(false);
-    expect(axeNext({ ...base, time: HOME_TO })).toBe(false);
+    expect(axeNext({ ...base, time: AXE_TO })).toBe(false);
     expect(axeNext({ ...base, axeDay: 5 })).toBe(false);                         // one unit a day
     expect(axeNext({ ...base, builtDay: 5 })).toBe(false);                       // the last piece of the home was finished today
     expect(axeNext({ ...base, day: 1 })).toBe(false);
@@ -113,7 +113,7 @@ describe('Dave and the axe: twelve days in a finished home', () => {
     expect(rec.fellTimes.length).toBeGreaterThanOrEqual(2);
     const days = rec.fellTimes.map(f => f.day);
     expect(new Set(days).size).toBe(days.length);                         // never two in a day
-    for (const f of rec.fellTimes) { expect(f.time).toBeGreaterThanOrEqual(HOME_FROM); expect(f.time).toBeLessThan(HOME_TO + 0.12); }   // started by HOME_TO; the hour of chopping ends a little later
+    for (const f of rec.fellTimes) { expect(f.time).toBeGreaterThanOrEqual(HOME_FROM); expect(f.time).toBeLessThan(AXE_TO + 0.12); }   // started by HOME_TO; the hour of chopping ends a little later
     for (let i = 1; i < rec.fellTimes.length; i++) expect(rec.fellTimes[i].d).toBeGreaterThanOrEqual(rec.fellTimes[i - 1].d - 1e-9);   // nearest first
     const within = trees0.map(t => t.id);
     for (const f of rec.fellTimes) expect(within).toContain(f.id);        // the clearing is not yet open: nothing beyond 10 m

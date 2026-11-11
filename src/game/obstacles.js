@@ -26,7 +26,7 @@
  * sameFirePlace(x, z) -> a skip for gapFree: the fire places and burnt places within FIRE_SAME of (x, z)
  * leantoPoint(l, f, r) -> { x, z }   a point of a lean-to's local frame (f along the heading, the open side; r across)
  * leantoCircles(l) -> [{ x, z, r }]   (0.30.7) the collision circles of a lean-to at { x, z, heading }, real or hypothetical (the one code path `campSolids` and the siting of game/mind share)
- * campSolids(wood, fire, leantos) -> camp
+ * campSolids(wood, fire, leantos) -> camp   (0.32: a lean-to site has its walls' circles from its first roof branch, game/leanto `solid`; its group and keep-free region exist from the start)
  *   camp.refresh() -> camp   rebuild when the game's solids changed (cheap when they did not); the other readers call it themselves
  *   camp.key        a number that changes exactly when some solid was added, moved, removed or resized
  *   camp.circles    [{ x, z, r, dynamic: true, g }]; camp.groups [{ id, kind: 'pile' | 'fire' | 'burnt' | 'leanto', x, z, r, heading? }]; camp.count (circles)
@@ -36,10 +36,11 @@
  *   camp.hit(a, b, margin?) -> the first circle the segment a -> b comes nearer to than r + margin (no escape rule), or null
  * solidObstacles(wood, fire, leantos) -> (x, z, reach?) -> [{ x, z, r, dynamic }]   the callback game/movement and game/path take as `obstacles`; its `.camp` is the camp view
  *
- * Depends on: game/movement (BODY), game/wood (pileSolidRadius)
+ * Depends on: game/movement (BODY), game/wood (pileSolidRadius), game/leanto (solid)
  */
 import { BODY } from './movement.js';
 import { pileSolidRadius } from './wood.js';
+import { solid } from './leanto.js';
 
 // Dynamic obstacles give movement the clearance to a castaway's centre, unlike
 // rendered dimensions which stop at the visible edge.
@@ -96,7 +97,7 @@ export function campSolids(wood, fire, leantos) {
     for (const p of wood.piles) { mix(1); mix(mm(p.x)); mix(mm(p.z)); mix(mm(pileSolidRadius(p))); }
     for (const f of fire.fires) { mix(2); mix(mm(f.x)); mix(mm(f.z)); }
     for (const f of fire.burnt) { mix(3); mix(mm(f.x)); mix(mm(f.z)); }
-    for (const l of leantos.list) { mix(4); mix(mm(l.x)); mix(mm(l.z)); mix(mm(l.heading)); }
+    for (const l of leantos.list) { mix(4); mix(mm(l.x)); mix(mm(l.z)); mix(mm(l.heading)); mix(solid(l) ? 1 : 0); }
     return [a, b, n];
   }
 
@@ -109,7 +110,7 @@ export function campSolids(wood, fire, leantos) {
     for (const b of fire.burnt) add(group('burnt', b, FIRE_R), b, FIRE_R);
     for (const l of leantos.list) {
       const g = group('leanto', l, LEANTO_R, { heading: l.heading });
-      for (const c of leantoCircles(l)) add(g, c, c.r);   // (the shape is shared with the hypothetical lean-to of game/mind's siting)
+      if (solid(l)) for (const c of leantoCircles(l)) add(g, c, c.r);   // (the shape is shared with the hypothetical lean-to of game/mind's siting); 0.32: a site has walls from its first roof branch on
     }
     buckets = new Map(); rmax = 0; x0 = z0 = Infinity; x1 = z1 = -Infinity;
     for (const o of circles) {

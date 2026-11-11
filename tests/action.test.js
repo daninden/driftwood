@@ -35,7 +35,7 @@ const makeInput = (o = {}) => {
   i.pressing = () => false;
   return i;
 };
-const bigOf = g => g.action().options.find(o => o.big) || null;   // the big option (light, build, upgrade, sleep) the arc would show
+const bigOf = g => g.action().options.find(o => o.big) || null;   // the big option (light, build here, build in, upgrade, sleep) the arc would show
 const run = (g, input, s, dt = 1 / 30) => { if (input.big) { input.big = false; g.act(bigOf(g)); } for (let t = 0; t < s; t += dt) g.update(input, dt); };
 const press = (g, kind = 'tap', s = 1) => { const i = makeInput(kind === 'big' ? { big: true } : { action: kind }); run(g, i, s); return i; };   // 'tap': the ring; 'big': the icon of the arc for the big action
 const at = (x, z) => ({ x, z, y: w.H(x, z) });
@@ -470,10 +470,10 @@ describe('the action input', () => {
 
 describe('the button: icons, opacity and the DOM', () => {
   it('has a drawing and plain words for every kind of action, in the ink', () => {
-    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(LABEL_OF[kind]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'build', 'sleep', 'dig', 'roast', 'fill', 'sip', 'berries', 'bananas', 'eatBerries', 'eatBanana', 'makeSpear', 'takeSpear', 'laySpear', 'fish', 'makeAxe', 'takeAxe', 'layAxe', 'fell']).toContain(kind); }
+    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(LABEL_OF[kind]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'buildHere', 'buildIn', 'sleep', 'dig', 'roast', 'fill', 'sip', 'berries', 'bananas', 'eatBerries', 'eatBanana', 'makeSpear', 'takeSpear', 'laySpear', 'fish', 'makeAxe', 'takeAxe', 'layAxe', 'fell']).toContain(kind); }
     for (const what of ['walls', 'bed', 'ring']) { expect(ICONS[what]).toBeTruthy(); expect(LABEL_OF[what]).toBeTruthy(); }
-    expect(Object.keys(ICON_OF).length).toBe(26);
-    expect(buttonIcons({ tap: null, options: [{ kind: 'build', big: true }] })).toEqual({ main: null, options: [{ key: 'leanto', label: 'Build a lean-to' }] });
+    expect(Object.keys(ICON_OF).length).toBe(27);
+    expect(buttonIcons({ tap: null, options: [{ kind: 'buildHere', big: true }, { kind: 'buildIn', big: true }] })).toEqual({ main: null, options: [{ key: 'leanto', label: 'Build a lean-to here' }, { key: 'buildIn', label: 'Build the piece in' }] });
     for (const svg of Object.values(ICONS)) expect(svg).not.toMatch(/fill="(?!none)/);
   });
   it('shows the main action in the ring and the options as icons of the arc', () => {

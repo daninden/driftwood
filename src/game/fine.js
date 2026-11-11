@@ -15,7 +15,7 @@
  *
  * Camp changes: `sync(camp)` compares the groups (piles, fires, burnt places, lean-tos, each by an identity string of kind, position, radius) with
  * the ones it has, drops the nodes of removed groups, makes the nodes of new ones, re-checks the nodes that a changed group can cover or uncover and
- * forgets the edges of every node within FINE_SPAN of a changed group. The result equals a fresh build (tests/walk.test.js checks it on random sequences).
+ * forgets the edges of every node within FINE_SPAN of a changed group. 0.32 "Piece by piece": a lean-to site gets its circles at its fifth part with the group unchanged; the sync notices that (`hasCircles`) and treats it as a change, or the links made while the site had no walls (the gate to a back corner) would stay and route him through the walls. The result equals a fresh build (tests/walk.test.js checks it on random sequences, tests/site.test.js the lean-to that turns solid).
  *
  * FINE_SPAN, FINE_LINK, RING_STEP, RING_GAP
  * createFine(world, grid) -> fine   grid: { C, N, cell(v), centre(i), isStand(ix, iz) } of game/path (isStand: the island only)
@@ -72,6 +72,7 @@ export function createFine(world, grid) {
       return { uid, id: N * N + uid, x: p.x, z: p.z, g: g.id, kind: p.kind, idx: i, stand: canStand(world, p.x, p.z, 0), alive: false, cl: null, nl: null, sm: new Map() };
     });
   }
+  const hasCircles = (camp, id) => camp.circles.some(o => o.g && o.g.id === id);   // does a group have solids (a lean-to site has none before its fifth part)
   const covered = (n, camp) => { for (const o of camp.nearNow(n.x, n.z, 0.01)) if (Math.hypot(n.x - o.x, n.z - o.z) < o.r - 0.001) return true; return false; };
 
   function sync(camp) {
@@ -82,8 +83,11 @@ export function createFine(world, grid) {
     const extent = g => (g.kind === 'leanto' ? 2.5 : g.r);
     for (const [id, c] of cands) if (!groups.has(id)) { spots.push({ x: c.g.x, z: c.g.z, e: extent(c.g) }); cands.delete(id); }
     for (const [id, g] of groups) if (!cands.has(id)) {
-      const list = candidates(g); cands.set(id, { g, list }); spots.push({ x: g.x, z: g.z, e: extent(g) });
+      const list = candidates(g); cands.set(id, { g, list, solid: hasCircles(camp, id) }); spots.push({ x: g.x, z: g.z, e: extent(g) });
       for (const n of list) added.add(n);
+    } else if (g.kind === 'leanto') {   // 0.32 "Piece by piece": a lean-to site has no circles until its fifth part; when they appear (or go) the links of the nodes round it are stale
+      const c = cands.get(id), now = hasCircles(camp, id);
+      if (c.solid !== now) { c.solid = now; spots.push({ x: g.x, z: g.z, e: extent(g) }); }
     }
     if (spots.length) for (const { list } of cands.values()) for (const n of list) {
       // coverage: a new node always; an old one only near a change (a changed solid can cover or uncover it)

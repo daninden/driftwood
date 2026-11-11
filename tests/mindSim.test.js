@@ -23,8 +23,8 @@ describe('the mind with a game: long runs', () => {
 
 describe('his home: the project, first days (0.29.3)', () => {
   it('never builds before the third day, and not at all without a camp', () => {
-    const { r } = runMind(w, spawn, { days: 2, know: true });
-    expect(r.builds).toBe(0); expect(r.final.leantos).toBe(0); expect(r.homeDay).toEqual({});
+    const { r } = runMind(w, spawn, { days: 1.8, know: true });   // (0.32: he builds from the first moment of the third day's window, so the run stops just before it, at 0.14 of day 2)
+    expect(r.final.day).toBe(2); expect(r.final.time).toBeLessThan(0.21); expect(r.builds).toBe(0); expect(r.final.leantos).toBe(0); expect(r.homeDay).toEqual({});
     const g = createGame(w, spawn, { day: 3, time: 0.25 }); walkFirstDay(w, g, spawn); const m = createMind(w, g); m.engage();
     expect(m.home().kind).toBe('here'); expect(m.homePlan().step).toBeNull();   // never slept, no fire: no camp yet
   });

@@ -16,7 +16,7 @@
  * Faint (0.45) and empty when there is no small action to do, clear (0.95) with an icon
  * when there is, fully opaque under a finger. There is no long press: the ring only
  * ever does the small actions (pick up, lay down, eat, drink, feed the fire ...); the big
- * ones (light a pile, build, upgrade, sleep) are icons of the arc.
+ * ones (light a pile, build here, build in, upgrade, sleep) are icons of the arc.
  *
  * The arc: the other options of game.action() (`options`, at most 3) as smaller ink
  * icons (same ink, stroke and glow as the ring, no frame, no text), left to right in the
@@ -28,7 +28,7 @@
  *
  * The icons (strokes like the moon and the drop): wood with an arrow up (pickup), wood with an arrow down
  * (lay), the half coconut (husk), a flame over a piece of wood (feed), a torch (torch), a
- * torch with a stroke of ground (plant), the drop (drink), a flame (light), a small lean-to (build), the
+ * torch with a stroke of ground (plant), the drop (drink), a flame (light), a small lean-to (buildHere: start a lean-to where he stands), a stick with an arrow down into a small lean-to (buildIn: 0.32, build a piece into a half-built one), the
  * crescent moon (sleep) and, since 0.22, a hand with claws over a
  * hole (dig) and a crab over a flame (roast), and since 0.25 a half shell with a drop over it
  * (fill) and a tilted half shell with water in it (sip). Since 0.31 "Axe" an axe (makeAxe), the same lying with an arrow up (takeAxe) or down (layAxe), a trunk with a notch cut in it (fell), and a log showing its cut end with an arrow up (pickupLog) or down (layLog). Since 0.30.17 "Spear" a spear (makeSpear), a spear lying with an arrow up (takeSpear) or down (laySpear), a fish over a line of water (fish) and a fish over a flame (the roast of a fish, `roastFish`, chosen by the option's `food`). Eating a carried nut uses the half coconut (husk). Since 0.26 (game/forage) a cluster of berries with an arrow up (berries: picks them, or eats them on the spot when he is hungry), a bunch with an arrow up (bananas), and the plain cluster or bunch for eating a carried one (eatBerries, eatBanana). Since 0.27 "Home" (game/leanto): an upgrade (kind 'upgrade', `what`) shows what will be built: a roof with fronds hanging down its side (walls), a low frame with a frond laid on it (bed) or a ring of stones round a small flame (ring).
@@ -83,6 +83,8 @@ export const ICONS = {
   drop: `<g transform="translate(-8 -12)"><path d="${DROP_PATH}"/></g>`,
   flame: '<g transform="translate(0 2) scale(1.15)">' + FLAME + '</g>',
   leanto: '<path d="M-11 11H11"/><path d="M-7 -6V11M6 6.3V11"/><path d="M-11 -9L11 4V8L-11 -5Z"/>',
+  // 0.32 "Piece by piece": a stick with an arrow down into a small lean-to frame (build the piece in)
+  buildIn: '<g transform="translate(0 6.4) scale(0.62)"><path d="M-11 11H11"/><path d="M-7 -6V11M6 6.3V11"/><path d="M-11 -9L11 4V8L-11 -5Z"/></g><path d="M-8 -10.6L8 -12.6"/><path d="M0 -7V-1.5M-3.4 -4.6L0 -1.2L3.4 -4.6"/>',
   dig: '<ellipse cx="0" cy="9" rx="9.5" ry="2.8"/><path d="M-5.5 -4C-5 -7 -4.5 -9 -4.5 -10.5M-2 -5C-1.8 -8 -1.6 -10.5 -1.6 -12M1.8 -5C2 -8 2.2 -10.5 2.2 -12M5.5 -4C5.2 -7 5 -9 5 -10.5"/><path d="M-5.5 -4C-6 0 -4 4 0 4.5C4 4 6 0 5.5 -4"/><path d="M-12 1L-9.5 3.2M12 1L9.5 3.2M-10 -3L-8 -2M10 -3L8 -2"/>',
   roast: `<g transform="translate(0 -5.5) scale(0.9)">${CRAB_PATHS}</g><g transform="translate(0 8.5) scale(0.58)">${FLAME}</g><path d="M-8 11.5H8"/>`,
   // 0.30.17 "Spear": a spear (make it), the same lying with an arrow up (take it up) or down (lay it down), a fish over a line of water (fish) and a fish over a flame (roast the fish)
@@ -109,8 +111,8 @@ export const ICONS = {
   layLog: LOG_END + '<path d="M0 -11V0M-3.5 -3.5L0 0L3.5 -3.5"/>',
   moon: '<path d="M3 -10.5A10 10 0 1 0 10.5 3A7.5 7.5 0 0 1 3 -10.5Z"/>',
 };
-export const ICON_OF = { pickup: 'pickup', lay: 'lay', fill: 'fill', sip: 'sip', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', build: 'leanto', sleep: 'moon', dig: 'dig', roast: 'roast', berries: 'berries', bananas: 'bananas', eatBerries: 'eatBerries', eatBanana: 'eatBanana', makeSpear: 'spear', takeSpear: 'takeSpear', laySpear: 'laySpear', fish: 'fish', makeAxe: 'axe', takeAxe: 'takeAxe', layAxe: 'layAxe', fell: 'fell' };
-export const LABEL_OF = { pickup: 'Pick up', lay: 'Lay down', fill: 'Fill the shell', sip: 'Sip water', husk: 'Husk and eat the coconut', feed: 'Feed the fire', torch: 'Take the torch', plant: 'Plant the torch', drink: 'Drink', light: 'Light the fire', build: 'Build a lean-to', sleep: 'Sleep', dig: 'Dig for the crab', roast: 'Roast the crab', berries: 'Pick berries', bananas: 'Pick bananas', eatBerries: 'Eat berries', eatBanana: 'Eat the banana', makeSpear: 'Make a spear', takeSpear: 'Take up the spear', laySpear: 'Lay the spear down', fish: 'Fish with the spear', roastFish: 'Roast the fish', makeAxe: 'Make an axe', takeAxe: 'Take up the axe', layAxe: 'Lay the axe down', fell: 'Chop the tree down', pickupLog: 'Lift the log onto the shoulder', layLog: 'Lay the log on the pile', walls: 'Build the side walls', bed: 'Build a bed', ring: 'Build a stone ring' };
+export const ICON_OF = { pickup: 'pickup', lay: 'lay', fill: 'fill', sip: 'sip', husk: 'coconut', feed: 'feed', torch: 'torch', plant: 'plant', drink: 'drop', light: 'flame', buildHere: 'leanto', buildIn: 'buildIn', sleep: 'moon', dig: 'dig', roast: 'roast', berries: 'berries', bananas: 'bananas', eatBerries: 'eatBerries', eatBanana: 'eatBanana', makeSpear: 'spear', takeSpear: 'takeSpear', laySpear: 'laySpear', fish: 'fish', makeAxe: 'axe', takeAxe: 'takeAxe', layAxe: 'layAxe', fell: 'fell' };
+export const LABEL_OF = { pickup: 'Pick up', lay: 'Lay down', fill: 'Fill the shell', sip: 'Sip water', husk: 'Husk and eat the coconut', feed: 'Feed the fire', torch: 'Take the torch', plant: 'Plant the torch', drink: 'Drink', light: 'Light the fire', buildHere: 'Build a lean-to here', buildIn: 'Build the piece in', sleep: 'Sleep', dig: 'Dig for the crab', roast: 'Roast the crab', berries: 'Pick berries', bananas: 'Pick bananas', eatBerries: 'Eat berries', eatBanana: 'Eat the banana', makeSpear: 'Make a spear', takeSpear: 'Take up the spear', laySpear: 'Lay the spear down', fish: 'Fish with the spear', roastFish: 'Roast the fish', makeAxe: 'Make an axe', takeAxe: 'Take up the axe', layAxe: 'Lay the axe down', fell: 'Chop the tree down', pickupLog: 'Lift the log onto the shoulder', layLog: 'Lay the log on the pile', walls: 'Build the side walls', bed: 'Build a bed', ring: 'Build a stone ring' };
 
 const roastsFish = a => a.kind === 'roast' && a.food === 'fish';   // 0.30.17: the roast of a fish has its own drawing
 const takesLog = a => a.kind === 'pickup' && !!a.thing && ((a.thing.kind === 'log' && !!a.thing.log && !!a.thing.log.timber) || (a.thing.kind === 'pile' && !!a.thing.pile && a.thing.pile.kind === 'log'));   // 0.31: a log (or a pile of logs) has its own drawing

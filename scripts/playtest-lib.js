@@ -4,7 +4,7 @@ export { canStand, stepFactor, terrainAt, nearestStandable } from '../src/game/m
 export { createPath } from '../src/game/path.js';
 export { findWater, freshWater } from '../src/game/water.js';
 export { FIRE_MIN, DRILL_TIME, FUEL_MAX, BURN } from '../src/game/fire.js';
-export { NEED, UPGRADES, UP_NEAR, UP_REACH, ringCentre } from '../src/game/leanto.js';
+export { UPGRADES, UP_REACH, ringCentre } from '../src/game/leanto.js';   // (0.32: NEED and UP_NEAR are gone with the building piles)
 export { dryness, logTop } from '../src/game/wood.js';
 export { WARM_R } from '../src/game/fire.js';
 export { YAW } from '../src/core/view.js';

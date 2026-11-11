@@ -110,6 +110,7 @@
  *     lazily, when he comes near, with no work for the rest of the island.
  *   wood.drying(total)  true while some washed-up, carried or rain-soaked piece can still be wet
  *   wood.takePile(pile) -> its logs, taken off the island (to burn, game/fire)
+ *   wood.giveStone() -> the stone out of his hands (0.32 "Piece by piece": built into a ring) or null
  *   wood.giveOne(ok?) -> the top piece carried that ok(log) accepts (any, without
  *     ok), taken off the island (to feed a fire), or null
  *   wood.flood(sea) -> number of piles the sea took (their ground below sea)
@@ -212,7 +213,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
   let sea = -Infinity;   // the current sea level (tideUpdate)
   const washedIds = new Set();   // ids of the wood washed up since the start (saved in full, with its t)
   const soaked = new Map();   // id -> log: wood the rain wet that is not saved with the washed-up wood (start wood, branches)
-  const wood = { carried: [], stones: [], log: null, load, tideUpdate, drying, rain, piles: [], version: 0, dirty: new Set(), fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, findAll, joinTarget, take, drop, washUp, flood, takePile, giveOne, consume, state };
+  const wood = { carried: [], stones: [], log: null, load, tideUpdate, drying, rain, piles: [], version: 0, dirty: new Set(), fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, find, findAll, joinTarget, take, drop, washUp, flood, takePile, giveOne, giveStone, consume, state };
   const special = id => id >= LOG_ID0 ? (logs ? logs.piece(id) : null) : id >= STONE_ID0 ? (stones ? stones.piece(id) : null) : id >= FROND_ID0 ? (fronds ? fronds.piece(id) : null) : (branches ? branches.piece(id) : null);   // a branch, frond or stone by its id
   function load() { return wood.carried.length + wood.stones.length + (wood.log ? 1 : 0); }   // pieces under his arm and in his hands: each slows him
   const homeTile = l => homeOf.has(l.id) ? homeOf.get(l.id) : tileOf(l.x, l.z);
@@ -475,6 +476,9 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     got.forEach(gone);
     if (!p.logs.length) wood.piles.splice(wood.piles.indexOf(p), 1);
     wood.version++; return got;
+  }
+  function giveStone() {   // 0.32: a stone out of his hands is built into the shelter (it is already out of the ground)
+    const l = wood.stones.pop() || null; if (l) wood.version++; return l;
   }
   function giveOne(ok) {
     let i = wood.carried.length - 1; while (i >= 0 && ok && !ok(wood.carried[i])) i--;

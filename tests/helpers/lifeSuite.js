@@ -7,7 +7,7 @@
 // Each scenario has its own test file (tests/mindLife<seed>.<part>.test.js, configured in tests/helpers/lifeSeeds.js), so the ten-day runs spread over the workers.
 // 0.30.5 "Streams": SEVERAL RANDOM STREAMS. One ten-day life is one stream of the mind's chance (mind option `stream`); a bound measured on one stream failed on another by luck of that stream alone (a crab dug fewer, a night lost to an errand). So each scenario
 // (walked / fresh / beach, per seed) plays the streams 0 to 3: four runs, each on its own freshly generated world (runMind changes the world it plays on, so the runs must be independent). The rule:
-//   - SAFETY invariants hold on EVERY stream, with the bounds unchanged: no simulation errors, at most one lean-to, the home pieces in order (lean-to from day 2, then walls, ring, bed, never two on one day), no tick outside known ground, no exploring tick on a climbing route,
+//   - SAFETY invariants hold on EVERY stream, with the bounds unchanged: no simulation errors, at most one lean-to, the home pieces in order (lean-to from day 2, then walls, ring, bed; 0.32: two may be finished on one day), no tick outside known ground, no exploring tick on a climbing route,
 //     known cells at day 1, tideline conservation (laid <= picked, burned <= laid), wood burned wet, no unexpected wakes, the final day reached, no thirst or exhaustion collapse, collapses, maximum thirst and hunger, no more than CRAB_DIGS digs on a crab trip, spoiled crabs,
 //     stuckSelf / stuckMax; beach: no berries or bananas, collapses and maximum hunger; seed 1337 walked: the dry-stock checks of `extra` on each stream.
 //   - QUANTITY and RHYTHM bounds hold on the MEAN over the four streams, with the same bound values as before (so one unlucky stream no longer decides): nights of 5 hours or more, hungry and thirsty shares, meals and drinks per day, inland food, crabs eaten, chosen sleeps,
@@ -27,7 +27,7 @@
 // 0.30.18 "Catch": the catch chance is 0.45 and the afternoon pastime 0.5 a day; the fish quantity bounds are set again by the policy in tests/helpers/lifeSeeds (fish caught and eaten on seed 1337 walked now have the default bound; fish eaten on seed 7 walked has none).
 // 0.30.19 "Journey": every 5 to 7 days from day 4 he may go on a journey (a night away). Safety, on every stream: a leg on the journey finder runs only inside a journey (`legOutside`: the climbing routes are open to journeys and to nothing else; daily exploring stays at `exploreRoute` 0), his journey ticks are on ground he knows,
 //   no journey ends stranded, at most one is unfinished at the end of the run; the collapse and thirst and hunger maxima cover the journeys too. Quantities, by the policy and only for the scenarios where a journey happens on at least 2 of the 4 streams (`journeys`, `journeyNights`, `journeyFires` of lifeSeeds): journeys, nights away, nights away by a fire.
-// Exports: lifeSuite(seed, { walked, fresh, beach, extra }, part?), SIM_TIMEOUT, STREAMS. Depends on: world/world, world/spots, game/leanto (siteFor, NEED), tests/helpers/mindSim.
+// Exports: lifeSuite(seed, { walked, fresh, beach, extra }, part?), SIM_TIMEOUT, STREAMS. Depends on: world/world, world/spots, game/leanto, tests/helpers/mindSim.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../../src/world/world.js';
 import { startSpot } from '../../src/world/spots.js';
@@ -67,9 +67,9 @@ export function lifeSuite(seed, { walked, fresh, beach, extra = [] }, part = nul
   const safety = (c, k, runs, scenario) => c.every('', (check, r) => {   // the invariants of every ten-day life, on every stream
     check(r.errors, 'simulation errors').toEqual([]);                  // no exception in ten days
     check(r.builds, 'lean-to builds').toBeLessThanOrEqual(1);        // 0.29.3 "Homestead": at most ONE lean-to (his home), never a second
-    const d = r.homeDay;                            // the day each piece of his home was finished: from day 2, the lean-to first, then walls, ring, bed in that order, never two pieces on one day
+    const d = r.homeDay;                            // the day each piece of his home was finished: from day 2, the lean-to first, then walls, ring, bed in that order (0.32 "Piece by piece": no limit of a piece a day, two may be finished on one day)
     if (d.leanto !== undefined) check(d.leanto, 'lean-to completion day').toBeGreaterThanOrEqual(2);
-    for (const [a, b] of [['leanto', 'walls'], ['walls', 'ring'], ['ring', 'bed']]) if (d[b] !== undefined) { check(d[a], `${a} before ${b}`).toBeDefined(); check(d[b], `${b} completion after ${a}`).toBeGreaterThan(d[a]); }
+    for (const [a, b] of [['leanto', 'walls'], ['walls', 'ring'], ['ring', 'bed']]) if (d[b] !== undefined) { check(d[a], `${a} before ${b}`).toBeDefined(); check(d[b], `${b} completion not before ${a}`).toBeGreaterThanOrEqual(d[a]); }
     check(r.outside, 'ticks outside known ground').toBe(0); // outside a search for water or food or an exploring trip (0.29.4), never a step on ground he does not know
     check(r.exploreRoute, 'daily exploring ticks on climbing routes').toBe(0); // 0.29.4: and exploring never takes him onto a climbing route (0.30.19: a journey is not exploring: `mind.exploring` is false on it)
     check(r.legOutside, 'journey-finder legs outside a journey').toBe(0); check(r.journeyOutside, 'journey ticks outside known ground').toBe(0);   // 0.30.19: climbing routes are used only on journeys

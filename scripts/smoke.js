@@ -18,7 +18,7 @@
 // smoke-17 beside the fire with dry wood (at night), smoke-18 the arc with three icons beside a brook (0.27.4, also in the quick run; a click on the flame icon lights),
 // smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night),
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
-// smoke-24 the action button beside the two piles with the lean-to icon (21 to 24 come before the phone shots),
+// smoke-24 the action button with driftwood in his arms and the lean-to icon (21 to 24 come before the phone shots; 0.32: the lean-to is built piece by piece),
 // smoke-39 an upgraded lean-to (side walls, bed, stone fire ring) from the default view (also in the quick run), smoke-40 from the side, smoke-41 a dead frond and stones on the ground (also in the quick run), smoke-42 a frond and two stones carried, in the row (0.27 "Home").
 // smoke-30 wood out at low water on the wet strip, smoke-31 the same spot at high water (0.18).
 // smoke-37 beside the berry bush nearest the start, ripe berries on it and the berries icon on the button; after a press (not hungry) the handful in the row and the bush bare (0.26 "Inland", also in the quick run).
@@ -393,8 +393,8 @@ const feedIcon = await iconOf();
 console.log('action button by the fire', JSON.stringify(feedIcon));
 if (!feedIcon.on) errors.push('the action button is empty beside a fire with dry wood in his arm');
 // Branches and the lean-to (0.16): branches under the nearest tree (smoke-21), picked up and
-// carried (the row shows a twig each), two piles of six, the action button's lean-to icon
-// (smoke-24), F builds it (smoke-22 half built, smoke-23 finished, by day), and a cold sleep
+// carried (the row shows a twig each), driftwood in his arms with the action button's lean-to icon
+// (smoke-24), F builds it piece by piece (smoke-22 half built, smoke-23 finished, by day), and a cold sleep
 // under it lasts six hours instead of three.
 const trees = await page.evaluate(start => {
   const { world, game, input, step } = window.__driftwood, p = game.player;
@@ -417,30 +417,41 @@ const carriedB = await page.evaluate(() => {
 });
 console.log('carrying branches', JSON.stringify(carriedB));
 if (carriedB.branches < 2 || carriedB.row !== carriedB.n) errors.push('branches picked up: ' + JSON.stringify(carriedB));
+// 0.32 "Piece by piece": no building piles. A piece of driftwood in his arms, the arc's lean-to icon ('buildHere', smoke-24), F builds the first part at once, and
+// then each piece in turn (a part a press): smoke-22 half built, smoke-23 finished.
 const piled = await page.evaluate(start => {
   const { world, game, step } = window.__driftwood, p = game.player, w = game.wood, tot = game.clock.total;
-  p.x = start.x + 2.5; p.z = start.z + 1.5; p.y = world.H(p.x, p.z);   // the two piles go in the open, on the start beach, where nothing hides the lean-to
-  const grab = list => { const out = []; for (const l of list) { w.take({ kind: 'log', log: l }, tot); if (w.carried.length === 3) out.push(...w.carried.splice(0)); } out.push(...w.carried.splice(0)); return out; };
-  w.carried.length = 0; w.piles.length = 0;   // only the two piles below (the earlier ones are far away)
-  const near = world.tiles.flatMap(t => game.branches.groundBranches(t)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z)).slice(0, 6);
-  const beach = world.tiles.flatMap(t => t.drift).filter(l => w.onBeach(l)).slice(0, 6);
-  const px = p.x + 0.7, pz = p.z - 0.2;
-  w.piles.push({ x: px, z: pz, kind: 'driftwood', logs: grab(beach) }, { x: px, z: pz + 1.2, kind: 'branch', logs: grab(near) });
-  w.version++; p.x = px - 0.5; p.z = pz + 0.6; p.y = world.H(p.x, p.z); step(0.1);
-  return w.piles.map(q => q.kind + ':' + q.logs.length);
+  p.x = start.x + 2.5; p.z = start.z + 1.5; p.y = world.H(p.x, p.z);   // in the open, on the start beach, where nothing hides the lean-to
+  w.carried.length = 0; w.stones.length = 0; w.piles.length = 0;
+  let nextId = 7000000;   // the pieces of the later stages are made up: a branch, a frond, a stone (the flags are what the game reads)
+  window.__give = kind => { const l = { id: nextId++, x: p.x, y: p.y, z: p.z, len: 1.4, a: 0, rad: 0.07, ...({ branch: { branch: true }, frond: { frond: true }, stone: { stone: true } }[kind] || {}) }; (kind === 'stone' ? w.stones : w.carried).push(l); w.version++; };
+  const beach = world.tiles.flatMap(t => t.drift).filter(l => w.onBeach(l)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+  w.take({ kind: 'log', log: beach }, tot); step(0.1);
+  return { carried: w.carried.length, piles: w.piles.length };
 }, start);
-console.log('piles', JSON.stringify(piled));
-if (piled.join() !== 'driftwood:6,branch:6') errors.push('piles are ' + piled.join());
+console.log('driftwood in his arms', JSON.stringify(piled));
+if (piled.carried !== 1 || piled.piles !== 0) errors.push('the start of the lean-to scene is wrong: ' + JSON.stringify(piled));
 await shot('smoke-24.png', { settle: 800 });
 const buildIcon = await page.evaluate(() => window.__driftwood.game.action().options.map(o => o.kind));   // (the DOM is only redrawn by the shots of the quick run)
-console.log('options by the two piles', JSON.stringify(buildIcon));
-if (!buildIcon.includes('build')) errors.push('the arc offers no lean-to icon beside the two piles: ' + buildIcon);
-await pressF();
-const half = await page.evaluate(() => { const { game, step } = window.__driftwood; step(30, () => game.leantos.list[0] && game.leantos.list[0].progress >= 0.5); return { n: game.leantos.list.length, progress: game.leantos.list[0] && game.leantos.list[0].progress, work: game.player.work && game.player.work.kind, piles: game.wood.piles.length }; });
-console.log('half built', JSON.stringify(half));
-if (half.n !== 1 || half.work !== 'build' || half.piles !== 0) errors.push('building did not start: ' + JSON.stringify(half));
-await shot('smoke-22.png');
-const built = await page.evaluate(() => { const { game, step } = window.__driftwood; step(80, () => !game.player.work); return { progress: game.leantos.list[0].progress, work: game.player.work }; });
+console.log('options with driftwood in his arms', JSON.stringify(buildIcon));
+if (!buildIcon.includes('buildHere')) errors.push('the arc offers no lean-to icon with driftwood in his arms: ' + buildIcon);
+// one piece: give it (but the first), press F, wait until the shelter has grown by a part; returns the shelter's parts built so far
+const progressNow = () => { const g = window.__driftwood.game, l = g.leantos.list[0]; return l ? Math.round(l.progress * 15) + Object.entries(l.up || {}).reduce((n, [k, v]) => n + Math.round(v * { walls: 6, bed: 8, ring: 8 }[k]), 0) : 0; };
+const piece = async (kind, own) => {
+  if (!own) await page.evaluate(k => window.__give(k), kind);
+  const before = await page.evaluate(`(${progressNow})()`);
+  await pressF();
+  await page.evaluate(`(() => { const { game, step } = window.__driftwood, now = ${progressNow}; step(0.1); step(15, () => now() > ${before}); step(0.3); })()`);
+  return (await page.evaluate(`(${progressNow})()`)) - before;
+};
+const first = await piece('driftwood', true);
+const half = await page.evaluate(() => { const { game } = window.__driftwood; return { n: game.leantos.list.length, progress: game.leantos.list[0] && game.leantos.list[0].progress, work: game.player.work && game.player.work.kind, piles: game.wood.piles.length }; });
+console.log('first part', first, JSON.stringify(half));
+if (first !== 1 || half.n !== 1 || half.piles !== 0) errors.push('building did not start: ' + JSON.stringify(half));
+for (const kind of ['driftwood', 'driftwood', 'driftwood', 'branch', 'branch', 'branch']) if (await piece(kind) !== 1) errors.push('a ' + kind + ' was not built in');
+await shot('smoke-22.png');   // 7 of 15 parts: the frame, the sill and three roof branches
+for (const kind of ['branch', 'branch', 'branch', 'frond', 'frond', 'frond', 'frond', 'frond']) if (await piece(kind) !== 1) errors.push('a ' + kind + ' was not built in');
+const built = await page.evaluate(() => { const { game } = window.__driftwood; return { progress: game.leantos.list[0].progress, work: game.player.work, carried: game.wood.carried.length }; });
 console.log('built', JSON.stringify(built));
 if (built.progress < 1) errors.push('the lean-to did not get finished: ' + built.progress);
 await page.evaluate(() => { const { game, step } = window.__driftwood, p = game.player, l = game.leantos.list[0]; p.x = l.x + 2.4 * Math.sin(l.heading); p.z = l.z + 2.4 * Math.cos(l.heading); p.y = window.__driftwood.world.H(p.x, p.z); step(0.1); });
@@ -464,31 +475,24 @@ if (slept.rest < 0.7) errors.push('not three quarters rested under the lean-to: 
 // on the ground (smoke-41, also in the quick run) and the same carried, in the row (smoke-42).
 const homeSet = await page.evaluate(() => {
   const { world, game, step } = window.__driftwood, p = game.player, w = game.wood, l = game.leantos.list[0];
-  const S = Math.sin(l.heading), C = Math.cos(l.heading), R = { x: C, z: -S }, F = { x: S, z: C };
-  const nearest = (list, n) => list.sort((a, b) => Math.hypot(a.x - l.x, a.z - l.z) - Math.hypot(b.x - l.x, b.z - l.z)).slice(0, n);
-  const fr = nearest(world.tiles.flatMap(t => game.fronds.groundFronds(t)), 12), st = nearest(world.tiles.flatMap(t => game.stones.groundStones(t)), 9), br = nearest(world.tiles.flatMap(t => game.branches.groundBranches(t)), 4);
+  const F = { x: Math.sin(l.heading), z: Math.cos(l.heading) };
   game.clock.time = 0.5; game.sleep.awake = 0.3; game.thirst.days = 0; game.hunger.days = 0; game.fire.torch = null;
-  w.carried.length = 0; w.stones.length = 0; w.piles.length = 0;
-  const at = (kind, logs, r, f) => w.piles.push({ x: l.x + R.x * r + F.x * f, z: l.z + R.z * r + F.z * f, kind, logs });
-  at('frond', fr, -1.9, 0.1); at('branch', br, -1.7, 1.0); at('stone', st, 1.9, 0.5); w.version++;
-  p.x = l.x + F.x * 1.5; p.z = l.z + F.z * 1.5; p.y = world.H(p.x, p.z); step(0.1); window.__driftwood.draw();
+  w.carried.length = 0; w.stones.length = 0; w.piles.length = 0; w.version++;
+  p.x = l.x + F.x * 1.5; p.z = l.z + F.z * 1.5; p.y = world.H(p.x, p.z); window.__give('frond'); step(0.1); window.__driftwood.draw();
   const a = game.action(), big = a.options.find(o => o.kind === 'upgrade');
-  return { frondsFound: fr.length, stonesFound: st.length, branchesFound: br.length, big: big && big.kind + ':' + big.what, tap: a.tap && a.tap.kind };
+  return { big: big && big.kind + ':' + big.what, tap: a.tap && a.tap.kind };
 });
 console.log('upgrade site', JSON.stringify(homeSet));
-if (homeSet.frondsFound < 12 || homeSet.stonesFound < 9 || homeSet.branchesFound < 4) errors.push('not enough fronds, stones or branches for the upgrades: ' + JSON.stringify(homeSet));
-if (homeSet.big !== 'upgrade:walls') errors.push('beside the lean-to and the piles the arc should offer to build the side walls: ' + homeSet.big);
-if (!homeSet.big) errors.push('the arc shows no icon for the upgrade');
-for (const what of ['walls', 'bed', 'ring']) {
-  await pressF();
-  await page.evaluate(() => window.__driftwood.step(3));
-  const done = await page.evaluate(what => { const { game, step } = window.__driftwood, l = game.leantos.list[0]; step(60, () => !game.player.work); return { what, built: l.up && l.up[what], work: game.player.work && game.player.work.kind, piles: game.wood.piles.map(q => q.kind + ':' + q.logs.length).join(',') }; }, what);
+if (homeSet.big !== 'upgrade:walls') errors.push('beside the lean-to with a frond in his arms the arc should offer to build the side walls: ' + homeSet.big);
+await page.evaluate(() => { const { game } = window.__driftwood; game.wood.carried.length = 0; game.wood.version++; });
+for (const [what, kinds] of [['walls', Array(6).fill('frond')], ['bed', [...Array(4).fill('branch'), ...Array(4).fill('frond')]], ['ring', Array(8).fill('stone')]]) {
+  for (const kind of kinds) if (await piece(kind) !== 1) errors.push('a ' + kind + ' was not built into the ' + what);
+  const done = await page.evaluate(what => { const l = window.__driftwood.game.leantos.list[0]; return { what, built: l.up && l.up[what] }; }, what);
   console.log('built', JSON.stringify(done));
   if (done.built !== 1) errors.push('the ' + what + ' did not get finished: ' + JSON.stringify(done));
-  await page.evaluate(() => { const { step } = window.__driftwood; step(1); });
 }
-const upLeft = await page.evaluate(() => window.__driftwood.game.wood.piles.map(q => q.kind + ':' + q.logs.length).join(','));
-if (upLeft !== 'frond:2,stone:1') errors.push('after the three upgrades the piles should hold the rest: ' + upLeft);
+const upLeft = await page.evaluate(() => { const w = window.__driftwood.game.wood; return w.carried.length + w.stones.length; });
+if (upLeft !== 0) errors.push('after the three upgrades nothing should be left in his arms: ' + upLeft);
 await page.evaluate(() => {
   const { world, game, step, view } = window.__driftwood, p = game.player, l = game.leantos.list[0], w = game.wood;
   w.piles.length = 0; w.version++;

@@ -166,32 +166,29 @@ describe('the handoff: wood in his arms goes to camp first (0.30.4)', () => {
     expect(m.stats.events.find(e => e.type === 'handoff').to).toBe('stock');
     expect(log.atDrink.load).toBe(0);
   });
-  it('two wet logs in his arms go to the lean-to site as timber while the project still needs driftwood there (0.29.3), not to the tideline and never to the fire', () => {
+  it('two wet logs in his arms at the start of a meal go to the tideline (0.32: wet wood is no building pile at the site; wet driftwood is still a post if he builds with it, tests/mind.test.js)', () => {
     const { g, ids: held } = away(2, { day: 2, time: 0.25, wet: true }); g.hunger.days = 0.45;
     const m = createMind(w, g); m.engage();
-    const site = m.homePlan().site; expect(site).not.toBeNull();
     const log = drive(g, m, l => l.eatAt !== null);
     expect(log.emptyAt).toBeLessThan(log.eatAt);
-    const pile = g.wood.piles.find(q => held.every(id => ids(q.logs).includes(id)));
-    expect(pile).toBeDefined(); expect(near(pile, site, 2.5)).toBe(true);
-    expect(m.stats.events.find(e => e.type === 'handoff').to).toBe('project');
+    expect(g.wood.carried.length).toBe(0);
+    expect(held.every(id => g.wood.piles.some(q => ids(q.logs).includes(id)))).toBe(true);
+    expect(m.stats.events.find(e => e.type === 'handoff').to).toBe('tide');
   });
-  it('building timber (for the lean-to) goes to the site, not to the fire or the tideline', () => {
+  it('building timber (for the lean-to) cut short by a need goes to the fire\'s stock like any dry wood (0.32: no building pile at the site)', () => {
     const probe = timberGame(w, spawn, { day: 2, time: 0.25 }), dry = places(w, probe, createMind(w, probe), { n: 4 });
     const g = timberGame(w, spawn, { day: 2, time: 0.25, dry }), m = createMind(w, g); m.engage();
     let got = false;
     for (let i = 0; i < 9000 && !got; i++) { tick(g, m); got = m.stats.home.trips >= 1 && g.wood.carried.length === 3 && m.goal === 'idle'; }
     expect(got).toBe(true);
-    for (let i = 0; i < 3; i++) tick(g, m);   // (the third pickup has just been made: the mind notes what the load is for a moment later)
-    expect(g.wood.carried.length).toBe(3);
     const held = ids(g.wood.carried);
     m.release(); g.thirst.days = 0.5; m.engage();   // a need falls due with the timber in his arms (the home trip is dropped)
-    const site = m.homePlan().site; expect(site).not.toBeNull();
+    const camp = m.home();
     const log = drive(g, m, l => l.drinkAt !== null);
     expect(log.emptyAt).toBeLessThan(log.drinkAt);
     const pile = g.wood.piles.find(q => held.every(id => ids(q.logs).includes(id)));
-    expect(pile).toBeDefined(); expect(near(pile, site, 2.5)).toBe(true);
-    expect(m.stats.events.filter(e => e.type === 'handoff').at(-1).to).toBe('project');
+    expect(pile).toBeDefined(); expect(near(pile, camp, 4)).toBe(true);
+    expect(m.stats.events.filter(e => e.type === 'handoff').at(-1).to).toBe('stock');
   });
   it('a full fire stock does not lose the load or make him loop: the logs are laid on a new pile beside the full one, once, and he goes on to drink', () => {
     const { g, ids: held } = away(2, { time: 0.3 }); g.thirst.days = 0.4;

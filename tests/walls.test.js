@@ -3,16 +3,13 @@
 //      fronds laid while he stands between the first pile and the lean-to: before, the pile landed on top of the first one and closed a pocket round him (no way out, thirst 1.5, collapse); now it lands
 //      apart and a way leads out;
 //   2. the gap rule (`gapFree`): the edge to edge distance, the fire place it replaces, the walls it ignores;
-//   3. every placement path keeps the gap: a pile laid by hand or by his habit (`wood.drop`, kinds that differ in size), the leftovers of a build, the pile places of the upgrades (the tideline spot is tested in tests/tideline.test.js),
-//      and the building pair stays within the 2 m of the arc's build rule.
-// Depends on: game/game, game/obstacles, game/path, game/mind, game/leanto, tests/helpers/spots.
+//   3. every placement path keeps the gap: a pile laid by hand or by his habit (`wood.drop`, kinds that differ in size; the tideline spot is tested in tests/tideline.test.js). (0.32: the leftovers of a build, the building pair and the pile places of the upgrades are gone with the building piles.)
+// Depends on: game/game, game/obstacles, game/path, tests/helpers/spots.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createPath } from '../src/game/path.js';
-import { createMind, UP_AT } from '../src/game/mind.js';
-import { siteFor, NEAR, UP_NEAR } from '../src/game/leanto.js';
 import { BODY } from '../src/game/movement.js';
 import { pileSolidRadius } from '../src/game/wood.js';
 import * as OB from '../src/game/obstacles.js';
@@ -109,34 +106,5 @@ describe('every placement keeps the gap', () => {
     }
     expect(g.wood.piles.length).toBeGreaterThan(1);
     for (const q of gaps(g)) expect(q).toBeGreaterThanOrEqual(GAP - 1e-9);
-  });
-  it('what is left of the two building piles is laid a gap from every other solid', () => {
-    const g = createGame(w, at(C.x, C.z - 0.9), { wood: { carried: [], piles: [{ x: C.x - 0.6, z: C.z, kind: 'driftwood', logs: ids(logs, 0, 9) }, { x: C.x + 0.6, z: C.z, kind: 'branch', logs: ids(branches, 0, 8) }, { x: C.x + 3.6, z: C.z + 1.5, kind: 'driftwood', logs: ids(logs, 40, 2) }] }, fibre: { carried: 2 } });
-    const a = g.action(), b = [a.tap, ...a.options].find(o => o && o.kind === 'build'); expect(b).toBeTruthy();
-    g.act(b); run(g, makeInput(), 6);
-    expect(g.leantos.list.length).toBe(1); expect(g.wood.piles.length).toBe(3);
-    for (const q of gaps(g)) expect(q).toBeGreaterThanOrEqual(GAP - 1e-9);
-  });
-  it('the second pile of a building pair is laid within the 2 m of the arc\'s build rule, and the pair keeps the gap', () => {
-    expect(NEAR).toBe(2); expect(2 * (OB.PILE_R) + GAP).toBeLessThan(NEAR);
-    const g = createGame(w, at(C.x, C.z - 0.9), { wood: { carried: [], piles: [{ x: C.x, z: C.z, kind: 'driftwood', logs: ids(logs, 0, 6) }] }, fibre: { carried: 2 } });
-    g.wood.carried.push(...branches.slice(0, 6).map(l => ({ ...l }))); g.wood.carried.splice(3);
-    g.player.heading = Math.PI; run(g, makeInput({ action: 'tap' }), 1.5);
-    g.wood.carried.push(...branches.slice(3, 6).map(l => ({ ...l })));
-    g.player.heading = Math.PI; run(g, makeInput({ action: 'tap' }), 1.5);
-    const big = g.wood.piles.filter(q => q.logs.length >= 6);
-    expect(big.length).toBe(2); expect(siteFor(g.wood.piles, big[0])).toBeTruthy();
-    for (const q of gaps(g)) expect(q).toBeGreaterThanOrEqual(GAP - 1e-9);
-  });
-  it('Dave\'s pile places for the upgrades (fronds on a ring round the lean-to) keep the gap, and stay within UP_NEAR', () => {
-    const l = lean(C.x, C.z, 0), base = Math.atan2(Math.cos(0), -Math.sin(0));
-    const g = createGame(w, at(C.x + 6, C.z + 2), { leantos: { list: [l], nextId: 1 }, time: 0.3 });
-    g.wood.piles.push({ x: C.x + Math.sin(base) * UP_AT, z: C.z + Math.cos(base) * UP_AT, kind: 'frond', logs: [frond(1, C.x, C.z), frond(2, C.x, C.z), frond(3, C.x, C.z)] });
-    const m = createMind(w, g); m.engage();
-    const need = m.homePlan().need; expect(need.kind).toBe('frond');
-    const d = need.dest(), cp = g.movement.obstacles.camp;
-    expect(d.pile).toBeUndefined();
-    expect(Math.hypot(d.x - l.x, d.z - l.z)).toBeLessThanOrEqual(UP_NEAR);
-    expect(OB.gapFree(cp, d.x, d.z, pileSolidRadius({ kind: 'frond', logs: [{}] }) + BODY)).toBe(true);
   });
 });

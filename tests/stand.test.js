@@ -142,33 +142,39 @@ describe('lighting a pile (with a torch in hand, so the kindling is certain)', (
   });
 });
 
-describe('building a lean-to from two piles (any pile within reach counts)', () => {
-  eachCase(SIZES, (n, extra, dir) => scene({ pile: n, partner: 6, dir, ...extra }), (g, n, dir, label) => {
-    const drift = g.wood.piles[0], site = n >= 6 ? { site: { drift, branch: g.wood.piles[1] } } : null;
-    if (!site) { const p = planFor(g, 'build', { site: { drift, branch: g.wood.piles[1] } }); expect(p, label + ' (too few)').toBeNull(); return; }
-    const p = planFor(g, 'build', site);
-    expect(p, label).not.toBeNull();
-    expect(goTo(g, p), label).toBe(true);
-    expect(g.stand.offered('build', site, g.player.x, g.player.z), label).toBe(true);
-    expect(g.leantos.list.filter(l => l.progress < 1).length, label).toBe(0);
-    expect(press(g, o => o.kind === 'build' && o.site && o.site.drift === drift, 3), label).toBe(true);
-    expect(g.player.work && g.player.work.kind, label).toBe('build'); expect(g.leantos.list.filter(l => l.progress < 1).length, label).toBe(1);   // the lean-to is begun
+describe('building a piece into a half-built lean-to (0.32: a piece in his arms, no piles)', () => {
+  for (const [name, extra] of [['alone', {}], ['a small pile beside it', { fragment: 1 }]]) {
+    it(`${name}: from all 8 sides`, () => {
+      for (let dir = 0; dir < 8; dir++) {
+        const lt = { id: 0, x: C.x, z: C.z, heading: Math.PI / 3, progress: 2 / 15 };
+        const g = scene({ leanto: lt, carried: ids(logs, 80, 1), dir, fragment: extra.fragment || 0 }), lean = g.leantos.list[0], label = `${name} dir ${dir}`;
+        const p = planFor(g, 'buildIn', lean);
+        expect(p, label).not.toBeNull();
+        expect(goTo(g, p), label).toBe(true);
+        expect(g.stand.offered('buildIn', lean, g.player.x, g.player.z), label).toBe(true);
+        expect(press(g, o => o.kind === 'buildIn' && o.leanto === lean, 6), label).toBe(true);
+        expect(Math.round(lean.progress * 15), label).toBe(3);
+      }
+    }, 120000);
+  }
+  it('with the wrong kind in his arms (a frond at the driftwood stage) there is nothing to stand for: no spot is offered', () => {
+    const lt = { id: 0, x: C.x, z: C.z, heading: Math.PI / 3, progress: 2 / 15 }, g = scene({ leanto: lt, carried: ids(fronds, 0, 1), dir: 2 });
+    expect(planFor(g, 'buildIn', g.leantos.list[0])).toBeNull();
   });
 });
 
-describe('upgrading a finished lean-to (walls from a pile of fronds beside it)', () => {
-  for (const n of SIZES) for (const [name, extra] of [['alone', {}], ['a small pile beside it', { fragment: 1 }]]) {
-    it(`${name}, ${n} fronds: from all 8 sides`, () => {
+describe('upgrading a finished lean-to (a frond in his arms for the walls)', () => {
+  for (const [name, extra] of [['alone', {}], ['a small pile beside it', { fragment: 1 }]]) {
+    it(`${name}: from all 8 sides`, () => {
       for (let dir = 0; dir < 8; dir++) {
         const lt = { id: 0, x: C.x, z: C.z, heading: Math.PI / 3, progress: 1 };
-        const g = scene({ leanto: lt, fronds: n, dir, fragment: extra.fragment || 0 }), lean = g.leantos.list[0], label = `${name} ${n} dir ${dir}`;
+        const g = scene({ leanto: lt, carried: ids(fronds, 0, 1), dir, fragment: extra.fragment || 0 }), lean = g.leantos.list[0], label = `${name} dir ${dir}`;
         const p = planFor(g, 'upgrade', lean);
-        if (n < 6) { expect(p, label + ' (too few)').toBeNull(); continue; }   // the walls take 6 fronds in all
         expect(p, label).not.toBeNull();
         expect(goTo(g, p), label).toBe(true);
         expect(g.stand.offered('upgrade', lean, g.player.x, g.player.z), label).toBe(true);
         expect(press(g, o => o.kind === 'upgrade' && o.leanto === lean, 6), label).toBe(true);
-        expect((lean.up && lean.up.walls) || 0, label).toBeGreaterThan(0);
+        expect((lean.up && lean.up.walls) || 0, label).toBeCloseTo(1 / 6, 9);
       }
     }, 120000);
   }

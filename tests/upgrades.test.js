@@ -10,7 +10,7 @@ import { stonesOfTile, createStones, STONE_ID0, STONE_MAX } from '../src/game/st
 import { branchesOfTile } from '../src/game/branches.js';
 import { createWood, CARRY_MAX, CARRY_SLOW, PILE_MAX, kindOf } from '../src/game/wood.js';
 import { createFire, FUEL_MAX, BURN, RAIN_OUT, RING_BURN, EMBERS } from '../src/game/fire.js';
-import { createLeantos, upgradeFor, paidSteps, UPGRADES, UP_TIME, UP_COST, UP_NEAR, UP_REACH, WALLS_WOOD, WALLS_FIRE, RING_AT, RING_R, ringCentre } from '../src/game/leanto.js';
+import { createLeantos, upgradeFor, PIECE_TIME, UPGRADES, UP_COST, UP_REACH, WALLS_WOOD, WALLS_FIRE, RING_AT, RING_R, ringCentre } from '../src/game/leanto.js';
 import { WOOD_SHELTER, FIRE_SHELTER } from '../src/game/weather.js';
 import { createSleep, COLD_SLEEP, SHELTER_SLEEP, WALLS_SLEEP, BED_REST, SHELTER_REST, REST_RATE } from '../src/game/sleep.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
@@ -156,82 +156,67 @@ describe('carrying fronds and stones', () => {
   });
 });
 
-describe('the upgrades: when they can be built', () => {
-  it('walls need 6 fronds, the bed 4 branches and 4 fronds, the ring 8 stones, in piles within 3 m of a finished lean-to', () => {
-    expect(UPGRADES.walls).toEqual({ steps: 6, per: { frond: 1 } });
-    expect(UPGRADES.bed).toEqual({ steps: 4, per: { branch: 1, frond: 1 } });
-    expect(UPGRADES.ring).toEqual({ steps: 8, per: { stone: 1 } });
-    expect(bigOf(camp({ fr: 6 }))).toMatchObject({ kind: 'upgrade', what: 'walls' });
-    expect(bigOf(camp({ fr: 5 })) && bigOf(camp({ fr: 5 })).kind).not.toBe('upgrade');
-    expect(bigOf(camp({ fr: 4, br: 4, up: { walls: 1 } }))).toMatchObject({ kind: 'upgrade', what: 'bed' });
-    expect(bigOf(camp({ fr: 3, br: 4, up: { walls: 1 } })) && bigOf(camp({ fr: 3, br: 4, up: { walls: 1 } })).kind).not.toBe('upgrade');
-    expect(bigOf(camp({ st: 8 }))).toMatchObject({ kind: 'upgrade', what: 'ring' });
-    expect(bigOf(camp({ st: 7 })) && bigOf(camp({ st: 7 })).kind).not.toBe('upgrade');
+const piece = (list, k) => ({ ...list[k] });
+const holding = (g, kind, n = 1, from = 0) => { for (let i = 0; i < n; i++) (kind === 'stone' ? g.wood.stones : g.wood.carried).push(piece({ frond: fronds, branch: branchesAll, stone: stones }[kind], from + i + 2)); return g; };
+const buildNext = (g, input) => { const o = bigOf(g); expect(o).toMatchObject({ kind: 'upgrade' }); g.act(o); run(g, input, PIECE_TIME + 0.5); return o; };
+
+describe('the upgrades: when they can be built (0.32: from pieces he holds, no piles)', () => {
+  it('walls are 6 fronds, the bed 4 branches then 4 fronds, the ring 8 stones; piles beside a lean-to build nothing', () => {
+    expect(UPGRADES.walls).toEqual({ steps: 6 }); expect(UPGRADES.bed).toEqual({ steps: 8 }); expect(UPGRADES.ring).toEqual({ steps: 8 });
+    expect(bigOf(holding(camp(), 'frond'))).toMatchObject({ kind: 'upgrade', what: 'walls' });
+    expect(bigOf(holding(camp({ up: { walls: 1 } }), 'frond'))).toBeNull();   // the bed needs its four branches before a frond
+    expect(bigOf(holding(camp({ up: { walls: 1 } }), 'branch'))).toMatchObject({ kind: 'upgrade', what: 'bed' });
+    expect(bigOf(holding(camp({ up: { walls: 1, bed: 0.5 } }), 'frond'))).toMatchObject({ kind: 'upgrade', what: 'bed' });
+    expect(bigOf(holding(camp(), 'stone'))).toMatchObject({ kind: 'upgrade', what: 'ring' });
+    for (const o of [{ fr: 12, br: 12, st: 12 }, { fr: 6 }, { st: 8 }]) { const g = camp(o); expect(g.actions().some(x => x.kind === 'upgrade')).toBe(false); }
   });
-  it('the order is free: the first one whose materials are there, walls before bed before ring', () => {
-    expect(bigOf(camp({ fr: 10, br: 4, st: 8 })).what).toBe('walls');
-    expect(bigOf(camp({ fr: 4, br: 4, st: 8 })).what).toBe('bed');
-    expect(bigOf(camp({ st: 8, fr: 3 })).what).toBe('ring');
+  it('the order: walls before bed before ring; a frond waits for the walls, then goes to the bed', () => {
+    const g = holding(holding(holding(camp(), 'frond'), 'branch'), 'stone');
+    expect(g.actions().filter(x => x.kind === 'upgrade').length).toBe(1); expect(bigOf(g).what).toBe('walls');
+    expect(upgradeFor({ ...LT(), up: { walls: 1 } }, 'frond')).toBeNull();
+    expect(upgradeFor({ ...LT(), up: { walls: 1, bed: 0.5 } }, 'frond')).toBe('bed'); expect(upgradeFor({ ...LT(), up: { walls: 0.5, bed: 0.5 } }, 'frond')).toBe('walls');
+    expect(upgradeFor({ ...LT(), progress: 0.5 }, 'frond')).toBeNull();
   });
-  it('needs the piles within 4 m of the lean-to (0.30.10, was 3: the piles keep the camp\'s gap) and himself beside it, and only once each', () => {
-    expect(UP_NEAR).toBe(4); expect(UP_REACH).toBeGreaterThan(1.7);
-    const farPiles = camp({ fr: 6, far: 4.1 }); expect(bigOf(farPiles) && bigOf(farPiles).kind).not.toBe('upgrade');
-    const g = camp({ fr: 6 }); g.player.x = spawn.x + 4; g.player.z = spawn.z; expect(bigOf(g) && bigOf(g).kind).not.toBe('upgrade');
-    expect(upgradeFor({ ...LT(), up: { walls: 1, bed: 1, ring: 1 } }, [{ x: spawn.x, z: spawn.z, kind: 'stone', logs: ids(stones, 0, 12) }])).toBeNull();
-    const half = { ...LT(), progress: 0.5 }; expect(upgradeFor(half, [{ x: half.x, z: half.z, kind: 'frond', logs: ids(fronds, 0, 6) }])).toBeNull();
+  it('needs himself beside the lean-to (UP_REACH) and a finished one', () => {
+    expect(UP_REACH).toBeGreaterThan(1.7);
+    const g = holding(camp(), 'frond'); g.player.x = spawn.x + 4; g.player.z = spawn.z; expect(bigOf(g)).toBeNull();
+    const half = createGame(w, spawn, { leantos: { list: [{ ...LT(), progress: 0.5 }], nextId: 1 } }); holding(half, 'frond'); expect(bigOf(half)).toBeNull();   // a half-built lean-to wants a branch
   });
   it('the button shows what will be built', () => {
-    for (const [what, fr, br, st] of [['walls', 6, 0, 0], ['bed', 4, 4, 0], ['ring', 0, 0, 8]]) {
-      const icons = buttonIcons(camp({ fr, br, st, up: what === 'bed' ? { walls: 1 } : undefined }).action());
-      expect(icons.options.map(o => o.key)).toContain(what); expect(ICONS[what]).toMatch(/</);   // a pile beside him is also picked up by a press: that is the ring's icon, the upgrade is in the arc
+    for (const [what, kind, up] of [['walls', 'frond'], ['bed', 'branch', { walls: 1 }], ['ring', 'stone']]) {
+      const icons = buttonIcons(holding(camp({ up }), kind).action());
+      expect(icons.options.map(o => o.key)).toContain(what); expect(ICONS[what]).toMatch(/</);
     }
   });
 });
 
 describe('building an upgrade', () => {
-  it('its icon builds it in steps: one frond a step, 30 seconds of work, the rest it costs', () => {
-    const g = camp({ fr: 7 }), input = makeInput({ big: true }), t0 = g.clock.total, awake0 = g.sleep.awake;
-    run(g, input, 3);
-    expect(g.player.work).toMatchObject({ kind: 'upgrade' });
-    const l = g.leantos.list[0];
-    expect(l.up.walls).toBeGreaterThan(0); expect(l.up.walls).toBeLessThan(0.2);
-    expect(g.wood.piles[0].logs.length).toBe(6);   // the first step took its frond
-    run(g, input, 12); expect(l.up.walls).toBeGreaterThan(0.3); expect(l.up.walls).toBeLessThan(0.6);
-    expect(g.wood.piles[0].logs.length).toBeLessThan(6); expect(g.wood.piles[0].logs.length).toBeGreaterThanOrEqual(3);
-    run(g, input, UP_TIME);
-    expect(g.player.work).toBeNull(); expect(l.up.walls).toBe(1); expect(g.wood.piles.map(p => p.logs.length)).toEqual([1]);
-    expect(g.leantos.has(l, 'walls')).toBe(true);
-    const days = g.clock.total - t0; expect(g.sleep.awake - awake0 - days).toBeCloseTo(UP_COST, 1);
-    expect(bigOf(g) && bigOf(g).kind).not.toBe('upgrade');   // built once
+  it('a piece a press: 4 seconds of kneeling, the frond used up, the walls grow by a sixth; all 6 in 24 seconds, the rest it costs', () => {
+    const g = holding(camp(), 'frond', 3), input = makeInput(), t0 = g.clock.total, awake0 = g.sleep.awake, l = g.leantos.list[0];
+    buildNext(g, input); expect(g.wood.carried.length).toBe(2); expect(l.up.walls).toBeCloseTo(1 / 6, 9);
+    holding(g, 'frond', 3, 5); for (let k = 1; k < 6; k++) buildNext(g, input);
+    expect(l.up.walls).toBe(1); expect(g.leantos.has(l, 'walls')).toBe(true); expect(g.wood.carried.length).toBe(0);
+    expect(g.sleep.awake - awake0 - (g.clock.total - t0)).toBeCloseTo(UP_COST, 1);
+    expect(bigOf(holding(g, 'frond'))).toBeNull();   // built once
   });
-  it('walking off keeps the progress and what was used; choosing it again builds on with only the rest', () => {
-    const g = camp({ fr: 6 }), input = makeInput({ big: true });
-    run(g, input, 10);
-    const l = g.leantos.list[0], p1 = l.up.walls, left = g.wood.piles.reduce((n, p) => n + p.logs.length, 0);
-    expect(p1).toBeGreaterThan(0.2); expect(p1).toBeLessThan(0.5);
-    expect(paidSteps('walls', p1)).toBe(6 - left);
-    input.up = true; g.update(input, 1 / 30); input.up = false;
-    expect(g.player.work).toBeNull(); run(g, input, 2); expect(l.up.walls).toBe(p1);
-    g.player.x = l.x + 0.8; g.player.z = l.z; g.player.y = w.H(g.player.x, g.player.z);
-    expect(bigOf(g)).toMatchObject({ kind: 'upgrade', what: 'walls' });
-    input.big = true; run(g, input, UP_TIME + 2);
-    expect(l.up.walls).toBe(1); expect(g.wood.piles.length).toBe(0);   // exactly the 6 were used, in all
+  it('walking off before the end builds nothing and keeps the piece', () => {
+    const g = holding(camp(), 'frond'), input = makeInput({ big: true });
+    run(g, input, 2); expect(g.player.work).toMatchObject({ kind: 'upgrade' });
+    input.up = true; g.update(input, 1 / 30); input.up = false; run(g, input, PIECE_TIME + 1);
+    expect(g.leantos.list[0].up).toBeUndefined(); expect(g.wood.carried.length).toBe(1);
   });
-  it('the bed takes a branch and a frond a step, the ring a stone a step', () => {
-    const g = camp({ fr: 4, br: 4, up: { walls: 1 } }), input = makeInput({ big: true });
-    run(g, input, UP_TIME + 4); const l = g.leantos.list[0];
-    expect(l.up.bed).toBe(1); expect(g.wood.piles.length).toBe(0);
-    const r = camp({ st: 9 }), i2 = makeInput({ big: true }); run(r, i2, UP_TIME + 4);
-    expect(r.leantos.list[0].up.ring).toBe(1); expect(r.wood.piles.map(p => p.logs.length)).toEqual([1]);
+  it('the bed takes four branches and then four fronds, the ring a stone a press from his hands', () => {
+    const g = camp({ up: { walls: 1 } }), input = makeInput();
+    for (let k = 0; k < 4; k++) { holding(g, 'branch'); buildNext(g, input); }
+    for (let k = 0; k < 4; k++) { holding(g, 'frond'); buildNext(g, input); }
+    expect(g.leantos.list[0].up.bed).toBe(1); expect(g.wood.carried.length).toBe(0);
+    const r = camp(), i2 = makeInput(); holding(r, 'stone', 2);
+    for (let k = 0; k < 8; k++) { if (!r.wood.stones.length) holding(r, 'stone', 2, 20); buildNext(r, i2); }
+    expect(r.leantos.list[0].up.ring).toBe(1);
   });
   it('works with F too', () => {
-    const g = camp({ st: 8 }); run(g, makeInput({ hold: { key: true } }), 5);
-    expect(g.player.work).toMatchObject({ kind: 'upgrade' }); expect(g.leantos.list[0].up.ring).toBeGreaterThan(0);
-  });
-  it('is stopped when the materials are taken away', () => {
-    const g = camp({ fr: 6 }), input = makeInput({ big: true });
-    run(g, input, 8); g.wood.piles.length = 0; run(g, input, 8);
-    expect(g.player.work).toBeNull(); expect(g.leantos.list[0].up.walls).toBeLessThan(1);
+    const g = holding(camp(), 'stone'); run(g, makeInput({ hold: { key: true } }), 5);
+    expect(g.leantos.list[0].up.ring).toBeCloseTo(1 / 8, 9);
   });
 });
 
@@ -303,10 +288,10 @@ describe('what the upgrades do', () => {
 
 describe('saving the upgrades', () => {
   it('a lean-to keeps its upgrades and their progress, older saves have none', () => {
-    const g = camp({ fr: 2, up: { walls: 1, bed: 0.4 } });
+    const g = camp({ fr: 2, up: { walls: 1, bed: 0.375 } });
     const text = serialise({ ...g.state(), name: '' }), back = parseSave(text, 1337);
-    expect(back).not.toBeNull(); expect(back.leantos.list[0].up).toEqual({ walls: 1, bed: 0.4 });
-    const g2 = createGame(w, spawn, back); expect(g2.leantos.list[0].up).toEqual({ walls: 1, bed: 0.4 }); expect(g2.leantos.has(g2.leantos.list[0], 'walls')).toBe(true);
+    expect(back).not.toBeNull(); expect(back.leantos.list[0].up).toEqual({ walls: 1, bed: 0.375 });
+    const g2 = createGame(w, spawn, back); expect(g2.leantos.list[0].up).toEqual({ walls: 1, bed: 0.375 }); expect(g2.leantos.has(g2.leantos.list[0], 'walls')).toBe(true);
     const old = g.state(); delete old.fronds; delete old.stones; old.leantos.list.forEach(l => delete l.up);
     const g3 = createGame(w, spawn, parseSave(serialise({ ...old, name: '' }), 1337)); expect(g3.leantos.list[0].up).toBeUndefined();
     expect(parseSave(serialise({ ...g.state(), leantos: { list: [{ ...LT(), up: { walls: 'x' } }], nextId: 1 } }), 1337)).toBeNull();
@@ -327,12 +312,12 @@ describe('the pictures', () => {
     expect(wallFronds(w.H, l(), 1).length).toBe(2 * WALL_N);
     const all = wallFronds(w.H, l(), 1), left = all.filter(f => f.k % 2 === 0).length; expect(left).toBe(WALL_N);
     for (const f of all) { expect(f.down.y).toBeLessThan(-0.9); expect(f.len).toBeGreaterThanOrEqual(0.8); expect(f.len).toBeLessThan(1.9); }
-    expect(wallFronds(w.H, l(), 0.3).length).toBe(3);
+    expect(wallFronds(w.H, l(), 0.34).length).toBe(2);
   });
   it('the bed is a frame first, then fronds on it; the ring is eight stones round the ring middle', () => {
     expect(bedParts(w.H, l(), 0).sticks.length).toBe(0);
     const some = bedParts(w.H, l(), 0.3); expect(some.sticks.length).toBeGreaterThan(0); expect(some.fronds.length).toBe(0);
-    const full = bedParts(w.H, l(), 1); expect(full.sticks.length).toBe(9); expect(full.fronds.length).toBe(BED_N);
+    const full = bedParts(w.H, l(), 1); expect(full.sticks.length).toBe(8); expect(new Set(full.sticks.map(s => s.part)).size).toBe(4); expect(full.fronds.length).toBe(BED_N);
     const ring = ringStones(w.H, l(), 1), c = ringCentre(l());
     expect(ring.length).toBe(RING_N); for (const s of ring) expect(Math.hypot(s.x - c.x, s.z - c.z)).toBeGreaterThan(0.38);
     expect(ringStones(w.H, l(), 0.5).length).toBe(4);

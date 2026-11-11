@@ -1,49 +1,52 @@
 /**
- * game/leanto — the lean-to: a shelter of driftwood posts and branches.
+ * game/leanto — the lean-to: a shelter of driftwood posts and branches, built piece by piece.
  *
  * Rules
- *   - The condition for building is a pile with at least NEED (6) driftwood and a
- *     pile with at least NEED branches whose centres are within NEAR (2 m) of each
- *     other (`siteFor`). The lean-to icon of the arc (or F) beside either builds
- *     instead of lighting (game/game); 0.30.3 rule (b): any pile within reach (BESIDE) that has such a partner counts, not only the nearest. Building takes NEED pieces of each kind out
- *     of those two piles (the rest stays); the lean-to stands midway between them.
- *   - It takes BUILD_TIME seconds of work (an hour of game time, about a minute of
- *     play) and costs BUILD_COST days of rest in all (as much as two attempts to
- *     drill a fire). Progress is kept: a lean-to that was left half built stays,
- *     and building on continues from where it was (no more wood is needed).
- *   - progress 0..1; 1 is finished. It rises in steps (render/leanto): two forked
- *     posts, a ridge pole, then a sloping roof of branches. heading is the direction
- *     towards the camera when building started: the open side faces that way. It
- *     is about 2 m wide and 1.5 m deep and is not solid.
+ *   - 0.32 "Piece by piece": every visible part of the shelter is one gathered piece. A lean-to (and each upgrade of a finished one) is a site with an
+ *     ordered list of parts (PARTS): the lean-to takes 4 driftwood (two forked posts, the ridge pole, a sill log at the foot of the roof), then 6 branches (roof
+ *     branches), then 5 fronds (roof fronds): 15 pieces. `walls` take 6 fronds (three a side), `bed` 4 branches (two rails with their legs, two slats) then 4
+ *     fronds, `ring` 8 stones. The parts are built in that order and a piece fits when it is of the kind the NEXT part needs (`nextKind`): a site in its
+ *     branch stage takes no driftwood. There are no building piles any more; wood in piles is firewood, logs and what is kept.
+ *   - He builds a piece in (game/game) standing beside the site, with a fitting piece in his arms (driftwood, branch, frond) or hands (stone): PIECE_TIME (4 s)
+ *     of kneeling per piece, then the piece is used up and its part appears. The rest cost is BUILD_COST / 15 a piece for the lean-to (the whole lean-to costs
+ *     BUILD_COST days of rest, as before), UP_COST / parts for an upgrade. A site is started with the first piece in his arms on a place where a lean-to fits
+ *     (`siteAt`): its open side faces the camera at that moment, the middle lies SITE_AT (1.4 m) behind him. An upgrade is started the same way, beside a
+ *     finished lean-to, with a fitting piece (`upgradeFor(l, kind)`: walls with a frond first, then bed (a branch, or a frond once its branches are in), ring with a stone).
+ *   - progress 0..1 is built parts / 15; 1 is finished (`built(l)` is the count). The shelter effects (sleeping, rain, dry wood, the stone ring) count only
+ *     when finished, as before; the collision circles (game/obstacles) stand from the first roof branch (`solid(l)`).
+ *     heading is the direction towards the camera when the site was started: the open side faces that way. It
+ *     is about 2 m wide and 1.5 m deep.
  *   - Sleeping within SLEEP_R (about 1 m) of the centre of a finished one counts
  *     (game/sleep: a longer cold sleep, faster rest by a fire).
- *   - Upgrades (0.27 "Home"), each built once per finished lean-to, in any order (UPGRADES): `walls` (6 fronds: palm fronds close
+ *   - Upgrades (0.27 "Home"), each built once per finished lean-to, in any order (UPGRADES): `walls` (palm fronds close
  *     the two sides; wood stays dry within WALLS_WOOD (2.5 m) instead of WOOD_SHELTER (1.5), a fire within WALLS_FIRE (3 m) instead of
- *     FIRE_SHELTER (2), and a cold sleep under it lasts longer, game/sleep), `bed` (4 branches and 4 fronds: a low raised bed under the
- *     roof; he rests 1.25 times as fast, game/sleep BED_REST) and `ring` (8 stones: a ring of stones RING_AT (2.2 m) in front of the open side; a fire
- *     within RING_R (1 m) of its middle burns longer and the rain does not put it out, game/fire). Built like the lean-to itself: he stands
- *     within UP_REACH (2.2 m) of a finished lean-to's centre and the materials lie in piles within UP_NEAR (4 m; 0.30.10 "Walls", was 3: the upgrade piles keep the camp's gap) of that centre (`upgradeFor`);
- *     an icon of the arc builds it in `steps` steps (UP_TIME seconds of work in all, UP_COST days of rest). Each step takes one
- *     of each material out of the piles as it begins (`paidSteps`), so walking off keeps the progress and what was used, and building on
- *     needs only the rest. The first upgrade whose materials are all there is built (walls, bed, ring).
+ *     FIRE_SHELTER (2), and a cold sleep under it lasts longer, game/sleep), `bed` (a low raised bed under the
+ *     roof; he rests 1.25 times as fast, game/sleep BED_REST) and `ring` (a ring of stones RING_AT (2.2 m) in front of the open side; a fire
+ *     within RING_R (1 m) of its middle burns longer and the rain does not put it out, game/fire). He stands within UP_REACH (2.2 m) of a finished lean-to's centre.
+ *     `l.up[what]` is the progress 0..1 (built parts / the parts of that upgrade).
+ *   - Old saves (before 0.32): a half-built lean-to or upgrade keeps its progress as a share of the parts (rounded down to whole parts); piles laid for building stay ordinary piles.
  *   - The flood takes a lean-to, also a half-built one, whose ground is below the sea.
  *   - More than one may be built.
  *
  * Pure data on a world; no DOM, no Three.js.
  *
- * NEED, NEAR, BUILD_TIME, BUILD_COST, SLEEP_R, REACH
- * UPGRADES, UP_ORDER, UP_REACH, UP_NEAR, UP_TIME, UP_COST, WALLS_WOOD, WALLS_FIRE, RING_AT, RING_R, RING_NOFIRE
- * paidSteps(what, p) -> how many steps of an upgrade at progress p (0..1) have begun (0 before it started), each took its materials
- * upgradeFor(l, piles) -> 'walls' | 'bed' | 'ring' | null   the first unfinished upgrade of finished lean-to l whose remaining materials
- *   lie in piles within UP_NEAR of its centre (piles: game/wood piles)
+ * PARTS { leanto, walls, bed, ring }   the ordered kinds of the parts of a site ('driftwood' | 'branch' | 'frond' | 'stone')
+ * PIECE_TIME, BUILD_COST, UP_COST, SLEEP_R, REACH, SITE_AT, SITE_APART
+ * UPGRADES { walls, bed, ring } -> { steps }   (the number of parts), UP_ORDER, UP_REACH, UP_TIME (all of an upgrade), WALLS_WOOD, WALLS_FIRE, RING_AT, RING_R, RING_NOFIRE
+ * partsOf(what) -> the list of kinds; pieceCost(what) -> days of rest one piece costs
+ * built(l, what = 'leanto') -> number of parts built; nextKind(l, what = 'leanto') -> the kind the next part needs, or null when that site is finished
+ * upgradeFor(l, kind) -> 'walls' | 'bed' | 'ring' | null   the upgrade of finished lean-to l a carried piece of that kind would go into (the first in UP_ORDER whose next part is of that kind)
+ * pieceFor(l, kind) -> 'leanto' | 'walls' | 'bed' | 'ring' | null   what a piece of that kind builds at l: the lean-to itself while it is unfinished, else its upgrade
+ * solid(l) -> true when the lean-to has collision (its roof is begun: 5 parts)
+ * siteAt(px, pz, heading) -> { x, z, heading }   the lean-to started by someone standing at (px, pz) with the camera at heading: SITE_AT behind him
+ * standFor(c) -> { x, z }   the spot where one stands to start the site c = { x, z, heading } (the inverse of siteAt)
  * ringCentre(l) -> { x, z }   where the fire ring stands (RING_AT in front of the open side)
  * KEEP, keepFree(l) -> { f, r, touches(x, z, rad) }   the region of a lean-to that stays free of wood (rule (a), 0.30.3): the inside and the area just in front of its opening; wood is laid beside it instead (game/wood drop, game/game)
- * siteFor(piles, pile) -> { drift, branch, x, z } | null   for a pile beside him: the pair of piles
- *   (that one and the nearest of the other kind that qualifies) and the middle between them
  * createLeantos(world, saved?) -> leantos
  *   leantos.list              [{ id, x, z, heading, progress, up? }]
- *   leantos.version           goes up when one is added or taken (progress alone does not change it)
- *   leantos.start(x, z, heading) -> the new lean-to, progress 0
+ *   leantos.version           goes up when one is added or taken, or an upgrade starts or finishes (progress alone does not change it)
+ *   leantos.start(x, z, heading) -> the new lean-to, no part built
+ *   leantos.build(l, what = 'leanto') -> the kind of the part that was built in, or null when that site was finished already (a lean-to that is not finished takes no upgrade)
  *   leantos.unfinished(x, z, reach) -> the nearest half-built lean-to whose centre is within reach, or null
  *   leantos.shelter(x, z) -> true when a finished lean-to's centre is within SLEEP_R
  *   leantos.has(l, what) -> true when lean-to l has that upgrade finished (l.up: { walls, bed, ring } progress 0..1, optional)
@@ -53,7 +56,7 @@
  *   leantos.dry(x, z, 'wood' | 'fire') -> true when wood (or a fire and torches) there stays dry: within WOOD_SHELTER / FIRE_SHELTER of a finished
  *     lean-to, or WALLS_WOOD / WALLS_FIRE when that one has side walls
  *   leantos.ring(x, z) -> true when (x, z) is within RING_R of the middle of a finished lean-to's finished stone ring
- *   leantos.noFire(x, z) -> true when (x, z) lies in the ring of no fire (0.31.1 "Milk"): more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring. A fire cannot be lit there (game/game `lightable`): beside the ring only in the ring itself.
+ *   leantos.noFire(x, z) -> true when (x, z) lies in the ring of no fire (0.31.1 "Milk"): more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring. A fire cannot be lit there (game/game `lightable`): beside a ring a fire is lit only in the ring itself.
  *   leantos.covers(x, z, r) -> true when a finished lean-to's centre is within r (the rain stays off wood and fires there, game/weather)
  *   leantos.flood(sea) -> number of lean-tos the sea took
  *   leantos.state() -> { list, nextId }   plain, for saving
@@ -64,23 +67,37 @@
 import { DRILL_COST } from './fire.js';
 import { WOOD_SHELTER, FIRE_SHELTER } from './weather.js';
 
-export const NEED = 6;
-export const NEAR = 2;
-export const BUILD_TIME = 60;
+const rep = (kind, n) => Array.from({ length: n }, () => kind);
+export const PARTS = {
+  leanto: [...rep('driftwood', 4), ...rep('branch', 6), ...rep('frond', 5)],   // two posts, the ridge pole, the sill; roof branches; roof fronds
+  walls: rep('frond', 6),
+  bed: [...rep('branch', 4), ...rep('frond', 4)],   // two rails (with their legs), two slats; fronds
+  ring: rep('stone', 8),
+};
+export const PIECE_TIME = 4;
 export const BUILD_COST = 2 * DRILL_COST;
 export const SLEEP_R = 1;
 export const REACH = 1.7;
+export const SITE_AT = 1.4, SITE_APART = 3.2;   // the middle of a new site lies this far behind him; no two sites closer than SITE_APART
 
-export const UPGRADES = {
-  walls: { steps: 6, per: { frond: 1 } },
-  bed: { steps: 4, per: { branch: 1, frond: 1 } },
-  ring: { steps: 8, per: { stone: 1 } },
-};
+export const UPGRADES = { walls: { steps: PARTS.walls.length }, bed: { steps: PARTS.bed.length }, ring: { steps: PARTS.ring.length } };
 export const UP_ORDER = ['walls', 'bed', 'ring'];
-export const UP_REACH = 2.2, UP_NEAR = 4, UP_TIME = 30, UP_COST = BUILD_COST / 2;
+export const UP_REACH = 2.2, UP_TIME = 30, UP_COST = BUILD_COST / 2;
 export const WALLS_WOOD = 2.5, WALLS_FIRE = 3, RING_AT = 2.2, RING_R = 1, RING_NOFIRE = 3.5;
 
-export const paidSteps = (what, p) => p > 0 ? Math.min(UPGRADES[what].steps, Math.floor(p * UPGRADES[what].steps + 1e-9) + 1) : 0;
+export const partsOf = what => PARTS[what];
+export const pieceCost = what => (what === 'leanto' ? BUILD_COST : UP_COST) / PARTS[what].length;
+const prog = (l, what) => what === 'leanto' ? l.progress : (l.up && l.up[what]) || 0;
+export const built = (l, what = 'leanto') => Math.min(PARTS[what].length, Math.floor(prog(l, what) * PARTS[what].length + 1e-6));
+export const nextKind = (l, what = 'leanto') => PARTS[what][built(l, what)] || null;
+export function upgradeFor(l, kind) {
+  if (!l || l.progress < 1) return null;
+  return UP_ORDER.find(what => nextKind(l, what) === kind) || null;
+}
+export const pieceFor = (l, kind) => !l ? null : l.progress < 1 ? (nextKind(l) === kind ? 'leanto' : null) : upgradeFor(l, kind);
+export const solid = l => built(l) >= 5;
+export const siteAt = (px, pz, heading) => ({ x: px - Math.sin(heading) * SITE_AT, z: pz - Math.cos(heading) * SITE_AT, heading });
+export const standFor = c => ({ x: c.x + Math.sin(c.heading) * SITE_AT, z: c.z + Math.cos(c.heading) * SITE_AT });
 
 /**
  * 0.30.3 "Routes", rule (a): the region K of a lean-to that stays free of wood, in its frame (f along the heading, the open side; r across): the footprint -1.1 <= f <= 0.95, |r| <= 1.25
@@ -104,47 +121,31 @@ export function ringCentre(l) { return { x: l.x + Math.sin(l.heading) * RING_AT,
 
 const has = (l, what) => !!l.up && l.up[what] >= 1;
 
-export function upgradeFor(l, piles) {
-  if (!l || l.progress < 1) return null;
-  for (const what of UP_ORDER) {
-    const p = (l.up && l.up[what]) || 0; if (p >= 1) continue;
-    const left = UPGRADES[what].steps - paidSteps(what, p);
-    const ok = Object.entries(UPGRADES[what].per).every(([kind, n]) => piles.filter(q => q.kind === kind && Math.hypot(q.x - l.x, q.z - l.z) <= UP_NEAR).reduce((s, q) => s + q.logs.length, 0) >= n * left);
-    if (ok) return what;
-  }
-  return null;
-}
-
-export function siteFor(piles, pile) {
-  if (!pile || pile.logs.length < NEED) return null;
-  const want = pile.kind === 'driftwood' ? 'branch' : pile.kind === 'branch' ? 'driftwood' : null;
-  if (!want) return null;
-  let best = null, bd = Infinity;
-  for (const q of piles) {
-    if (q.kind !== want || q.logs.length < NEED) continue;
-    const d = Math.hypot(q.x - pile.x, q.z - pile.z);
-    if (d <= NEAR && d < bd) { bd = d; best = q; }
-  }
-  if (!best) return null;
-  const drift = pile.kind === 'driftwood' ? pile : best, branch = pile.kind === 'branch' ? pile : best;
-  return { drift, branch, x: (pile.x + best.x) / 2, z: (pile.z + best.z) / 2 };
-}
-
 export function createLeantos(w, saved) {
-  const leantos = { list: [], version: 0, start, unfinished, shelter, covers, has, upgraded, home, nearFinished, dry, ring, noFire, flood, state };
+  const leantos = { list: [], version: 0, start, build, unfinished, shelter, covers, has, upgraded, home, nearFinished, dry, ring, noFire, flood, state };
   let nextId = 0;
   if (saved) {
-    leantos.list = (saved.list || []).map(l => ({ id: l.id, x: l.x, z: l.z, heading: l.heading, progress: Math.max(0, Math.min(1, l.progress)), ...cleanUp(l.up) }));
+    leantos.list = (saved.list || []).map(l => ({ id: l.id, x: l.x, z: l.z, heading: l.heading, progress: whole(l.progress, PARTS.leanto.length), ...cleanUp(l.up) }));
     nextId = Math.max(saved.nextId || 0, ...leantos.list.map(l => l.id + 1), 0);
   }
-  function cleanUp(up) {   // the upgrades saved with a lean-to: known ones only, progress 0..1
-    const out = {}; if (up && typeof up === 'object') for (const k of UP_ORDER) if (Number.isFinite(up[k]) && up[k] > 0) out[k] = Math.max(0, Math.min(1, up[k]));
+  function whole(p, n) {   // a saved progress as a whole number of parts (a half-built site of an older save keeps its share): 1 stays 1
+    const q = Math.max(0, Math.min(1, p)); return q >= 1 ? 1 : Math.floor(q * n + 1e-6) / n;
+  }
+  function cleanUp(up) {   // the upgrades saved with a lean-to: known ones only, progress 0..1 in whole parts
+    const out = {}; if (up && typeof up === 'object') for (const k of UP_ORDER) if (Number.isFinite(up[k]) && up[k] > 0) { const q = whole(up[k], PARTS[k].length); if (q > 0) out[k] = q; }
     return Object.keys(out).length ? { up: out } : {};
   }
   function upgraded(l, what, p) {
     if (!UPGRADES[what]) return;
     const was = (l.up && l.up[what]) || 0; l.up = { ...(l.up || {}), [what]: Math.max(0, Math.min(1, p)) };
     if ((was <= 0 && p > 0) || (was < 1 && p >= 1)) leantos.version++;
+  }
+  function build(l, what = 'leanto') {   // the next part of a site is built in
+    if (!leantos.list.includes(l) || !PARTS[what] || (what !== 'leanto' && l.progress < 1)) return null;
+    const n = PARTS[what].length, k = built(l, what); if (k >= n) return null;
+    const kind = PARTS[what][k], p = k + 1 >= n ? 1 : (k + 1) / n;
+    if (what === 'leanto') { l.progress = p; if (k + 1 === 5 || p >= 1) leantos.version++; } else upgraded(l, what, p);
+    return kind;
   }
   function start(x, z, heading) {
     const l = { id: nextId++, x, z, heading, progress: 0 };

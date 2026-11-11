@@ -29,7 +29,7 @@
  * to 0..4 by game/hunger; missing in older saves: not hungry).
  * Since 0.16 a save may also carry `branches: { taken: [[id, day]] }` (the branches taken
  * and when, for their regrowing) and `leantos: { list: [{ id, x, z, heading, progress }], nextId }`
- * (the lean-tos, finished or half built); the branches in piles are part of `wood.piles`
+ * (the lean-tos, finished or half built; 0.32 "Piece by piece": `progress` and each `up` value are a share of whole parts, and an older save's half-built share is rounded down to whole parts on load, game/leanto); the branches in piles are part of `wood.piles`
  * (kind 'branch', ids from game/branches BRANCH_ID0). Both optional: older saves have none.
  * Since 0.27.3 `branches` may also carry `grown: [[id, day]]` (regrown branches and the day they grew, for 3 days, so rain from
  * before they grew stays off them after a load).
@@ -174,7 +174,7 @@ export function createViewSaver(settle = VIEW_SETTLE) {
 
 export function momentKey(game) {
   const f = game.fire;
-  return [game.wood.piles.length, game.wood.piles.reduce((n, p) => n + p.logs.length, 0), f.fires.length, f.torches.length, game.sleep.asleep ? 1 : 0, game.leantos.list.length, game.leantos.list.filter(l => l.progress >= 1).length, game.leantos.list.map(l => Object.keys(l.up || {}).filter(k => l.up[k] >= 1).length).join(''), game.crabs.carried.length, game.crabs.gone.size, game.fish.carried.length, game.spear.hand ? 1 : game.spear.at ? 2 : 0, game.axe ? (game.axe.hand ? 1 : game.axe.at ? 2 : 0) : 0, game.felled ? game.felled.list.length : 0, game.wood.log ? 1 : 0, game.shells.list.map(f => (f ? 1 : 0)).join(''), game.shells.nuts, game.berries.carried.length, game.berries.picked.size, game.bananas.carried.length, game.bananas.picked.size].join(',');
+  return [game.wood.piles.length, game.wood.piles.reduce((n, p) => n + p.logs.length, 0), f.fires.length, f.torches.length, game.sleep.asleep ? 1 : 0, game.leantos.list.length, game.leantos.list.filter(l => l.progress >= 1).length, game.leantos.list.reduce((n, l) => n + Math.round(l.progress * 15) + Object.values(l.up || {}).reduce((m, p) => m + Math.round(p * 24), 0), 0), game.leantos.list.map(l => Object.keys(l.up || {}).filter(k => l.up[k] >= 1).length).join(''), game.crabs.carried.length, game.crabs.gone.size, game.fish.carried.length, game.spear.hand ? 1 : game.spear.at ? 2 : 0, game.axe ? (game.axe.hand ? 1 : game.axe.at ? 2 : 0) : 0, game.felled ? game.felled.list.length : 0, game.wood.log ? 1 : 0, game.shells.list.map(f => (f ? 1 : 0)).join(''), game.shells.nuts, game.berries.carried.length, game.berries.picked.size, game.bananas.carried.length, game.bananas.picked.size].join(',');
 }
 
 export const MOMENT_EVERY = 0.5;   // seconds between looks at momentKey

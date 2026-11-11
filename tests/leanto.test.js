@@ -1,8 +1,7 @@
 // Branches and the lean-to (0.16): branches under the trees (deterministic per
 // seed, the generated world untouched), picking up and carrying them with
 // driftwood, piles of their own, burning half as long, lighting a branch pile;
-// building a lean-to (condition, build instead of light, 6 + 6 consumed,
-// interruption and resuming, the rest it costs, the heading), sleeping under it,
+// the lean-to as a site (0.32: no building piles any more; the building itself is in tests/site.test.js): its drawing by progress, its walls, sleeping under it,
 // the flood, and saving.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
@@ -11,7 +10,7 @@ import { createGame } from '../src/game/game.js';
 import { branchesOfTile, createBranches, BRANCH_ID0, REGROW, REGROW_SPREAD, BRANCH_LEN } from '../src/game/branches.js';
 import { createWood, CARRY_MAX, CARRY_SLOW, PILE_MAX, kindOf } from '../src/game/wood.js';
 import { createFire, fuelOf, BURN, BRANCH_BURN, FIRE_MIN, DRILL_COST } from '../src/game/fire.js';
-import { siteFor, createLeantos, NEED, NEAR, BUILD_TIME, BUILD_COST, SLEEP_R } from '../src/game/leanto.js';
+import { createLeantos, PIECE_TIME, BUILD_COST, SLEEP_R, PARTS } from '../src/game/leanto.js';
 import { createSleep, COLD_SLEEP, SHELTER_SLEEP, SHELTER_REST, SLEEP_DAYS } from '../src/game/sleep.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { FIRST_HIGH, PERIOD } from '../src/game/tide.js';
@@ -135,79 +134,17 @@ describe('burning branches', () => {
   });
 });
 
-describe('the build condition', () => {
-  const pile = (kind, n, x, z) => ({ kind, x, z, logs: Array.from({ length: n }, (_, i) => ({ id: i })) });
-  it('needs 6 driftwood and 6 branches within 2 m of each other', () => {
-    const d = pile('driftwood', 6, 0, 0), b = pile('branch', 6, 1.9, 0), piles = [d, b];
-    expect(siteFor(piles, d)).toMatchObject({ drift: d, branch: b, x: 0.95, z: 0 }); expect(siteFor(piles, b)).toMatchObject({ drift: d, branch: b });
-    b.x = 2.1; expect(siteFor(piles, d)).toBeNull(); expect(NEAR).toBe(2);
-    b.x = 1; b.logs.pop(); expect(siteFor(piles, d)).toBeNull(); expect(siteFor(piles, b)).toBeNull();
-    b.logs.push({ id: 9 }); d.logs.pop(); expect(siteFor(piles, b)).toBeNull();
-    expect(NEED).toBe(6);
-  });
-  it('shows the lean-to as the big icon beside either pile, instead of lighting', () => {
-    const g = withPiles();
-    expect(bigOf(g)).toMatchObject({ kind: 'build' });   // with fibre and a pile of 4 or more he could also light: building wins
-    g.player.x = spawn.x - 0.4; g.player.z = spawn.z + 1.2;   // beside the branch pile
-    expect(bigOf(g)).toMatchObject({ kind: 'build' });
-    const few = withPiles(8, 5); expect(bigOf(few)).toMatchObject({ kind: 'light' });
-    const far = createGame(w, spawn, { wood: { carried: [], piles: [{ ...P1(), kind: 'driftwood', logs: dids(0, 8) }, { x: spawn.x + 0.4, z: spawn.z + 2.6, kind: 'branch', logs: bids(0, 8) }] }, fibre: { carried: 1 } });
-    expect(bigOf(far)).toMatchObject({ kind: 'light' });
-  });
-});
-
-describe('building', () => {
-  it('its icon builds instead of drilling: 6 + 6 go out of the piles, the rest stays, and it is done in a minute', () => {
-    const g = withPiles(), input = makeInput({ big: true, yaw: 1.0 }), t0 = g.clock.total, awake0 = g.sleep.awake;
-    run(g, input, 3);
-    expect(g.player.work).toMatchObject({ kind: 'build' });
-    expect(g.wood.piles.map(p => [p.kind, p.logs.length])).toEqual([['driftwood', 2], ['branch', 1]]);
-    expect(g.leantos.list.length).toBe(1);
-    const l = g.leantos.list[0];
-    expect(l.x).toBeCloseTo(spawn.x + 0.4, 5); expect(l.z).toBeCloseTo(spawn.z + 0.6, 5); expect(l.heading).toBe(1.0);
-    expect(l.progress).toBeGreaterThan(0); expect(l.progress).toBeLessThan(0.1);
-    run(g, input, BUILD_TIME + 1);
-    expect(g.player.work).toBeNull(); expect(l.progress).toBe(1); expect(g.fibre.carried).toBe(2); expect(g.fire.fires.length).toBe(0);
-    const days = g.clock.total - t0;
-    expect(g.sleep.awake - awake0 - days).toBeCloseTo(BUILD_COST, 1);
-    expect(BUILD_COST).toBeCloseTo(2 * DRILL_COST, 6);
-  });
-  it('takes the heading from the starting view when the input has none', () => {
-    const g = withPiles(); run(g, makeInput({ big: true }), 2);
-    expect(g.leantos.list[0].heading).toBe(YAW);
-  });
-  it('works with F too, from beside the branch pile', () => {
-    const g = withPiles(); g.player.x = spawn.x - 0.4; g.player.z = spawn.z + 1.2; g.player.y = w.H(g.player.x, g.player.z);
-    run(g, makeInput({ hold: { key: true } }), 4);
-    expect(g.player.work).toMatchObject({ kind: 'build' }); expect(g.leantos.list.length).toBe(1);
-  });
-  it('is stopped by walking, the lean-to stays half built, and its icon beside it builds on', () => {
-    const g = withPiles(), input = makeInput({ big: true, yaw: 2.0 });
-    run(g, input, 20);
-    const l = g.leantos.list[0], p1 = l.progress;
-    expect(p1).toBeGreaterThan(0.2); expect(p1).toBeLessThan(0.4);
-    input.up = true; g.update(input, 1 / 30); input.up = false;
-    expect(g.player.work).toBeNull();
-    run(g, input, 3); expect(l.progress).toBe(p1);
-    g.player.x = l.x + 0.8; g.player.z = l.z; g.player.y = w.H(g.player.x, g.player.z);
-    const left = g.wood.piles.map(p => p.logs.length);
-    expect(bigOf(g)).toMatchObject({ kind: 'build', leanto: l });
-    input.big = true; run(g, input, 5); expect(g.player.work).toMatchObject({ kind: 'build' });
-    expect(g.wood.piles.map(p => p.logs.length)).toEqual(left);   // nothing more is taken
-    run(g, input, BUILD_TIME); expect(l.progress).toBe(1); expect(g.leantos.list.length).toBe(1); expect(l.heading).toBe(2.0);
-    expect(bigOf(g) && bigOf(g).kind).not.toBe('build');
-  });
-  it('rises in steps: posts, then a ridge pole, then a roof', () => {
-    const l = { x: spawn.x, z: spawn.z, heading: 0.5, progress: 0 }, keys = p => new Set(leantoParts(w.H, l, p).map(s => s.key));
-    expect(keys(0).size).toBe(0); expect([...keys(0.1)]).toEqual(['post']);
-    expect(keys(0.3).has('fork')).toBe(true); expect(keys(0.3).has('ridge')).toBe(false);
-    expect(keys(0.5).has('ridge')).toBe(true); expect(keys(0.5).has('roof')).toBe(false);
+describe('the drawing of a lean-to', () => {
+  it('rises part by part: two posts, a ridge pole, a sill, then the roof branches, then the fronds (the parts of game/leanto, 15 in all)', () => {
+    const l = { x: spawn.x, z: spawn.z, heading: 0.5, progress: 0 }, keys = k => new Set(leantoParts(w.H, l, k / 15).map(s => s.key));
+    expect(keys(0).size).toBe(0); expect([...keys(1)].sort()).toEqual(['fork', 'post']);
+    expect(keys(2).has('ridge')).toBe(false); expect(keys(3).has('ridge')).toBe(true); expect(keys(3).has('sill')).toBe(false); expect(keys(4).has('sill')).toBe(true); expect(keys(4).has('roof')).toBe(false); expect(keys(5).has('roof')).toBe(true);
     expect(leantoParts(w.H, l, 1).filter(s => s.key === 'roof').length).toBe(ROOF_N);
-    expect(leantoParts(w.H, l, 0.8).filter(s => s.key === 'roof').length).toBeLessThan(ROOF_N);
-    expect(leantoFronds(w.H, l, 0.8).length).toBe(0);   // the palm fronds come last
-    const n = [0.86, 0.9, 0.95, 1].map(p => leantoFronds(w.H, l, p).length);
-    expect(n[0]).toBeGreaterThan(0); expect(n[3]).toBe(FROND_N);
-    expect(n).toEqual([...n].sort((a, b) => a - b));   // one by one, never fewer
+    expect(leantoParts(w.H, l, 9 / 15).filter(s => s.key === 'roof').length).toBeLessThan(ROOF_N);
+    expect(leantoFronds(w.H, l, 10 / 15).length).toBe(0);   // the palm fronds come last
+    const n = [11, 12, 13, 14, 15].map(k => leantoFronds(w.H, l, k / 15).length);
+    expect(n).toEqual([1, 2, 3, 4, FROND_N]);   // one by one, never fewer
+    expect(PARTS.leanto.length).toBe(4 + ROOF_N + FROND_N);
   });
   it('lays the fronds on the roof, not above it (0.22.2), at every stage and heading, on flat and on real ground', () => {
     const flat = () => 0.3;
@@ -216,7 +153,7 @@ describe('building', () => {
       const fr = leantoFronds(H, l);
       expect(fr.length).toBe(FROND_N);
       for (const f of fr) {
-        expect(leantoFronds(H, l, 0.9 + 0.02 * f.k).some(g => g.k === f.k && g.pos.equals(f.pos) && g.pitch === f.pitch)).toBe(true);   // a frond does not move while the others are added
+        expect(leantoFronds(H, l, (11 + f.k) / 15).some(g => g.k === f.k && g.pos.equals(f.pos) && g.pitch === f.pitch)).toBe(true);   // a frond does not move while the others are added
         const r = (f.pos.x - l.x) * Math.cos(heading) - (f.pos.z - l.z) * Math.sin(heading), line = roofLine(H, l, r), prof = frondProfile(f.sx, -f.pitch);
         const gaps = prof.map(([u, v]) => v + f.slope * u);   // height above the slope line through the frond's base (the base is on the roof line, plus the gap and the layer lift)
         const lowest = Math.min(...gaps), highest = Math.max(...gaps);
@@ -297,16 +234,14 @@ describe('the flood and saving', () => {
     const h = at0(high); h.update(makeInput(), 0.1); expect(h.leantos.list.map(l => l.id)).toEqual([2]);
   });
   it('is saved: branches taken, branch piles, lean-tos with position, heading and progress', () => {
-    const g = withPiles(), input = makeInput({ big: true, yaw: 0.7 });
+    const g = createGame(w, spawn, { wood: { carried: [], piles: [{ ...P2(), kind: 'branch', logs: bids(0, 3) }] }, leantos: { list: [{ id: 0, x: spawn.x - 4, z: spawn.z, heading: 0.7, progress: 5 / 15 }], nextId: 1 } });
     g.wood.carried.push(all[30]); g.branches.take(all[30], g.clock.total);
-    run(g, input, 12);
     const s = JSON.parse(serialise(g.state()));
-    expect(s.branches.taken.length).toBe(1); expect(s.leantos.list[0]).toMatchObject({ heading: 0.7 }); expect(s.leantos.list[0].progress).toBeGreaterThan(0);
+    expect(s.branches.taken.length).toBe(1); expect(s.leantos.list[0]).toMatchObject({ heading: 0.7 }); expect(s.leantos.list[0].progress).toBeCloseTo(5 / 15, 9);
     expect(s.wood.piles.some(p => p.kind === 'branch')).toBe(true);
     const back = parseSave(serialise(g.state()), 1337), g2 = createGame(w, spawn, back);
     expect(g2.state()).toEqual(g.state());
     expect(g2.branches.onGround(all[30])).toBe(false);
-    expect(momentKey(g)).not.toBe(momentKey(withPiles()));
   });
   it('loads an older save without branches or lean-tos, and rejects wrong types', () => {
     const s = createGame(w, spawn).state(); delete s.branches; delete s.leantos;

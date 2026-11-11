@@ -20,7 +20,6 @@
  *             fibre (or a torch in hand), and the fire fed from the piles only when its fuel is nearly out, below FEED_BELOW (0.25 of the most it holds; 0.30.12 "Kindling", was 0.6). An ember still counts as a fire: he feeds it through the same player action and drills only when it has truly died. Since 0.29.12, while idle by day he also wakes a home ember he passes with one dry piece already carried; he never fetches wood or feeds flames by day.
  *   5 stores  by day (DAY_FROM 0.2 to EVENING): a nut husked to carry (NUT_WANT 2, game limits) and for fibre (the first tuft always, up to FIBRE_WANT 3 tufts when he is hungry
  *             enough to eat the nut, `huskWanted`), and wood to the pile at the fire spot, as above, then topped up to PILE_FULL (12) pieces, with the pile's own kind only.
- *             Driftwood and branches are never both piled there in piles of 6 or more (the arc would offer to build and not to light)
  *   6 idle    (0.28.2) by day (STROLL_FROM to STROLL_TO, `strollNow`, 9 times in 10) a STROLL on known ground instead of standing about: `strollKind` picks one of shore (the waterline:
  *             one to three stretches along it; dry washed-up driftwood within 8 m is picked up when an arm is free and the pile has room), river (to the water, fills empty shells,
  *             a drink if thirsty), palms (a round past a palm or two; husks a nut on the ground if the stores want one) or forest (a berry bush or two; a handful from one that bears
@@ -34,13 +33,13 @@
  *   errands (drink, eat, sleep, fire, stores, a search, a crab trip for food) go at the normal pace, and a run is never slowed. SITTING (input.sit, `sitKind`): on the ground, facing what he looks at (the fire within SIT_FIRE,
  *   else out to sea where the ground falls away, else the way he faces), in the sunset gaze, on an evening at the fire (EVENING to BED_FROM, with flames within SIT_FIRE: he walks to SIT_AT_FIRE m from it) and in the long rests by day (STROLL_FROM to GAZE_FROM).
  *   Any task but idling (and a walk) first gets him up (game/game: half a second). The game refuses a seat in water, on steep ground or a climbing route, with a torch or wood: he then stands. At night, once he may lie down, no rest comes first.
- * 0.29.3 "Homestead": HOME, a project that takes the morning's idle moments (`homeNext`, pure; part of the idle goal, at the amble): from the third day (HOME_DAY 2, two nights lived) with a camp (a fire of his, lit or burnt out, or the place he sleeps) he builds ONE lean-to and then
- *   its upgrades, walls (6 fronds), stone ring (8 stones), bed (4 branches and 4 fronds), through the very actions a player has (the arc's build / upgrade icon). A step of the project (a trip for up to three pieces,
- *   or the building) is what he does at an idle moment of the morning, between HOME_FROM 0.21 and HOME_TO 0.44 (0.29.4, was 0.38: mornings are for the house, a crab trip at low water comes first, the afternoon belongs to the tide and the crabs, the evening to the fire; every need
- *   and every errand comes first), and at most one piece of the home is finished a day (`builtDay`). The site (`leantoSites`, chosen once and kept, checked again when asked for and right before the building; 0.30.7 "Clearing": a lean-to that fits as the real one: its collision circles and keep-free region touch no trunk, boulder, crag or camp solid, the ground rules hold on a grid of 0.3 m, a straight line S-G-F-ring spot is walkable, the ring and the three upgrade piles have room, a way leads there from the fire; none that fits: he waits, `home-no-site`; a player's pair of piles gets the same check, `existingSite`): on known, dry, level ground at least SITE_HIGH (0.8 m) above the high-water line, 5 to 7.5 m from his home fire, the open side across
- *   from the fire (so the stone ring comes to stand about 5 m from it, not on it), preferring ground near fresh water he knows; the piles for the building (6 driftwood and 6 branches, within 2 m of each other) are laid there.
- *   Never a second lean-to: with one (also a player's) the project only adds the upgrades to it, and a half-built one is built on. Materials only from known ground, within HOME_MAX_COST of walking; piles for the upgrades lie
- *   beside the lean-to (fronds on one side, stones on the other, branches behind).
+ * 0.29.3 "Homestead", rewritten in 0.32 "Piece by piece": HOME, a project that takes the idle moments of the day (`homeNext`, pure; part of the idle goal, at the amble): from the third day (HOME_DAY 2, two nights lived) with a camp (a fire of his, lit or burnt out, or the place he sleeps) he builds ONE lean-to and then
+ *   its upgrades, walls (6 fronds), stone ring (8 stones), bed (4 branches and 4 fronds; the order HOME_ORDER), through the very actions a player has (the arc's 'buildHere', 'buildIn' and 'upgrade' icons): every visible part is one piece he has fetched. A UNIT of the project is one load (`homeGoal`): the next parts the site still needs in the order of game/leanto PARTS
+ *   (`remaining`, `loadOf`: up to three pieces of driftwood, branch and frond mixed, or two stones), fetched kind by kind straight into his arms (`fetchParts`, `collect`: from known ground within HOME_MAX_COST of walking, wet driftwood will do for a post, piles that are not part of his camp (`ownPile`: the fire's stock, what lies within `UP_NEAR` of a finished lean-to) are material too), walked to the site and built in, one press per piece (`buildPieces`: he kneels
+ *   PIECE_TIME seconds a piece). He keeps at it, unit after unit, as long as he finds material (from HOME_FROM 0.21 to HOME_TO 0.56, a little before the evening's chores begin at EVENING 0.6; a crab trip at low water comes first and every need and every errand breaks in; a unit that finds nothing for the first piece cools the project down, `noMaterial`, and the lack sends him exploring; the old limit of one piece
+ *   of the home a day is gone). A piece in his arms at the start of another goal goes the ordinary way (`handoff`: dry driftwood and branches to the fire's stock, wet wood to the tideline, fronds and stones laid where he stands): no building pile is laid at the site as a rule. The site (`leantoSites`, chosen once and kept, checked again when asked for and again by the game when the first piece is pressed; 0.30.7 "Clearing": a lean-to that fits as the real one: its collision circles and keep-free region touch no trunk, boulder, crag or camp solid, the ground rules hold on a grid of 0.3 m, a straight line S-G-F-ring spot is walkable, the ring and the three places round the shelter (`SURROUND` 2.1 m from its middle: both sides and behind) have room, a way leads there from the fire; none that fits: he waits, `home-no-site`):
+ *   on known, dry, level ground at least SITE_HIGH (0.8 m) above the high-water line, 5 to 7.5 m from his home fire, the open side a quarter turn from the line to the fire (so the stone ring comes to stand about 5 m from it, not on it), preferring ground near fresh water he knows. He stands where the middle of the site comes to lie SITE_AT behind him (game/leanto `standFor`), looks the way the site was validated (`headingWanted`, `inp.yaw`, `game.yaw`) and presses 'buildHere' with a post in his arms;
+ *   a site the game refuses though the check passed is not chosen again for SITE_BAD_DAYS days (`siteBad`). Never a second lean-to: a half-built one on known ground (his own or a player's) is built on, a finished one (also a player's) gets the upgrades; one on ground he does not know is none of his. Old building piles of a player are ordinary material.
  * 0.30.16 "Reach": the 220 m cap of the exploring reach is gone (`exploreReach`: 80 m + 15 m a day, up to the whole island; the island's edge and the way home before dark are the limits), and a trip may start from EXPLORE_EARLY (just after dawn)
  *   when `calm` (idleGoal: the home project has nothing to do today and no crab trip is possible or due: `crabDue`, pure); otherwise from EXPLORE_FROM as before.
  * 0.30.19 "Journey": now and then (about once every 5 to 7 days from day 4, `journeyGap` / `journeyOk`, pure; the PRNG of its own, `rngJourney`) he goes on a JOURNEY: out in the morning (JOURNEY_FROM to JOURNEY_TO), only when calm at home (the lean-to stands, the day's piece of the home is done, no crab trip
@@ -61,11 +60,11 @@
  *   and the margin, against EXPLORE_BACK; at the normal pace when it is late) to lay down what he carries at home. His own terrace and ordinary ground only: the finder `pathExplore` closes climbing routes (climb above EXPLORE_ROUTE) and steep ground (slope 0.45 and more), and a trip is only made from a place from which home can be reached that way.
  * 0.29.5 "Drying" (until 0.30.12; replaced in 0.30.13 "Tideline"): the camp's drying pile, its stock errand and the transfer to the fire's pile are gone. A pile of that time in an old save is an ordinary pile now.
  * 0.30.13 "Tideline": RESCUING WET WOOD. Wood in the strip between the tides never dries (game/wood: the sea covers it again and again) and a pile there is taken by the sea. On a beach he knows (a stroll's shore leg, the far end of an exploring trip, near or far from home), with
- *   nothing but wet driftwood (or nothing) under his arm, he takes up to three pieces of such wet wood from the strip within 8 m of where the leg ends (`pickUpWet`, `SRC.strip`) and carries them a few metres higher (`tideSpot`: ground TIDE_LAND high, 2 to 9 m away, a way of at most TIDE_COST s, TIDE_CAMP (11, so that no pile lands where the lean-to's site, its ring and its upgrade piles may come) m from the fire,
+ *   nothing but wet driftwood (or nothing) under his arm, he takes up to three pieces of such wet wood from the strip within 8 m of where the leg ends (`pickUpWet`, `SRC.strip`) and carries them a few metres higher (`tideSpot`: ground TIDE_LAND high, 2 to 9 m away, a way of at most TIDE_COST s, TIDE_CAMP (11, so that no pile lands where the lean-to's site and its ring may come) m from the fire,
  *   the lean-to and its site, TIDE_APART (3) m from other piles, CAMP_GAP kept by the game's lay) and lays them there (`layTideline`): a small pile at the beach edge, which dries where it lies (rain wets it again in the open). Later the stores and the evening fire fetch it like any pile that is not his own
  *   With no spot at hand (he stands in the camp) wet wood in his arms goes to the nearest known strip (`stripPoint`) and is laid up the beach there, never as a pile at the camp. A pile is a stop of a fetch only with empty arms (`selectStops`: the game offers no pickup from a pile with wood under his arm).
- *   THE DAILY ROUND (`tideRound`, `rngTide`, TIDE_ROUND_*): once a day, by day (TIDE_ROUND_FROM 0.22 to TIDE_ROUND_TO 0.5, chance 0.85), when calm (idle, thirst below EXPLORE_THIRST, hunger below EXPLORE_HUNGER, no crab trip possible, and after the morning's home work, which comes first in `idleGoal`), he walks to the nearest strip he knows (`tideTarget`: wet wood on known ground, a way of at most TIDE_ROUND_COST 150 s) and is home before dark (`exploreLate`, like an exploring trip); up to three pieces, and a second load when more lies there and there is time; to the lean-to site while `wetForSite` holds, else to the beach edge. FIREWOOD: a dry pile at a beach edge that is not his own counts TIDE_BONUS (0.7) times its walking cost against loose wood and other piles (`nearestBy`, `selectStops`).
- *   (`pileFinds`: its top pieces must be dry). While the lean-to still needs driftwood at its site (`wetForSite`) wet wood goes there instead, as timber. Wet wood in his arms at the start of another task is laid at such a spot too (`handoff`, `deliver`), else where he stands (never in the strip); it never goes on the fire's pile.
+ *   THE DAILY ROUND (`tideRound`, `rngTide`, TIDE_ROUND_*): once a day, by day (TIDE_ROUND_FROM 0.22 to TIDE_ROUND_TO 0.5, chance 0.85), when calm (idle, thirst below EXPLORE_THIRST, hunger below EXPLORE_HUNGER, no crab trip possible, and after the morning's home work, which comes first in `idleGoal`), he walks to the nearest strip he knows (`tideTarget`: wet wood on known ground, a way of at most TIDE_ROUND_COST 150 s) and is home before dark (`exploreLate`, like an exploring trip); up to three pieces, and a second load when more lies there and there is time; to the beach edge. FIREWOOD: a dry pile at a beach edge that is not his own counts TIDE_BONUS (0.7) times its walking cost against loose wood and other piles (`nearestBy`, `selectStops`).
+ *   (`pileFinds`: its top pieces must be dry). Wet wood in his arms at the start of another task is laid at such a spot too (`handoff`, `deliver`), else where he stands (never in the strip); it never goes on the fire's pile. (Until 0.31 wet driftwood went to the lean-to site as timber, `wetForSite`; since 0.32 wet driftwood is a post like any other when he builds with it.)
  * 0.30.17 "Spear": THE SPEAR AND FISHING. He makes ONE spear, once (`spearMakeOk`, `makeSpearTrip`): at an idle moment by day (DAY_FROM to EVENING, thirst and hunger low) when he has none at all, his lean-to stands (or it is day SPEAR_DAY 6: the home comes first, the spear takes a branch the lean-to needs) and a loose branch and a loose stone lie within SPEAR_RANGE (60 m) of home on known ground, he takes the nearest
  *   branch up, goes to the nearest stone and presses the arc's 'makeSpear' (10 s of kneeling); the spear is then laid at the camp. It is KEPT at the camp: `spearSpot`, beside the lean-to (3.2 to 4.8 m round its middle) or round the fire when there is no lean-to (2.6 to 4.2 m), the nearest spot to the fire spot where
  *   a body keeps CAMP_GAP from every solid (`gapFree`), outside the lean-to's keep-free region and on open known ground; the game keeps new piles 1.1 m or more from a lying spear. He fetches it only to fish (`fetchSpear`: walks to where it lies, 'takeSpear') and lays it back (`returnSpear`: 'laySpear')
@@ -88,8 +87,8 @@
  * A higher need breaks into a lower goal (checked every CHECK seconds), except while an actual material errand is under way: it delivers first. Very thirsty or very hungry needs still break in; a goal keeps going otherwise and a failing one is left alone for a while (`cool`; 0.28.2: 10 to 40 s, a failed
  * light 100 s, or 300 s when one tuft of fibre is left; a failed try keeps the last tuft).
  * 0.30.14 "Torch": after dusk (isNight), standing beside a fire with flames (at least TORCH_FUEL of fuel), empty-handed, a trip of more than TORCH_TRIP (15 m) to drink, to bed or to look for food starts with a torch from the fire (`torchFor`: the player's action 'torch', the only time the torch is in `ALLOWED`); not in rain, not with wood in his arms (so never on a wood trip), not when the way leads through water deeper than DOUSE_DEPTH. On arrival it is stuck in the ground (the game does it for a drink and for sleep, `plantTorch` for food) and burns out there. No new text.
- * 0.30.9 "Errands": the small stock errand gets +HANDOFF_SECS once per goal and takes its wet load to the lean-to site while `wetForSite` holds (else, since 0.30.13, the tideline); the upgrade piles search the whole ring finely (`dest()` of `homeNeed`); a failed roast ends the eat goal as failed when hunger is too low for other food.
- * Standing points (0.30.3 "Routes"): every errand at a pile, a fire or a building site goes to a spot where the game really offers the action for that object (game/stand, `goStand`); none reachable is an honest false, no stall. 0.30.7: the walk to a standing point has `settle` (STAND_SETTLE 3 s): a step of a coarse tick is longer than the 0.12 m window the movement takes for arrived, so he could swing across the point for ever; after 3 s within 0.3 m the arrival test (the action is offered at his real place) decides. Frond and stone piles cannot be added to (wider than the join distance): their next pile is a pile of its own on the ring UP_AT round the lean-to. Stock for the next fire never feeds a burning fire.
+ * 0.30.9 "Errands": the small stock errand gets +HANDOFF_SECS once per goal (0.30.13: its wet load goes to the tideline; the lean-to site and the upgrade piles it also served are gone since 0.32); a failed roast ends the eat goal as failed when hunger is too low for other food.
+ * Standing points (0.30.3 "Routes"): every errand at a pile, a fire or a building site goes to a spot where the game really offers the action for that object (game/stand, `goStand`); none reachable is an honest false, no stall. 0.30.7: the walk to a standing point has `settle` (STAND_SETTLE 3 s): a step of a coarse tick is longer than the 0.12 m window the movement takes for arrived, so he could swing across the point for ever; after 3 s within 0.3 m the arrival test (the action is offered at his real place) decides. Frond and stone piles cannot be added to (wider than the join distance): the next one is a pile of its own. Stock for the next fire never feeds a burning fire.
  * Walking a path (0.30.3 "Routes"): `walk` is a thin wrapper over game/route, the one follower: it pulls the string over the next route points (he heads for the furthest of the next four he can see by the rule of game/walk),
  * closes a segment he made no progress on for 0.7 s and plans again (at most three times: then `stats.stuck` counts each such stall, an event 'stuck' names it, and the walk fails), and reports no way at all as `stats.nopath` and an event 'nopath'.
  * There are no bans and no hand steering. He walks; only very thirsty (thirst >= 0.95) and far (20 m or more) does he run.
@@ -105,7 +104,7 @@
  * sitKind(s) -> 'gaze' | 'fire' | 'rest' | null   pure (0.29.2): whether he sits while he rests (s: time, long, fireNear, gazing)
  * DRY_AT, TIDE_LAND, TIDE_NEAR, TIDE_CAMP, TIDE_APART, TIDE_JOIN_MAX, TIDE_COST, STOCK_MAX_COST, TORCH_TRIP, TORCH_FUEL   (0.30.13 / 0.30.14) the numbers of the tideline and of the torch
  * axeNext(s) -> bool   pure (0.31): does the axe project have its turn now (s: day, time, done (the home is complete), builtDay, axeDay, thirst, hunger, cool)
- * homeNext(s) -> 'leanto' | 'walls' | 'ring' | 'bed' | null   pure (0.29.3): the next piece of his home now (s: day, time, fire (he has a camp), lean ('none' | 'half' | 'done' | 'other'), up {walls, ring, bed: 0..1}, builtDay, cool)
+ * homeNext(s) -> 'leanto' | 'walls' | 'ring' | 'bed' | null   pure (0.29.3): the next piece of his home now (s: day, time, fire (he has a camp), lean ('none' | 'half' | 'done' | 'other'), up {walls, ring, bed: 0..1}, cool); HOME_FROM, HOME_TO (0.32: until the afternoon), AXE_TO (the axe's morning window)
  * SET_SPAN, HANDOFF_SECS   (0.30.4) the reach of a set of pieces to fetch (m of walking beyond the nearest) and the time a goal gets on top of its limit for the handoff
  * RANK   the priority of each goal (lower wins)
  * errandPreempts(current, next, errand, thirst, hunger) -> bool  0.29.8 preemption rule, pure
@@ -128,15 +127,16 @@
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
  *   mind.tideSpot()  the spot just above the high-water line where wet wood would be laid from where he stands now, { x, z, cost } or null (for the tests)
  *   mind.strollCands(centre?, range?)  { shore, river, palms, forest, crabs: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
- *   mind.homePlan()   { step (homeNext without the time window), need (what the next unit does: { kind, want } a trip for pieces of that kind, { build } the building, or null), site } for the tests
- *   mind.leantoSites(fire)  the places for the lean-to round a fire, best first: [{ x, z, heading, score, r, water, geo }]; mind.siteReason(c, fire, ignore?) -> null | 'ground' | 'footprint' | 'keep' | 'solid' | 'approach' | 'room' | 'route' (0.30.7: why a lean-to { x, z, heading } does not fit there; ignore: the piles the building consumes); mind.existingSite(fire) -> { ...siteFor, heading } | null; mind.stats.home { units, trips, builds, refused, noMaterial }
+ *   mind.homePlan()   { step (homeNext without the time window), work ({ what, lt } a half-built lean-to or an upgrade of a finished one, { what: 'leanto', lt: null, site } a new lean-to, or null), load (the kinds of the next load, in order, or null), site (the chosen site), snap } for the tests
+ *   mind.leantoSites(fire)  the places for the lean-to round a fire, best first: [{ x, z, heading, score, r, water, geo }]; mind.siteReason(c, fire) -> null | 'ground' | 'footprint' | 'keep' | 'solid' | 'approach' | 'room' | 'route' (0.30.7: why a lean-to { x, z, heading } does not fit there); mind.stats.home { units, trips, builds (pieces pressed), refused, noMaterial }
  *   mind.materialFind(kind, range?)  nearest eligible loose material or abandoned pile by path cost (test helper); mind.timberPlan(src, n, opts?)  the set `selectStops` would fetch now, farthest first (test helper)
  *
  * Everything he decides from comes from the game objects; the only chance is a PRNG seeded from the island (core/noise), so a run is repeatable.
  *
- * 0.30.10 "Walls": he is never boxed in by his own camp. Every pile he lays (through the game's lay, `wood.drop`), the pile places of the upgrades (`homeNeed`, a gap from every pile and fire place instead of the 1.5 m from other piles), the tideline spot (`tideSpot`) and the leftovers of a build keep CAMP_GAP of walking room from the other solids (game/obstacles `gapFree`), so no ring of solids can close round him. The two building piles stand PAIR_HALF (0.925) either side of the site, 1.85 m apart (were 1.3 to 1.4), and the second is laid from beside the first (`siteDest`), so the game puts it 1.85 to 2 m from it: the gap needs 1.8 m, the arc's build pair allows 2 m.
+ * 0.30.10 "Walls": he is never boxed in by his own camp. Every pile he lays (through the game's lay, `wood.drop`), the pile places of the upgrades (`homeNeed`, a gap from every pile and fire place instead of the 1.5 m from other piles), the tideline spot (`tideSpot`) and the leftovers of a build keep CAMP_GAP of walking room from the other solids (game/obstacles `gapFree`), so no ring of solids can close round him. (0.32: the building piles, their pair and the pile places of the upgrades are gone.)
  *
- * Depends on: game/felled (treeId, treeInfo, trunkRadius ...), game/axe and game/logs (through game), game/path, game/route, game/stand (through game.stand), game/weather (through game.weather: the forecast and the rain of a journey), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (siteFor, UPGRADES), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
+ * 0.32 "Piece by piece": the shelter is built from pieces he holds (game/leanto, game/game kinds 'buildHere', 'buildIn', 'upgrade'), not from piles; the home project above (HOME_FROM to HOME_TO, a load of up to three pieces at a time, built in piece by piece) replaces the pile pair, the upgrade piles, `wetForSite`, the one-piece-a-day limit and the adopting of a player's pair of piles.
+ * Depends on: game/felled (treeId, treeInfo, trunkRadius ...), game/axe and game/logs (through game), game/path, game/route, game/stand (through game.stand), game/weather (through game.weather: the forecast and the rain of a journey), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (PARTS, built, nextKind, standFor, UPGRADES, ringCentre, keepFree), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -150,7 +150,7 @@ import { freshWater } from './water.js';
 import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX, PILE_FRONT, pileSolidRadius } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius, isGiant, treeInfo } from './felled.js';
 import { FIRE_MIN, FUEL_MAX, TORCH_DRY, BURN, DOUSE_DEPTH } from './fire.js';
-import { ringCentre, siteFor, keepFree, KEEP, UPGRADES, UP_NEAR, NEED, RING_AT, RING_R, RING_NOFIRE, paidSteps } from './leanto.js';
+import { ringCentre, keepFree, KEEP, UPGRADES, RING_AT, RING_R, RING_NOFIRE, partsOf, built, nextKind, standFor, REACH as LEANTO_REACH } from './leanto.js';
 import { DAWN as SLEEP_DAWN, isNight } from './sleep.js';
 import { seaLevel } from './tide.js';
 import { EAT_AT } from './shells.js';
@@ -170,10 +170,10 @@ export const SIT_FIRE = 3.5, SIT_AT_FIRE = 1.8;   // 0.29.2 "Amble": he sits at 
 export const LINGER_MIN = 5, LINGER_MAX = 12, PAUSE_CHANCE = 0.45, PAUSE_MIN = 2, PAUSE_MAX = 6;
 export const STROLL_KINDS = ['shore', 'river', 'palms', 'forest', 'crabs'], STROLL_WEIGHT = { shore: 3, river: 2, palms: 2, forest: 2, crabs: 12 };   // 0.29.1: crabs, only at low water in the afternoon, so when it is possible it is the usual choice (0.29.2: weight 12, was 6, and the window opens at 0.38, was 0.42: at the amble each stroll takes half as long again, so fewer fitted into the window)
 export const CRAB_TIDE = -0.2, CRAB_FROM = 0.38, CRAB_TO = 0.66, CRAB_FOOD_TO = 0.8, CRAB_DIGS = 4, CRAB_WANT = 1, CRAB_ROAST_HUNGER = 0.2, CRAB_SEEK = 10, NUT_FAR = 50, CRAB_LIMIT = 420;   // 0.29.1 "Low water": crab trips
-export const HOME_DAY = 2, HOME_FROM = 0.21, HOME_TO = 0.44, HOME_LIMIT = 480, HOME_MAX_COST = 50, HOME_ORDER = ['walls', 'ring', 'bed'];   // 0.29.3 "Homestead": he builds his home from day 2 (the third day), in the morning (0.29.4: until 0.44, was 0.38; a crab trip comes first), one piece a day
+export const HOME_DAY = 2, HOME_FROM = 0.21, HOME_TO = 0.56, AXE_TO = 0.44, HOME_LIMIT = 480, HOME_MAX_COST = 50, HOME_ORDER = ['walls', 'ring', 'bed'];   // 0.29.3 "Homestead": he builds his home from day 2 (the third day); 0.32 "Piece by piece": from the morning (HOME_FROM) to HOME_TO (a little before the evening's chores begin, EVENING 0.6), piece after piece while he finds material, no limit of a piece a day; the axe keeps the old morning window (HOME_FROM to AXE_TO). A crab trip at low water comes first
 // 0.31 "Axe": once the home is complete (lean-to, walls, ring, bed) he makes ONE axe and then fells at most one tree a morning (the home's window): first every tree whose trunk stands within AXE_CLEAR_R of the lean-to's middle, nearest first, then, while fewer than AXE_LOGS logs are stored, the nearest trees just beyond it (up to AXE_OUT_R)
 export const AXE_CLEAR_R = 10, AXE_OUT_R = 32, AXE_LOGS = 12, AXE_LIMIT = 540, AXE_RANGE = 60, AXE_FIBRE = 2, AXE_THIRST = 0.25, AXE_HUNGER = 0.3, AXE_RETRY_DAYS = 6, LOG_RING = [11.6, 12.1, 12.6];   // a tree he cannot reach is asked again after AXE_RETRY_DAYS; the log piles stand 11.6 to 12.6 m from the lean-to's middle
-export const SITE_RINGS = [5, 6.2, 7.5], SITE_HIGH = 0.8, SITE_LEVEL = 0.3, SITE_SLOPE = 0.25;   // the lean-to's site: 4 to 7 m from the home fire, 0.8 m above the high-water line (the sea stands at 0 at high water), the footprint level within 0.3 m
+export const SITE_RINGS = [5, 6.2, 7.5], SITE_HIGH = 0.8, SITE_LEVEL = 0.3, SITE_SLOPE = 0.25, SURROUND = 2.1, UP_NEAR = 4;   // UP_NEAR: the camp round a finished lean-to (the piles within it are his own, `ownPile`)   // the lean-to's site: 4 to 7 m from the home fire, 0.8 m above the high-water line (the sea stands at 0 at high water), the footprint level within 0.3 m
 // 0.29.4 "Wander": now and then, by day and when nothing presses, he goes exploring to the edge of what he knows, on his own terrace, and is home well before dark
 export const EXPLORE_FROM = 0.2, EXPLORE_TO = 0.52, EXPLORE_BACK = 0.6, EXPLORE_MARGIN = 0.012, EXPLORE_DETOUR = 1.5, EXPLORE_SPARE = 45, EXPLORE_LIMIT = 900, EXPLORE_ROUTE = 0.12;   // starts between FROM and TO, is home by BACK (where the evening's chores begin), with a margin; ground with a climbing route of more than EXPLORE_ROUTE is closed
 export const EXPLORE_THIRST = 0.25, EXPLORE_HUNGER = 0.3, EXPLORE_GAP = 2, EXPLORE_CHANCE = 0.3, EXPLORE_MISSING_CHANCE = 0.8, LACK_DAYS = 2;   // nothing urgent; every EXPLORE_GAP-th day, or every day when something is missing at home
@@ -192,14 +192,12 @@ export const DRY_AT = TORCH_DRY, TIDE_LAND = [0.15, 0.8], TIDE_NEAR = [2, 9], TI
 export const TIDE_ROUND_FROM = 0.22, TIDE_ROUND_TO = 0.5, TIDE_ROUND_CHANCE = 0.85, TIDE_ROUND_COST = 150, TIDE_ROUND_RANGE = 120, TIDE_BONUS = 0.7;
 export const TORCH_TRIP = 15, TORCH_FUEL = 2 * BURN;
 export const SET_SPAN = 45, HANDOFF_SECS = 150, HANDOFF_MAX_COST = 150;   // 0.30.4 "Timber": a set of pieces to fetch reaches at most SET_SPAN m of walking beyond the nearest; a goal gets HANDOFF_SECS more on top of its limit for bringing the wood in his arms to camp first, and a camp farther than HANDOFF_MAX_COST of walking is out of reach for it (the wood is laid down where he stands)   // 0.30.4 "Timber": the time a goal gets on top of its limit for bringing the wood in his arms to camp first
-export const PAIR_HALF = 0.925;   // 0.30.10: the two building piles stand 1.85 m apart (their solids 0.55 m apart: the camp's spacing rule needs 0.5 (CAMP_GAP), the arc's build pair 2 m at most; it was 1.3 to 1.4)
-export const UP_AT = 2.1;   // 0.30.3 rule (a): the piles of the upgrades lie this far from the lean-to's middle, beside its keep-free region (a pile's solid is 0.65) and within UP_NEAR (4, 0.30.10; the ring of piles of a kind searches UP_AT to UP_AT + 1.2)
 // 0.30.17 "Spear": making the one spear (a branch and a stone at hand), fishing for food (flames burning) and as an afternoon pastime, the spear kept at the camp
 export const SPEAR_DAY = 6, SPEAR_RANGE = 60, SPEAR_LIMIT = 300, FISH_FROM = 0.42, FISH_TO = 0.6, FISH_FOOD_TO = 0.8, FISH_IDLE_CHANCE = 0.5, FISH_THIRST = 0.3, FISH_HUNGER = 0.35, FISH_RANGE = 80, FISH_TRIES = 8, FISH_WANT = 1, FISH_LIMIT = 420, FISH_EXTRA = 20;   // FISH_EXTRA: seconds a fish costs on top of the walk when it is weighed against a nut (the tries and the roast)
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
 const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, axe: 300, explore: 600, fish: 240, spear: 300, journey: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
-const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light', 'build', 'upgrade', 'torch', 'makeSpear', 'takeSpear', 'laySpear', 'fish', 'makeAxe', 'takeAxe', 'layAxe', 'fell'];   // the kinds of the arc / ring he ever chooses (the torch only from a fire, `torchFor`, 0.30.14); build and upgrade only in the home project (0.29.3)
+const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light', 'buildHere', 'buildIn', 'upgrade', 'torch', 'makeSpear', 'takeSpear', 'laySpear', 'fish', 'makeAxe', 'takeAxe', 'layAxe', 'fell'];   // the kinds of the arc / ring he ever chooses (the torch only from a fire, `torchFor`, 0.30.14); buildHere, buildIn and upgrade only in the home project (0.29.3, 0.32)
 
 export function fireStep(s) {
   const t = s.time;
@@ -227,10 +225,10 @@ function crabTripWhy(s, food) {
 }
 
 /** 0.29.3 "Homestead": the next piece of his home (pure). s: { day, time, fire (he has a camp: a fire of his, lit or burnt out, or the place he sleeps), lean ('none': no lean-to at all, 'half': one is half built on ground he knows, 'done': his home is a
- *  finished lean-to, 'other': one exists he cannot use), up ({walls, ring, bed}: progress 0..1 of the finished lean-to's upgrades), builtDay (the day something was last finished), cool }. By day (HOME_FROM to HOME_TO), from day HOME_DAY, at most one
- *  piece finished a day. Returns 'leanto' (build it, or build on), else the first unfinished upgrade in HOME_ORDER (walls, ring, bed), else null. */
+ *  finished lean-to, 'other': one exists he cannot use), up ({walls, ring, bed}: progress 0..1 of the finished lean-to's upgrades), cool }. By day (HOME_FROM to HOME_TO), from day HOME_DAY, as often as he finds material (0.32: the limit of one piece finished a day is gone; he keeps
+ *  building while the project is not cooling). Returns 'leanto' (build it, or build on), else the first unfinished upgrade in HOME_ORDER (walls, ring, bed), else null. */
 export function homeNext(s) {
-  if ((s.cool && s.cool.home) || !(s.time >= HOME_FROM && s.time < HOME_TO) || s.day < HOME_DAY || s.builtDay === s.day) return null;
+  if ((s.cool && s.cool.home) || !(s.time >= HOME_FROM && s.time < HOME_TO) || s.day < HOME_DAY) return null;
   if (s.lean === 'half') return 'leanto';
   if (s.lean === 'none') return s.fire ? 'leanto' : null;
   if (s.lean !== 'done') return null;
@@ -240,7 +238,7 @@ export function homeNext(s) {
 /** 0.31 "Axe": does the axe project have its turn now (pure)? His home is complete (s.done: lean-to, walls, ring and bed), the day is from HOME_DAY, it is the home's morning window (HOME_FROM to HOME_TO), no piece of the home was finished today and no unit of the axe's work was done today (one tree, one log, or the axe itself a day),
  *  nothing presses (thirst under AXE_THIRST, hunger under AXE_HUNGER) and it is not cooling. s: { day, time, done, builtDay, axeDay, thirst, hunger, cool }. */
 export function axeNext(s) {
-  if (!s.done || (s.cool && s.cool.axe) || !(s.time >= HOME_FROM && s.time < HOME_TO) || s.day < HOME_DAY || s.builtDay === s.day || s.axeDay === s.day) return false;
+  if (!s.done || (s.cool && s.cool.axe) || !(s.time >= HOME_FROM && s.time < AXE_TO) || s.day < HOME_DAY || s.builtDay === s.day || s.axeDay === s.day) return false;
   return !(s.thirst >= AXE_THIRST || s.hunger >= AXE_HUNGER);
 }
 
@@ -466,8 +464,9 @@ export function createMind(world, game, opts = {}) {
   const pileKind = kind => kind === 'drift' || kind === 'timber' ? 'driftwood' : kind;
   const ownPile = q => {
     const fs = fireSpot();
-    return firePiles(fs).includes(q) || (proj.site && Math.hypot(q.x - proj.site.x, q.z - proj.site.z) <= 2.2)
-      || game.leantos.list.some(l => Math.hypot(q.x - l.x, q.z - l.z) <= UP_NEAR)
+    const rc = ringMid();   // 0.32: piles beside a lean-to that is still a site are no longer building piles, just material (a player's old pair of piles, a load laid down by the handoff); the piles of his camp are his own: the fire's stock (and the aside piles of the stone ring), whatever lies within UP_NEAR of a finished lean-to (the overflow of the stock: fetching it would only move it about), and a journey's camp pile
+    return firePiles(fs).includes(q) || (!!rc && isFuel(q) && dist(q, rc) <= ASIDE_RING + 0.5)
+      || game.leantos.list.some(l => l.progress >= 1 && Math.hypot(q.x - l.x, q.z - l.z) <= UP_NEAR)
       || (!!journey && !!journey.camp && Math.hypot(q.x - journey.camp.x, q.z - journey.camp.z) <= 2.6);   // 0.30.19: the camp's pile on a journey is not wood to fetch
   };
   const pileFinds = (kind, x, z, r) => W.piles.filter(q => q.kind === pileKind(kind) && q.logs.length && inside(q.x, q.z) && !ownPile(q) && !isBad(kind, q) && Math.hypot(q.x - x, q.z - z) <= r)
@@ -1014,7 +1013,7 @@ export function createMind(world, game, opts = {}) {
     if (picked) { const n = Math.min(3, W.carried.length); if (src === 'strip') stats.timber.wetLoads[n]++; else stats.timber.loads[n]++; }
     return picked;
   }
-  let tag = null, owed = null;   // tag: where the load in his arms is for ({ kind: 'fire' | 'home' | 'tide', dest, ids }); owed: wood an emergency made him lay down away from camp ({ ids, t })
+  let tag = null, owed = null;   // tag: where the load in his arms is for ({ kind: 'fire' | 'tide', dest, ids }); owed: wood an emergency made him lay down away from camp ({ ids, t })
   const TAG_SECS = 8;   // a pickup is under way (or just made) this long: the piece that comes into his arms is for the tag's purpose though it is not noted yet
   const validTag = () => {
     const all = [...W.carried, ...W.stones];
@@ -1023,16 +1022,16 @@ export function createMind(world, game, opts = {}) {
     return all.every(l => tag.ids.has(l.id)) ? tag : null;
   };
   const setTag = (kind, dest = null) => { tag = { kind, dest, until: now + TAG_SECS, ids: new Set([...W.carried, ...W.stones].map(l => l.id)) }; };
-  // fetch up to three pieces of one kind (stones: two) and bring them to dest (fire: feed it first, then lay down); maxCost: only pieces within that walk (0.29.3, the home project); tagKind: 'fire' or 'home' (what the load is for)
-  function* gather(kind, dest, want, maxCost = Infinity, src = kind, tagKind = 'fire') {
+  // fetch up to three pieces of one kind (stones: two) and bring them to dest (fire: feed it first, then lay down); maxCost: only pieces within that walk
+  function* gather(kind, dest, want, maxCost = Infinity) {
     return yield* errand(function* () {
     const cap = kind === 'stone' ? STONE_MAX : CARRY_MAX, pk = kind === 'drift' ? 'driftwood' : kind, mine = () => kind === 'stone' ? W.stones.length : W.carried.filter(l => kindOf(l) === pk).length;   // mine: pieces of the wanted kind in his arms (another piece lying close by may be the one the ring offers)
     const ck = carriedKind();
-    if (ck && (ck !== kind || (kind === 'drift' && src !== 'timber' && wetCarried()))) yield* handoff('gather');   // 0.30.4: another kind (or wet wood for the fire's stock) goes to its own pile first
-    yield* collect(src, {
-      goal: Math.min(cap, want), have: mine, maxCost, think: kind === 'drift' || kind === 'branch' ? (tagKind === 'home' ? 'homeWoodIntent' : 'woodIntent') : null,
+    if (ck && (ck !== kind || (kind === 'drift' && wetCarried()))) yield* handoff('gather');   // 0.30.4: another kind (or wet wood for the fire's stock) goes to its own pile first
+    yield* collect(kind, {
+      goal: Math.min(cap, want), have: mine, maxCost, think: kind === 'drift' || kind === 'branch' ? 'woodIntent' : null,
       wanted: t => o => !!o.thing && (t.pile ? o.thing.kind === 'pile' && o.thing.pile === t.pile : o.thing.kind === 'log' && kindOf(o.thing.log) === pk),
-      tag: tagKind, dest,
+      tag: 'fire', dest,
     });
     if (!W.load()) return false;
     const d = dest(); if (!d) return false;
@@ -1042,24 +1041,15 @@ export function createMind(world, game, opts = {}) {
     return true;
     });
   }
-  // wood for the fire: onto the biggest pile of the same kind at the fire spot (laying down within a metre joins a pile), else a new pile there. The kind of the biggest pile
-  // goes first, so a pile of branches and a pile of driftwood do not both grow to 6 (the arc would then offer to build, not to light)
-  const pairNear = (fs, pk) => firePiles(fs).some(q => q.kind !== pk && q.logs.length >= NEED);   // a pile of the other kind with 6 or more pieces stands at the fire (two such piles within 2 m make the arc offer to build)
-  function fireStockDest(fs) {   // one actual dry-driftwood destination: its pile, or an exact first-pile drop at the fire; never a second build-sized kind
-    const drift = firePiles(fs).filter(q => q.kind === 'driftwood'), pile = drift.filter(q => q.logs.length < PILE_FULL).sort((a, b) => b.logs.length - a.logs.length)[0];
-    if (pile) return { x: pile.x, z: pile.z, pile, room: pairNear(fs, 'driftwood') ? Math.max(0, NEED - 1 - pile.logs.length) : PILE_FULL - pile.logs.length };
-    if (drift.length || pairNear(fs, 'driftwood')) return null;
-    return { ...fs, exact: true, stock: true, pile: null, room: PILE_FULL };
-  }
+  // wood for the fire: onto the biggest pile of the same kind at the fire spot (laying down within a metre joins a pile), else a new pile there; the kind of the biggest pile goes first
   function* gatherWood() {
     const h = homeSpot(), fs = fireSpot(h), best = bestPile(fs), st = best ? fuelOfPile(best) : 0;
-    const topUp = !!best && st >= WOOD_WANT;   // the evening's wood is there: only fill the pile up, and only with its own kind (two piles of 6 or more would make the arc offer to build)
+    const topUp = !!best && st >= WOOD_WANT;   // the evening's wood is there: only fill the pile up, and only with its own kind
     const order = best && best.kind === 'branch' ? ['branch', 'drift'] : ['drift', 'branch'];
     if (wetCarried()) yield* layTideline(true);   // wet wood from a stroll is not the fire's
     for (const kind of topUp ? order.slice(0, 1) : order) {
-      const pk = kind === 'branch' ? 'branch' : 'driftwood', mine = firePiles(fs).filter(x => x.kind === pk).sort((a, b) => b.logs.length - a.logs.length)[0];
-      let want = topUp ? Math.max(1, PILE_FULL - best.logs.length) : Math.max(1, Math.ceil((WOOD_WANT - st) / (kind === 'branch' ? 0.5 : 1)));
-      if (pairNear(fs, pk)) { want = Math.min(want, NEED - 1 - (mine ? mine.logs.length : 0)); if (want < 1) continue; }   // 0.29.3: the other kind is already 6 or more: this pile stays below 6, else the arc offers to build and not to light
+      const pk = kind === 'branch' ? 'branch' : 'driftwood';
+      const want = topUp ? Math.max(1, PILE_FULL - best.logs.length) : Math.max(1, Math.ceil((WOOD_WANT - st) / (kind === 'branch' ? 0.5 : 1)));
       const dest = () => {
         const q = firePiles(fs).filter(x => x.kind === pk && x.logs.length < 12).sort((a, b) => b.logs.length - a.logs.length)[0];
         if (q) return { x: q.x, z: q.z, pile: q, room: PILE_FULL - q.logs.length };
@@ -1071,13 +1061,6 @@ export function createMind(world, game, opts = {}) {
     return false;
   }
 
-  function* breakPair(pile) {   // takes up to three pieces from the other pile of the pair under his arm (a pile of 6 or more becomes smaller), then lights
-    const other = firePiles(fireSpot()).filter(q => q !== pile && q.logs.length >= NEED).sort((a, b) => fuelOfPile(a) - fuelOfPile(b))[0]; if (!other) return false;
-    const mine = o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === other;
-    if (!(yield* goStand('take', other)) || !pressKind(['pickup'], mine)) return false;
-    yield* waitIdle(); ev('pair-broken');
-    return (yield* goStand('light', pile)) && !!pressKind(['light']);
-  }
   function* lightFire() {
     const fs = fireSpot(), h = homeSpot();
     if (fireAt(fs)) return true;
@@ -1090,11 +1073,7 @@ export function createMind(world, game, opts = {}) {
     const logs0 = pile.logs.slice();
     for (let k = 0; k < 3 && (game.fibre.carried || game.fire.torch) && !fireAt(fs); k++) {
       // 0.30.3: to a spot where the arc really offers to light THIS pile (not a neighbour, not the lean-to's upgrade icon)
-      if (!(yield* goStand('light', pile)) || !pressKind(['light'])) {
-        let done = false;
-        if (siteFor(W.piles, pile)) done = yield* breakPair(pile);   // two piles of 6 or more at the fire (a legacy of the piles): the arc offers to build and not to light
-        if (!done) { stats.lightRefused++; ev('light-not-offered', { arc: game.action().options.map(o => o.kind).join() }); cool('light'); return false; }
-      }
+      if (!(yield* goStand('light', pile)) || !pressKind(['light'])) { stats.lightRefused++; ev('light-not-offered', { arc: game.action().options.map(o => o.kind).join() }); cool('light'); return false; }
       yield* waitActs(30); yield* waitIdle();
       if (!fireAt(fs) && !game.fire.torch && game.fibre.carried <= 1) break;   // a try that failed: the last tuft is kept for another time
     }
@@ -1157,10 +1136,10 @@ export function createMind(world, game, opts = {}) {
     return true;
   }
 
-  // ---------- his home (0.29.3 "Homestead") ----------
-  // One lean-to at his camp, then its upgrades, by day, one piece a day, through the same build / upgrade actions a player has. Materials only from known ground (`scan`).
-  const pileSum = (kind, x, z, r) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - x, q.z - z) <= r).reduce((n, q) => n + q.logs.length, 0);
-  const bigPile = (kind, x, z, r) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - x, q.z - z) <= r).sort((a, b) => b.logs.length - a.logs.length)[0] || null;
+  // ---------- his home (0.29.3 "Homestead", rewritten in 0.32 "Piece by piece") ----------
+  // One lean-to at his camp, then its upgrades, by day, through the same actions a player has: pieces in his arms (driftwood, branches, fronds) or hands (stones) are built into the site one by one (the arc's 'buildHere', 'buildIn', 'upgrade').
+  // A unit of the project is one load: the next parts the site still needs (`remaining`, at most three pieces, two stones), fetched straight into his arms from known ground, then built in. He keeps at it, unit after unit, while he finds material (a
+  // unit with nothing to be found cools the project down) and nothing calls him away. Materials only from known ground, within HOME_MAX_COST of walking.
   const UP_NAMES = Object.keys(UPGRADES);
   const homeCount = () => game.leantos.list.reduce((n, l) => n + (l.progress >= 1 ? 1 : 0) + UP_NAMES.reduce((m, k) => m + (l.up && l.up[k] >= 1 ? 1 : 0), 0), 0);
   function homeSnap() {
@@ -1170,10 +1149,12 @@ export function createMind(world, game, opts = {}) {
     return { day: clock.day, time: clock.time, fire: h.kind === 'fire' || h.kind === 'bed', lean, up, builtDay, cool: { home: isCool('home') } };
   }
   // ---------- the lean-to's site (0.30.7 "Clearing") ----------
-  // A site is a lean-to { x, z, heading } checked as the real one: its collision circles (game/obstacles `leantoCircles`, the very ones `campSolids` gives the built lean-to) and its keep-free region (game/leanto `keepFree`) must not touch a trunk, boulder or crag nor a solid of the camp, and no drying pile lies within DRY_PAIR of a place for a building pile (the piles that are
-  // to be consumed by the building are left out); the ground rules hold on a grid of about SITE_CELL over the lean-to's own footprint (the walls' area), and the rest of the keep-free region is standable and out of the river (not a few sample points); a straight line S (the sleep point) - G (the gate) - F (in front) - the ring spot is walkable with the lean-to's own solids in place;
-  // the ring spot and the three places of the upgrade piles have room (and, for a pile, a standing spot); and a way leads from the fire to the ring spot and to those standing spots. `siteGeometry` is pure geometry, `siteRoutes` asks the path finder.
-  const SITE_CELL = 0.3, SITE_REACH = 4.5, PILE_CORE = 0.45;
+  // A site is a lean-to { x, z, heading } checked as the real one: its collision circles (game/obstacles `leantoCircles`, the very ones `campSolids` gives the built lean-to) and its keep-free region (game/leanto `keepFree`) must not touch a trunk, boulder or crag nor a solid of the camp;
+  // the ground rules hold on a grid of about SITE_CELL over the lean-to's own footprint (the walls' area), and the rest of the keep-free region is standable and out of the river (not a few sample points); a straight line S (the sleep point) - G (the gate) - F (in front) - the ring spot is
+  // walkable with the lean-to's own solids in place; the ring spot and the three places round the lean-to (SURROUND 2.1 m from its middle: beside it on both sides and behind it, where the piles of the upgrades used to lie) have room (a ground, no trunk, no solid, and a place to stand);
+  // and a way leads from the fire to the ring spot and to those places. `siteGeometry` is pure geometry, `siteRoutes` asks the path finder. (0.32: no building piles, so no pile is ignored; the three places stay, now as the room to walk round the shelter: measured, a lean-to hard against a trunk or
+  // a rock on its side or back left a pocket that he could not leave, seed 2024 walked stream 2: stuck 72 against 6.)
+  const SITE_CELL = 0.3, SITE_REACH = 4.5, SITE_BAD_DAYS = 2, SURROUND_CORE = 0.45;
   const axis = (lo, hi, step) => { const n = Math.max(1, Math.ceil((hi - lo) / step)); return Array.from({ length: n + 1 }, (_, i) => lo + (hi - lo) * i / n); };
   const SITE_DENSE = []; for (const f of axis(KEEP.back, KEEP.apron, SITE_CELL)) for (const r of axis(-KEEP.side, KEEP.side, SITE_CELL)) if (f <= KEEP.front || Math.abs(r) <= KEEP.apronSide) SITE_DENSE.push([f, r]);   // (f along the opening, r across; the footprint and then the narrower apron)
   const naturalNear = (x, z) => {   // the trunks, boulders and crags within SITE_REACH of a point (each once)
@@ -1186,11 +1167,11 @@ export function createMind(world, game, opts = {}) {
     const t = terrainAt(world, x, z, 0);
     return !t.inRiver && world.dryOfRiver(x, z, 1.5) && t.y >= SITE_HIGH && Math.abs(t.y - y0) <= SITE_LEVEL;
   };
-  function siteGeometry(c, ignore = []) {   // c: { x, z, heading }; ignore: piles that the building will consume. -> the reason it does not fit (a string), or { R, F, stands, rise }
+  function siteGeometry(c) {   // c: { x, z, heading }. -> the reason it does not fit (a string), or { R, F, stands, rise }
     const l = { x: c.x, z: c.z, heading: c.heading }, keep = keepFree(l), pt = (f, r) => leantoPoint(l, f, r), y0 = world.H(l.x, l.z);
     if (!inside(l.x, l.z) || terrainAt(world, l.x, l.z, 0).s >= SITE_SLOPE) return 'ground';
     const nat = naturalNear(l.x, l.z), hyp = leantoCircles(l);
-    const cc = game.movement.obstacles.camp.near(l.x, l.z, SITE_REACH).filter(o => !(o.g.kind === 'pile' && ignore.some(q => Math.abs(q.x - o.g.x) < 1e-6 && Math.abs(q.z - o.g.z) < 1e-6)));
+    const cc = game.movement.obstacles.camp.near(l.x, l.z, SITE_REACH);
     for (const o of nat) for (const h of hyp) if (Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) return 'footprint';   // a trunk, boulder or crag in the walls (no room for a body between)
     for (const o of nat) if (keep.touches(o.x, o.z, o.r)) return 'keep';                                            // ... or in the room inside and in front of the opening
     for (const o of cc) { for (const h of hyp) if (Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) return 'solid'; if (keep.touches(o.x, o.z, o.r)) return 'solid'; }   // a pile, a fire place or a wall of the camp
@@ -1207,9 +1188,9 @@ export function createMind(world, game, opts = {}) {
     if (!groundOk(R.x, R.z, y0) || !room(R, RING_R)) return 'room';
     rise = Math.max(rise, Math.abs(world.H(R.x, R.z) - y0));
     const stands = [];
-    for (const [f, r] of [[0, UP_AT], [0, -UP_AT], [-UP_AT, 0]]) {   // the piles of the upgrades: fronds on one side, stones on the other, branches behind
+    for (const [f, r] of [[0, SURROUND], [0, -SURROUND], [-SURROUND, 0]]) {   // the room round the shelter: both sides and behind it
       const U = pt(f, r);
-      if (!groundOk(U.x, U.z, y0) || !room(U, PILE_CORE)) return 'room';
+      if (!groundOk(U.x, U.z, y0) || !room(U, SURROUND_CORE)) return 'room';
       rise = Math.max(rise, Math.abs(world.H(U.x, U.z) - y0));
       let st = null;
       for (let k = 0; k < 12 && !st; k++) { const a = k * Math.PI / 6, q = { x: U.x + Math.sin(a) * 0.9, z: U.z + Math.cos(a) * 0.9 }; if (inside(q.x, q.z) && canStand(world, q.x, q.z, 0) && room(q, 0.02) && !keep.touches(q.x, q.z, 0.1)) st = q; }
@@ -1218,112 +1199,115 @@ export function createMind(world, game, opts = {}) {
     }
     return { R, F, stands, rise };
   }
-  function siteRoutes(c, f, geo) {   // null when ways lead from the fire to the ring spot (or in front of the opening) and to a standing spot at each upgrade pile, else the reason
+  function siteRoutes(c, f, geo) {   // null when ways lead from the fire to the ring spot (or in front of the opening) and to a standing place at each of the three places round the shelter, else the reason
     const bound = Math.hypot(c.x - f.x, c.z - f.z) * 2.5 + 10;
     if (!(Math.min(path.cost(f, geo.R), path.cost(f, geo.F)) < bound)) return 'route';
     for (const st of geo.stands) if (!(path.cost(f, st) < bound + 10)) return 'room';
     return null;
   }
-  const siteReason = (c, f, ignore = []) => { const g = siteGeometry(c, ignore); return typeof g === 'string' ? g : siteRoutes(c, f, g); };   // null: the lean-to fits at c = { x, z, heading }
-  // Places for the lean-to round the fire f, best first: a lean-to that fits as the real one (above), on ground he knows, dry and level, 0.8 m above the high-water line, with the ring and the piles of the upgrades in reach
-  // and clear of the rivers; the open side a quarter turn from the line to the fire (so that the stone ring comes to stand 4 m or more from the old fire, and becomes his fire); nearer the fire and nearer fresh water he knows is better.
-  function leantoSites(f, ignore = []) {
+  const siteReason = (c, f) => { const g = siteGeometry(c); return typeof g === 'string' ? g : siteRoutes(c, f, g); };   // null: the lean-to fits at c = { x, z, heading }
+  // Places for the lean-to round the fire f, best first: a lean-to that fits as the real one (above), on ground he knows, dry and level, 0.8 m above the high-water line, with the ring in reach and clear of the rivers; the open side a quarter turn from the line to the fire
+  // (so that the stone ring comes to stand 4 m or more from the old fire, and becomes his fire); nearer the fire and nearer fresh water he knows is better.
+  function leantoSites(f) {
     const wp = waterPts(), out = [];
     for (const r of SITE_RINGS) for (let i = 0; i < 16; i++) for (const side of [1, -1]) {
       const a = (i + (r === SITE_RINGS[1] ? 0.5 : 0)) * Math.PI / 8, c = { x: f.x + Math.sin(a) * r, z: f.z + Math.cos(a) * r, heading: a + side * Math.PI / 2, r };
-      const g = siteGeometry(c, ignore); if (typeof g === 'string') continue;
+      const g = siteGeometry(c); if (typeof g === 'string') continue;
       let wd = 120; for (const q of wp) wd = Math.min(wd, Math.hypot(q.x - c.x, q.z - c.z));
       out.push({ ...c, score: r + 0.05 * wd + 3 * g.rise, water: wd, geo: g });
     }
     return out.sort((a, b) => a.score - b.score);
   }
-  const sitePiles = sp => W.piles.filter(q => (q.kind === 'driftwood' || q.kind === 'branch') && Math.hypot(q.x - sp.x, q.z - sp.z) <= 2.2 && Math.hypot(q.x - sp.fire.x, q.z - sp.fire.z) > 2.6);   // 0.30.7: every pile of building material at the site, whatever its size (what the build does not use, `layLeftovers` of game/game moves out of the footprint): never a reason to reject the site
+  const siteBad = [];   // places the game refused to start a lean-to at, though the check passed: { x, z, day }; not chosen again for SITE_BAD_DAYS days
   function homeSite(h) {   // kept once chosen (while the fire is the same), and checked again each time it is asked for: if the ground has changed (a pile, a fire) a new one is chosen
     if (proj.site && dist(proj.site.fire, h) < 4) {
-      const why = siteReason(proj.site, h, sitePiles(proj.site));
+      const why = siteReason(proj.site, h);
       if (!why) return proj.site;
       ev('home-site-bad', { why }); proj.site = null;
     }
-    for (const c of leantoSites(h).slice(0, 8)) if (path.cost(h, c) < c.r * 2.5 + 10 && !siteRoutes(c, h, c.geo)) return (proj.site = { ...c, fire: { x: h.x, z: h.z } });
+    const bad = c => siteBad.some(b => clock.day - b.day < SITE_BAD_DAYS && Math.hypot(b.x - c.x, b.z - c.z) < 1);
+    for (const c of leantoSites(h).filter(c => !bad(c)).slice(0, 8)) if (path.cost(h, c) < c.r * 2.5 + 10 && !siteRoutes(c, h, c.geo)) return (proj.site = { ...c, fire: { x: h.x, z: h.z } });
     return null;
   }
-  const existingSite = h => {   // two piles of 6 near the fire that the player left: the building is there, if the lean-to fits (a quarter turn from the line to the fire first, then towards the fire, then away from it); else he does not adopt them
-    for (const q of W.piles) if (q.kind === 'driftwood' && q.logs.length >= NEED && Math.hypot(q.x - h.x, q.z - h.z) <= 30 && inside(q.x, q.z)) {
-      const s = siteFor(W.piles, q);   // (a pair at the fire is its stock, not a site)
-      if (!s || Math.hypot(s.x - h.x, s.z - h.z) < 3.5 || !inside(s.x, s.z) || !canStand(world, s.x, s.z, 0)) continue;
-      const a = Math.atan2(s.x - h.x, s.z - h.z), ig = [s.drift, s.branch, ...sitePiles({ x: s.x, z: s.z, fire: h })], mine = proj.site && dist(proj.site, s) < 1.5 ? [proj.site.heading] : [];   // (his own piles for the site he chose: its heading first)
-      for (const heading of [...mine, a + Math.PI / 2, a - Math.PI / 2, a + Math.PI, a]) if (!siteReason({ x: s.x, z: s.z, heading }, h, ig)) return { ...s, heading };
+  // What he works on now (`what`: the step homeNext gave): { what, lt } a half-built lean-to or a finished one's upgrade, { what: 'leanto', lt: null, site } a new lean-to at the chosen site; null when there is nothing he can do (no site that fits: `home-no-site`, a long cool-down).
+  function homeWork(what, h) {
+    if (what === 'leanto') {
+      const half = game.leantos.list.filter(l => l.progress < 1 && inside(l.x, l.z)).sort((a, b) => dist(a, p) - dist(b, p))[0];   // his own or a player's: built on, never a second one
+      if (half) return { what, lt: half };
+      const site = homeSite(h); if (!site) { ev('home-no-site'); cool('home', 900); return null; }
+      return { what, lt: null, site };
     }
-    return null;
+    return h.kind === 'leanto' && nextKind(h.lt, what) ? { what, lt: h.lt } : null;
+  }
+  const remaining = w => partsOf(w.what).slice(w.lt ? built(w.lt, w.what) : 0);   // the kinds of the parts the site still needs, in order
+  const loadOf = w => { const rest = remaining(w); return rest.slice(0, rest[0] === 'stone' ? STONE_MAX : CARRY_MAX); };   // the next load: up to three pieces (two stones)
+  const heldKinds = () => [...W.carried.map(kindOf), ...W.stones.map(() => 'stone')];
+  const homeCarry = w => {   // what is in his arms already is the start of the next load: nothing else (no log, no torch)
+    if (W.log) return false;
+    const load = loadOf(w).slice(); for (const k of heldKinds()) { const i = load.indexOf(k); if (i < 0) return false; load.splice(i, 1); }
+    return true;
   };
-  const sitePile = (kind, sp) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - sp.x, q.z - sp.z) <= 2.2 && Math.hypot(q.x - sp.fire.x, q.z - sp.fire.z) > 2.6).sort((a, b) => b.logs.length - a.logs.length)[0] || null;   // the piles for the building: close to the site, and not the fire's stock
-  function* doBuild(kind, obj, face) {   // walks to a spot where the arc offers `kind` for obj (a lean-to being built or upgraded, { site } of two piles), presses build / upgrade and kneels until it is done (or he is called away); face: the way a new lean-to is to open
-    think(kind === 'build' ? 'buildIntent' : 'upgradeIntent');   // 0.30.20: the reason, before he walks to the spot
-    if (!(yield* goStand(kind, obj))) { stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join(), stand: false }); cool('home', 300); return false; }
-    if (face !== undefined) { headingWanted = face; inp.yaw = face; }   // 0.30.7: at once, the game reads the way to open at the press of the same step
-    if (!pressKind([kind])) { headingWanted = null; stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join() }); cool('home', 300); return false; }
-    stats.home.builds++;
-    yield* waitActs(40); yield* waitIdle(); headingWanted = null;
+  const PIECE_SRC = { driftwood: 'timber', branch: 'branch', frond: 'frond', stone: 'stone' };   // where each kind of piece is found (wet driftwood will do for a post)
+  const PIECE_LACK = { driftwood: 'wood', branch: 'branches', frond: 'nuts', stone: 'wood' };
+  function* fetchParts(load) {   // the pieces of a load straight into his arms, kind by kind in the order of the parts, each from the nearest known ground within HOME_MAX_COST of walking; true when every one is in his arms
+    return yield* errand(function* () {
+      const kinds = [...new Set(load)];
+      for (const kind of kinds) {
+        const goal = load.filter(k => k === kind).length, pk = kind, held = () => kind === 'stone' ? W.stones.length : W.carried.filter(l => kindOf(l) === pk).length;
+        if (held() >= goal) continue;
+        yield* collect(PIECE_SRC[kind], {
+          goal, have: held, maxCost: HOME_MAX_COST, think: kind === 'driftwood' || kind === 'branch' ? 'homeWoodIntent' : null,
+          onPick: kind === 'driftwood' ? fresh => { stats.tide.picked += fresh.length; } : undefined,   // a load cut short by a need may be laid at the tideline by the handoff (wet wood goes there): its pieces count as taken, so that no piece is laid that was not picked (the conservation of the long lives)
+          wanted: t => o => !!o.thing && (t.pile ? o.thing.kind === 'pile' && o.thing.pile === t.pile : o.thing.kind === 'log' && kindOf(o.thing.log) === pk),
+        });
+        if (held() < goal) { lack[PIECE_LACK[kind]] = clock.day; ev('home-no-material', { kind }); break; }
+      }
+      return heldKinds().length >= load.length;
+    });
+  }
+  function* leaveDoorway(lt) {   // the game walks him to its own spot beside the lean-to for each press, in the doorway when the walls stand (a walk that starts there sees through the walls, steers into them and stalls): he steps out to the open front first, as a small errand no need breaks into
+    if (!game.leantos.list.includes(lt) || dist(p, lt) > LEANTO_REACH + 0.1 || dist(p, standFor(lt)) <= 0.4) return;
+    yield* errand(function* () { const st = standFor(lt); yield* walk(st.x, st.z, { stop: STOP, settle: STAND_SETTLE }); });
+  }
+  function* buildPieces(w) {   // presses the build action for each piece in his arms, from beside the site: 'buildHere' (the new site, started where he stands), 'buildIn' (a half-built lean-to), 'upgrade'; kneels until each is done (or he is called away)
+    let lt = w.lt; const kind = w.what === 'leanto' ? 'buildIn' : 'upgrade';
+    think(kind === 'upgrade' ? 'upgradeIntent' : 'buildIntent');   // 0.30.20: the reason, before he walks to the spot
+    if (!lt) {
+      const site = w.site, st = standFor(site);   // the lean-to opens the way the site was validated (a quarter turn from the line to the fire): he stands where its middle comes to lie SITE_AT behind him, facing that way
+      headingWanted = site.heading; inp.yaw = site.heading; game.yaw(site.heading);
+      if (!(yield* walk(st.x, st.z, { stop: STOP, settle: STAND_SETTLE })) || !pressKind(['buildHere'])) {
+        stats.home.refused++; ev('home-not-offered', { kind: 'buildHere', arc: game.action().options.map(o => o.kind).join() }); siteBad.push({ x: site.x, z: site.z, day: clock.day }); proj.site = null; cool('home', 300); return false;
+      }
+      stats.home.builds++;
+      yield* waitActs(40); yield* waitIdle();
+      lt = game.leantos.list.find(l => Math.hypot(l.x - site.x, l.z - site.z) < 1);
+      if (!lt) { stats.home.refused++; ev('home-site-bad', { why: 'start' }); siteBad.push({ x: site.x, z: site.z, day: clock.day }); proj.site = null; cool('home', 300); return false; }
+    }
+    if (kind === 'buildIn') { const st = standFor(lt); if (dist(p, st) > 0.4) yield* walk(st.x, st.z, { stop: STOP, settle: STAND_SETTLE }); }   // a half-built lean-to has no collision before its fifth part: he stands in front of the opening (where its keep-free region lies), never in the footprint, or the roof branches would close round him
+    for (let n = 0; n < 8 && W.load() && nextKind(lt, w.what); n++) {
+      const mine = o => o.leanto === lt && (kind === 'upgrade' ? o.what === w.what : true);
+      const before = built(lt, w.what);
+      if (!pressKind([kind], mine)) {
+        if (!(yield* goStand(kind, lt)) || !pressKind([kind], mine)) { stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join() }); cool('home', 300); return false; }
+      }
+      stats.home.builds++;
+      yield* waitActs(40); yield* waitIdle();
+      if (built(lt, w.what) <= before) { stats.home.refused++; ev('home-not-built', { kind }); cool('home', 300); return false; }
+    }
+    yield* leaveDoorway(lt);
     return true;
   }
-  // 0.30.10: the second pile of the pair is laid from beside the first one (within PILE_JOIN): the game then puts it next to that pile at the camp's gap, 1.85 to 2 m away, still a build pair
-  function siteDest(sp, kind, other) {   // where the pieces of `kind` ('driftwood' | 'branch') are laid for the building: on the pile there, else across the opening from the pile of the other kind (a metre and a bit apart), else at the site
-    const sx = Math.sin(sp.heading), sz = Math.cos(sp.heading), mine = sitePile(kind, sp), twin = sitePile(other, sp);
-    if (mine) return { x: mine.x, z: mine.z, pile: mine };
-    for (const sg of twin ? [1, -1] : [kind === 'driftwood' ? -1 : 1]) { const q = twin ? { x: twin.x + sz * 0.9 * sg, z: twin.z - sx * 0.9 * sg } : { x: sp.x + sz * PAIR_HALF * sg, z: sp.z - sx * PAIR_HALF * sg }; const st = standNear(q.x, q.z, 0.5); if (st && Math.hypot(st.x - q.x, st.z - q.z) < 1) return st; }
-    return standNear(sp.x, sp.z, 2);
-  }
-  // what the next unit of the project is, for `what` ('leanto' | 'walls' | 'ring' | 'bed'): { kind, want, dest } a trip for pieces of that kind to dest(), { build, run } the building, null when there is nothing he can do now
-  function homeNeed(what, h) {
-    if (what === 'leanto') {
-      const half = game.leantos.list.filter(l => l.progress < 1 && inside(l.x, l.z)).sort((a, b) => dist(a, p) - dist(b, p))[0];
-      if (half) return { build: true, run: () => doBuild('build', { leanto: half }, undefined) };
-      let s = existingSite(h), face = s && s.heading, sp = null;
-      if (!s) {
-        sp = homeSite(h); if (!sp) { ev('home-no-site'); cool('home', 900); return null; }
-        const dest = (kind, other) => () => siteDest(sp, kind, other);
-        const d = sitePile('driftwood', sp), b = sitePile('branch', sp), nd = d ? d.logs.length : 0, nb = b ? b.logs.length : 0;
-        if (nd < NEED) return { kind: 'drift', src: 'timber', want: NEED - nd, dest: dest('driftwood', 'branch') };
-        if (nb < NEED) return { kind: 'branch', want: NEED - nb, dest: dest('branch', 'driftwood') };
-        s = siteFor(W.piles, d); face = sp.heading;
-        if (!s) { ev('home-site-bad'); cool('home', 600); return null; }
-      }
-      // 0.29.4: he builds at the pile that has its partner within 2 m (a second pile of 6 nearby, with no partner, offered 'light' only). 0.30.7: it opens the way the site was validated (a quarter turn from the line to the fire; towards its own ring,
-      // which becomes the fire), and is checked once more at the pile pair itself right before the building starts
-      return { build: true, run: function* () {
-        const why = siteReason({ x: s.x, z: s.z, heading: face }, h, [s.drift, s.branch, ...sitePiles({ x: s.x, z: s.z, fire: h })]);
-        if (why) { ev('home-site-bad', { why }); if (sp) proj.site = null; cool('home', 300); return false; }
-        return yield* doBuild('build', { site: s }, face);
-      } };
-    }
-    if (h.kind !== 'leanto') return null;
-    const lt = h.lt, per = UPGRADES[what].per, p0 = (lt.up && lt.up[what]) || 0, left = UPGRADES[what].steps - paidSteps(what, p0), hx = Math.sin(lt.heading), hz = Math.cos(lt.heading);
-    const spot = { frond: [hz, -hx], stone: [-hz, hx], branch: [-hx, -hz] };   // fronds on one side, stones on the other, branches behind the lean-to (UP_AT m from its middle: beside the keep-free region, within UP_NEAR)
-    for (const [kind, n] of Object.entries(per)) {
-      const need = n * left - pileSum(kind, lt.x, lt.z, UP_NEAR);
-      if (need <= 0) continue;
-      const [ux, uz] = spot[kind], at = { x: lt.x + ux * UP_AT, z: lt.z + uz * UP_AT };
-      return { kind: kind === 'branch' ? 'branch' : kind, want: need, dest: () => {
-        const q = bigPile(kind, at.x, at.z, 1.5);
-        if (q && (kind === 'branch' || q.kind === 'driftwood')) return { x: q.x, z: q.z, pile: q };
-        // a pile of fronds or stones is wider than the join distance (nothing is added to it from outside): the next one is a pile of its own at the nearest free spot of the ring UP_AT from the middle
-        const base = Math.atan2(ux, uz), rs = pileSolidRadius({ kind, logs: [{ rad: 0.2 }] });
-        for (let k = 0; k < 176; k++) {   // 0.30.9: a finer search (0.15 rad steps all round the ring, three radii, all within UP_NEAR): with 0.55 rad steps the old piles blocked every spot and a pile laid beside them fell outside UP_NEAR, so it never counted
-          const ring = UP_AT + 0.4 * (k % 4), j = (k / 4) | 0, a = base + (j % 2 ? -1 : 1) * Math.ceil(j / 2) * 0.15, x = lt.x + Math.sin(a) * ring, z = lt.z + Math.cos(a) * ring;
-          if (openNear(x, z, 0) && !keepFree(lt).touches(x, z, rs + BODY) && gapFree(game.movement.obstacles.camp, x, z, rs + BODY)) return { x, z, exact: true };   // 0.30.10: CAMP_GAP from every solid (it was 1.5 m from the other piles)
-        }
-        return q ? { x: q.x, z: q.z, pile: q } : { x: at.x, z: at.z, exact: true };
-      } };
-    }
-    return { build: true, run: () => doBuild('upgrade', lt, undefined) };
-  }
-  function* homeGoal(what, need) {
+  function* homeGoal(what, w) {   // one unit of the project: a load of the next parts, fetched, then built in; at an idle moment, repeated while there is material (the idle goal asks again)
     if (cur) cur.limit = HOME_LIMIT;
-    const n0 = homeCount(); stats.home.units++;
-    ev('home', { what, need: need.kind || 'build' });
-    let ok;
-    if (need.kind) { stats.home.trips++; ok = yield* gather(need.kind, need.dest, need.want, HOME_MAX_COST, need.src || need.kind, 'home'); if (!ok) { stats.home.noMaterial++; lack[need.kind === 'drift' ? 'wood' : need.kind === 'branch' ? 'branches' : need.kind === 'stone' ? 'wood' : 'nuts'] = clock.day; ev('home-no-material', { kind: need.kind }); cool('home', 600); } }
-    else ok = yield* need.run();
+    const n0 = homeCount(), load = loadOf(w); stats.home.units++;
+    ev('home', { what, load: load.join() });
+    let ok = true;
+    try {
+      if (w.lt) yield* leaveDoorway(w.lt);   // (a need that cut the last unit short left him in the doorway)
+      if (heldKinds().length < load.length) { stats.home.trips++; yield* fetchParts(load); }
+      if (!heldKinds().includes(remaining(w)[0])) { stats.home.noMaterial++; cool('home', 600); return false; }   // the piece the site needs first is not to be had: later (the lack sends him exploring); a part load is built in as far as it goes
+      ok = yield* buildPieces(w);
+    } finally { headingWanted = null; }
     if (homeCount() > n0) { builtDay = clock.day; ev('home-built', { what }); }
     return ok;
   }
@@ -1603,7 +1587,7 @@ export function createMind(world, game, opts = {}) {
     const ck = carriedKind();
     if ((ck && ck !== 'drift') || W.carried.some(l => !wetPiece(l)) || W.carried.length >= CARRY_MAX) return;
     const got = yield* collect('strip', { goal: CARRY_MAX, have: () => W.carried.length, r0: 8, rMax: 8, think: 'wetwood', wanted: wetWanted, good: fresh => !W.carried.some(l => !wetPiece(l)), onPick: wetPicked, tag: 'tide' });
-    if (got && wetCarried() && !wetForSite()) { stats.tide.trips++; yield* layTideline(false); }
+    if (got && wetCarried()) { stats.tide.trips++; yield* layTideline(false); }
   }
   // The daily round (0.30.13): once a day by day, nothing urgent, the nearest strip he knows where wet wood lies, home before dark like an exploring trip: up to two loads, to the lean-to site while it needs driftwood, else to the beach edge.
   let tideDay = -9, tideNone = -1e9;
@@ -1620,7 +1604,7 @@ export function createMind(world, game, opts = {}) {
     if (cur) cur.limit = EXPLORE_LIMIT;
     stats.tide.rounds++; ev('tide-round', { to: [+t.x.toFixed(1), +t.z.toFixed(1)] });
     for (let load = 0; load < 2; load++) {
-      if (load && (exploreLate(clock.time, 2 * dist(p, homeSpot()) / WALK_SPEED + 60, PACE) || wetForSite() || !scan('strip', p.x, p.z, 8).length)) break;
+      if (load && (exploreLate(clock.time, 2 * dist(p, homeSpot()) / WALK_SPEED + 60, PACE) || !scan('strip', p.x, p.z, 8).length)) break;
       if (!load && !(yield* walk(t.x, t.z, { stop: 1.2 }))) break;
       const n0 = W.carried.length; yield* pickUpWet();
       if (W.carried.length <= n0 && !W.load()) break;
@@ -1699,11 +1683,9 @@ export function createMind(world, game, opts = {}) {
   function* deliver() {   // wood under his arm from a stroll goes to the pile at the fire spot (a pile of its own kind within a metre, else a new one there)
     return yield* errand(function* () {
     if (!W.carried.length || (carriedKind() !== 'drift' && carriedKind() !== 'branch')) return;
-    if (wetForSite()) { const d = siteDest(proj.site, 'driftwood', 'branch'); if (d && (yield* toDest(d))) yield* layAt(d); return; }
     if (wetCarried()) { yield* layTideline(true); return; }   // wood that is not dry enough to burn never goes to the fire's pile
     const fs = fireSpot(), kind = carriedKind() === 'branch' ? 'branch' : 'driftwood';
     const q = firePiles(fs).filter(x => x.kind === kind && x.logs.length < PILE_FULL).sort((a, b) => b.logs.length - a.logs.length)[0], d = q ? { x: q.x, z: q.z, pile: q } : fs;
-    if (pairNear(fs, kind) && (q ? q.logs.length : 0) + W.carried.length >= NEED) { yield* layAt(p); return; }   // it would make a second pile of 6 or more at the fire: laid down where he stands
     if (d.pile) { if (!(yield* goStand('add', d.pile))) return; }
     else { const o = openNear(d.x, d.z, 1.5); if (!o || !(yield* walk(o.x, o.z, { stop: 0.35 }))) return; }
     for (let n = 0; n < 3 && W.carried.length; n++) { if (!pressKind(['lay'])) break; yield* waitIdle(); }   // (lay only: by day he never feeds the flames with it)
@@ -1712,8 +1694,6 @@ export function createMind(world, game, opts = {}) {
   // 0.30.4 "Timber": the handoff. Before any other task he brings the wood in his arms to camp and lays it on the pile it belongs to: dry firewood on the fire's stock, wet wood on the drying pile, building material where the project wants it (what the
   // load is for was noted when he picked it up, `tag`; wood of no known purpose goes by its dryness). A deposit that cannot be made (no way, no standing point, nothing laid) is not retried: he lays it on a spot of its own at camp (a pile of its own, clear of
   // other piles), and as the last resort where he stands, so that nothing is lost and nothing loops. The two emergencies (very thirsty, very hungry) go first with what is in his arms; if the game laid it down for the drink, the handoff fetches it afterwards (`fetchOwed`).
-  // 0.29.3 rule: wet driftwood in his arms (mean dryness under 0.6) is timber for the lean-to site while the project still needs driftwood there
-  const wetForSite = () => carriedKind() === 'drift' && !!proj.site && !game.leantos.list.length && W.carried.reduce((n, l) => n + dryness(l, clock.total), 0) / W.carried.length < 0.6 && (sitePile('driftwood', proj.site)?.logs.length || 0) < NEED;
   function* campSpot() {
     const fs = fireSpot(), spots = [];
     for (const r of [2.4, 3.4, 4.4]) for (let i = 0; i < 8; i++) {
@@ -1737,17 +1717,13 @@ export function createMind(world, game, opts = {}) {
         if (yield* deliverLog()) { ev('handoff-done', { why, ids: [], left: 0 }); return true; }
       }
       const ids = [...W.carried, ...W.stones, ...(W.log ? [W.log] : [])].map(l => l.id), ck = carriedKind(), t = validTag();
-      // 0.29.3 rule restored: wet driftwood (a stroll's, mean dryness under 0.6) goes to the lean-to site as timber while the project still needs driftwood there; never to the fire
-      const siteWet = !(t && t.kind === 'home') && wetForSite();
-      const dest = t && t.kind === 'home' ? t.dest : siteWet ? () => siteDest(proj.site, 'driftwood', 'branch') : null;
-      const to = dest ? 'project' : (ck === 'drift' && wetCarried()) || (t && t.kind === 'tide' && ck === 'drift') ? 'tide' : ck === 'drift' || ck === 'branch' ? 'stock' : 'here';
+      const to = (ck === 'drift' && wetCarried()) || (t && t.kind === 'tide' && ck === 'drift') ? 'tide' : ck === 'drift' || ck === 'branch' ? 'stock' : 'here';   // 0.32: building pieces of a home trip cut short are wood like any other: dry driftwood and branches to the fire's stock, wet wood to the tideline, fronds and stones where he stands
       stats.timber.handoffs++; stats.timber.handoffPieces += ids.length;
       ev('handoff', { why, ids, kind: ck, to, tag: t ? t.kind : null });
       // a pile farther than HANDOFF_MAX_COST of walking (on another terrace the way round can be many times the distance) counts as out of reach for the handoff, except on the way to bed: the wood is laid down where he stands, a pile of its own
-      const spot = to === 'project' ? dest() : to === 'stock' ? fireSpot() : null, open = spot && (openNear(spot.x, spot.z, 3) || spot), away = open && why !== 'sleep' ? path.cost(p, open) : 0;   // (the cost to a free spot beside the pile: a pile or a fire place is a solid)
+      const spot = to === 'stock' ? fireSpot() : null, open = spot && (openNear(spot.x, spot.z, 3) || spot), away = open && why !== 'sleep' ? path.cost(p, open) : 0;   // (the cost to a free spot beside the pile: a pile or a fire place is a solid)
       if (!(away <= HANDOFF_MAX_COST)) { stats.timber.far++; ev('handoff-far', { why, to, cost: +Math.min(9999, away).toFixed(0) }); yield* layAt(p); ev('handoff-done', { why, ids, left: W.load() }); return !W.load(); }
-      if (to === 'project') { const d = dest(); if (d && (yield* toDest(d))) yield* layAt(d); }
-      else if (to === 'tide') yield* layTideline(true);
+      if (to === 'tide') yield* layTideline(true);
       else if (to === 'stock') yield* deliver();
       else yield* layAt(p);
       if (W.load()) { stats.timber.fallbacks++; ev('handoff-fallback', { why, to, left: W.load() }); yield* campSpot(); }
@@ -2122,16 +2098,16 @@ export function createMind(world, game, opts = {}) {
     if (journey) return yield* journeyGoal();   // 0.30.19: a journey is on: nothing else is an idle pastime
     const h = homeSpot(), t = clock.time;
     if (t >= GAZE_FROM && t < GAZE_TO && gazedDay !== clock.day) { gazedDay = clock.day; yield* handoff('gaze'); return yield* gaze(); }
-    const step = homeNext(homeSnap()), need = step ? homeNeed(step, h) : null;   // 0.29.3: the next piece of his home
+    const step = homeNext(homeSnap()), work = step ? homeWork(step, h) : null;   // 0.29.3: the next piece of his home
     if (feedPassingEmber()) { yield; return true; }
     if (!isCool('stray') && strays().length && !W.load() && clock.time >= DAY_FROM && clock.time < EVENING && game.thirst.days < EXPLORE_THIRST && game.hunger.days < EXPLORE_HUNGER) { cool('stray', 90); if (yield* centreStrays()) return true; }   // 0.31.1: a stray pile near the ring joins the stock at a calm moment
-    if (W.load() && !(need && need.kind && need.kind === carriedKind())) yield* handoff('idle');   // 0.30.4: wood left in his arms goes to camp, to the pile it belongs to (wet to drying, building timber to the site), before anything else; what the next home trip needs he keeps
+    if (W.load() && !(work && homeCarry(work))) yield* handoff('idle');   // 0.30.4: wood left in his arms goes to camp, to the pile it belongs to, before anything else; 0.32: what the next load of the home needs he keeps
     const s = senses();
     if (clock.day >= journeyDue && clock.day !== journeyTried && clock.time >= JOURNEY_FROM && clock.time < JOURNEY_TO && !isCool('journey')) {   // 0.30.19: now and then a journey (calm at home, in the morning, the weather fair)
       const sn = homeSnap();
       if (journeyOk({ day: clock.day, time: clock.time, due: journeyDue, lean: sn.lean, raining: game.weather.raining(clock.total), rainSoon: journeyRain(game.weather, clock.total), thirst: s.thirst, hunger: s.hunger, cool: s.cool }) && (yield* journeyBegin())) return yield* journeyGoal();
     }
-    if (need && !crabTripOk(s)) return yield* homeGoal(step, need);
+    if (work && !crabTripOk(s)) return yield* homeGoal(step, work);
     if (spearMakeOk({ ...s, day: clock.day, lean: homeSnap().lean })) { if (scan('branch', h.x, h.z, SPEAR_RANGE).length && scan('stone', h.x, h.z, SPEAR_RANGE).length) return yield* makeSpearTrip(); cool('spear', 120); }   // 0.30.17: he has no spear and a branch and a stone are at hand
     if (axeNext({ ...axeSnap(), thirst: s.thirst, hunger: s.hunger }) && !crabTripOk(s)) { const r = yield* axeGoal(); if (r !== null) return r; }   // 0.31 "Axe": once the home is complete, the axe and one tree a morning
     if (clock.day !== tideDay && clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crabTripOk(s)) { if (yield* tideRound()) return true; }   // 0.30.13: the daily round to the strip
@@ -2275,6 +2251,6 @@ export function createMind(world, game, opts = {}) {
   mind.state = () => ({ journeyDue, journeyTried, exploredDay, journeys: stats.journey.started });   // 0.31.1: plain, for saving (the journey in progress is not saved)
   mind.journeyAim = (day, time, where = 'coast', avail = (JOURNEY_ARRIVE - time) * DAY_SECONDS) => { const home = fireSpot(homeSpot()); return journeyTarget(home, where, avail); };   // 0.30.19: the spot a journey would aim for (tests; the rings it looks at are the PRNG's)
   mind.axePlan = axePlan; mind.logDest = () => { const h = homeSpot(); return h.kind === 'leanto' ? logDest(h) : null; }; mind.axeSpot = axeSpot; mind.axeSnap = axeSnap;   // 0.31: for the tests
-  mind.siteReason = siteReason; mind.existingSite = existingSite; mind.homePlan = () => { const h = homeSpot(), sn = { ...homeSnap(), time: HOME_FROM, day: Math.max(clock.day, HOME_DAY), builtDay: -1, cool: {} }, step = homeNext(sn); return { step, need: step ? homeNeed(step, h) : null, site: proj.site, snap: sn }; };
+  mind.siteReason = siteReason; mind.homePlan = () => { const h = homeSpot(), sn = { ...homeSnap(), time: HOME_FROM, day: Math.max(clock.day, HOME_DAY), cool: {} }, step = homeNext(sn), work = step ? homeWork(step, h) : null; return { step, work, load: work ? loadOf(work) : null, site: proj.site, snap: sn }; };
   return mind;
 }
