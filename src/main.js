@@ -65,8 +65,8 @@
  * The developer panel shows both the selected mode and `habit`; headless
  * step/draw hooks use the player's input only.
  *
- * Voice (render/voice): player actions and situation-led mind intents show one
- * short fixed thought above Dave, not every autonomous step. L opens the
+ * Voice (render/voice): only reasons speak (0.30.20): the mind's intents, and what the player
+ * lacks (game.lackAt, once per still period of about 1.5 s); never actions. One short fixed thought above Dave. L opens the
  * in-memory session log with island HH:mm timestamps (no dates); its own
  * capture guard keeps all log interaction passive to Hands and the camera.
  *
@@ -210,7 +210,8 @@ async function boot() {
   const mind = createMind(world, game, { onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);
   let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
   const tnow = () => performance.now() / 1000 + hurried;   // 0.28 "Habit"
-  game.onAction(({ kind }) => { if (!mind.active) voice.announce(kind, game.clock.time); });   // the habit's thought precedes its errand, not each pickup or retry
+  // 0.30.20: actions never speak, only reasons do (the mind's intents above, and what the player lacks below)
+  let still = 0, stillSaid = false, lastX = game.player.x, lastZ = game.player.z;   // seconds the player has stood still; whether this still period was asked about
   const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
   const poke = e => {
     if (isVoiceLogEvent(e)) return;
@@ -291,6 +292,12 @@ async function boot() {
     }
     info.distance = walked;   // the footprints get the whole way walked this frame
     show(info);
+    {   // 0.30.20: after about 1.5 s of standing still where something is almost possible, Dave says what is missing, once per still period
+      const p = game.player, moved = Math.hypot(p.x - lastX, p.z - lastZ) > 0.01 || wantsToMove(input) || input.pressing() || game.sleep.asleep || p.work;
+      lastX = p.x; lastZ = p.z;
+      if (moved || mind.active) { still = 0; stillSaid = false; }
+      else { still += dt; if (still >= 1.5 && !stillSaid) { stillSaid = true; const kind = game.lackAt(); if (kind) voice.announce(kind, game.clock.time); } }
+    }
     hurried += (speed - 1) * dt;
     view.render(game.player, info, dt); voice.update(dt, game.player, view.camera, performance.now() / 1000);
     if (sound.active) hear(info, dt);

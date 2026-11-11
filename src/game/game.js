@@ -53,6 +53,7 @@
  *                               without a saved memory starts with the area round where he stands known
  *   game.wildlife               crabs, fish and birds within 30 m of him: atmosphere only, not saved (game/wildlife)
  *   game.fireflies              the fireflies within 30 m of him, from dusk to an hour before sunrise: atmosphere only, not saved (game/fireflies)
+ *   game.lackAt(x?, z?)         0.30.20: what is missing for an action that is almost possible there (default: where he stands): 'needSpear' | 'spearAway' | 'needFibre' | 'needMoreWood' | null (pure, game/lack; the voice says it)
  *   game.onAction(listener)     optional presentation notification when a deliberate action is accepted; listeners receive { kind, x, z }, alter no game state and are not saved
  *   game.weather                the schedule of showers (game/weather); game.rain: the intensity of the rain now, 0..1 (0.21:
  *                               wet wood in the open, fires and torches burning down faster, see game/wood rain and game/fire update)
@@ -160,7 +161,7 @@
  * 0.30.10 "Walls": a new pile keeps CAMP_GAP (game/obstacles) of walking room from every other pile, fire place and burnt place (a lean-to's walls excepted): `blockedAt(x, z, rs)` holds the rule for `wood.drop` and for the leftovers of a build (`layLeftovers`). With no such spot within 3.45 m the wood stays in his arms, as on wet ground.
  *
  * Depends on: game/path, game/route, game/stand, game/known, game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
- *   game/fibre, game/fire, game/thirst, game/hunger, game/breath, game/crabs, game/spear, game/fish, game/water, game/wildlife, game/fireflies, game/weather
+ *   game/fibre, game/fire, game/lack, game/thirst, game/hunger, game/breath, game/crabs, game/spear, game/fish, game/water, game/wildlife, game/fireflies, game/weather
  */
 import { BODY, createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, canStand, nearestStandable, weariStride, paceOf, paceStride } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
@@ -182,6 +183,7 @@ import { createBreath } from './breath.js';
 import { createCrabs, DIG_TIME, ROAST_TIME, CRAB_FOOD } from './crabs.js';
 import { createSpear, MAKE_TIME } from './spear.js';
 import { createFish, fishableAt, FISH_TIME, FISH_FOOD } from './fish.js';
+import { lackOf } from './lack.js';
 import { findWater } from './water.js';
 import { createWildlife } from './wildlife.js';
 import { createFireflies } from './fireflies.js';
@@ -221,7 +223,7 @@ export function createGame(world, spawn, opts = {}) {
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.spear = spear.hand; player.thirsty = thirst.level(); player.hungry = hunger.level();
   const voiceListeners = new Set();
   const notifyAction = kind => { for (const listener of voiceListeners) listener({ kind, x: player.x, z: player.z }); };
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
   const stand = game.stand = createStand(game, world, { BESIDE });   // 0.30.3 "Routes": standing points (game/stand), asked by the click on a pile or fire and by the walk to the spot of a light, a build or an upgrade
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
@@ -297,6 +299,13 @@ export function createGame(world, spawn, opts = {}) {
     if (wet(hereAt(px, pz)) || (!fire.torch && !fibre.carried)) return null;
     const p = wood.find(px, pz, BESIDE, 'pile');
     return p && p.pile.logs.length >= FIRE_MIN ? { kind: 'light', pile: p.pile, torch: !!fire.torch } : null;
+  }
+  /** 0.30.20 "Words": what is missing for an action that is almost possible at (px, pz) (pure, game/lack): 'needSpear', 'spearAway', 'needFibre', 'needMoreWood' or null. */
+  function lackAt(px = player.x, pz = player.z) {
+    if (sleep.asleep || sleep.lie > 0 || work) return null;
+    const t = hereAt(px, pz), pile = wood.find(px, pz, BESIDE, 'pile');
+    if (!fishableAt(t) && pile && buildable(px, pz)) return null;   // a lean-to could be built here: that is the offer
+    return lackOf({ fishable: fishableAt(t) && !fish.full(), hand: spear.hand, spear: spear.has(), pileLogs: pile ? pile.pile.logs.length : null, dry: !wet(t), fibre: fibre.carried > 0, torch: !!fire.torch, load: wood.load() });
   }
   function buildable(px, pz) {   // a lean-to he could build or go on building now: beside a half-built one, or beside a pile that has a partner of the other kind within 2 m (0.30.3 rule (b): any pile within reach counts, not only the nearest)
     if (wet(hereAt(px, pz))) return null;

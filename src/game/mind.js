@@ -647,7 +647,7 @@ export function createMind(world, game, opts = {}) {
     if (!cs.length) { ev('no-food'); return false; }
     cs.sort((a, q) => a.w - q.w); let pick = cs[0];
     if (pick.kind === 'fish') {
-      yield* fishTrip(pick.t);
+      yield* fishTrip(pick.t);   // (the eat goal has said foodIntent)
       if (catchCarried() && flameFire() && (yield* roastCatch())) return true;
       cs = foods(); if (!cs.length) return false;   // no fish after all: the nuts and the berries
       cs.sort((a, q) => a.w - q.w); pick = cs[0];
@@ -666,6 +666,7 @@ export function createMind(world, game, opts = {}) {
   const catchCarried = () => game.crabs.carried.length + game.fish.carried.length;   // 0.30.17: what is carried raw and has to be roasted
   function* roastCatch() {   // to the fire with flames and the row's crab or fish (the one caught first, as the game's roast does): kneels ROAST_TIME and eats it
     const f = flameFire(); if (!f) return false;
+    think('roastIntent');   // 0.30.20: the reason, before he goes to the fire
     if (!(yield* goStand('nearFire', f))) return false;
     const F = game.fish.carried, C = game.crabs.carried, kind = F.length && (!C.length || F[0] < C[0]) ? 'fish' : 'crab', n0 = F.length;
     if (useRow(kind)) { yield* waitIdle(); if (kind === 'fish' && game.fish.carried.length < n0) stats.fishEaten++; return true; }
@@ -774,9 +775,10 @@ export function createMind(world, game, opts = {}) {
     const f = flameFire(), o = f ? bestFishSpot(STROLL_MAX_COST) : null;
     return o ? { kind: 'fish', t: o, w: o.cost + dist(o, f) * 1.3 / WALK_SPEED + FISH_EXTRA } : null;
   }
-  function* fishTrip(c) {   // the spear from the camp, into the shallows, up to FISH_TRIES tries until FISH_WANT fish is carried, the spear back at the camp
+  function* fishTrip(c, pastime = false) {   // the spear from the camp, into the shallows, up to FISH_TRIES tries until FISH_WANT fish is carried, the spear back at the camp
     return yield* errand(function* () {
     if (cur) cur.limit = FISH_LIMIT;
+    if (pastime) think('fishIntent');   // 0.30.20: the afternoon pastime says why; a fish for the meal is the eat goal's foodIntent
     if (W.load()) yield* handoff('fish');
     if (!S.hand && !(yield* fetchSpear())) { cool('fish'); return false; }
     stats.fishTrips++; ev('fish-trip', { to: [+c.x.toFixed(1), +c.z.toFixed(1)] });
@@ -801,6 +803,7 @@ export function createMind(world, game, opts = {}) {
   function* makeSpearTrip() {   // a loose branch under his arm, to a loose stone, kneel: the spear is made; it goes to the camp
     return yield* errand(function* () {
     if (cur) cur.limit = SPEAR_LIMIT;
+    think('spearIntent');   // 0.30.20: the reason, once, before he sets off
     const cost = list => { for (const c of list.slice(0, 3)) { const k = path.cost(p, c); if (k < Infinity) return { ...c, cost: k }; } return null; };
     const b = cost(scan('branch', p.x, p.z, SPEAR_RANGE)), st = b ? cost(scan('stone', b.x, b.z, SPEAR_RANGE)) : null;
     if (!b || !st) { cool('spear'); return false; }
@@ -948,7 +951,7 @@ export function createMind(world, game, opts = {}) {
     const ck = carriedKind();
     if (ck && (ck !== kind || (kind === 'drift' && src !== 'timber' && wetCarried()))) yield* handoff('gather');   // 0.30.4: another kind (or wet wood for the fire's stock) goes to its own pile first
     yield* collect(src, {
-      goal: Math.min(cap, want), have: mine, maxCost, think: kind === 'drift' || kind === 'branch' ? 'woodIntent' : null,
+      goal: Math.min(cap, want), have: mine, maxCost, think: kind === 'drift' || kind === 'branch' ? (tagKind === 'home' ? 'homeWoodIntent' : 'woodIntent') : null,
       wanted: t => o => !!o.thing && (t.pile ? o.thing.kind === 'pile' && o.thing.pile === t.pile : o.thing.kind === 'log' && kindOf(o.thing.log) === pk),
       tag: tagKind, dest,
     });
@@ -1169,6 +1172,7 @@ export function createMind(world, game, opts = {}) {
   };
   const sitePile = (kind, sp) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - sp.x, q.z - sp.z) <= 2.2 && Math.hypot(q.x - sp.fire.x, q.z - sp.fire.z) > 2.6).sort((a, b) => b.logs.length - a.logs.length)[0] || null;   // the piles for the building: close to the site, and not the fire's stock
   function* doBuild(kind, obj, face) {   // walks to a spot where the arc offers `kind` for obj (a lean-to being built or upgraded, { site } of two piles), presses build / upgrade and kneels until it is done (or he is called away); face: the way a new lean-to is to open
+    think(kind === 'build' ? 'buildIntent' : 'upgradeIntent');   // 0.30.20: the reason, before he walks to the spot
     if (!(yield* goStand(kind, obj))) { stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join(), stand: false }); cool('home', 300); return false; }
     if (face !== undefined) { headingWanted = face; inp.yaw = face; }   // 0.30.7: at once, the game reads the way to open at the press of the same step
     if (!pressKind([kind])) { headingWanted = null; stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join() }); cool('home', 300); return false; }
@@ -1339,6 +1343,7 @@ export function createMind(world, game, opts = {}) {
     if (!isNight(clock.time) || game.fire.torch || W.load() || game.weather.raining(clock.total) || Math.hypot(dest.x - p.x, dest.z - p.z) <= TORCH_TRIP) return;
     const f = nearFlame(SIT_FIRE); if (!f || !(f.fuel >= TORCH_FUEL)) return;   // beside a fire with flames, and not a low one
     if (throughDeep(finder, dest)) return;
+    think('torchIntent');   // 0.30.20: the reason, before he goes to the fire for it
     if (!(game.action().options.concat(game.action().tap || []).some(o => o.kind === 'torch' && o.fire)) && !(yield* goStand('nearFire', f))) return;
     if (pressKind(['torch'], o => !!o.fire)) { yield* waitIdle(); if (game.fire.torch) { stats.torch.taken++; ev('torch-taken', { to: [+dest.x.toFixed(1), +dest.z.toFixed(1)] }); } }
   }
@@ -1625,7 +1630,7 @@ export function createMind(world, game, opts = {}) {
     if (!c) { stats.journey.noTarget++; cool('journey', 300); ev('journey-none', { why: 'no-target' }); return false; }
     journeyDue = clock.day + journeyGap(rngJourney()); journeyPts.push(c); exploredDay = clock.day;
     journey = { day0: clock.day, t0: clock.total, phase: 'out', to: c, home, camp: null, max: 0, fails: 0, why: null };
-    stats.journey.started++; ev('journey', { to: [+c.x.toFixed(1), +c.z.toFixed(1)], dist: +dist(home, c).toFixed(0), out: +c.out.toFixed(0), back: +c.back.toFixed(0), next: journeyDue });
+    stats.journey.started++; journey.said = new Set(); think('journeyIntent'); ev('journey', { to: [+c.x.toFixed(1), +c.z.toFixed(1)], dist: +dist(home, c).toFixed(0), out: +c.out.toFixed(0), back: +c.back.toFixed(0), next: journeyDue });
     return true;
   }
   function journeyEnd(why) {
@@ -1636,6 +1641,7 @@ export function createMind(world, game, opts = {}) {
     ev('journey-end', { why, hours });
     journey = null; exploredDay = Math.max(exploredDay, clock.day);
   }
+  const sayOnce = (J, kind) => { const k = kind + (J.nights || 0); if (J.said.has(k)) return; J.said.add(k); think(kind); };   // 0.30.20: one thought per journey phase (a second night out, or a second walk home, says its line again)
   const turnBack = (J, why) => { J.phase = 'home'; J.why = why; stats.journey.back[why]++; ev('journey-back', { why }); };
   function* pauseJourney(secs) { const until = now + secs; while (now < until) yield; }   // a look about (no chance involved: the stream of the strolls stays as it was)
   function* journeyOut(J) {
@@ -1728,7 +1734,7 @@ export function createMind(world, game, opts = {}) {
     if (!J.camp) {
       const sp = journeySpot(p);
       J.camp = { x: sp ? sp.x : p.x, z: sp ? sp.z : p.z, day: clock.day, pk: null, fire: null, lit: false, husked: false };
-      J.nights = (J.nights || 0) + 1; stats.journey.nights++;
+      J.nights = (J.nights || 0) + 1; stats.journey.nights++; sayOnce(J, 'campIntent');
       ev('journey-camp', { at: [+J.camp.x.toFixed(1), +J.camp.z.toFixed(1)], spot: !!sp, water: sp ? +sp.water.toFixed(0) : null, fibre: game.fibre.carried });
     }
     const C = J.camp;
@@ -1752,6 +1758,7 @@ export function createMind(world, game, opts = {}) {
   function* journeyHome(J) {   // the walk home by the planner; the journey ends when he is there
     if (cur) cur.limit = JOURNEY_LIMIT;
     const home = fireSpot(homeSpot());
+    sayOnce(J, 'homeIntent');
     legBegin();
     try {
       let ok = yield* walk(home.x, home.z, { stop: 3, finder: pathJourney, until: () => { fullPace = game.thirst.days >= JOURNEY_HURRY || clock.time >= EXPLORE_BACK - 0.15; return clock.time >= JOURNEY_CAMP && dist(p, home) > 40; } });   // (thirsty, or late: at the normal pace)
@@ -1814,7 +1821,7 @@ export function createMind(world, game, opts = {}) {
       if (chance > 0 && rngFish() < chance) {
         fishedDay = clock.day;
         const o = bestFishSpot(STROLL_MAX_COST);
-        if (o && !exploreLate(clock.time, o.cost * 2 + 40)) return yield* fishTrip(o);
+        if (o && !exploreLate(clock.time, o.cost * 2 + 40)) return yield* fishTrip(o, true);
       }
     }
     if (strollNow(s, rand())) {

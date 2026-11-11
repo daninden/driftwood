@@ -1,13 +1,16 @@
 /** Voice phrases are deterministic presentation data and L stays passive. */
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import * as THREE from 'three';
-import { phraseFor, voiceTime, createThoughts, createVoice, isVoiceKey, isVoiceLogEvent } from '../src/render/voice.js';
+import { readFileSync } from 'node:fs';
+import { PHRASES, phraseFor, voiceTime, createThoughts, createVoice, isVoiceKey, isVoiceLogEvent } from '../src/render/voice.js';
+import { LACK_KINDS } from '../src/game/lack.js';
 import { PASSIVE_CODES, createActing } from '../src/game/input.js';
 
 describe('Voice', () => {
   it('chooses fixed phrases from its own counter', () => {
     expect(phraseFor('woodIntent', 0)).toBe('I need some wood.');
-    expect(phraseFor('woodIntent', 3)).toBe('I need some wood.');
+    expect(phraseFor('woodIntent', 4)).toBe('I need some wood.');
+    expect(phraseFor('woodIntent', 1)).not.toBe('I need some wood.');
     expect(phraseFor('foodIntent', 0)).toBe("I'm hungry.");
     expect(phraseFor('drinkIntent', 0)).toBe('I need a drink.');
     expect(phraseFor('fireLow', 0)).toBe("The fire's getting low.");
@@ -21,9 +24,9 @@ describe('Voice', () => {
     expect(thoughts.take('pickup')).toBeNull();
     thoughts.update(8);
     expect(thoughts.take('woodIntent')).toBeNull();
-    expect(thoughts.take('foodIntent')).toBe('I need something to eat.');
+    expect(thoughts.take('foodIntent')).toBe("I'm hungry.");
     thoughts.update(52);
-    expect(thoughts.take('woodIntent')).toBe('I need some wood.');
+    expect(thoughts.take('woodIntent')).toBe(PHRASES.woodIntent[1]);
     expect(thoughts.take('unknown')).toBeNull();
   });
 
@@ -67,7 +70,34 @@ describe('Voice', () => {
     expect(log.children.length).toBe(1);
     voice.update(10, player, camera, 26.1);
     voice.announce('foodIntent', 0.3);               // outside the wake window: at once
-    expect(line.textContent).toBe('I need something to eat.');
+    expect(line.textContent).toBe("I'm hungry.");
+  });
+
+  it('speaks only reasons: no action kind has a phrase (0.30.20 "Words")', () => {
+    for (const kind of ['pickup', 'lay', 'feed', 'husk', 'drink', 'fill', 'sip', 'dig', 'roast', 'light', 'kindle', 'build', 'upgrade', 'sleep', 'berries', 'bananas', 'eatBerries', 'eatBanana', 'torch', 'plant', 'eatNut', 'drytransfer']) expect(phraseFor(kind, 0)).toBeNull();
+    const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+    expect(main).not.toMatch(/game\.onAction/);
+  });
+
+  it('has 3 or 4 lines for every kind the mind thinks and every kind the player can lack', () => {
+    const mind = readFileSync(new URL('../src/game/mind.js', import.meta.url), 'utf8');
+    const kinds = new Set([...mind.matchAll(/think\('(\w+)'\)/g)].map(m => m[1]));
+    for (const m of mind.matchAll(/'(\w+Intent)'/g)) kinds.add(m[1]);
+    for (const m of mind.matchAll(/think\([^\n]*\? '(\w+)' : '(\w+)'\)/g)) { kinds.add(m[1]); kinds.add(m[2]); }   // a choice between two kinds
+    for (const m of mind.matchAll(/think: ([^\n]*?)(?:, wanted|,\n)/g)) for (const q of m[1].matchAll(/(?<!=== )'(\w+)'/g)) kinds.add(q[1]);   // the collect option
+    for (const k of LACK_KINDS) kinds.add(k);
+    for (const k of ['fibreIntent', 'foodReserve', 'wetwood', 'fireOut', 'fireLow', 'explore', 'homeWoodIntent']) expect(kinds.has(k)).toBe(true);
+    for (const kind of kinds) { expect(PHRASES[kind], kind).toBeDefined(); expect(PHRASES[kind].length).toBeGreaterThanOrEqual(3); expect(PHRASES[kind].length).toBeLessThanOrEqual(4); }
+    for (const kind of Object.keys(PHRASES)) expect(kinds.has(kind), `unused phrase ${kind}`).toBe(true);
+  });
+
+  it('rotates the variants and never repeats a line for a kind twice in a row', () => {
+    for (const kind of Object.keys(PHRASES)) {
+      const thoughts = createThoughts(), said = [];
+      for (let i = 0; i < PHRASES[kind].length * 2 + 1; i++) { thoughts.update(100); said.push(thoughts.take(kind)); }
+      for (let i = 1; i < said.length; i++) expect(said[i]).not.toBe(said[i - 1]);
+      expect(new Set(said).size).toBe(PHRASES[kind].length);
+    }
   });
 
   it('leaves L out of castaway control', () => {

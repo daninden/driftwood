@@ -1,7 +1,8 @@
 /**
  * render/voice — situation-led written thoughts and the session log (0.30.1 "Thoughts").
  *
- * Fixed phrases use a separate counter, never the world or mind PRNG. The DOM
+ * 0.30.20 "Words": only reasons speak, never actions. Every kind (an intent of the mind, or what the player lacks, game/lack) has 3 or 4 lines that rotate per kind
+ * (never the same line twice in a row). Fixed phrases use their own counters, never the world or mind PRNG. The DOM
  * view projects one fading line over Dave and keeps displayed lines in order.
  *
  * 0.30.8 "Morning": voice.hold(until) keeps a new line above Dave back until the steady clock `now`
@@ -9,30 +10,42 @@
  * rule (8 s) still applies at the moment it is said, so at most one line can wait through the 5 s wake line;
  * there is no queue.
  *
- * Exports: phraseFor, voiceTime, createThoughts, isVoiceKey, isVoiceLogEvent, createVoice
+ * Exports: PHRASES, phraseFor, voiceTime, createThoughts, isVoiceKey, isVoiceLogEvent, createVoice
  *   (createVoice -> { history, announce, hold(until), update(dt, player, camera, now?), toggle, open }; now defaults to a clock of the dts)
  * Depends on: three, render/screenRect
  */
 import * as THREE from 'three';
 import { rectOf } from './screenRect.js';
 
-const PHRASES = {
-  pickup: ['This may be useful.', 'Better keep this.'],
-  lay: ['This is a good place for it.'],
-  feed: ["The fire needs more wood."],
-  husk: ['This coconut will do.'],
-  drink: ['I need a drink.'], fill: ['A little water for later.'], sip: ['I need a drink.'],
-  dig: ['There may be a crab here.'], roast: ['Something warm to eat.'],
-  light: ['I need a fire.'], kindle: ['A little warmth here, too.'],
-  build: ['I need a little shelter.'], upgrade: ['This could be a little cosier.'], sleep: ['I need some rest.'],
-  berries: ['These berries will do.'], bananas: ['These bananas will do.'], eatBerries: ['A little food will help.'], eatBanana: ['A little food will help.'],
-  torch: ['I need a little light.'], plant: ['The light can stay here.'], eatNut: ['A little food will help.'],
-  drinkIntent: ['I need a drink.', "I'm thirsty."], foodIntent: ["I'm hungry.", 'I need something to eat.'], sleepIntent: ['I need some rest.'],
-  woodIntent: ['I need some wood.'], fireLow: ["The fire's getting low."], fireOut: ['I need a fire.'],
-  fibreIntent: ['I need some fibre for the fire.'], foodReserve: ['Not much food left for later.'],
-  wetwood: ['This wood needs a dry place.'], drytransfer: ['I need some dry wood by the fire.'], explore: ['There may be something useful further on.'],
+/** Reasons only, never actions (0.30.20 "Words"): every kind is something Dave intends or something he lacks. 3 or 4 plain first-person lines each. */
+export const PHRASES = {
+  drinkIntent: ['I need a drink.', "I'm thirsty.", 'My throat is dry.', 'Some water would be good.'],
+  foodIntent: ["I'm hungry.", 'I need something to eat.', 'My stomach is empty.', 'I should eat something.'],
+  sleepIntent: ['I need some rest.', "I'm tired.", 'It is time to sleep.', 'I could do with some sleep.'],
+  woodIntent: ['I need some wood.', 'The fire will want wood.', 'I should gather some wood.', 'A few pieces of wood would help.'],
+  homeWoodIntent: ['I need wood for a shelter.', 'The shelter needs more wood.', 'A few more pieces for the shelter.', 'I need timber for my shelter.'],
+  fireLow: ["The fire's getting low.", 'The fire needs more wood.', 'The flames are dying down.', 'I should feed the fire.'],
+  fireOut: ['I need a fire.', 'It would be good to have a fire.', 'I should light a fire.', 'A fire would help.'],
+  fibreIntent: ['I need some fibre for the fire.', 'I need fibre to start a fire.', 'A fire needs some fibre.', 'I should find some fibre.'],
+  foodReserve: ['Not much food left for later.', 'I should keep some food for later.', 'I want something in reserve.', 'A nut for later would be good.'],
+  wetwood: ['This wood needs a dry place.', 'This wood is too wet to burn.', 'It should dry somewhere higher.', 'The sea will take this wood.'],
+  explore: ['There may be something useful further on.', 'I wonder what is further along.', 'I should look around a little.', 'Perhaps something useful lies ahead.'],
+  spearIntent: ['I need a spear to fish.', 'A spear might catch a fish.', 'I could make a spear.', 'I want to try fishing.'],
+  fishIntent: ['There may be fish in the shallows.', 'I could try for a fish.', 'Perhaps a fish today.', 'A fish would be a good meal.'],
+  roastIntent: ['Something warm to eat.', 'This should be cooked first.', 'I will roast it.', 'It will taste better warm.'],
+  buildIntent: ['I need a little shelter.', 'I should build a shelter.', 'A roof would be good.', 'I want somewhere to sleep.'],
+  upgradeIntent: ['This could be a little cosier.', 'The shelter could be better.', 'I can make this more comfortable.', 'A few more touches here.'],
+  torchIntent: ['I need a little light.', 'It is dark. I need a light.', 'I will take a light with me.', 'I should not walk in the dark.'],
+  journeyIntent: ['I want to see what lies further off.', 'I would like to go further.', 'Perhaps I can find something far away.', 'I want to see more of the island.'],
+  campIntent: ["I'll sleep out here tonight.", 'This will do for the night.', 'I should rest here tonight.', 'Night is coming. I will camp here.'],
+  homeIntent: ['Time to go home.', 'I should head back.', 'I want to be back at camp.', 'It is a long way back to camp.'],
+  needSpear: ['I need a spear to fish.', 'I cannot fish with my hands.', 'A spear would help here.', 'There may be fish, but I have no spear.'],
+  spearAway: ['My spear is back at camp.', 'I left my spear behind.', 'I need my spear for this.', 'The spear is not with me.'],
+  needFibre: ['I need some fibre for the fire.', 'I need fibre to light this.', 'This needs a little fibre.', 'I have nothing to light it with.'],
+  needMoreWood: ['This needs more wood to burn.', 'There is not enough wood here.', 'I need a few more pieces.', 'This will not burn for long.'],
 };
 
+/** The variant of `kind` for its n-th line: a plain rotation, so a kind never repeats a line twice in a row. Presentation only: no PRNG. */
 export function phraseFor(kind, count = 0) {
   const phrases = PHRASES[kind];
   return phrases ? phrases[Math.abs(Math.trunc(count)) % phrases.length] : null;
@@ -47,13 +60,14 @@ export function voiceTime(time) {
 /** Presentation-only quiet time: no queue of stale thoughts, no retry chatter. */
 export function createThoughts() {
   const shown = new Map();
-  let now = 0, last = -Infinity, count = 0;
+  const counts = new Map();   // per kind: how many of its lines were shown (the rotation)
+  let now = 0, last = -Infinity;
   return {
     update(dt) { now += dt; },
     take(kind) {
-      const next = phraseFor(kind, count);
+      const next = phraseFor(kind, counts.get(kind) ?? 0);
       if (!next || now - last < 8 || now - (shown.get(kind) ?? -Infinity) < 60) return null;
-      last = now; shown.set(kind, now); count++;
+      last = now; shown.set(kind, now); counts.set(kind, (counts.get(kind) ?? 0) + 1);
       return next;
     },
   };

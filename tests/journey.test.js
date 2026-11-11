@@ -61,11 +61,11 @@ describe('journeys: when one may start (pure)', () => {
 });
 
 // a game from `day` at `time` with his lean-to done and wood and fibre in stock; the mind of stream `stream`; steps until `stop(m, g)` or `max` game days
-const life = ({ day = 5, time = 0.19, stream = 0, leantos = done(), days = 1.5, stop = null, onTick = null, tweak = null } = {}) => {
+const life = ({ day = 5, time = 0.19, stream = 0, leantos = done(), days = 1.5, stop = null, onTick = null, tweak = null, onIntent = null } = {}) => {
   const g = campGame(w, spawn, { day, time, know: true, leantos, stocked: true });
   g.known.visit(spawn.x, spawn.z);
   if (tweak) tweak(g);
-  const m = createMind(w, g, { stream }); m.engage();
+  const m = createMind(w, g, { stream, ...(onIntent ? { onIntent } : {}) }); m.engage();
   const r = { ticks: 0, started: null, routeJourney: 0, routeExplore: 0, exploreTicks: 0, journeyTicks: 0, sleeps: [], phases: new Set(), maxFromHome: 0 };
   const start = g.clock.total, home = () => m.home();
   for (let i = 0; i < 200000 && g.clock.total < start + days; i++) {
@@ -82,6 +82,18 @@ const life = ({ day = 5, time = 0.19, stream = 0, leantos = done(), days = 1.5, 
   return r;
 };
 const journeyOver = (m, g, r) => r.started !== null && !m.journeying;
+
+describe('journeys: words (0.30.20)', () => {
+  it('thinks once on departure, once at each night camp and once on the way home', () => {
+    const kinds = [];
+    const r = life({ days: 3, onIntent: e => { if (/^(journey|camp|home)Intent$/.test(e.kind)) kinds.push(e.kind); }, stop: journeyOver });
+    expect(r.started).not.toBeNull();
+    expect(kinds.filter(k => k === 'journeyIntent')).toHaveLength(1);
+    expect(kinds.filter(k => k === 'campIntent')).toHaveLength(r.m.stats.journey.nights);
+    expect(kinds.filter(k => k === 'homeIntent').length).toBeGreaterThanOrEqual(1);
+    expect(kinds[0]).toBe('journeyIntent');
+  }, 600000);
+});
 
 describe('journeys: starting (in a scene, seed 1337, his lean-to done, stocked)', () => {
   it('goes on a journey on a calm morning from day 4: far, to ground he did not know, learning on the way, at the amble', () => {
