@@ -86,7 +86,7 @@ describe('Voice', () => {
     for (const m of mind.matchAll(/think\([^\n]*\? '(\w+)' : '(\w+)'\)/g)) { kinds.add(m[1]); kinds.add(m[2]); }   // a choice between two kinds
     for (const m of mind.matchAll(/think: ([^\n]*?)(?:, wanted|,\n)/g)) for (const q of m[1].matchAll(/(?<!=== )'(\w+)'/g)) kinds.add(q[1]);   // the collect option
     for (const k of LACK_KINDS) kinds.add(k);
-    for (const k of ['fibreIntent', 'foodReserve', 'wetwood', 'fireOut', 'fireLow', 'explore', 'homeWoodIntent']) expect(kinds.has(k)).toBe(true);
+    for (const k of ['fibreIntent', 'foodReserve', 'wetwood', 'fireOut', 'fireLow', 'explore', 'homeWoodIntent', 'axeIntent', 'clearIntent']) expect(kinds.has(k)).toBe(true);
     for (const kind of kinds) { expect(PHRASES[kind], kind).toBeDefined(); expect(PHRASES[kind].length).toBeGreaterThanOrEqual(3); expect(PHRASES[kind].length).toBeLessThanOrEqual(4); }
     for (const kind of Object.keys(PHRASES)) expect(kinds.has(kind), `unused phrase ${kind}`).toBe(true);
   });

@@ -6,7 +6,7 @@
  * (a walk target, a press of the action button, a click on an icon of the arc, Z, a click on the row) and so can do only what a
  * player could do. It looks at the island only where the castaway has been (game/known): its targets and its paths stay inside the
  * known cells and 1.5 m away from their edge (`inside`), so he does not wander off into land he has not seen, except on a search (below) and on an exploring trip (0.29.4). Since 0.29.9 a target at a dynamic solid's centre is approached at its rim, so the same actions still work. It never wakes him from sleep and never starts a sleep before he could choose to.
- * It builds only one thing: his home (0.29.3 "Homestead", below); every other kind of the arc it never chooses.
+ * It builds only one thing: his home (0.29.3 "Homestead", below); every other kind of the arc it never chooses, except (0.31 "Axe", below) making the one axe, felling trees with it and carrying and piling the logs once his home is complete.
  *
  * What he does, in this order of priority (`chooseGoal`, pure, on a plain snapshot of the needs and the time of day):
  *   1 drink   thirst >= THIRST_GO (0.35 days; BED_THIRST 0.25 from SUPPER_FROM 0.64 to LIGHT_FROM 0.74): a full shell is drunk, else he walks to the nearest known fresh river water and kneels (knowing none, he searches, below);
@@ -71,6 +71,10 @@
  *   game/fish `fishableAt` at the sea as it is now, a way of at most STROLL_MAX_COST), up to FISH_TRIES (8) presses of the arc's/ring's 'fish' until FISH_WANT (1) fish is carried; the spear goes back and a fish waits for flames like a crab (`chooseGoal`: a fish counts with the crabs). FOOD: fish is an
  *   ordinary option of the eat goal (`fishOption`, `fishFoodOk`: a spear exists, room for a fish, flames burning to roast it at, by day until FISH_FOOD_TO 0.8), weighed like the others by walking cost: the way to the spear if it lies at the camp, on to the water, back to the flames, and FISH_EXTRA (20) seconds for the tries and the roast.
  *   PASTIME (`fishChance`, a stream of its own, `rngFish`): once a day in the afternoon (FISH_FROM 0.42 to FISH_TO 0.6) at an idle moment, chance FISH_IDLE_CHANCE (0.5; 0.35 before 0.30.18 "Catch"), when nothing is urgent (thirst under FISH_THIRST 0.3, hunger under FISH_HUNGER 0.35), nothing is carried to roast and no crab trip is possible now, and he can be home before dark (`exploreLate`); the catch is the evening fire's supper.
+ * 0.31 "Axe": THE AXE AND THE CLEARING (`axeNext` pure, `axePlan`, `axeGoal`; the routine and the numbers are in docs/architecture.md, "The axe and the clearing"). Only when his home is complete (lean-to, walls, ring and bed), in the home's morning window (HOME_FROM to HOME_TO), at most one unit of work a day, after the spear and before the tide round and exploring, nothing pressing (AXE_THIRST, AXE_HUNGER): he makes ONE
+ *   axe once (`makeAxeTrip`: a branch, a stone, a tuft of fibre from known ground), else carries a log that lies about to a log pile (`carryLog`), else fells a tree (`fellTree`): first every tree whose trunk stands within AXE_CLEAR_R (10 m) of the lean-to's middle, nearest first (palms and giants too; one he cannot reach is skipped and asked again after AXE_RETRY_DAYS), then, while fewer than AXE_LOGS (12) logs are stored,
+ *   the nearest just outside it (up to AXE_OUT_R); then no more. He takes the axe, stands where 'fell' is offered, chops, lays the axe down, shoulders the log, lays it on a log pile (`logDest`: piles of twelve on the ring LOG_RING, 11.6 to 12.6 m from the lean-to's middle, behind it first, the next beside the last along the ring), and takes the axe back to lie beside the piles (`axeSpot`). A giant: the first section the day it falls, one more each morning. A log
+ *   on his shoulder or the axe in his hand is laid down before any other goal (`handoff`, `returnAxe`): a carried log counts as `W.load()` 1 with an empty `W.carried` (`carriedKind()` is 'log'). Never for firewood. `mind.stats.axe`, events `axe-*`, hooks `mind.axePlan`, `mind.logDest`, `mind.axeSpot`, `mind.axeSnap`.
  * 0.30.4 "Timber": FETCHING AND HANDOFF. Wood is fetched far to near: `selectStops` picks the nearest pieces from where he stands (normally three, fewer when the errand needs fewer; the finder's walking cost, as `nearestBy` weighs it; at most SET_SPAN 45 m of walking beyond the nearest piece),
  *   `collect` fetches the farthest of them first, then the nearer, and chooses again only when a chosen piece is gone or cannot be had (fire stock, home materials, the wet reserve trips and the wet pieces of a shore stroll all use it). Wet wood for the tideline: up to CARRY_MAX (3, was two) per trip, fewer when fewer are in reach. (The drying
  *   pile of 0.30.4 to 0.30.12 is gone.) HANDOFF: before another task (drink, meal, bed, the fire, a nut, the morning at home, a stroll, an exploring walk) with wood in his arms he first lays it on the pile it belongs to (`handoff`: dry firewood on the fire's stock, wet wood at the tideline, building
@@ -98,6 +102,7 @@
  * huskWanted(s), restSeconds(r1, r2), strollKind(avail, last, r), strollNow(s, r)   pure; the choices of the pastimes (0.28.2), tested in tests/mind.test.js
  * sitKind(s) -> 'gaze' | 'fire' | 'rest' | null   pure (0.29.2): whether he sits while he rests (s: time, long, fireNear, gazing)
  * DRY_AT, TIDE_LAND, TIDE_NEAR, TIDE_CAMP, TIDE_APART, TIDE_JOIN_MAX, TIDE_COST, STOCK_MAX_COST, TORCH_TRIP, TORCH_FUEL   (0.30.13 / 0.30.14) the numbers of the tideline and of the torch
+ * axeNext(s) -> bool   pure (0.31): does the axe project have its turn now (s: day, time, done (the home is complete), builtDay, axeDay, thirst, hunger, cool)
  * homeNext(s) -> 'leanto' | 'walls' | 'ring' | 'bed' | null   pure (0.29.3): the next piece of his home now (s: day, time, fire (he has a camp), lean ('none' | 'half' | 'done' | 'other'), up {walls, ring, bed: 0..1}, builtDay, cool)
  * SET_SPAN, HANDOFF_SECS   (0.30.4) the reach of a set of pieces to fetch (m of walking beyond the nearest) and the time a goal gets on top of its limit for the handoff
  * RANK   the priority of each goal (lower wins)
@@ -127,7 +132,7 @@
  *
  * 0.30.10 "Walls": he is never boxed in by his own camp. Every pile he lays (through the game's lay, `wood.drop`), the pile places of the upgrades (`homeNeed`, a gap from every pile and fire place instead of the 1.5 m from other piles), the tideline spot (`tideSpot`) and the leftovers of a build keep CAMP_GAP of walking room from the other solids (game/obstacles `gapFree`), so no ring of solids can close round him. The two building piles stand PAIR_HALF (0.925) either side of the site, 1.85 m apart (were 1.3 to 1.4), and the second is laid from beside the first (`siteDest`), so the game puts it 1.85 to 2 m from it: the gap needs 1.8 m, the arc's build pair allows 2 m.
  *
- * Depends on: game/path, game/route, game/stand (through game.stand), game/weather (through game.weather: the forecast and the rain of a journey), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (siteFor, UPGRADES), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
+ * Depends on: game/felled (treeId, treeInfo, trunkRadius ...), game/axe and game/logs (through game), game/path, game/route, game/stand (through game.stand), game/weather (through game.weather: the forecast and the rain of a journey), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (siteFor, UPGRADES), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -135,10 +140,11 @@ import { createPath } from './path.js';
 import { createRoute } from './route.js';
 import { canStand, terrainAt, obstaclesNear, PACE, WALK_SPEED, BODY } from './movement.js';
 import { asCamp, segmentClear } from './walk.js';
-import { leantoCircles, leantoPoint, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT, PILE_R, gapFree } from './obstacles.js';
+import { leantoCircles, leantoPoint, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT, PILE_R, CAMP_GAP, gapFree } from './obstacles.js';
 import { DAY_SECONDS } from './clock.js';
 import { freshWater } from './water.js';
 import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX, PILE_FRONT, pileSolidRadius } from './wood.js';
+import { LISTS, treeId, sizeKind, trunkRadius, isGiant, treeInfo } from './felled.js';
 import { FIRE_MIN, FUEL_MAX, TORCH_DRY, BURN, DOUSE_DEPTH } from './fire.js';
 import { ringCentre, siteFor, keepFree, KEEP, UPGRADES, UP_NEAR, NEED, RING_AT, RING_R, paidSteps } from './leanto.js';
 import { DAWN as SLEEP_DAWN, isNight } from './sleep.js';
@@ -161,6 +167,8 @@ export const LINGER_MIN = 5, LINGER_MAX = 12, PAUSE_CHANCE = 0.45, PAUSE_MIN = 2
 export const STROLL_KINDS = ['shore', 'river', 'palms', 'forest', 'crabs'], STROLL_WEIGHT = { shore: 3, river: 2, palms: 2, forest: 2, crabs: 12 };   // 0.29.1: crabs, only at low water in the afternoon, so when it is possible it is the usual choice (0.29.2: weight 12, was 6, and the window opens at 0.38, was 0.42: at the amble each stroll takes half as long again, so fewer fitted into the window)
 export const CRAB_TIDE = -0.2, CRAB_FROM = 0.38, CRAB_TO = 0.66, CRAB_FOOD_TO = 0.8, CRAB_DIGS = 4, CRAB_WANT = 1, CRAB_ROAST_HUNGER = 0.2, CRAB_SEEK = 10, NUT_FAR = 50, CRAB_LIMIT = 420;   // 0.29.1 "Low water": crab trips
 export const HOME_DAY = 2, HOME_FROM = 0.21, HOME_TO = 0.44, HOME_LIMIT = 480, HOME_MAX_COST = 50, HOME_ORDER = ['walls', 'ring', 'bed'];   // 0.29.3 "Homestead": he builds his home from day 2 (the third day), in the morning (0.29.4: until 0.44, was 0.38; a crab trip comes first), one piece a day
+// 0.31 "Axe": once the home is complete (lean-to, walls, ring, bed) he makes ONE axe and then fells at most one tree a morning (the home's window): first every tree whose trunk stands within AXE_CLEAR_R of the lean-to's middle, nearest first, then, while fewer than AXE_LOGS logs are stored, the nearest trees just beyond it (up to AXE_OUT_R)
+export const AXE_CLEAR_R = 10, AXE_OUT_R = 32, AXE_LOGS = 12, AXE_LIMIT = 540, AXE_RANGE = 60, AXE_FIBRE = 2, AXE_THIRST = 0.25, AXE_HUNGER = 0.3, AXE_RETRY_DAYS = 6, LOG_RING = [11.6, 12.1, 12.6];   // a tree he cannot reach is asked again after AXE_RETRY_DAYS; the log piles stand 11.6 to 12.6 m from the lean-to's middle
 export const SITE_RINGS = [5, 6.2, 7.5], SITE_HIGH = 0.8, SITE_LEVEL = 0.3, SITE_SLOPE = 0.25;   // the lean-to's site: 4 to 7 m from the home fire, 0.8 m above the high-water line (the sea stands at 0 at high water), the footprint level within 0.3 m
 // 0.29.4 "Wander": now and then, by day and when nothing presses, he goes exploring to the edge of what he knows, on his own terrace, and is home well before dark
 export const EXPLORE_FROM = 0.2, EXPLORE_TO = 0.52, EXPLORE_BACK = 0.6, EXPLORE_MARGIN = 0.012, EXPLORE_DETOUR = 1.5, EXPLORE_SPARE = 45, EXPLORE_LIMIT = 900, EXPLORE_ROUTE = 0.12;   // starts between FROM and TO, is home by BACK (where the evening's chores begin), with a margin; ground with a climbing route of more than EXPLORE_ROUTE is closed
@@ -185,8 +193,8 @@ export const UP_AT = 2.1;   // 0.30.3 rule (a): the piles of the upgrades lie th
 export const SPEAR_DAY = 6, SPEAR_RANGE = 60, SPEAR_LIMIT = 300, FISH_FROM = 0.42, FISH_TO = 0.6, FISH_FOOD_TO = 0.8, FISH_IDLE_CHANCE = 0.5, FISH_THIRST = 0.3, FISH_HUNGER = 0.35, FISH_RANGE = 80, FISH_TRIES = 8, FISH_WANT = 1, FISH_LIMIT = 420, FISH_EXTRA = 20;   // FISH_EXTRA: seconds a fish costs on top of the walk when it is weighed against a nut (the tries and the roast)
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
-const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, explore: 600, fish: 240, spear: 300, journey: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
-const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light', 'build', 'upgrade', 'torch', 'makeSpear', 'takeSpear', 'laySpear', 'fish'];   // the kinds of the arc / ring he ever chooses (the torch only from a fire, `torchFor`, 0.30.14); build and upgrade only in the home project (0.29.3)
+const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, axe: 300, explore: 600, fish: 240, spear: 300, journey: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
+const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light', 'build', 'upgrade', 'torch', 'makeSpear', 'takeSpear', 'laySpear', 'fish', 'makeAxe', 'takeAxe', 'layAxe', 'fell'];   // the kinds of the arc / ring he ever chooses (the torch only from a fire, `torchFor`, 0.30.14); build and upgrade only in the home project (0.29.3)
 
 export function fireStep(s) {
   const t = s.time;
@@ -222,6 +230,13 @@ export function homeNext(s) {
   if (s.lean === 'none') return s.fire ? 'leanto' : null;
   if (s.lean !== 'done') return null;
   return HOME_ORDER.find(k => !(s.up && s.up[k] >= 1)) || null;
+}
+
+/** 0.31 "Axe": does the axe project have its turn now (pure)? His home is complete (s.done: lean-to, walls, ring and bed), the day is from HOME_DAY, it is the home's morning window (HOME_FROM to HOME_TO), no piece of the home was finished today and no unit of the axe's work was done today (one tree, one log, or the axe itself a day),
+ *  nothing presses (thirst under AXE_THIRST, hunger under AXE_HUNGER) and it is not cooling. s: { day, time, done, builtDay, axeDay, thirst, hunger, cool }. */
+export function axeNext(s) {
+  if (!s.done || (s.cool && s.cool.axe) || !(s.time >= HOME_FROM && s.time < HOME_TO) || s.day < HOME_DAY || s.builtDay === s.day || s.axeDay === s.day) return false;
+  return !(s.thirst >= AXE_THIRST || s.hunger >= AXE_HUNGER);
 }
 
 /** 0.29.4 "Wander": the chance, at an idle moment, that he sets out exploring now (pure). s: { time, day, thirst, hunger, last (the day of the last trip), missing (how many of wood, branches, nuts are short at home), cool, crab (a crab trip is possible now) }.
@@ -343,7 +358,7 @@ export function createMind(world, game, opts = {}) {
   const MARGIN = 1.5, DIAG = MARGIN * 0.75;
   const inside = (x, z) => known.hasAround(x, z, MARGIN, DIAG);   // the nine points: (x, z), MARGIN along the axes, DIAG on the diagonals (0.30.5 "Quicker": one lookup where they share a cell)
   const path = createPath(world, { allow: inside, allowVersion: () => known.count, obstacles: game.movement.obstacles }), pathFree = createPath(world, { obstacles: game.movement.obstacles });   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
-  const stats = { tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, spearsMade: 0, spearStuck: 0, fishTrips: 0, fishTries: 0, fishTripTriesMax: 0, fishCaught: 0, fishEaten: 0, journey: { started: 0, completed: 0, nights: 0, fires: 0, cold: 0, noTarget: 0, back: { thirst: 0, hunger: 0, rain: 0, nopath: 0, late: 0 }, stranded: 0, wood: 0, husked: 0, list: [] }, events: [] };
+  const stats = { axe: { made: 0, madeDay: -1, trips: 0, felled: 0, inner: 0, outer: 0, palms: 0, giants: 0, logs: 0, laid: 0, skipped: 0, stuck: 0, fails: 0, felledDays: [], list: [] }, tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, spearsMade: 0, spearStuck: 0, fishTrips: 0, fishTries: 0, fishTripTriesMax: 0, fishCaught: 0, fishEaten: 0, journey: { started: 0, completed: 0, nights: 0, fires: 0, cold: 0, noTarget: 0, back: { thirst: 0, hunger: 0, rain: 0, nopath: 0, late: 0 }, stranded: 0, wood: 0, husked: 0, list: [] }, events: [] };
   const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring && !journeyLeg; }, get journeying() { return !!journey; }, get journeyLeg() { return journeyLeg; }, get journey() { return journey; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let journey = null, journeyLeg = false, journeyDue = JOURNEY_DAY, journeyTried = -9;   // 0.30.19: the journey in hand (it outlasts goals and sleep), the first day of the next one, the day a start was last tried
   let fishedDay = -9, exploring = false, exploredDay = -9, fullPace = false, now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
@@ -355,7 +370,7 @@ export function createMind(world, game, opts = {}) {
     takeWake: () => false, takeLight: () => false, pressing: () => false, cancelAction() { pressed = null; }, clearTarget() { inp.target = null; },
     takeAction: () => { const k = pressed; pressed = null; return k; }, takeChoice: () => { const k = choice; choice = null; return k; }, takeSleep: () => { const k = sleepKey; sleepKey = false; return k; },
   };
-  const ev = (type, data) => { if (stats.events.length < (type.startsWith('home') || type.startsWith('tide') || type.startsWith('journey') ? 900 : 400)) stats.events.push({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); };
+  const ev = (type, data) => { if (stats.events.length < (type.startsWith('home') || type.startsWith('axe') || type.startsWith('tide') || type.startsWith('journey') ? 900 : 400)) stats.events.push({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); };
   const idleInput = () => { inp.target = null; inp.run = false; };
   const busy = () => game.sleep.asleep || p.lie > 0 || !!p.work || p.stoop > 0 || (p.sitting > 0 && !inp.sit);   // (0.29.2: getting up is not done until he stands)
   const cool = (name, secs = COOL[name] || 60) => { coolUntil[name] = now + secs; };
@@ -720,7 +735,7 @@ export function createMind(world, game, opts = {}) {
   // One spear, made once (`makeSpearTrip`: a loose branch and a loose stone on known ground), kept lying at the camp (`spearSpot`: beside the lean-to, or round the fire when there is no lean-to, where a body keeps CAMP_GAP from every solid, clear of the lean-to's
   // keep-free region) and fetched only to fish (`fetchSpear`); afterwards he lays it back there (`returnSpear`) before he takes up wood (every goal but eat begins with it, `withHandoff`). Fishing (`fishTrip`) is the player's own action in shallow sea water (game/fish
   // `fishableAt`): up to FISH_TRIES tries, until FISH_WANT fish is carried. A fish is roasted like a crab.
-  const S = game.spear, offered = kind => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === kind); };
+  const S = game.spear, A = game.axe, LOGS = game.logs, FELLED = game.felled, offered = kind => { const a = game.action(); return [a.tap, ...a.options].some(o => o && o.kind === kind); };
   const campView = game.movement.obstacles.camp;
   let spearHome = null;
   const spearOk = (x, z) => !!openNear(x, z, 0) && gapFree(campView, x, z, BODY) && !game.leantos.list.some(l => keepFree(l).touches(x, z, BODY));
@@ -836,8 +851,8 @@ export function createMind(world, game, opts = {}) {
     });
   }
 
-  const carriedKind = () => W.carried.length ? (W.carried[0].branch ? 'branch' : W.carried[0].frond ? 'frond' : 'drift') : (W.stones.length ? 'stone' : null);
-  function* layDown() { for (let n = 0; n < 3 && (W.carried.length || W.stones.length); n++) { if (!pressKind(['feed', 'lay'])) break; yield* waitIdle(); } }
+  const carriedKind = () => W.log && !W.carried.length && !W.stones.length ? 'log' : W.carried.length ? (W.carried[0].branch ? 'branch' : W.carried[0].frond ? 'frond' : 'drift') : (W.stones.length ? 'stone' : null);
+  function* layDown() { for (let n = 0; n < 3 && (W.carried.length || W.stones.length || W.log); n++) { if (!pressKind(['feed', 'lay'])) break; yield* waitIdle(); } }
   function* toDest(d) {   // to where wood is laid down: beside the pile that is to take it (a spot where the game's lay joins that very pile), at a fire (where it is fed), else to the point itself (a new pile there)
     if (d.pile && W.piles.includes(d.pile) && (d.pile.kind === 'driftwood' || d.pile.kind === 'branch') && (yield* goStand('add', d.pile))) return true;   // (a frond or stone pile is wider than the join distance: none to be had from outside, then a pile of its own beside it)
     const f = game.fire.fires.find(q => dist(q, d) < 1.2);
@@ -1249,6 +1264,226 @@ export function createMind(world, game, opts = {}) {
     return ok;
   }
 
+  // ---------- the axe and the clearing (0.31 "Axe") ----------
+  // Only when his shelter is quite finished (lean-to, walls, ring and bed). He makes ONE axe (a branch, a stone and a tuft of fibre from known ground) and then, at an idle moment of the home's morning window, at most one tree a day through the player's own actions
+  // (take the axe, 'fell', lay it down, shoulder the log, lay it on a log pile). The order: first every tree whose trunk stands within AXE_CLEAR_R of the lean-to's middle, nearest first (palms and giants too); only when that clearing is open (a tree he cannot reach stays: it is
+  // asked again after AXE_RETRY_DAYS, as the known ground grows) and fewer than AXE_LOGS logs are stored (in log piles, lying or on his shoulder) the nearest trees beyond it, up to AXE_OUT_R, until twelve logs are there; then no more. A giant gives 2 or 3 sections: the day it falls he carries the first,
+  // then one a morning (a log lying about is always carried before a new tree is felled; that is the day's work). The logs go to log piles of twelve at the clearing's edge, 11.6 to 12.6 m from the lean-to's middle (`logDest`: behind the lean-to first, then beside the last pile along the ring), the axe is kept lying
+  // beside them (`axeSpot`), laid down where the tree fell while the log is carried and fetched back after it. Never for firewood. Nothing is saved but the game's own state: the axe lies where it was laid (never lost: `fetchAxe` goes to wherever it lies on known ground), a lying log is picked up the next morning.
+  const homeDone = h => h.kind === 'leanto' && UP_NAMES.every(k => !!h.lt.up && h.lt.up[k] >= 1);
+  let axeDay = -9, axeNone = -9, axeHome = null;   // the day of the last unit of work, the day the plan found nothing to do, where the axe is kept
+  const axeSnap = () => ({ day: clock.day, time: clock.time, done: homeDone(homeSpot()) && axeNone !== clock.day, builtDay, axeDay, cool: { axe: isCool('axe') } });
+  const logBad = new Set(), spotKey = (x, z) => Math.round(x * 2) + ',' + Math.round(z * 2);
+  const naturalClear = (x, z, r) => naturalNear(x, z).every(o => Math.hypot(o.x - x, o.z - z) >= o.r + r);
+  const logsStored = () => W.piles.filter(q => q.kind === 'log').reduce((n, q) => n + q.logs.length, 0);
+  const logsLying = () => { let n = 0; for (const l of LOGS.all.values()) if (LOGS.onGround(l)) n++; return n; };
+  const logTotal = () => logsStored() + logsLying() + (W.log ? 1 : 0);   // every log that is or will be in a pile: piled, lying, on his shoulder
+
+  function treesWithin(c, r0, r1) {   // the standing trees whose trunk stands more than r0 and at most r1 from c, nearest first
+    const out = [];
+    for (const t of tilesNear(c.x, c.z, r1 + 2)) for (const list of LISTS) t[list].forEach((tree, index) => {
+      const d = Math.hypot(tree.x - c.x, tree.z - c.z); if (d > r1 || d <= r0) return;
+      const id = treeId(t, list, index); if (FELLED.has(id)) return;
+      const kind = sizeKind(list, tree); out.push({ id, x: tree.x, z: tree.z, r: trunkRadius(tree, kind), d, kind, list, giant: isGiant(tree, kind) });
+    });
+    return out.sort((a, b) => a.d - b.d);
+  }
+  function planFell(t) {   // the standing spot beside a trunk where 'fell' is offered (the arc offers it only with the axe in hand: for the planning alone it is taken as held; nothing else reads it meanwhile)
+    const had = A.hand; A.hand = true;
+    try { return stand.plan('fell', t, path, p, { allow: inside }); } finally { A.hand = had; }
+  }
+  function treeReach(t, h) {   // a standing spot for t he can walk to on his own ground (known, no detour over another terrace), else null (a tree he cannot reach is left alone, and asked again AXE_RETRY_DAYS later)
+    if (isBad('tree', t) || !inside(t.x, t.z)) return null;
+    const fs = fireSpot(h), sp = planFell(t);
+    if (!sp || !(path.cost(fs, sp) <= 2.5 * Math.hypot(sp.x - fs.x, sp.z - fs.z) / WALK_SPEED + 12)) { markBad('tree', t, AXE_RETRY_DAYS * DAY_SECONDS); stats.axe.skipped++; ev('axe-skip', { id: t.id, d: +t.d.toFixed(1), list: t.list }); return null; }
+    return sp;
+  }
+  function nextTree(h) {   // the tree for today: the nearest reachable one in the clearing; else, while the stores are short, the nearest just outside it
+    const c = { x: h.lt.x, z: h.lt.z };
+    for (const t of treesWithin(c, -1, AXE_CLEAR_R).slice(0, 40)) { const sp = treeReach(t, h); if (sp) return { ...t, sp, inner: true }; }
+    if (logTotal() >= AXE_LOGS) return null;
+    for (const t of treesWithin(c, AXE_CLEAR_R, AXE_OUT_R).slice(0, 60)) { if (path.cost(fireSpot(h), t) > HOME_MAX_COST * 3) continue; const sp = treeReach(t, h); if (sp) return { ...t, sp, inner: false }; }
+    return null;
+  }
+  function nextLog(h) {   // a log lying on known ground, the nearest by walking cost
+    for (const l of LOGS.near(h.lt.x, h.lt.z, AXE_RANGE).filter(q => inside(q.x, q.z) && !isBad('log', q)).sort((a, b) => dist(a, p) - dist(b, p)).slice(0, 4)) {
+      if (path.cost(p, l) < Infinity) return l;
+      markBad('log', l, 1200);
+    }
+    return null;
+  }
+  function axePlan() {   // what the next unit of the project is: { what: 'make' } | { what: 'log', log } | { what: 'fell', tree } | null (nothing to do)
+    const h = homeSpot(); if (!homeDone(h)) return null;
+    if (!A.has()) return { what: 'make' };
+    const l = nextLog(h); if (l) return { what: 'log', log: l };
+    const t = nextTree(h); return t ? { what: 'fell', tree: t } : null;
+  }
+
+  // where the log piles stand: on the ring LOG_RING round the lean-to's middle, on known, dry, ordinary ground, a pile's room clear of every camp solid and trunk and the lean-to's keep-free region
+  const logRoom = PILE_R + BODY;
+  const ringPile = (lt, q) => { const d = Math.hypot(q.x - lt.x, q.z - lt.z); return d >= LOG_RING[0] - 1 && d <= LOG_RING[2] + 1; };
+  function logSpotOk(lt, x, z) {
+    if (!openNear(x, z, 0) || logBad.has(spotKey(x, z))) return false;
+    const t = terrainAt(world, x, z, game.sea);
+    if (t.inRiver || t.y < game.sea + 0.5 || t.s >= EXPLORE_SLOPE || t.climb > EXPLORE_ROUTE) return false;
+    if (keepFree(lt).touches(x, z, logRoom) || !gapFree(campView, x, z, logRoom) || !naturalClear(x, z, logRoom + CAMP_GAP)) return false;
+    for (let k = 0; k < 12; k++) {   // open ground all round it: a pile never closes a gap between a trunk, the sea or a slope and itself (a way past it stays)
+      const qx = x + Math.sin(k * Math.PI / 6) * (logRoom + 0.7), qz = z + Math.cos(k * Math.PI / 6) * (logRoom + 0.7), q = terrainAt(world, qx, qz, game.sea);
+      if (!canStand(world, qx, qz, game.sea) || q.inRiver || q.y < game.sea + 0.3 || q.s >= EXPLORE_SLOPE) return false;
+    }
+    return ![S.at, A.at].some(q => q && Math.hypot(q.x - x, q.z - z) < 1.6);
+  }
+  function logSpot(h) {   // a spot for a new pile: behind the lean-to for the first, beside the last pile along the ring after that; null when none fits
+    const lt = h.lt, fs = fireSpot(h), piles = W.piles.filter(q => q.kind === 'log' && ringPile(lt, q)), prev = piles[piles.length - 1] || null, behind = lt.heading + Math.PI, cands = [];
+    for (const r of LOG_RING) for (let i = 0; i < 36; i++) {
+      const a = i * Math.PI / 18, x = lt.x + Math.sin(a) * r, z = lt.z + Math.cos(a) * r;
+      if (!logSpotOk(lt, x, z)) continue;
+      const turn = Math.abs(((a - behind) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);   // 0 straight behind
+      cands.push({ x, z, k: prev ? Math.hypot(x - prev.x, z - prev.z) : turn * 10 + Math.abs(r - LOG_RING[1]) });
+    }
+    cands.sort((a, b) => a.k - b.k);
+    for (const c of cands.slice(0, 12)) if (path.cost(fs, exactPileDrop(fs, c)) <= 3 * Math.hypot(c.x - fs.x, c.z - fs.z) / WALK_SPEED + 15) return { x: c.x, z: c.z };
+    return null;
+  }
+  function logDest(h) {   // where the next log goes: the fullest log pile of the ring with room, else a new pile's spot ({ exact: true }), else null
+    const open = W.piles.filter(q => q.kind === 'log' && ringPile(h.lt, q) && q.logs.length < PILE_FULL && inside(q.x, q.z) && !isBad('logpile', q)).sort((a, b) => b.logs.length - a.logs.length)[0];
+    if (open) return { x: open.x, z: open.z, pile: open };
+    const s = logSpot(h); return s ? { x: s.x, z: s.z, exact: true } : null;
+  }
+  function* deliverLog() {   // the log on his shoulder onto a log pile at the clearing's edge; false (the log stays on his shoulder) when no pile can be had
+    const h = homeSpot(); if (!W.log || h.kind !== 'leanto') return false;
+    for (let tries = 0; tries < 3 && W.log; tries++) {
+      const d = logDest(h); if (!d) break;
+      if (d.pile) {
+        if (!(yield* goStand('add', d.pile))) { markBad('logpile', d.pile, 600); continue; }
+        if (pressKind(['lay'])) yield* waitIdle();
+      } else {
+        const at = exactPileDrop(p, d);
+        if (yield* walk(at.x, at.z, { stop: 0.08, settle: 4 })) { p.heading = at.heading; if (pressKind(['lay'])) yield* waitIdle(); }
+        if (W.log) logBad.add(spotKey(d.x, d.z));
+      }
+    }
+    if (W.log) { ev('axe-log-nowhere'); return false; }
+    stats.axe.laid++;
+    const q = W.piles.filter(o => o.kind === 'log').sort((a, b) => dist(a, p) - dist(b, p))[0];
+    ev('axe-log-laid', { pile: q ? q.logs.length : 0, d: q ? +Math.hypot(q.x - h.lt.x, q.z - h.lt.z).toFixed(1) : null });
+    return true;
+  }
+  function logStand(l) {   // a spot along the log where the arc offers to pick up THAT log (a pile or another piece nearer to his feet takes its place in the arc: the tideline's piles lie where trees fall too; the next section of a giant lies end to end with this one), the best of the spots; null when none
+    const ca = Math.cos(l.a), sa = Math.sin(l.a), h = l.len / 2, camp = game.movement.obstacles.camp, offers = (qx, qz) => game.offersAt(qx, qz).some(o => o.kind === 'pickup' && o.thing && o.thing.kind === 'log' && o.thing.log === l);
+    let best = null, bk = -1, bd = Infinity;
+    for (let u = -1; u <= 1.001; u += 0.2) for (const side of [0, 0.2, -0.2, 0.4, -0.4]) {
+      const x = l.x + ca * u * h - sa * side, z = l.z + sa * u * h + ca * side;
+      if (!inside(x, z) || !canStand(world, x, z, game.sea) || camp.inside(x, z, 0.05) || !offers(x, z)) continue;
+      let k = 0; for (let n = 0; n < 8; n++) { const qx = x + Math.sin(n * Math.PI / 4) * 0.12, qz = z + Math.cos(n * Math.PI / 4) * 0.12; if (!canStand(world, qx, qz, game.sea) || offers(qx, qz)) k++; }   // (the follower stops within 0.12 m, a slide a little more: the more the log is offered all round the spot, the better)
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (k > bk || (k === bk && d < bd)) { bk = k; bd = d; best = { x, z }; }
+    }
+    return best;
+  }
+  function* fetchLog(l) {   // walks to a spot beside the log where it is offered and shoulders it (nothing else in his arms or hands)
+    const wanted = o => !!o.thing && o.thing.kind === 'log' && o.thing.log === l;
+    const near = () => { const a = game.action().tap; return !!a && a.kind === 'pickup' && wanted(a); };
+    for (let tries = 0; tries < 2 && !W.log; tries++) {
+      const at = logStand(l); if (!at) break;
+      yield* walk(at.x, at.z, { stop: 0.12, settle: 3, until: near });
+      const k = pressKind(['pickup'], wanted); if (k) yield* waitIdle();
+    }
+    return !!W.log;
+  }
+
+  // the axe's own place: beside the log piles (the next pile's spot), 1.9 to 3.1 m from it on the lean-to's side
+  const axeSpotOk = (x, z) => !!openNear(x, z, 0) && gapFree(campView, x, z, BODY) && !game.leantos.list.some(l => keepFree(l).touches(x, z, BODY)) && !(S.at && Math.hypot(x - S.at.x, z - S.at.z) < 1.2) && naturalClear(x, z, BODY + 0.3);
+  function axeSpot() {
+    if (axeHome && axeSpotOk(axeHome.x, axeHome.z)) return axeHome;
+    const h = homeSpot(), d = h.kind === 'leanto' ? logDest(h) : null, base = d || (h.kind === 'leanto' ? { x: h.lt.x, z: h.lt.z } : { x: h.x, z: h.z }), cands = [];
+    for (const r of d ? [1.9, 2.5, 3.1] : [3.4, 4.2, 5]) for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8; cands.push({ x: base.x + Math.sin(a) * r, z: base.z + Math.cos(a) * r }); }
+    cands.sort((a, b) => dist(a, h) - dist(b, h));
+    axeHome = cands.find(q => axeSpotOk(q.x, q.z)) || null;
+    return axeHome;
+  }
+  function* fetchAxe() {   // the axe into his hand, from wherever it lies on known ground
+    if (A.hand) return true;
+    if (!A.at || W.load() || game.fire.torch || !inside(A.at.x, A.at.z)) return false;
+    const q = { x: A.at.x, z: A.at.z };
+    yield* walk(q.x, q.z, { stop: 0.3, until: () => offered('takeAxe') });
+    if (!A.hand) { if (!offered('takeAxe')) yield* walk(q.x, q.z, { stop: 0.1 }); if (pressKind(['takeAxe'])) yield* waitIdle(); }
+    return A.hand;
+  }
+  function* returnAxe() {   // lays the axe down at its place beside the log piles (as the spear: where he can when there is no way there)
+    if (!A.hand) return true;
+    const q = axeSpot();
+    if (q && (yield* walk(q.x, q.z, { stop: 0.15, settle: 3 })) && pressKind(['layAxe'])) yield* waitIdle();
+    if (A.hand) { const o = standNear(p.x, p.z, 4); if (o) yield* walk(o.x, o.z, { stop: 0.3 }); if (pressKind(['layAxe'])) yield* waitIdle(); }
+    if (A.hand) { stats.axe.stuck++; ev('axe-stuck'); }
+    return !A.hand;
+  }
+
+  function* makeAxeTrip() {   // a tuft of fibre (husked if need be), a loose branch under his arm, to a loose stone, kneel: the axe is made and laid down beside the log piles
+    return yield* errand(function* () {
+    if (cur) cur.limit = AXE_LIMIT;
+    const h = homeSpot(), tuft = () => game.fibre.carried;
+    for (let n = 0; n < 2 && tuft() < AXE_FIBRE; n++) { if (!nearestBy('coco', 60)) { cool('axe', 300); lack.nuts = clock.day; return false; } if (!(yield* huskGoal())) { cool('axe', 300); return false; } }
+    if (tuft() < 1) { cool('axe', 300); return false; }
+    const cost = list => { for (const c of list.slice(0, 3)) { const k = path.cost(p, c); if (k < Infinity) return { ...c, cost: k }; } return null; };
+    const b = cost(scan('branch', h.x, h.z, AXE_RANGE)), st = b ? cost(scan('stone', b.x, b.z, AXE_RANGE)) : null;
+    if (!b || !st) { cool('axe', 300); lack[b ? 'wood' : 'branches'] = clock.day; return false; }
+    think('axeIntent');
+    stats.axe.trips++; ev('axe-trip', { what: 'make', branch: [+b.x.toFixed(1), +b.z.toFixed(1)], stone: [+st.x.toFixed(1), +st.z.toFixed(1)] });
+    const pickOffered = () => { const a = game.action().tap; return !!a && a.kind === 'pickup' && !!a.thing && a.thing.kind === 'log' && !!a.thing.log.branch && Math.hypot(a.thing.x - b.x, a.thing.z - b.z) < 1.5; };
+    yield* walk(b.x, b.z, { tap: true, stop: 0.4, until: pickOffered });
+    let k = pressKind(['pickup']); if (k) yield* waitIdle();
+    if (!W.carried.some(l => l.branch) || W.load() !== 1) { markBad('branch', b.o, 600); cool('axe', 300); return false; }
+    yield* walk(st.x, st.z, { tap: true, stop: 0.4, until: () => offered('makeAxe') });
+    if (!offered('makeAxe')) yield* walk(st.x, st.z, { stop: 0.2 });
+    k = pressKind(['makeAxe']); if (k) yield* waitIdle();
+    if (!A.has()) { markBad('stone', st.o, 600); cool('axe', 300); stats.axe.fails++; return false; }
+    stats.axe.made++; stats.axe.madeDay = clock.day; axeDay = clock.day; ev('axe-made');
+    yield* returnAxe();
+    return true;
+    });
+  }
+  function* carryLog(l) {   // a lying log to a pile: the day's work when there is no tree to fell today (or the rest of a giant)
+    return yield* errand(function* () {
+    if (cur) cur.limit = AXE_LIMIT;
+    stats.axe.trips++; ev('axe-trip', { what: 'log', at: [+l.x.toFixed(1), +l.z.toFixed(1)] });
+    if (!(yield* fetchLog(l))) { const t = game.action().tap; ev('axe-fail', { what: 'log', why: 'fetch', tap: t && t.kind, thing: t && t.thing && t.thing.kind, d: +dist(p, l).toFixed(2), len: l.len }); markBad('log', l, 600); cool('axe', 300); stats.axe.fails++; return false; }
+    axeDay = clock.day;
+    if (!(yield* deliverLog())) { cool('axe', 300); stats.axe.fails++; return false; }
+    return true;
+    });
+  }
+  function* fellTree(t) {   // take the axe, to the tree, fell it, lay the axe down, carry the log to its pile, back for the axe and lay it down beside the piles
+    return yield* errand(function* () {
+    if (cur) cur.limit = AXE_LIMIT;
+    think('clearIntent');
+    stats.axe.trips++; ev('axe-trip', { what: 'fell', id: t.id, list: t.list, d: +t.d.toFixed(1), giant: t.giant, inner: t.inner });
+    if (!(yield* fetchAxe())) { cool('axe', 300); stats.axe.fails++; return false; }
+    const info = treeInfo(world, t.id);
+    if (!info || FELLED.has(t.id) || !(yield* goStand('fell', info))) { markBad('tree', t, AXE_RETRY_DAYS * DAY_SECONDS); stats.axe.skipped++; ev('axe-skip', { id: t.id, why: 'stand' }); yield* returnAxe(); return false; }
+    if (!pressKind(['fell'], o => !!o.tree && o.tree.id === t.id)) { markBad('tree', t, AXE_RETRY_DAYS * DAY_SECONDS); stats.axe.skipped++; ev('axe-skip', { id: t.id, why: 'offer' }); yield* returnAxe(); return false; }
+    yield* waitActs(5); yield* waitIdle();
+    if (!FELLED.has(t.id)) { stats.axe.fails++; ev('axe-fell-cut-short', { id: t.id, chopped: +FELLED.chopped(t.id).toFixed(2) }); return false; }   // the progress is kept; the next goal lays the axe back at the camp
+    axeDay = clock.day; stats.axe.felled++; stats.axe[t.inner ? 'inner' : 'outer']++; if (t.list === 'palms') stats.axe.palms++; if (t.giant) stats.axe.giants++;
+    stats.axe.felledDays.push(clock.day); stats.axe.list.push({ day: clock.day, id: t.id, list: t.list, d: +t.d.toFixed(1), giant: t.giant });
+    ev('axe-felled', { id: t.id, list: t.list, d: +t.d.toFixed(1), giant: t.giant });
+    for (let n = 0; n < 2 && A.hand; n++) { if (pressKind(['layAxe'])) yield* waitIdle(); else { const o = standNear(p.x, p.z, 2); if (o) yield* walk(o.x, o.z, { stop: 0.3 }); } }   // the axe lies where the tree fell while the log is carried
+    if (A.hand) return false;
+    const l = LOGS.near(t.x, t.z, 6).filter(q => !isBad('log', q)).sort((a, b) => dist(a, p) - dist(b, p))[0];
+    if (l && (yield* fetchLog(l))) { stats.axe.logs++; yield* deliverLog(); }
+    else if (l) { ev('axe-fail', { what: 'fell', why: 'fetch', id: l.id }); markBad('log', l, 600); stats.axe.fails++; }
+    if (!W.log) { if (yield* fetchAxe()) yield* returnAxe(); }
+    return true;
+    });
+  }
+  function* axeGoal() {   // the day's unit of the project, if there is one; null when nothing was done (nothing to do, or not now)
+    const plan = axePlan();
+    if (!plan) { axeNone = clock.day; return null; }
+    if (plan.what === 'make') return yield* makeAxeTrip();
+    if (plan.what === 'log') return yield* carryLog(plan.log);
+    return yield* fellTree(plan.tree);
+  }
+
   // ---------- the tideline (0.30.13 "Tideline") ----------
   // Wet wood in the strip between the tides never dries there (the sea covers it again and again), and a pile in the strip is taken by the sea at high water. On a beach he knows (a stroll's shore leg, the far end of an exploring trip) he
   // takes up to three such pieces with an arm free and carries them a few metres higher, to a spot just above the high-water line (`tideSpot`), and lays them there: a small pile at the beach edge. It dries where it lies (game/wood), the
@@ -1433,7 +1668,11 @@ export function createMind(world, game, opts = {}) {
     if (!W.load()) return true;
     return yield* errand(function* () {
       if (cur && !cur.handed) { cur.handed = true; cur.limit = (cur.limit || LIMIT[cur.name]) + HANDOFF_SECS; }
-      const ids = [...W.carried, ...W.stones].map(l => l.id), ck = carriedKind(), t = validTag();
+      if (W.log && !W.carried.length && !W.stones.length && why !== 'sleep' && homeSpot().kind === 'leanto') {   // 0.31: a log goes to a log pile at the clearing's edge (never anywhere else but where he stands, when no pile can be had)
+        stats.timber.handoffs++; stats.timber.handoffPieces++; ev('handoff', { why, ids: [W.log.id], kind: 'log', to: 'logpile', tag: null });
+        if (yield* deliverLog()) { ev('handoff-done', { why, ids: [], left: 0 }); return true; }
+      }
+      const ids = [...W.carried, ...W.stones, ...(W.log ? [W.log] : [])].map(l => l.id), ck = carriedKind(), t = validTag();
       // 0.29.3 rule restored: wet driftwood (a stroll's, mean dryness under 0.6) goes to the lean-to site as timber while the project still needs driftwood there; never to the fire
       const siteWet = !(t && t.kind === 'home') && wetForSite();
       const dest = t && t.kind === 'home' ? t.dest : siteWet ? () => siteDest(proj.site, 'driftwood', 'branch') : null;
@@ -1818,9 +2057,10 @@ export function createMind(world, game, opts = {}) {
     }
     if (need && !crabTripOk(s)) return yield* homeGoal(step, need);
     if (spearMakeOk({ ...s, day: clock.day, lean: homeSnap().lean })) { if (scan('branch', h.x, h.z, SPEAR_RANGE).length && scan('stone', h.x, h.z, SPEAR_RANGE).length) return yield* makeSpearTrip(); cool('spear', 120); }   // 0.30.17: he has no spear and a branch and a stone are at hand
+    if (axeNext({ ...axeSnap(), thirst: s.thirst, hunger: s.hunger }) && !crabTripOk(s)) { const r = yield* axeGoal(); if (r !== null) return r; }   // 0.31 "Axe": once the home is complete, the axe and one tree a morning
     if (clock.day !== tideDay && clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crabTripOk(s)) { if (yield* tideRound()) return true; }   // 0.30.13: the daily round to the strip
     if (clock.day > exploredDay && clock.time >= EXPLORE_EARLY && clock.time < EXPLORE_TO) {   // 0.29.4: now and then he goes exploring
-      // 0.30.16: before EXPLORE_FROM only when calm: the home project has nothing to do today (its next piece, as at HOME_FROM, is none: built today, finished, cooling, no camp) and no crab trip is possible or due
+      // 0.30.16: before EXPLORE_FROM only when calm: the home project has nothing to do today (its next piece, as at HOME_FROM, is none: built today, finished, cooling, no camp; the axe's work of 0.31 does not count: it shares the morning with exploring by chance, as the spear and fishing do) and no crab trip is possible or due
       const calm = clock.time < EXPLORE_FROM ? !homeNext({ ...homeSnap(), time: HOME_FROM }) && !crabTripOk(s) && !crabDue({ ...s, total: clock.total }) : undefined;
       const missing = exploreMissing(h), chance = exploreChance({ time: clock.time, day: clock.day, thirst: s.thirst, hunger: s.hunger, last: exploredDay, missing: missing.length, cool: s.cool, crab: crabTripOk(s), calm });
       if (chance > 0 && rngEx() < chance) return yield* exploreTrip(missing);
@@ -1872,8 +2112,9 @@ export function createMind(world, game, opts = {}) {
   const withHandoff = (name, run) => function* () {
     const emergency = (name === 'drink' && game.thirst.days >= VERY_AT) || (name === 'eat' && game.hunger.days >= VERY_HUNGER_AT);
     if (game.fire.torch && name !== 'fire') yield* plantTorch();   // 0.30.14: a torch left in his hand (a trip cut short) is stuck in the ground first
-    if (S.hand && !emergency && name !== 'eat') yield* returnSpear();   // 0.30.17: the spear lies at the camp before he takes up wood (a fishing trip cut short leaves it in his hand)
-    if (emergency) { if (W.load()) { owed = { ids: new Set([...W.carried, ...W.stones].map(l => l.id)), t: now }; stats.timber.skipped++; stats.timber.owed += W.load(); ev('handoff-skipped', { goal: name, ids: [...owed.ids] }); } }
+    if (S.hand && !emergency && name !== 'eat') yield* returnSpear();
+    if (A.hand && !emergency && name !== 'eat') yield* returnAxe();   // 0.31: the axe too lies at the camp before he takes up wood (a felling cut short leaves it in his hand)   // 0.30.17: the spear lies at the camp before he takes up wood (a fishing trip cut short leaves it in his hand)
+    if (emergency) { if (W.load()) { owed = { ids: new Set([...W.carried, ...W.stones, ...(W.log ? [W.log] : [])].map(l => l.id)), t: now }; stats.timber.skipped++; stats.timber.owed += W.load(); ev('handoff-skipped', { goal: name, ids: [...owed.ids] }); } }
     else if (name === 'idle') { if (!W.load()) yield* fetchOwed(); }
     else if (!usesLoad(name)) { yield* handoff(name); if (name !== 'sleep') yield* fetchOwed(); }
     return yield* run();
@@ -1956,6 +2197,7 @@ export function createMind(world, game, opts = {}) {
   mind.path = path; mind.strollCands = strollCands; mind.leantoSites = leantoSites; mind.tideSpot = tideSpot; mind.materialFind = (kind, range) => nearestBy(kind, range); mind.timberPlan = (src, n, o) => selectStops(src, n, o).sort((a, b) => b.cost - a.cost);
   mind.exploreAim = (day, time, where = 'coast', avail = (EXPLORE_BACK - time) * DAY_SECONDS) => { const home = fireSpot(homeSpot()); exo.x = home.x; exo.z = home.z; exo.reach = exploreReach(day); return exploreTarget(home, exploreReach(day), where, avail); };   // 0.30.16: the spot a trip would aim for on that day at that time of day (tests; no side effects but the trip's own bookkeeping of exo)
   mind.journeyAim = (day, time, where = 'coast', avail = (JOURNEY_ARRIVE - time) * DAY_SECONDS) => { const home = fireSpot(homeSpot()); return journeyTarget(home, where, avail); };   // 0.30.19: the spot a journey would aim for (tests; the rings it looks at are the PRNG's)
+  mind.axePlan = axePlan; mind.logDest = () => { const h = homeSpot(); return h.kind === 'leanto' ? logDest(h) : null; }; mind.axeSpot = axeSpot; mind.axeSnap = axeSnap;   // 0.31: for the tests
   mind.siteReason = siteReason; mind.existingSite = existingSite; mind.homePlan = () => { const h = homeSpot(), sn = { ...homeSnap(), time: HOME_FROM, day: Math.max(clock.day, HOME_DAY), builtDay: -1, cool: {} }, step = homeNext(sn); return { step, need: step ? homeNeed(step, h) : null, site: proj.site, snap: sn }; };
   return mind;
 }

@@ -32,6 +32,8 @@ export const PHRASES = {
   explore: ['There may be something useful further on.', 'I wonder what is further along.', 'I should look around a little.', 'Perhaps something useful lies ahead.'],
   spearIntent: ['I need a spear to fish.', 'A spear might catch a fish.', 'I could make a spear.', 'I want to try fishing.'],
   fishIntent: ['There may be fish in the shallows.', 'I could try for a fish.', 'Perhaps a fish today.', 'A fish would be a good meal.'],
+  axeIntent: ['I could use an axe.', 'An axe would be useful.', 'I should make an axe.', 'A good axe would help.'],
+  clearIntent: ["Let's make some room.", 'This tree has to go.', 'I need more room here.', 'I will clear some space.'],
   roastIntent: ['Something warm to eat.', 'This should be cooked first.', 'I will roast it.', 'It will taste better warm.'],
   buildIntent: ['I need a little shelter.', 'I should build a shelter.', 'A roof would be good.', 'I want somewhere to sleep.'],
   upgradeIntent: ['This could be a little cosier.', 'The shelter could be better.', 'I can make this more comfortable.', 'A few more touches here.'],
