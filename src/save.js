@@ -40,6 +40,7 @@
  * Since 0.31 "Axe" a save may also carry `axe: { hand, at }` (the one axe, like `spear`, game/axe), `felled: { list: [{ id, h, at }], chop?: [[id, progress]] }` (the trees he has cut down with the heading they fell,
  * and the progress of an interrupted felling, game/felled), `logs: { list: [{ id, x, y, z, len, a, rad }], taken: [id] }` (the logs of felled trees, game/logs), `wood.log: id` (the log on his shoulder), piles of kind 'log' (ids from
  * game/logs LOG_ID0), and `extra: [[id, x, z, ...]]` on `branches`, `fronds` and `fibre` (the loose branches, fronds and nuts a felled crown left, ids from their EXTRA_ID0); all optional, older saves have none (nothing felled, no axe).
+ * Since 0.31.1 "Milk" a save may also carry `habit: { journeyDue, journeyTried, exploredDay, journeys }` (whole numbers: the first day of his next journey, the day a journey start was last tried, his last exploring day, and how many journeys he has begun; game/mind `state`), handed back to createMind as `saved`; optional, older saves have none (the next journey is due on day 4 as at a new start). The journey in progress is not saved.
  * Since 0.25 a save may also carry `shells: { full: [boolean], nuts }` (the half shells he keeps, at most 2, each full of water or not, and the
  * whole coconuts he carries, 0 to 2); optional, older saves have none (no shells, no nuts).
  * Since 0.26 a save may also carry `berries` and `bananas`, each `{ carried: [total], picked: [[plantId, total]] }` (the handfuls / the bunch he carries with the moment
@@ -126,6 +127,7 @@ function valid(s, seed) {
   if (s.branches !== undefined && s.branches.extra !== undefined && !(arr(s.branches.extra) && s.branches.extra.length <= 32768 && s.branches.extra.every(e => arr(e) && e.length === 6 && e.every(num)))) return false;
   if (s.fronds !== undefined && s.fronds.extra !== undefined && !(arr(s.fronds.extra) && s.fronds.extra.length <= 32768 && s.fronds.extra.every(e => arr(e) && e.length === 6 && e.every(num)))) return false;
   if (f.extra !== undefined && !(arr(f.extra) && f.extra.length <= 32768 && f.extra.every(e => arr(e) && e.length === 4 && e.every(num)))) return false;
+  if (s.habit !== undefined && !(obj(s.habit) && Object.values(s.habit).every(Number.isInteger))) return false;
   if (s.fish !== undefined && !(obj(s.fish) && arr(s.fish.carried) && s.fish.carried.length <= 2 && s.fish.carried.every(num) && num(s.fish.tries))) return false;
   if (s.shells !== undefined && !(obj(s.shells) && arr(s.shells.full) && s.shells.full.length <= 2 && s.shells.full.every(f => typeof f === 'boolean') && Number.isInteger(s.shells.nuts) && s.shells.nuts >= 0 && s.shells.nuts <= 2)) return false;
   for (const [key, max] of [['berries', 2], ['bananas', 1]]) {

@@ -11,6 +11,8 @@ import { freshWater, findWater } from '../src/game/water.js';
 import { terrainAt } from '../src/game/movement.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { serialise, parseSave } from '../src/save.js';
+import { thirstFill, FILL_GO as THIRST_FILL_GO } from '../src/game/thirst.js';
+import { THIRST_GO } from '../src/game/mind.js';
 import { dropClip, thirstOpacity, drank, createThirstMark, FILL_STEPS } from '../src/render/thirstMark.js';
 import { burntOpacity, BURNT_PEAK, BURNT_FLOOR } from '../src/render/fire.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
@@ -231,6 +233,14 @@ describe('the drop mark', () => {
     expect(thirstOpacity(0, 0)).toBeCloseTo(PEAK_OPACITY); expect(thirstOpacity(0, HOLD)).toBeCloseTo(PEAK_OPACITY);
     expect(thirstOpacity(0, HOLD + EASE + 1)).toBeCloseTo(REST_OPACITY);
     expect(drank(1.4, 0)).toBe(true); expect(drank(1.4, 1.41)).toBe(false); expect(drank(null, 0)).toBe(false);
+  });
+  it('fills the drop on a curve in three pieces: full, half when he goes to drink, a quarter when thirsty, empty at the collapse (0.31.1)', () => {
+    expect(THIRST_FILL_GO).toBe(THIRST_GO);
+    expect(thirstFill(0)).toBe(1); expect(thirstFill(THIRST_GO)).toBeCloseTo(0.5, 10); expect(thirstFill(THIRSTY_AT)).toBeCloseTo(0.25, 10);
+    expect(thirstFill(COLLAPSE_AT)).toBe(0); expect(thirstFill(9)).toBe(0); expect(thirstFill(-1)).toBe(1);
+    expect(thirstFill(THIRST_GO / 2)).toBeCloseTo(0.75, 10); expect(thirstFill((THIRSTY_AT + COLLAPSE_AT) / 2)).toBeCloseTo(0.125, 10);
+    let prev = 1; for (let d = 0; d <= COLLAPSE_AT; d += 0.01) { const f = thirstFill(d); expect(f).toBeLessThanOrEqual(prev + 1e-12); prev = f; }
+    const t = createThirst(); t.update(THIRST_GO); expect(t.fill()).toBeCloseTo(0.5, 10);
   });
   it('writes the filling and the opacity into the element only when they change', () => {
     const attrs = {}, rect = { setAttribute: (k, v) => { attrs[k] = v; attrs.n = (attrs.n || 0) + 1; } }, el = { style: {}, querySelector: () => rect };

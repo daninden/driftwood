@@ -11,6 +11,8 @@ import { DRILL_COST, DRILL_TIME, FIRE_MIN } from '../src/game/fire.js';
 import { createGame, HUSK_TIME, NUT_DRINK } from '../src/game/game.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { serialise, parseSave } from '../src/save.js';
+import { hungerFill, FILL_GO as HUNGER_FILL_GO } from '../src/game/hunger.js';
+import { HUNGER_GO } from '../src/game/mind.js';
 import { hungerClip, hungerOpacity, ate, createHungerMark, FILL_STEPS, CLEAR_FROM, CLEAR_TO } from '../src/render/hungerMark.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 
@@ -150,6 +152,14 @@ describe('the half coconut mark', () => {
     expect(hungerOpacity(0)).toBeCloseTo(REST_OPACITY, 5); expect(hungerOpacity(CLEAR_FROM)).toBeCloseTo(REST_OPACITY, 5);
     expect(hungerOpacity(CLEAR_TO)).toBeCloseTo(PEAK_OPACITY, 5); expect(hungerOpacity(2.5)).toBeGreaterThan(REST_OPACITY);
     expect(hungerOpacity(0, 0)).toBeCloseTo(PEAK_OPACITY, 5); expect(hungerOpacity(0, HOLD + EASE + 1)).toBeCloseTo(REST_OPACITY, 5);
+  });
+  it('fills the half coconut like the drop: full, half when he goes to eat, a quarter when hungry, empty when starving (0.31.1)', () => {
+    expect(HUNGER_FILL_GO).toBe(HUNGER_GO);
+    expect(hungerFill(0)).toBe(1); expect(hungerFill(HUNGER_GO)).toBeCloseTo(0.5, 10); expect(hungerFill(HUNGRY_AT)).toBeCloseTo(0.25, 10);
+    expect(hungerFill(STARVING_AT)).toBe(0); expect(hungerFill(9)).toBe(0); expect(hungerFill(HUNGER_GO / 2)).toBeCloseTo(0.75, 10);
+    let prev = 1; for (let d = 0; d <= STARVING_AT; d += 0.01) { const f = hungerFill(d); expect(f).toBeLessThanOrEqual(prev + 1e-12); prev = f; }
+    const h = createHunger(); h.update(HUNGER_GO); expect(h.fill()).toBeCloseTo(0.5, 10);
+    expect(hungerClip(hungerFill(HUNGER_GO))).toEqual(hungerClip(0.5));
   });
   it('notices that he ate', () => {
     expect(ate(null, 3)).toBe(false); expect(ate(3, 3.2)).toBe(false); expect(ate(3, 3 - NUT_FOOD)).toBe(true);

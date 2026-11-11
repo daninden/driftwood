@@ -61,11 +61,11 @@ describe('journeys: when one may start (pure)', () => {
 });
 
 // a game from `day` at `time` with his lean-to done and wood and fibre in stock; the mind of stream `stream`; steps until `stop(m, g)` or `max` game days
-const life = ({ day = 5, time = 0.19, stream = 0, leantos = done(), days = 1.5, stop = null, onTick = null, tweak = null, onIntent = null } = {}) => {
+const life = ({ day = 5, time = 0.19, stream = 0, leantos = done(), days = 1.5, stop = null, onTick = null, tweak = null, onIntent = null, saved = null } = {}) => {
   const g = campGame(w, spawn, { day, time, know: true, leantos, stocked: true });
   g.known.visit(spawn.x, spawn.z);
   if (tweak) tweak(g);
-  const m = createMind(w, g, { stream, ...(onIntent ? { onIntent } : {}) }); m.engage();
+  const m = createMind(w, g, { stream, ...(saved ? { saved } : {}), ...(onIntent ? { onIntent } : {}) }); m.engage();
   const r = { ticks: 0, started: null, routeJourney: 0, routeExplore: 0, exploreTicks: 0, journeyTicks: 0, sleeps: [], phases: new Set(), maxFromHome: 0 };
   const start = g.clock.total, home = () => m.home();
   for (let i = 0; i < 200000 && g.clock.total < start + days; i++) {
@@ -226,5 +226,58 @@ describe('journeys: climbing routes are for journeys only', () => {
     let route = 0, ordinary = 0;
     for (let x = -300; x < 300; x += 6) for (let z = -300; z < 300; z += 6) { const t = terrainAt(w, x, z, 0); if (t.climb > EXPLORE_ROUTE && t.s < 3.2 && w.H(x, z) > 1) route++; else if (t.climb <= EXPLORE_ROUTE && t.s < 0.45) ordinary++; }
     expect(route).toBeGreaterThan(0); expect(ordinary).toBeGreaterThan(route);
+  });
+});
+
+describe('journeys: coconut milk and full shells (0.31.1 "Milk")', () => {
+  it('before he leaves he fills his empty shells at the river nearby', () => {
+    const r = life({ stop: (m, g, r) => r.started !== null && (m.stats.journey.filled > 0 || g.clock.time > 0.35), tweak: g => { g.shells.keep(); g.shells.keep(); } });
+    expect(r.started).not.toBeNull();
+    expect(r.m.stats.journey.filled).toBe(2); expect(r.g.shells.full()).toBe(2);
+    expect(r.m.stats.events.some(e => e.type === 'journey-fill' && e.shells === 2)).toBe(true);
+    expect(r.m.stats.events.findIndex(e => e.type === 'journey')).toBeLessThan(r.m.stats.events.findIndex(e => e.type === 'journey-fill'));   // the departure is logged, then the shells are filled, then he goes
+  });
+  it('without empty shells he fills nothing', () => {
+    const r = life({ stop: (m, g, r) => r.started !== null && g.clock.time > 0.35 });
+    expect(r.m.stats.journey.filled).toBe(0); expect(r.m.stats.events.some(e => e.type === 'journey-fill')).toBe(false);
+  });
+  it('thirsty far from the river on a journey, he husks a coconut from the ground nearby and drinks its milk, and keeps the nuts he carries', () => {
+    let set = false, nuts0 = -1;
+    const r = life({ days: 1.2, onTick: (m, g) => {
+      if (!set && m.journeying && m.journey.phase === 'out' && Math.hypot(g.player.x - m.journey.home.x, g.player.z - m.journey.home.z) > 100) { set = true; g.thirst.days = 0.45; nuts0 = g.shells.nuts; }
+    }, stop: (m, g) => set && g.thirst.days < 0.3 });
+    expect(set).toBe(true);
+    expect(r.m.stats.journey.milk).toBeGreaterThanOrEqual(1);          // the milk of a nut from the ground
+    expect(r.g.shells.nuts).toBe(nuts0);                               // never a carried nut
+    expect(r.g.thirst.days).toBeLessThan(0.3);
+  });
+  it('at home, or not on a journey, he does not husk a nut for a drink: he walks to the river', () => {
+    const r = life({ day: 2, time: 0.3, days: 0.25, tweak: g => { g.thirst.days = 0.45; } });
+    expect(r.m.journeying).toBe(false); expect(r.m.stats.journey.milk).toBe(0); expect(r.g.thirst.days).toBeLessThan(0.3);
+  });
+});
+
+describe('journeys: what a reload remembers (0.31.1 "Milk", mind.state)', () => {
+  it('state() holds the next journey, the last try, the last exploring day and the journeys begun, as whole numbers', () => {
+    const r = life({ stop: (m, g, r) => r.started !== null });
+    const s = r.m.state();
+    expect(Object.keys(s).sort()).toEqual(['exploredDay', 'journeyDue', 'journeyTried', 'journeys']);
+    expect(s.journeys).toBe(1); expect(s.journeyTried).toBe(5); expect(s.exploredDay).toBe(5);
+    expect(s.journeyDue - 5).toBeGreaterThanOrEqual(5); expect(s.journeyDue - 5).toBeLessThanOrEqual(7);
+    expect(Object.values(s).every(Number.isInteger)).toBe(true);
+    expect(JSON.parse(JSON.stringify(s))).toEqual(s);
+  });
+  it('a mind started from that state has it again; a missing or bad one starts as a new game (the next journey on day 4)', () => {
+    const g = campGame(w, spawn, { day: 6, time: 0.3, know: true, leantos: done() });
+    const s = { journeyDue: 11, journeyTried: 6, exploredDay: 6, journeys: 2 };
+    expect(createMind(w, g, { saved: s }).state()).toEqual(s);
+    const fresh = { journeyDue: JOURNEY_DAY, journeyTried: -9, exploredDay: -9, journeys: 0 };
+    expect(createMind(w, g).state()).toEqual(fresh);
+    for (const bad of [null, 5, 'x', {}, { journeyDue: 'a', exploredDay: 1.5, journeys: -1, journeyTried: NaN }]) expect(createMind(w, g, { saved: bad }).state()).toEqual(fresh);
+  });
+  it('after a reload on day 6 with the next journey due on day 11 he does not go the next calm morning (as he did when the reload forgot it)', () => {
+    expect(life({ day: 6, days: 0.4 }).started).not.toBeNull();   // forgetful: a journey on a calm morning of day 6
+    const r = life({ day: 6, days: 0.4, saved: { journeyDue: 11, journeyTried: 5, exploredDay: 5, journeys: 1 } });
+    expect(r.started).toBeNull();
   });
 });

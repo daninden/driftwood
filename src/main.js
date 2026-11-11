@@ -26,7 +26,7 @@
  * with a name) the loading screen asks "What is your name?" (render/namePrompt,
  * texts in game/castaway). Loading goes on meanwhile; the island fades in once
  * the answer is in. The name and the day the game started (`startDay`) are
- * saved with the island (src/save, optional fields). With the test parameters
+ * saved with the island (src/save, optional fields; since 0.31.1 also the mind's habits, `habit: mind.state()`, handed back to createMind as `saved`). With the test parameters
  * the question is skipped and he is "the castaway". Top left #who always shows
  * `Dave, day 3` (render/nameLines), and each time a sleep ends #wake shows
  * `Dave wakes. Day 3.` for a few seconds. Day 1 is the day the game started.
@@ -207,7 +207,7 @@ async function boot() {
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
   input.yaw = view.yaw;
-  const mind = createMind(world, game, { onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);
+  const mind = createMind(world, game, { saved: saved && saved.habit, onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);
   let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
   const tnow = () => performance.now() / 1000 + hurried;   // 0.28 "Habit"
   // 0.30.20: actions never speak, only reasons do (the mind's intents above, and what the player lacks below)
@@ -228,7 +228,7 @@ async function boot() {
   button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
   let stopSaving = testing || !!asking, sinceSave = 0;
   const moments = createMomentWatcher(game);   // looks for something worth saving twice a second, not every frame
-  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, view: view.pose }); sinceSave = 0; } };
+  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, habit: mind.state(), view: view.pose }); sinceSave = 0; } };
   const viewSaver = createViewSaver();
   const autosave = dt => { sinceSave += dt; if (viewSaver.update(view.pose, dt)) save(); if (moments.update(dt) || sinceSave >= SAVE_EVERY) save(); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });

@@ -32,7 +32,7 @@
  * Pure data on a world; no DOM, no Three.js.
  *
  * NEED, NEAR, BUILD_TIME, BUILD_COST, SLEEP_R, REACH
- * UPGRADES, UP_ORDER, UP_REACH, UP_NEAR, UP_TIME, UP_COST, WALLS_WOOD, WALLS_FIRE, RING_AT, RING_R
+ * UPGRADES, UP_ORDER, UP_REACH, UP_NEAR, UP_TIME, UP_COST, WALLS_WOOD, WALLS_FIRE, RING_AT, RING_R, RING_NOFIRE
  * paidSteps(what, p) -> how many steps of an upgrade at progress p (0..1) have begun (0 before it started), each took its materials
  * upgradeFor(l, piles) -> 'walls' | 'bed' | 'ring' | null   the first unfinished upgrade of finished lean-to l whose remaining materials
  *   lie in piles within UP_NEAR of its centre (piles: game/wood piles)
@@ -53,6 +53,7 @@
  *   leantos.dry(x, z, 'wood' | 'fire') -> true when wood (or a fire and torches) there stays dry: within WOOD_SHELTER / FIRE_SHELTER of a finished
  *     lean-to, or WALLS_WOOD / WALLS_FIRE when that one has side walls
  *   leantos.ring(x, z) -> true when (x, z) is within RING_R of the middle of a finished lean-to's finished stone ring
+ *   leantos.noFire(x, z) -> true when (x, z) lies in the ring of no fire (0.31.1 "Milk"): more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring. A fire cannot be lit there (game/game `lightable`): beside the ring only in the ring itself.
  *   leantos.covers(x, z, r) -> true when a finished lean-to's centre is within r (the rain stays off wood and fires there, game/weather)
  *   leantos.flood(sea) -> number of lean-tos the sea took
  *   leantos.state() -> { list, nextId }   plain, for saving
@@ -77,7 +78,7 @@ export const UPGRADES = {
 };
 export const UP_ORDER = ['walls', 'bed', 'ring'];
 export const UP_REACH = 2.2, UP_NEAR = 4, UP_TIME = 30, UP_COST = BUILD_COST / 2;
-export const WALLS_WOOD = 2.5, WALLS_FIRE = 3, RING_AT = 2.2, RING_R = 1;
+export const WALLS_WOOD = 2.5, WALLS_FIRE = 3, RING_AT = 2.2, RING_R = 1, RING_NOFIRE = 3.5;
 
 export const paidSteps = (what, p) => p > 0 ? Math.min(UPGRADES[what].steps, Math.floor(p * UPGRADES[what].steps + 1e-9) + 1) : 0;
 
@@ -130,7 +131,7 @@ export function siteFor(piles, pile) {
 }
 
 export function createLeantos(w, saved) {
-  const leantos = { list: [], version: 0, start, unfinished, shelter, covers, has, upgraded, home, nearFinished, dry, ring, flood, state };
+  const leantos = { list: [], version: 0, start, unfinished, shelter, covers, has, upgraded, home, nearFinished, dry, ring, noFire, flood, state };
   let nextId = 0;
   if (saved) {
     leantos.list = (saved.list || []).map(l => ({ id: l.id, x: l.x, z: l.z, heading: l.heading, progress: Math.max(0, Math.min(1, l.progress)), ...cleanUp(l.up) }));
@@ -168,6 +169,9 @@ export function createLeantos(w, saved) {
   }
   function ring(x, z) {
     return leantos.list.some(l => { if (l.progress < 1 || !has(l, 'ring')) return false; const c = ringCentre(l); return Math.hypot(c.x - x, c.z - z) <= RING_R; });
+  }
+  function noFire(x, z) {
+    return leantos.list.some(l => { if (l.progress < 1 || !has(l, 'ring')) return false; const c = ringCentre(l), d = Math.hypot(c.x - x, c.z - z); return d > RING_R && d <= RING_NOFIRE; });
   }
   function flood(sea) {
     let n = 0;

@@ -233,3 +233,13 @@ describe('the known ground (0.28 "Habit")', () => {
     expect(cleanKnown({ cell: 10, cells: [] })).toEqual({ cell: 10, cells: [] }); expect(cleanKnown(undefined)).toBeNull(); expect(cleanKnown({ cell: 10, cells: [0, 5183] })).toEqual({ cell: 10, cells: [0, 5183] });
   });
 });
+
+describe('his habits (0.31.1 "Milk")', () => {
+  const good = () => JSON.parse(serialise(createGame(w, spawn).state()));
+  it('are an optional field of whole numbers: the next journey, the last try, the last exploring day, the journeys begun', () => {
+    const habit = { journeyDue: 11, journeyTried: 6, exploredDay: 6, journeys: 1 };
+    const p = parseSave(JSON.stringify({ ...good(), habit }), 1337); expect(p).not.toBeNull(); expect(p.habit).toEqual(habit);
+    expect(parseSave(JSON.stringify(good()), 1337).habit).toBeUndefined();   // an older save loads as before
+    for (const bad of [5, 'x', [1], null, { journeyDue: 'a' }, { journeyDue: 1.5 }, { journeyDue: NaN }]) expect(parseSave(JSON.stringify({ ...good(), habit: bad }), 1337), JSON.stringify(bad)).toBeNull();
+  });
+});

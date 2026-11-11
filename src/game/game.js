@@ -158,6 +158,7 @@
  * 0.30.17 "Spear" (game/spear, game/fish): `makeSpear` (a small kind, after 'lay', so the arc and not the ring: no spear exists, exactly one branch under his arm and nothing else carried, a stone loose within REACH or a pile of stones within BESIDE, on dry ground; MAKE_TIME of kneeling, the branch is used up, the stone stays; the spear is in his hand), `fish` (the spear in his hand, standing in shallow sea water, `fishableAt`, fewer than 2 fish carried: the ring; FISH_TIME standing, a fish with the seed's chance),
  *   `takeSpear` (empty arms and hands, the lying spear within REACH, nearest first with the other small kinds) and `laySpear` (the spear in his hand, on dry ground; always offered after the nearer things, so the arc keeps it within reach; it lies at his feet). A spear in his hand fills it like a torch: no pickup of wood, fronds or stones, no torch taken, no sitting; it goes down beside him when he sleeps. 'roast' takes a crab or a fish (`food`: whichever was caught first), game.use('fish') roasts a fish from the row. A new pile keeps 0.55 m + its own radius + BODY from a lying spear.
  *
+ * 0.31.1 "Milk": 'light' (and 'kindle') is not offered for a pile that lies more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring (leantos.noFire): beside a ring a fire is lit only in the ring itself; a pile elsewhere is unaffected. It is not started either when the pile moved there meanwhile (no fibre is used).
  * 0.31 "Axe" (game/axe, game/felled, game/logs): small kinds `makeAxe` (no axe exists, no spear or torch in hand, exactly one branch under his arm and nothing else, a loose stone within REACH or a pile of stones within BESIDE, a tuft of fibre,
  *   dry ground: work kind 'makeAxe', AXE MAKE_TIME of kneeling; the branch, the stone and the tuft are all used up; after 'lay', before `makeSpear`, so the arc), `takeAxe` (empty arms and hands, the lying axe within REACH) and `layAxe` (the axe in his hand, dry
  *   ground; always offered after the nearer things) and `fell` ({ kind: 'fell', tree } with the nearest standing trunk of game/felled `nearest` within FELL_REACH (0.7 m from its edge), the axe in his hand, dry ground; nearest-wins with the other small actions, so it is
@@ -315,6 +316,7 @@ export function createGame(world, spawn, opts = {}) {
   function lightable(px, pz) {   // the pile beside him he could light now, with the torch or with fibre
     if (wet(hereAt(px, pz)) || (!fire.torch && !fibre.carried)) return null;
     const p = fuelPile(px, pz);
+    if (p && leantos.noFire(p.pile.x, p.pile.z)) return null;   // 0.31.1: beside a stone ring a fire is lit only in the ring itself
     return p && p.pile.logs.length >= FIRE_MIN ? { kind: 'light', pile: p.pile, torch: !!fire.torch } : null;
   }
   /** 0.30.20 "Words": what is missing for an action that is almost possible at (px, pz) (pure, game/lack): 'needSpear', 'spearAway', 'needFibre', 'needMoreWood' or null. */
@@ -563,10 +565,10 @@ export function createGame(world, spawn, opts = {}) {
       return;
     }
     if (a.kind === 'kindle') {
-      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && !wet(here()) && fire.kindle(a.pile.x, a.pile.z, a.pile.logs, meanDry(a.pile.logs), clock.total)) { wood.takePile(a.pile); notifyAction('kindle'); }
+      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && !leantos.noFire(a.pile.x, a.pile.z) && !wet(here()) && fire.kindle(a.pile.x, a.pile.z, a.pile.logs, meanDry(a.pile.logs), clock.total)) { wood.takePile(a.pile); notifyAction('kindle'); }
       stoop();
     } else if (a.kind === 'light') {
-      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && fibre.carried && !wet(here())) { work = { kind: 'drill', t: 0, dur: DRILL_TIME, thing: a.pile }; notifyAction('light'); }
+      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && fibre.carried && !leantos.noFire(a.pile.x, a.pile.z) && !wet(here())) { work = { kind: 'drill', t: 0, dur: DRILL_TIME, thing: a.pile }; notifyAction('light'); }
     }
     if (work) face(a);
   }
@@ -594,7 +596,7 @@ export function createGame(world, spawn, opts = {}) {
     if (wk.kind === 'makeAxe') { if (makeableAxe(player.x, player.z) && useStone() && wood.giveOne(l => !!l.branch) && fibre.use()) axe.make(); return; }   // the branch, the stone and the tuft are all used up
     if (wk.kind === 'make') { if (makeable(player.x, player.z) && wood.giveOne(l => !!l.branch)) spear.make(); return; }   // the branch is used up, the stone stays
     if (wk.kind === 'fish') { if (spear.hand && fishableAt(here())) fish.fishTry(clock.total); return; }
-    const pile = wk.thing; if (!wood.piles.includes(pile) || !fibre.use()) return;
+    const pile = wk.thing; if (!wood.piles.includes(pile) || leantos.noFire(pile.x, pile.z) || !fibre.use()) return;
     const lit = fire.attempt(pile.x, pile.z, pile.logs, meanDry(pile.logs), sleep.tired(), clock.total);
     if (lit) wood.takePile(pile);
   }

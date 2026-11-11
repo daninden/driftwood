@@ -4,7 +4,8 @@
  *
  * A drop drawn in outline, in the ink of the moon (`--ink`, pale at night,
  * render/ink). Its filling empties as he gets thirsty: full just after a
- * drink, empty when he is about to collapse (game/thirst `fill`). Always
+ * drink, half full when he goes to drink himself (0.35 day), a quarter when thirsty, empty when he is about to
+ * collapse (game/thirst `fill`, thirstFill: a curve in three pieces, 0.31.1 "Milk"). Always
  * shown, faint like the moon (REST_OPACITY) while he is not thirsty, clearer
  * as thirst grows from the half of the way to thirsty (a quarter of a day) on, and clear for a few
  * seconds after drinking (the curve of render/carryMark). No numbers. Rim 2 px with the glow `--halo` (index.html, 0.13.3). It
@@ -22,11 +23,11 @@
  *   `days`; now: seconds (any steady clock). Only touches the DOM when the
  *   filling or the opacity step changed.
  *
- * Depends on: core/math, render/carryMark, game/thirst
+ * Depends on: core/math, render/carryMark, game/thirst (COLLAPSE_AT, thirstFill)
  */
 import { ss } from '../core/math.js';
 import { carryOpacity, REST_OPACITY, PEAK_OPACITY } from './carryMark.js';
-import { COLLAPSE_AT } from '../game/thirst.js';
+import { COLLAPSE_AT, thirstFill } from '../game/thirst.js';
 
 export const FILL_STEPS = 48;
 export const CLEAR_FROM = 0.25, CLEAR_TO = COLLAPSE_AT;   // days of thirst: starts getting clearer (half of the way to thirsty), fully clear
@@ -50,7 +51,7 @@ export function createThirstMark(el) {
     if (!el) return;
     if (drank(prev, days)) drankAt = now;
     prev = days;
-    const c = dropClip(1 - days / COLLAPSE_AT), key = c.y + ',' + c.h;
+    const c = dropClip(thirstFill(days)), key = c.y + ',' + c.h;
     if (key !== shownClip) { shownClip = key; rect.setAttribute('y', c.y); rect.setAttribute('height', c.h); }
     const o = thirstOpacity(days, now - drankAt).toFixed(2);
     if (o !== shownOpacity) { shownOpacity = o; el.style.opacity = o; }

@@ -18,10 +18,12 @@
  *   - Eating (game/game, when the husking of a coconut is finished) takes
  *     NUT_FOOD off the hunger, never below 0, always, also when not hungry.
  *
- * HUNGRY_AT, STARVING_AT, HUNGER_SLOW, DRILL_COST, STARVE_DRAIN, NUT_FOOD
+ * HUNGRY_AT, STARVING_AT, HUNGER_SLOW, DRILL_COST, STARVE_DRAIN, NUT_FOOD, FILL_GO (0.4)
+ * hungerFill(days) -> 0..1   (0.31.1 "Milk") the half coconut's fill curve, the same shape as the drop's: 1 at 0 days, 0.5 at FILL_GO (0.4, the day he eats himself: game/mind's HUNGER_GO,
+ *   kept equal by a test), 0.25 at HUNGRY_AT, 0 at STARVING_AT. Only what the mark shows: his rhythm is not changed.
  * createHunger(saved?) -> hunger
  *   hunger.days          days since he last ate, 0 .. STARVING_AT
- *   hunger.fill()        1 just ate .. 0 starving (for the half coconut mark)
+ *   hunger.fill()        1 just ate .. 0 starving (for the half coconut mark): hungerFill(days)
  *   hunger.level()       0 .. 1 how hungry, from HUNGRY_AT to STARVING_AT
  *   hunger.hungry()      days >= HUNGRY_AT
  *   hunger.starving()    days >= STARVING_AT
@@ -42,11 +44,18 @@ export const HUNGER_SLOW = 0.75;    // walking speed when starving
 export const DRILL_COST = 1.5;      // drilling a fire costs half as much rest again when hungry
 export const STARVE_DRAIN = 1.5;    // rest runs out one and a half times as fast when starving
 export const NUT_FOOD = 0.5;        // days of hunger one coconut takes away: a meal
+export const FILL_GO = 0.4;         // the coconut is half full when he goes to eat himself (equals game/mind HUNGER_GO; tests/hunger.test.js)
+const KNOTS = [[0, 1], [FILL_GO, 0.5], [HUNGRY_AT, 0.25], [STARVING_AT, 0]];   // days of hunger, fill
+export function hungerFill(days) {
+  if (!(days > 0)) return 1;
+  for (let i = 1; i < KNOTS.length; i++) if (days <= KNOTS[i][0]) { const [a, fa] = KNOTS[i - 1], [b, fb] = KNOTS[i]; return fa + (fb - fa) * (days - a) / (b - a); }
+  return 0;
+}
 
 export function createHunger(saved) {
   const hunger = {
     days: 0,
-    fill: () => 1 - hunger.days / STARVING_AT,
+    fill: () => hungerFill(hunger.days),
     level: () => Math.min(1, Math.max(0, (hunger.days - HUNGRY_AT) / (STARVING_AT - HUNGRY_AT))),
     hungry: () => hunger.days >= HUNGRY_AT,
     starving: () => hunger.days >= STARVING_AT,

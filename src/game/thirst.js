@@ -19,10 +19,12 @@
  *   - Drinking (game/game, DRINK_TIME of kneeling at fresh river water,
  *     see game/water) takes thirst back to 0, always, also when he is not thirsty.
  *
- * THIRSTY_AT, VERY_AT, COLLAPSE_AT, REVIVE_AT, THIRST_SLOW, DRAIN
+ * THIRSTY_AT, VERY_AT, COLLAPSE_AT, REVIVE_AT, THIRST_SLOW, DRAIN, FILL_GO (0.35)
+ * thirstFill(days) -> 0..1   (0.31.1 "Milk") the drop's fill curve, piecewise linear: 1 at 0 days, 0.5 at FILL_GO (0.35, the day he goes to drink himself: game/mind's THIRST_GO, kept equal by a test),
+ *   0.25 at THIRSTY_AT, 0 at COLLAPSE_AT. Only what the mark shows: his rhythm is not changed.
  * createThirst(saved?) -> thirst
  *   thirst.days          days since he last drank, 0 .. COLLAPSE_AT
- *   thirst.fill()        1 just drank .. 0 about to collapse (for the drop mark)
+ *   thirst.fill()        1 just drank .. 0 about to collapse (for the drop mark): thirstFill(days)
  *   thirst.level()       0 .. 1 how thirsty, from THIRSTY_AT to COLLAPSE_AT
  *   thirst.thirsty()     days >= THIRSTY_AT
  *   thirst.very()        days >= VERY_AT
@@ -43,11 +45,18 @@
 export const THIRSTY_AT = 0.5, VERY_AT = 1, COLLAPSE_AT = 1.5, REVIVE_AT = 1.25;
 export const THIRST_SLOW = 0.65;   // walking speed at the point of collapse
 export const DRAIN = 2;            // rest runs out twice as fast when very thirsty
+export const FILL_GO = 0.35;       // the drop is half full when he goes to drink himself (equals game/mind THIRST_GO; tests/thirst.test.js)
+const KNOTS = [[0, 1], [FILL_GO, 0.5], [THIRSTY_AT, 0.25], [COLLAPSE_AT, 0]];   // days of thirst, fill
+export function thirstFill(days) {
+  if (!(days > 0)) return 1;
+  for (let i = 1; i < KNOTS.length; i++) if (days <= KNOTS[i][0]) { const [a, fa] = KNOTS[i - 1], [b, fb] = KNOTS[i]; return fa + (fb - fa) * (days - a) / (b - a); }
+  return 0;
+}
 
 export function createThirst(saved) {
   const thirst = {
     days: 0,
-    fill: () => 1 - thirst.days / COLLAPSE_AT,
+    fill: () => thirstFill(thirst.days),
     level: () => Math.min(1, Math.max(0, (thirst.days - THIRSTY_AT) / (COLLAPSE_AT - THIRSTY_AT))),
     thirsty: () => thirst.days >= THIRSTY_AT,
     very: () => thirst.days >= VERY_AT,

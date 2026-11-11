@@ -6,7 +6,8 @@
  * and the oval rim on top, in the ink of the moon and the drop (`--ink`, pale
  * at night, render/ink; rim 2 px with the glow `--halo`, index.html). Its
  * white flesh is the filling and empties from the top down as he gets hungry:
- * full just after eating, empty when he is starving (game/hunger `fill`).
+ * full just after eating, half full when he goes to eat himself (0.4 day), a quarter when hungry, empty when he is starving
+ * (game/hunger `fill`, hungerFill: a curve in three pieces, 0.31.1 "Milk").
  * Always shown, faint like the moon (REST_OPACITY) while he is not hungry,
  * clearer as hunger grows from the half of the way to hungry on, and clear for
  * a few seconds after eating (the same curve as render/thirstMark and
@@ -24,11 +25,11 @@
  *   game/hunger `days`; now: seconds (any steady clock). Only touches the DOM
  *   when the filling or the opacity step changed.
  *
- * Depends on: core/math, render/carryMark, game/hunger
+ * Depends on: core/math, render/carryMark, game/hunger (STARVING_AT, hungerFill)
  */
 import { ss } from '../core/math.js';
 import { carryOpacity, REST_OPACITY, PEAK_OPACITY } from './carryMark.js';
-import { STARVING_AT } from '../game/hunger.js';
+import { STARVING_AT, hungerFill } from '../game/hunger.js';
 
 export const FILL_STEPS = 48;
 export const CLEAR_FROM = 0.25, CLEAR_TO = STARVING_AT;   // days of hunger: starts getting clearer (half of the way to hungry, as for the drop), fully clear
@@ -53,7 +54,7 @@ export function createHungerMark(el) {
     if (!el) return;
     if (ate(prev, days)) ateAt = now;
     prev = days;
-    const c = hungerClip(1 - days / STARVING_AT), key = c.y + ',' + c.h;
+    const c = hungerClip(hungerFill(days)), key = c.y + ',' + c.h;
     if (key !== shownClip) { shownClip = key; rect.setAttribute('y', c.y); rect.setAttribute('height', c.h); }
     const o = hungerOpacity(days, now - ateAt).toFixed(2);
     if (o !== shownOpacity) { shownOpacity = o; el.style.opacity = o; }
