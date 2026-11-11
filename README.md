@@ -16,10 +16,10 @@ npm run test:sim   only the long simulations of Dave alone for ten days
 npm run build      dist/ plus dist/driftwood.html (everything in one file)
 npm run smoke      quick check in headless Chromium with a few screenshots
 npm run smoke:full the same with every screenshot
-npm run playtest   a scripted castaway plays several game days in a real browser and reports how it went (run npm run build first)
+npm run playtest   Dave lives several game days in a real browser while a watcher logs how it went (run npm run build first)
 ```
 
-The playtest (`npm run playtest -- --seed 7,1337 --days 10`, after a build) lets a simple bot play: it looks for food and water, gathers wood, makes fire and sleeps, saves and reloads once a day, and writes a short report and a few screenshots into `playtest-out/` (or the folder after `--out`). It is for finding bugs and judging balance, not part of the game.
+The playtest (`npm run playtest -- --seed 7,1337 --days 10`, after a build) lets Dave look after himself (the bot only watches): it logs his meals, drinks, fires and sleeps, saves and reloads once a day, and writes a short report and a few screenshots into `playtest-out/` (or the folder after `--out`). It is for finding bugs and judging balance, not part of the game.
 
 ### Address options
 

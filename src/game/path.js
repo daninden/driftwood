@@ -30,12 +30,11 @@
  *   path.cost(from, to) -> cost | Infinity
  *   path.campKey() -> the camp view's key now (a number), or null without a camp
  *   path.edgeKey(u, v) -> number   the key of the edge between two ids (a pts[i].id, START (-1) or GOAL (-3)); the follower puts both directions of a blocked edge into `closed`
- *   path.isStand(ix, iz) -> true when the cell can be stood on and is not banned (the island only, not asking `allow`)
+ *   path.isStand(ix, iz) -> true when the cell can be stood on (the island only, not asking `allow`)
  *   path.nearestCell(x, z, rings?, ok?) -> [ix, iz] | null   the nearest standable cell within `rings` rings (4), ok(ix, iz) may refuse some
  *   path.cell(v) -> the cell index of a coordinate; path.centre(i) -> the middle of cell index i
- *   path.ban(x, z)       keep the cell at (x, z) out of every path from now on (legacy, for the playtest bot); path.banned is the Set (cell keys iz * N + ix)
  *   path.allow           the current `allow(x, z)` predicate (assignable); path.dynamic: true when there is a camp; path.camp, path.fine: the camp view and the fine layer (or null)
- *   path.grid            { C, N, cell, centre, isStand } the grid helpers (isStand: the island only, ignoring bans), shared with game/fine
+ *   path.grid            { C, N, cell, centre, isStand } the grid helpers (isStand: the island only), shared with game/fine
  *   path.stats           { finds, nulls, cached (answers from the failure memory), expanded (nodes looked at in all) } for the tests and the benchmarks
  *
  * Pure functions on a world; no DOM, no Three.js.
@@ -62,7 +61,7 @@ class Heap {
 }
 
 export function createPath(world, opts = {}) {
-  const stand = new Map(), banned = new Set(), efs = new Map(), neg = new Map();
+  const stand = new Map(), efs = new Map(), neg = new Map();
   const camp = asCamp(opts.obstacles), dynamic = !!camp, stats = { finds: 0, nulls: 0, cached: 0, expanded: 0 };
   const centre = i => (i + 0.5) * C - HALF, cell = v => Math.floor((v + HALF) / C);
   let stamp = felledStamp(world);
@@ -74,9 +73,9 @@ export function createPath(world, opts = {}) {
     if (v === undefined) { v = canStand(world, centre(ix), centre(iz), 0) ? 1 : 0; stand.set(k, v); }
     return v === 1;
   };
-  const isStand = (ix, iz) => standT(ix, iz) && !banned.has(iz * N + ix);
+  const isStand = (ix, iz) => standT(ix, iz);
   const edgeKey = (u, v) => (u + 1024) * EK + (v + 1024);
-  const path = { grid: null, allow: opts.allow || null, allowVersion: opts.allowVersion || null, dynamic, camp, fine: null, banned, isStand, centre, cell, find, findAny, cost, nearestCell, ban, clear, open, campKey, edgeKey, stats };
+  const path = { grid: null, allow: opts.allow || null, allowVersion: opts.allowVersion || null, dynamic, camp, fine: null, isStand, centre, cell, find, findAny, cost, nearestCell, clear, open, campKey, edgeKey, stats };
   const grid = path.grid = { C, N, cell, centre, isStand: standT };
   const fine = path.fine = camp && camp.groups ? createFine(world, grid) : null;
   const ok = (ix, iz) => !path.allow || path.allow(centre(ix), centre(iz));
@@ -178,7 +177,7 @@ export function createPath(world, opts = {}) {
     // the memory of failures: only when nothing outside the key can change the answer
     let nkey = null;
     if (!closedSet && (!camp || camp.key !== null) && (!path.allow || path.allowVersion)) {
-      nkey = `${from.x.toFixed(2)},${from.z.toFixed(2)}>${goals.map(g => g.x.toFixed(2) + ',' + g.z.toFixed(2)).join(';')}|${camp ? camp.key : 0}|${banned.size}|${path.allow ? path.allowVersion() : 0}|${maxExp}`;
+      nkey = `${from.x.toFixed(2)},${from.z.toFixed(2)}>${goals.map(g => g.x.toFixed(2) + ',' + g.z.toFixed(2)).join(';')}|${camp ? camp.key : 0}|${path.allow ? path.allowVersion() : 0}|${maxExp}`;
       if (neg.has(nkey)) { stats.cached++; stats.nulls++; return null; }
     }
     const fail = () => { stats.nulls++; if (nkey) { if (neg.size > 400) neg.clear(); neg.set(nkey, true); } return null; };
@@ -227,7 +226,7 @@ export function createPath(world, opts = {}) {
         const ix = k % N, iz = (k - ix) / N, x = centre(ix), z = centre(iz);
         for (let d = 0; d < 8; d++) {
           const nx = ix + DIRS[d][0], nz = iz + DIRS[d][1], nk = nz * N + nx;
-          if (nx < 0 || nz < 0 || nx >= N || nz >= N || closed.has(nk) || banned.has(nk) || !ok(nx, nz) || (path.allow && !lineOk({ x, z }, { x: centre(nx), z: centre(nz) }))) continue;   // 0.30.5: and the edge between two allowed cells stays on allowed ground (a closed band narrower than a cell is not jumped)
+          if (nx < 0 || nz < 0 || nx >= N || nz >= N || closed.has(nk) || !ok(nx, nz) || (path.allow && !lineOk({ x, z }, { x: centre(nx), z: centre(nz) }))) continue;   // 0.30.5: and the edge between two allowed cells stays on allowed ground (a closed band narrower than a cell is not jumped)
           const f = gridEdge(ix, iz, d); if (f <= MIN) continue;
           relax(k, g0, nk, centre(nx), centre(nz), d < 4 ? C : C * 1.414, f);
         }
@@ -239,7 +238,7 @@ export function createPath(world, opts = {}) {
       } else {
         const n = fine.byId.get(k); if (!n) continue;
         for (const [ck, f] of fine.cellLinks(n, camp)) {
-          if (closed.has(ck) || banned.has(ck)) continue;
+          if (closed.has(ck)) continue;
           const ix = ck % N, iz = (ck - ix) / N; if (!ok(ix, iz) || (path.allow && !lineOk(n, { x: centre(ix), z: centre(iz) }))) continue;
           relax(k, g0, ck, centre(ix), centre(iz), Math.hypot(centre(ix) - n.x, centre(iz) - n.z), f);
         }
@@ -263,6 +262,5 @@ export function createPath(world, opts = {}) {
   function find(from, to, o) { const r = search(from, [to], optsOf(o)); return r ? { pts: r.pts, cost: r.cost } : null; }
   function findAny(from, goals, o) { return goals.length ? search(from, goals, optsOf(o)) : null; }
   function cost(from, to) { const r = find(from, to); return r ? r.cost : Infinity; }
-  function ban(x, z) { banned.add(cell(z) * N + cell(x)); }
   return path;
 }

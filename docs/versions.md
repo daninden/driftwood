@@ -2,6 +2,10 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.32.1 "Watcher" — 2026-11-11
+
+Tooling cleanup agreed with the user. **The playtest bot only watches now:** its own scripted player (its goals, building from piles, clicking and choosing actions, its own path finding and bans) is gone; `npm run playtest` always lets Dave's own habit (`game/mind`) live in the built page and logs metrics, events, errors, screenshots and the daily save/load round trip (`--mind` is still accepted and does nothing). `scripts/playtest-lib.js` exports only `createMind`; the playtest takes `CHROME_PATH` like the other smoke scripts. `game/path`: `ban`/`banned` removed (nothing used them any more). No change to the game.
+
 ## 0.32.0 "Piece by piece" — 2026-11-11
 
 Agreed with the user on 2026-11-11. **The shelter is built piece by piece, without building piles: every visible part of the lean-to, the walls, the bed and the ring is one gathered piece, for the player and for Dave alike, and Dave keeps building as long as he finds material.** The island the world generates is untouched (`tests/world.test.js` and its seed 1337 fixture are unchanged). Built in two parts (part 1 the game, render and player actions, part 2 Dave's home logic), released together.

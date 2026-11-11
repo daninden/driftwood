@@ -36,14 +36,6 @@ describe('path finding', () => {
     path.allow = null; expect(path.allow).toBeNull();
     const none = createPath(w, { allow: () => false }); expect(none.find(spawn, to)).toBeNull();
   });
-  it('can be told to keep out of a cell it got stuck at', () => {
-    const path = createPath(w), to = ahead(path, 25), r = path.find(spawn, to), mid = r.pts[Math.floor(r.pts.length / 2)];
-    path.ban(mid.x, mid.z);
-    expect(path.banned.size).toBe(1);
-    const r2 = path.find(spawn, to);
-    expect(r2).not.toBeNull(); expect(r2.pts.some(q => Math.abs(q.x - mid.x) < 1e-6 && Math.abs(q.z - mid.z) < 1e-6)).toBe(false);
-    expect(r2.cost).toBeGreaterThanOrEqual(r.cost - 1e-6);
-  });
   it('gives the cell numbers and middles back', () => {
     const path = createPath(w);
     expect(path.centre(path.cell(12.3))).toBeCloseTo(Math.floor((12.3 + 360) / C) * C + C / 2 - 360, 6);

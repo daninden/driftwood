@@ -1,12 +1,10 @@
 // Playtest bot: plays the built game (dist/driftwood.html) in a real browser like a sensible player and logs how it went.
-// Run `npm run build` first. Usage: npm run playtest [-- --seed N] [--days D] [--out DIR] [--shots=0] [--mind]
-//   --mind: the bot does nothing; Dave's own habit (src/game/mind, 0.28) lives, with the same numbers reported (its own stuck and goal counts under Mind)
+// Run `npm run build` first. Usage: npm run playtest [-- --seed N] [--days D] [--out DIR] [--shots=0] [--wall MINUTES]
+//   Since 0.32.1 "Watcher" the bot only watches: Dave's own habit (src/game/mind) lives and the bot logs it (its own stuck and goal counts under Mind). `--mind` is still accepted and does nothing.
 //   no --seed: seeds 1337, 2024 and 7 one after the other; --days: game days per seed (default 10; a day is 20 minutes of play)
-// Tooling only (feature freeze): it changes no game code. The bot (scripts/playtest-bot.js, runs inside the page) walks with
-// input.target and Shift, presses the action button with input.actionStart/actionEnd, clicks the icons of the arc with input.choose, and uses the row
-// (game.use), and steps time itself with game.update in 0.1 s ticks while drawing is paused. Path finding uses the game's
-// own movement rules (scripts/playtest-lib.js, bundled with esbuild and injected). A few game methods are wrapped in the page
-// to log events exactly (hunger.eat, thirst.drink, fire.attempt, ...); they still call the originals.
+// Tooling only: it changes no game code. The bot (scripts/playtest-bot.js, runs inside the page) steps time itself with
+// game.update in 1/60 s ticks while drawing is paused and feeds it the input of Dave's mind (scripts/playtest-lib.js, bundled with
+// esbuild and injected). A few game methods are wrapped in the page to log events exactly (hunger.eat, thirst.drink, fire.attempt, ...); they still call the originals.
 // Once per game day the game is saved the way the page does it (a pagehide event), the page is reloaded from that save
 // and the loaded state is compared with the state before (position, needs, carried things, piles, lean-tos, fires ...).
 // Output (in --out, default ./playtest-out): playtest-<seed>.json (all numbers), playtest-<seed>.md (per day table, events)
@@ -26,7 +24,6 @@ const seeds = opt('seed', '') ? String(opt('seed')).split(',').map(Number) : [13
 const DAYS = Number(opt('days', 10));
 const OUT = path.resolve(opt('out', 'playtest-out'));
 const SHOTS = opt('shots', '1') !== '0';
-const MIND = args.includes('--mind');
 const WALL_LIMIT = Number(opt('wall', 25)) * 60 * 1000;   // minutes of real time per seed
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -37,9 +34,11 @@ const rendererOf = async b => {
   const pg = await b.newPage();
   try { return await pg.evaluate(() => { const gl = document.createElement('canvas').getContext('webgl'); const e = gl && gl.getExtension('WEBGL_debug_renderer_info'); return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl ? 'unknown' : 'no WebGL'; }); } finally { await pg.close(); }
 };
+const own = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] } : null;   // CHROME_PATH: a Chromium Playwright did not install itself
 let browser = null, renderer = '';
-try { browser = await chromium.launch({ channel: 'chromium' }); renderer = await rendererOf(browser); if (/swiftshader|llvmpipe|software|no webgl/i.test(renderer)) { await browser.close(); browser = null; } } catch (e) { browser = null; }
-if (!browser) { browser = await chromium.launch(); renderer = await rendererOf(browser); }
+if (own) { browser = await chromium.launch(own); renderer = await rendererOf(browser); }
+else try { browser = await chromium.launch({ channel: 'chromium' }); renderer = await rendererOf(browser); if (/swiftshader|llvmpipe|software|no webgl/i.test(renderer)) { await browser.close(); browser = null; } } catch (e) { browser = null; }
+if (!browser) { browser = await chromium.launch();  renderer = await rendererOf(browser); }
 console.log('renderer:', renderer);
 
 // ---- comparing a saved state with the state loaded from it ----
@@ -59,7 +58,6 @@ async function runSeed(seed) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   // pause drawing the moment the game object exists, so real time never moves the game
   await context.addInitScript(() => { let v; Object.defineProperty(window, '__driftwood', { configurable: true, get() { return v; }, set(x) { v = x; try { x.pause(true); } catch (e) { /* none */ } } }); });
-  if (MIND) await context.addInitScript(() => { window.__mindMode = true; });
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push('pageerror: ' + e.message));
@@ -76,8 +74,6 @@ async function runSeed(seed) {
   await waitReady(true);
   await page.evaluate(() => { window.__bot = window.makeBot(); });
   console.log(`[${seed}] ready after ${wall()}`);
-  const base = await page.evaluate(() => window.__bot.metrics.base);
-  console.log(`[${seed}] base`, JSON.stringify(base));
 
   const roundtrips = [], shotsTaken = [];
   const takeShot = async name => {
@@ -104,7 +100,7 @@ async function runSeed(seed) {
     if (!pre.state.sleep.asleep) { delete pre.state.sleep.slept; delete post.sleep.slept; }   // 'slept' only means something during a sleep and is not restored otherwise
     const d = diffs(pre.state, post, 1e-6);
     if (d.length) { rt.ok = false; rt.diffs.push(...d.slice(0, 12)); if (d.length > 12) rt.diffs.push(`... ${d.length - 12} more`); }
-    if (pre.saved) { if (!pre.state.sleep.asleep) delete pre.state.sleep.slept; const sv = JSON.parse(pre.saved); if (sv.sleep && !sv.sleep.asleep) delete sv.sleep.slept; const d2 = diffs(pre.state, Object.fromEntries(Object.entries(sv).filter(([k]) => !['v', 'name', 'startDay', 'view'].includes(k))), 1e-6); if (d2.length) { rt.ok = false; rt.diffs.push('saved json vs state: ' + d2.slice(0, 5).join('; ')); } }
+    if (pre.saved) { if (!pre.state.sleep.asleep) delete pre.state.sleep.slept; const sv = JSON.parse(pre.saved); if (sv.sleep && !sv.sleep.asleep) delete sv.sleep.slept; const d2 = diffs(pre.state, Object.fromEntries(Object.entries(sv).filter(([k]) => !['v', 'name', 'startDay', 'view', 'habit'].includes(k))), 1e-6); if (d2.length) { rt.ok = false; rt.diffs.push('saved json vs state: ' + d2.slice(0, 5).join('; ')); } }
     await page.evaluate(m => { window.__bot = window.makeBot(null, m); window.__bot.markRt(window.__driftwood.game.clock.day); }, metrics);
     return rt;
   };
@@ -123,13 +119,13 @@ async function runSeed(seed) {
     }
   }
   const metrics = await page.evaluate(() => window.__bot.metrics);
-  const final = await page.evaluate(() => { const g = window.__driftwood.game; return { summary: window.__bot.summary(), leantos: JSON.parse(JSON.stringify(g.leantos.list)), attempts: g.fire.attempts, rainShowers: g.weather.showers(g.clock.day + 1).length }; });
+  const final = await page.evaluate(() => { const g = window.__driftwood.game; return { summary: window.__bot.summary(), leantos: JSON.parse(JSON.stringify(g.leantos.list)), attempts: g.fire.attempts }; });
   await takeShot('end');
   await context.close();
   const result = { seed, days: DAYS, wallSeconds: Math.round((Date.now() - t0) / 1000), renderer, metrics, final, pageErrors, shots: shotsTaken.map(f => path.basename(f)) };
   fs.writeFileSync(path.join(OUT, `playtest-${seed}.json`), JSON.stringify(result, null, 1));
   fs.writeFileSync(path.join(OUT, `playtest-${seed}.md`), seedReport(result));
-  console.log(`[${seed}] done in ${result.wallSeconds}s, ${metrics.stucks.length} stucks, ${metrics.botErrors.length} bot errors, ${pageErrors.length} page errors, ${roundtrips.filter(r => !r.ok).length}/${roundtrips.length} round trips off`);
+  console.log(`[${seed}] done in ${result.wallSeconds}s, ${metrics.mind ? metrics.mind.stuck : 0} stucks, ${metrics.errors.length} bad numbers, ${pageErrors.length} page errors, ${roundtrips.filter(r => !r.ok).length}/${roundtrips.length} round trips off`);
   return result;
 }
 
@@ -140,27 +136,21 @@ const median = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x
 function seedReport(r) {
   const m = r.metrics, days = Object.values(m.days).sort((a, b) => a.day - b.day);
   const o = [];
-  o.push(`# Playtest, seed ${r.seed}`, '', `${r.days} game days, ${r.wallSeconds} s of real time, renderer ${r.renderer}. Base spot ${m.base ? `(${m.base.x.toFixed(0)}, ${m.base.z.toFixed(0)}), ${m.base.dist.toFixed(0)} m from the start, ${m.base.wd.toFixed(0)} m from water, ${m.base.bc} branches within 20 m` : '-'}.`, '');
-  o.push('## Per day', '', '| day | max hunger (d) | max thirst (d) | min rest | eaten | drinks/sips/fills | searches (n, mean s) | thirsty s | very s | hungry s | starving s | collapses | sleeps | fires ok/fail | lean-to/upg | showers | fires lost (rain) | walked m | run s | winded | stuck |', '|' + ' --- |'.repeat(21));
+  o.push(`# Playtest, seed ${r.seed}`, '', `${r.days} game days, ${r.wallSeconds} s of real time, renderer ${r.renderer}.`, '');
+  o.push('## Per day', '', '| day | max hunger (d) | max thirst (d) | min rest | eaten | drinks/sips/fills | thirsty s | very s | hungry s | starving s | collapses | sleeps | fires ok/fail | lean-to/upg | showers | fires lost (rain) | walked m | run s | winded |', '|' + ' --- |'.repeat(19));
   for (const d of days) {
     const eaten = Object.entries(d.eaten).map(([k, v]) => `${k} ${v}`).join(', ') || '-';
-    o.push(`| ${d.day} | ${f2(d.maxHunger)} | ${f2(d.maxThirst)} | ${f2(d.minRest)} | ${eaten} | ${d.drinks}/${d.sips}/${d.fills} | ${d.searches}, ${d.searches ? f1(d.searchSecs / d.searches) : '-'} | ${f1(d.tThirsty)} | ${f1(d.tVery)} | ${f1(d.tHungry)} | ${f1(d.tStarving)} | ${d.collapses} | ${d.sleeps} | ${d.fires}/${d.fireFails} | ${d.leantos}/${d.upgrades} | ${d.showers} | ${d.firesLost} (${d.firesLostRain}) | ${d.dist.toFixed(0)} | ${f1(d.runSecs)} | ${d.winded} | ${d.stuck} |`);
+    o.push(`| ${d.day} | ${f2(d.maxHunger)} | ${f2(d.maxThirst)} | ${f2(d.minRest)} | ${eaten} | ${d.drinks}/${d.sips}/${d.fills} | ${f1(d.tThirsty)} | ${f1(d.tVery)} | ${f1(d.tHungry)} | ${f1(d.tStarving)} | ${d.collapses} | ${d.sleeps} | ${d.fires}/${d.fireFails} | ${d.leantos}/${d.upgrades} | ${d.showers} | ${d.firesLost} (${d.firesLostRain}) | ${d.dist.toFixed(0)} | ${f1(d.runSecs)} | ${d.winded} |`);
   }
-  const secs = m.searches.map(s => s.secs);
-  o.push('', '## Food searches (game seconds from deciding to eat until eating)', '', `n ${secs.length}, mean ${f1(mean(secs))}, median ${f1(median(secs))}, max ${f1(Math.max(0, ...secs))}.`, '');
-  const byKind = {}; for (const s of m.searches) (byKind[s.kind] = byKind[s.kind] || []).push(s.secs);
-  for (const [k, v] of Object.entries(byKind)) o.push(`- ${k}: n ${v.length}, mean ${f1(mean(v))} s, max ${f1(Math.max(...v))} s`);
   o.push('', '## Sleeps', '', '| day | start | where | why | hours | rest before -> after | lean-to | fire | upgrades |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const s of m.sleeps) o.push(`| ${s.day} | ${s.t0} | ${s.x}, ${s.z} | ${s.reason} | ${s.hours ?? '?'} | ${s.restBefore} -> ${s.restAfter ?? '?'} | ${s.leanto} | ${s.fire} | ${(s.upgrades || []).join(',') || '-'} |`);
   o.push('', '## Save and load round trips', '', `${m.roundtrips.filter(x => x.ok).length} of ${m.roundtrips.length} matched.`);
   for (const rt of m.roundtrips.filter(x => !x.ok)) o.push(`- (${rt.kind}) day ${rt.day} t ${rt.time} at ${rt.x}, ${rt.z}: ${rt.diffs.join(' | ')}`);
-  if (m.mind) o.push('', '## Mind (--mind: the bot did nothing, Dave looked after himself)', '', `Goals started: ${JSON.stringify(m.mind.goals)}; stuck detections ${m.mind.stuck}; no path ${m.mind.nopath}; standing still ${m.mind.idleSecs} s; fire not offered to light ${m.mind.lightRefused}; evenings spent looking out ${m.mind.gazes}; exploring trips ${m.mind.explores} (${m.mind.exploreSecs} s).`);
-  o.push('', '## Stuck', '', m.stucks.length ? '' : 'none');
-  for (const s of m.stucks.slice(0, 30)) o.push(`- day ${s.day} t ${s.time} at (${s.x}, ${s.z}, y ${s.y}) goal ${s.goal} -> ${s.target} (${s.dist} m away) n ${s.n}, slope ${s.slope}, river ${s.river} depth ${s.depth}, sea ${s.sea}, load ${s.load}`);
+  if (m.mind) o.push('', '## Mind (Dave looked after himself; the bot only watched)', '', `Goals started: ${JSON.stringify(m.mind.goals)}; stuck detections ${m.mind.stuck}; no path ${m.mind.nopath}; standing still ${m.mind.idleSecs} s; fire not offered to light ${m.mind.lightRefused}; evenings spent looking out ${m.mind.gazes}; exploring trips ${m.mind.explores} (${m.mind.exploreSecs} s).`);
   o.push('', '## Errors', '', `Page errors and warnings: ${r.pageErrors.length}`); for (const e of [...new Set(r.pageErrors)].slice(0, 15)) o.push('- ' + e);
-  o.push('', `Bad numbers in the state: ${m.errors.length ? JSON.stringify(m.errors) : 'none'}`, `Bot errors (bot bugs, not game bugs): ${m.botErrors.length}`); for (const e of m.botErrors.slice(0, 6)) o.push('- ' + e.what + ': ' + e.msg.split('\n').slice(0, 3).join(' / '));
+  o.push('', `Bad numbers in the state: ${m.errors.length ? JSON.stringify(m.errors) : 'none'}`);
   const evCount = {}; for (const e of m.events) evCount[e.type] = (evCount[e.type] || 0) + 1;
-  o.push('', '## Event counts', '', Object.entries(evCount).map(([k, v]) => `${k} ${v}`).join(', '), '', `Goals started: ${JSON.stringify(m.goals)}`);
+  o.push('', '## Event counts', '', Object.entries(evCount).map(([k, v]) => `${k} ${v}`).join(', '));
   o.push('', '## Final state', '', '```', JSON.stringify(r.final.summary), JSON.stringify(r.final.leantos), '```');
   return o.join('\n') + '\n';
 }
