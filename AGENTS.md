@@ -20,4 +20,5 @@ Read `docs/design.md` (what the game is) and `docs/architecture.md` (how the cod
 - Every module starts with a header: what it does, what it exports, what it depends on. Update it when the module changes.
 - Add or update tests with every change: `npm test`. For changes that touch render also run `npm run build && npm run smoke` (quick), and for visual versions `npm run build && npm run smoke:full`; look at the screenshots.
 - `tests/world.test.js` guards seed 1337 against the style prototype. If it fails, the island changed: only accept that on purpose, and regenerate the fixture with `prototypes/make-golden.js` after changing the prototype the same way.
+- **No care for old saves.** The game is not released and the user starts new games often: a change need not keep running or saved games working (no save migrations or old-save rounding), unless the user asks for it.
 - Three.js stays at r128 (the shaders depend on its shader chunks).

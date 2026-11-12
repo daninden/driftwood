@@ -1,5 +1,5 @@
 /**
- * game/fine — the fine layer of the path finder (0.30.3 "Routes"): nodes round the camp's solids where the 1.5 m grid is too coarse.
+ * game/fine — the fine layer of the path finder (0.30.3 "Routes"): nodes round the camp's solids where the 1.5 m grid is too coarse. 0.33.3 adds the route nodes (`createRouteNodes`, below): the same idea for steep stretches and climbing routes between cells that cannot be stood on.
  *
  * The grid of game/path cannot go between two piles 1.4 m apart, round a pile at 0.1 m, or into and out of a lean-to. The fine layer adds a few
  * nodes the planner may use next to the grid cells:
@@ -17,7 +17,8 @@
  * the ones it has, drops the nodes of removed groups, makes the nodes of new ones, re-checks the nodes that a changed group can cover or uncover and
  * forgets the edges of every node within FINE_SPAN of a changed group. 0.32 "Piece by piece": a lean-to site gets its circles at its fifth part with the group unchanged; the sync notices that (`hasCircles`) and treats it as a change, or the links made while the site had no walls (the gate to a back corner) would stay and route him through the walls. The result equals a fresh build (tests/walk.test.js checks it on random sequences, tests/site.test.js the lean-to that turns solid).
  *
- * FINE_SPAN, FINE_LINK, RING_STEP, RING_GAP
+ * FINE_SPAN, FINE_LINK, RING_STEP, RING_GAP, ROUTE_SLOPE, ROUTE_SAMPLE, ROUTE_LINK, ROUTE_SPAN, ROUTE_BLOCK, ROUTE_CELLS
+ * createRouteNodes(world, grid) -> rn   0.33.3, see its own header: rn.ensure(x, z, r), rn.near(x, z, r), rn.cellLinks(node), rn.nodeLinks(node), rn.leadsOut(node), rn.byId, rn.base, rn.count, rn.reset()
  * createFine(world, grid) -> fine   grid: { C, N, cell(v), centre(i), isStand(ix, iz) } of game/path (isStand: the island only)
  *   fine.sync(camp)                  bring the nodes up to date with the camp view (cheap when camp.key did not change)
  *   fine.nodes                       the nodes now: [{ uid, id, x, z, g (group id), kind, ... }]; node.id = N * N + uid (cell indices are below N * N)
@@ -27,13 +28,15 @@
  *   fine.nodeLinks(node, camp) -> [[node, factor]]              nodes within FINE_SPAN joined to it
  *   fine.signature(camp) -> string  the nodes and links in a canonical order (for the equality test)
  *
- * Depends on: game/walk, game/obstacles (leantoPoint), game/movement (canStand)
+ * Depends on: game/walk, game/obstacles (leantoPoint), game/movement (canStand, terrainAt), world/constants
  */
-import { canStand } from './movement.js';
+import { canStand, terrainAt } from './movement.js';
 import { edgeFactor, staticFactor, campOpen, PLAN_MARGIN } from './walk.js';
 import { leantoPoint } from './obstacles.js';
+import { HALF } from '../world/constants.js';
 
 export const FINE_SPAN = 7, FINE_LINK = 3, RING_STEP = 0.55, RING_GAP = 0.06;
+export const ROUTE_SLOPE = 0.3, ROUTE_SAMPLE = 0.5, ROUTE_LINK = 2.6, ROUTE_SPAN = 1.1, ROUTE_BLOCK = 4, ROUTE_CELLS = 4;   // 0.33.3 "Routes": the lattice of the route nodes (m), how far one reaches a cell centre and another node (m), the side of the blocks they are made in (cells)
 const BUCKET = 3, MIN = 0.05;
 // the node places of a lean-to in its local frame (f, r)
 // 0.33 "Hut": a lean-to that has begun a hut (its group has `hut`) also gets the four outer corners of the hut's offset outline (0.55 m off its walls)
@@ -148,4 +151,92 @@ export function createFine(world, grid) {
   }
 
   return fine;
+}
+
+/**
+ * 0.33.3 "Routes": route nodes, the third kind of node the planner uses. A climbing route (or a steep stretch he can scramble) is often only 1 to 2 m long between two cell centres of the 1.5 m grid that
+ * cannot be stood on, so the grid has no node on it and no edge over it. A route node is a point of the 0.5 m lattice (ROUTE_SAMPLE) that he can stand on (game/movement `canStand`), on a cell whose
+ * middle he cannot, and that lies on ground of slope ROUTE_SLOPE (0.3) or more or on a climbing route (more than 0.25). It is island-only (no camp, no allowed ground): made lazily, a block of
+ * ROUTE_BLOCK x ROUTE_BLOCK cells at a time when the search comes near, and forgotten when a tree is felled (what canStand says near a trunk changes). Links, made when the search looks at a node: to the
+ * nearest ROUTE_CELLS (4) standable cell middles within ROUTE_LINK and to the other route nodes within ROUTE_SPAN, each by game/walk `staticFactor` ('block': a trunk on the line closes it), which for steep ground asks the stepper's own
+ * test (`stepperOpen`) along the whole line. The camp is asked by the caller (game/path), on the fly. What counts as standable anywhere else (the grid, building sites, piles, camp spots, game/stand) is not touched.
+ *
+ * createRouteNodes(world, grid) -> rn   grid: { C, N, centre(i), isStand(ix, iz) } of game/path (isStand: the island only)
+ *   rn.ensure(x, z, r)         make the blocks within r of a point
+ *   rn.near(x, z, r) -> [node] the nodes within r (after ensure); node: { id, x, z }, id from rn.base up (above every cell and fine id)
+ *   rn.byId                    Map id -> node;   rn.count: the nodes made so far;   rn.reset(): forget everything
+ *   rn.cellLinks(node) -> Map cell index -> factor      rn.nodeLinks(node) -> [[node, factor]]      rn.leadsOut(node) -> true when the chain of route nodes it belongs to touches a cell middle (a start is joined only to such nodes)
+ */
+export function createRouteNodes(world, grid) {
+  const { C, N } = grid, base = N * N + (1 << 24), block = ROUTE_BLOCK * C;
+  let blocks = new Map(), next = 0;
+  const rn = { base, byId: new Map(), ensure, near, cellLinks, nodeLinks, leadsOut, reset, get count() { return next; } };
+  function reset() { blocks = new Map(); rn.byId = new Map(); next = 0; }
+  const bk = (bx, bz) => bx * 65536 + bz;
+  function make(bx, bz) {
+    const list = [], ix0 = bx * ROUTE_BLOCK, iz0 = bz * ROUTE_BLOCK;
+    for (let iz = iz0; iz < iz0 + ROUTE_BLOCK; iz++) for (let ix = ix0; ix < ix0 + ROUTE_BLOCK; ix++) {
+      if (ix < 0 || iz < 0 || ix >= N || iz >= N || grid.isStand(ix, iz)) continue;
+      const cx = grid.centre(ix), cz = grid.centre(iz);
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        const x = cx + a * ROUTE_SAMPLE, z = cz + b * ROUTE_SAMPLE;
+        const t = terrainAt(world, x, z, 0);
+        if (t.s < ROUTE_SLOPE && t.climb <= 0.25) continue;   // level ground is the grid's
+        if (!canStand(world, x, z, 0)) continue;
+        const n = { id: base + next++, x, z, cl: null, nl: null };
+        list.push(n); rn.byId.set(n.id, n);
+      }
+    }
+    return list;
+  }
+  function ensure(x, z, r) {
+    const b0 = Math.floor((x - r + HALF) / block), b1 = Math.floor((x + r + HALF) / block), c0 = Math.floor((z - r + HALF) / block), c1 = Math.floor((z + r + HALF) / block);
+    for (let bx = b0; bx <= b1; bx++) for (let bz = c0; bz <= c1; bz++) { const k = bk(bx, bz); if (!blocks.has(k)) blocks.set(k, make(bx, bz)); }
+  }
+  function near(x, z, r) {
+    const out = [], b0 = Math.floor((x - r + HALF) / block), b1 = Math.floor((x + r + HALF) / block), c0 = Math.floor((z - r + HALF) / block), c1 = Math.floor((z + r + HALF) / block);
+    for (let bx = b0; bx <= b1; bx++) for (let bz = c0; bz <= c1; bz++) { const l = blocks.get(bk(bx, bz)); if (l) for (const n of l) if (Math.hypot(n.x - x, n.z - z) <= r) out.push(n); }
+    return out;
+  }
+  function cellLinks(node) {
+    if (node.cl) return node.cl;
+    const out = new Map(), ix = grid.cell(node.x), iz = grid.cell(node.z), rr = Math.ceil(ROUTE_LINK / C) + 1, list = [];
+    for (let a = -rr; a <= rr; a++) for (let b = -rr; b <= rr; b++) {
+      const cx = ix + a, cz = iz + b;
+      if (!grid.isStand(cx, cz)) continue;
+      const d = Math.hypot(grid.centre(cx) - node.x, grid.centre(cz) - node.z);
+      if (d <= ROUTE_LINK) list.push([cx, cz, d]);
+    }
+    list.sort((p, q) => p[2] - q[2]);
+    for (const [cx, cz] of list) {   // the nearest ROUTE_CELLS cell middles a line reaches (a node needs a way onto the grid, not every cell round it)
+      if (out.size >= ROUTE_CELLS) break;
+      const sf = staticFactor(world, node, { x: grid.centre(cx), z: grid.centre(cz) }, 'block');
+      if (sf > MIN) out.set(cz * N + cx, sf);
+    }
+    return node.cl = out;
+  }
+
+  function nodeLinks(node) {
+    if (node.nl) return node.nl;
+    ensure(node.x, node.z, ROUTE_SPAN);
+    const out = [];
+    for (const m of near(node.x, node.z, ROUTE_SPAN)) {
+      if (m === node) continue;
+      const sf = staticFactor(world, node, m, 'block');
+      if (sf > MIN) out.push([m, sf]);
+    }
+    return node.nl = out;
+  }
+  // true when the chain of route nodes the node belongs to touches a standable cell middle anywhere (a short stretch of nodes that leads nowhere is no way out; memoised on the nodes)
+  function leadsOut(node) {
+    if (node.out !== undefined) return node.out;
+    const seen = new Set([node]), q = [node]; let ok = false;
+    for (let i = 0; i < q.length && !ok; i++) {
+      const n = q[i]; if (n.out === true || cellLinks(n).size) { ok = true; break; }
+      for (const [m] of nodeLinks(n)) if (!seen.has(m)) { seen.add(m); q.push(m); }
+    }
+    for (const n of ok ? [node] : seen) n.out = ok;
+    return ok;
+  }
+  return rn;
 }

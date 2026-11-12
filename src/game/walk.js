@@ -15,8 +15,9 @@
  *     0.33.2: a line that cuts between two natural circles that overlap (a wall of trunks, `naturalWall`) is closed in planning too.
  * The circle geometry is the one `pushOut` enforces, so every planned segment can be walked.
  *
- * stepperOpen(world, a, b) -> true when stepPlayer's own test (movement stepAhead) passes at a place every DENSE along the line; terrainPace asks it where the ground along the line is at least STEEP
- * STEP, STEEP, DENSE, PLAN_MARGIN, FOLLOW_MARGIN, NATURAL_DEAR
+ * stepperOpen(world, a, b, lateral?) -> true when stepPlayer's own test (movement stepAhead) passes at a place every DENSE along the line, and (0.33.3) along the lines LATERAL (0.12 m) to either side of it too (he never keeps exactly to a line: a
+ *   band he could pass only on the line itself stalled the follower, seed 2024 near (-107.0, -147.2)); terrainPace asks it where the ground along the line is at least STEEP
+ * STEP, STEEP, DENSE, LATERAL, PLAN_MARGIN, FOLLOW_MARGIN, NATURAL_DEAR
  * terrainPace(world, a, b) -> 0 | pace   the terrain part: 0 when any step is a wall, else the harmonic mean of the steps' speed factors
  * naturalHit(world, a, b) -> the natural circle the line meets, or null
  * naturalWall(world, a, b) -> true when the line cuts between two overlapping natural circles (0.33.2: closed in staticFactor)
@@ -37,6 +38,7 @@ export const PLAN_MARGIN = 0.05;     // clearance a planned line keeps from a ca
 export const FOLLOW_MARGIN = 0.04;   // clearance the follower keeps when it cuts a corner
 export const NATURAL_DEAR = 0.25;
 export const STEEP = 0.85;           // ground at least this steep along a line makes `terrainPace` ask the stepper's own test (a gentler line has no band for the lattice to miss)
+export const LATERAL = 0.12;     // how far to either side of a steep line the stepper must pass too
 export const DENSE = 0.05;           // the spacing of the places along a line where the stepper's own test is made (about one step at 60 frames a second)
 const EPS = 1e-6;
 
@@ -52,8 +54,12 @@ export function asCamp(obstacles) {
  * ahead and the point one step ahead must both be walkable, with the symmetric steepness rule) is made in the direction of the line, the look-ahead cut short at the end
  * of the line. The lattice of 0.25 m steps in `terrainPace` alone let a thin steep band between two of its places through, and the stepper then refused a step into it.
  */
-export function stepperOpen(world, a, b) {
+export function stepperOpen(world, a, b, lateral = LATERAL) {
   const len = Math.hypot(b.x - a.x, b.z - a.z); if (len < 1e-6) return true;
+  if (lateral > 0) {   // the follower never keeps exactly to a line: the lines a little to either side must be open too (a band the stepper could pass only on the line itself is no way)
+    const nx = -(b.z - a.z) / len * lateral, nz = (b.x - a.x) / len * lateral;
+    return stepperOpen(world, a, b, 0) && stepperOpen(world, { x: a.x + nx, z: a.z + nz }, { x: b.x + nx, z: b.z + nz }, 0) && stepperOpen(world, { x: a.x - nx, z: a.z - nz }, { x: b.x - nx, z: b.z - nz }, 0);
+  }
   const n = Math.max(1, Math.ceil(len / DENSE)), d = len / n, ux = (b.x - a.x) / len, uz = (b.z - a.z) / len, here = { x: a.x, y: 0, z: a.z };
   for (let i = 0; i < n; i++) {
     here.x = a.x + ux * d * i; here.z = a.z + uz * d * i; here.y = world.H(here.x, here.z);

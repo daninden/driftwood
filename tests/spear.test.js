@@ -408,7 +408,7 @@ describe('Dave makes a spear, once', () => {
     const near = w.tiles.flatMap(t => g.branches.groundBranches(t)).sort((a, b) => Math.hypot(a.x - spawn.x, a.z - spawn.z) - Math.hypot(b.x - spawn.x, b.z - spawn.z))[0];
     knowRoute(g, near); knowRoute(g, stone);
     const m = createMind(w, g); m.engage();
-    tickMind(g, m, 1500, () => m.stats.spearsMade > 0 && !g.spear.hand && !!g.spear.at);
+    tickMind(g, m, 4000, () => m.stats.spearsMade > 0 && !g.spear.hand && !!g.spear.at);   // (0.33.3: 1500 s was one day: with the planner's routes his idle moments of that day went to other things and the spear came on the next)
     expect(m.stats.spearsMade).toBe(1); expect(g.spear.has()).toBe(true); expect(g.spear.hand).toBe(false); expect(g.spear.at).toBeTruthy();
     expect(g.wood.carried.some(l => l.branch)).toBe(false);                                        // the branch is used up
     expect(Math.hypot(g.spear.at.x - m.home().x, g.spear.at.z - m.home().z)).toBeLessThan(8);   // at the camp

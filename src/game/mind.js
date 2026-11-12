@@ -56,6 +56,7 @@
  *   and the logs lying about within HOME_MAX_COST of walking), then loads of three branches and three fronds (as for the lean-to); needs and errands break in as ever (a log on his shoulder goes to a log pile: `handoff`), a piece of the hut built counts as a piece of the home built today (`builtDay`: the axe waits for another morning, and after the hut has used its twelve the
  *   axe's own rule, fewer than AXE_LOGS stored, fills a log pile again: timber for later). Before the first part the footprint must be clear (game `hutFits`): his own piles in it are carried out, a load at a time (`clearFootprint`: logs to a log pile, dry fuel, fronds and stones to a spot behind the hut, wet wood to the tideline), a fire place or burnt place is
  *   waited out (it fades in two days), a trunk, a boulder or ground that does not fit (or HUT_REFUSALS refusals by the game) means no hut there for good (`hutNever`; the home stays a lean-to). The reason `hutIntent` is said once, when the errand starts. `mind.stats.hut`, events `hut-start`, `hut-clear`, `hut-done`, `hut-never`, hooks `mind.hutPlan`, `mind.hutNever`, `mind.clearingTrees`, `mind.hutBlockers`, `mind.logsAvail`.
+ * 0.33.3 "Routes": `layAt` with an exact drop (the stray into the ring) tries another approach when the standing point cannot be reached, lies within a metre of another pile of fuel that would take the lay, or he stops more than 0.35 m short of it (found by a scene in which the pile laid beside the ring joined the stray and no fire was lit all evening).
  * 0.33.1 "Hearth": `centreStrays` asks `game.canPileAt` for the ring's middle before it takes a stray, stops for the day after a trip that left no fuel pile in the ring (stats.strayFails, strayRefused), and when the ring holds STRAY_ENOUGH (6) pieces; the walk counts a stall that ended as arrived as no stall (game/route).
  * 0.31.1 "Milk", the fire and the stone ring: with a finished ring only the stock pile in the ring can be lit (game/leanto `noFire`, game/game `lightable`); `ringMid`, `strays`, `centreStrays` carry a stray fuel pile within RING_NOFIRE of the ring's middle into the ring (idle goal at a calm moment, and before `lightFire`), and the aside pile beside a burning fire at the ring stands ASIDE_RING (RING_NOFIRE + 0.7) from it.
  * 0.30.21: journey beds and the sleep fallback are never on a climbing route (the sleep key is refused there): `journeyBed` takes a spot beside the fire on ordinary ground, and the refusal fallback of `sleepGoal` (`ringSpot`) prefers ordinary ring spots, keeping the old one if none qualifies.
@@ -962,8 +963,21 @@ export function createMind(world, game, opts = {}) {
       if (!W.load()) return;
     }
     if (d.exact && W.load()) {
-      const at = exactPileDrop(p, d);
-      if (yield* walk(at.x, at.z, { stop: 0.08, settle: 4 })) { p.heading = at.heading; yield* layDown(); }
+      const camp = game.movement.obstacles.camp, a0 = Math.atan2(d.x - p.x, d.z - p.z);
+      const joins = c => W.piles.some(q => isFuel(q) && q !== d.pile && dist(q, c) < 1.2);   // (the lay joins a pile of fuel within about a metre of where he stands instead of making the new pile: PILE_JOIN)
+      // 0.33.3: the standing point of the drop on his own side first (in a solid it is walked to as before: he stops at the rim and the pile lands a little off the middle); when it cannot be reached, would let a pile of fuel beside it take the lay (a stray left between him and the ring),
+      // or he does not get within 0.35 m of it, the next approach: from another side, the nearest to his own with a free point and a way, standing up to 0.4 m farther out if the point itself is in a solid (the pile lands that much off the middle)
+      const tries = [exactPileDrop(p, d)];
+      for (const da of [0.8, -0.8, 1.6, -1.6, 2.4, -2.4, Math.PI]) for (const k of [0, 0.1, 0.2, 0.3, 0.4]) {
+        const hd = a0 + da, c = { x: d.x - Math.sin(hd) * (PILE_FRONT + k), z: d.z - Math.cos(hd) * (PILE_FRONT + k), heading: hd };
+        if (!camp.inside(c.x, c.z, 0.1) && !joins(c) && canStand(world, c.x, c.z, 0)) { tries.push(c); break; }
+      }
+      for (let i = 0; i < tries.length && W.load(); i++) {
+        const at = tries[i];
+        if (i > 0 && path.cost(p, at) === Infinity) continue;
+        if (i === 0 && (joins(at) || path.cost(p, at) === Infinity)) continue;
+        if ((yield* walk(at.x, at.z, { stop: 0.08, settle: 4 })) && (dist(p, at) <= 0.35 || i === tries.length - 1)) { p.heading = at.heading; yield* layDown(); break; }
+      }
       if (!W.load()) return;
     }
     for (let tries = 0; tries < 3 && W.load(); tries++) {
@@ -1287,7 +1301,7 @@ export function createMind(world, game, opts = {}) {
         if (held() >= goal) continue;
         yield* collect(PIECE_SRC[kind], {
           goal, have: held, maxCost: HOME_MAX_COST, think: kind === 'driftwood' || kind === 'branch' ? 'homeWoodIntent' : null,
-          onPick: kind === 'driftwood' ? fresh => { stats.tide.picked += fresh.length; } : undefined,   // a load cut short by a need may be laid at the tideline by the handoff (wet wood goes there): its pieces count as taken, so that no piece is laid that was not picked (the conservation of the long lives)
+          onPick: fresh => { stats.tide.picked += fresh.length; },   // a load cut short by a need may be laid at the tideline by the handoff (wet wood goes there): its pieces count as taken, so that no piece is laid that was not picked (the conservation of the long lives). 0.33.3: whatever the kind of the load (a load of branches was laid and counted as laid, never as taken, seed 7 walked stream 1)
           wanted: t => o => !!o.thing && (t.pile ? o.thing.kind === 'pile' && o.thing.pile === t.pile : o.thing.kind === 'log' && kindOf(o.thing.log) === pk),
         });
         if (held() < goal) { lack[PIECE_LACK[kind]] = clock.day; ev('home-no-material', { kind }); break; }

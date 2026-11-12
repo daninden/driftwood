@@ -2,6 +2,39 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.33.3 "Routes" — 2026-11-12
+
+Agreed with the user: **make the planner reliable where it failed; no new behaviour.** `JOURNEY_RIM` and all rules of the mind are unchanged. Of two options, (a) fine nodes along routes was chosen over (b) (measured on 1635 walks: (b) no plan 3.0%, arrived 99.62%, stuck 21; (a) final no plan 2.2%, arrived 100%, stuck 3).
+
+**Causes found.** (1) A steep stretch of 1 to 2 m on a narrow climbing route fell between two cell middles of the 1.5 m grid that cannot be stood on, so the cell grid had no edge there (the gorge stranding on seed 2024, day 58, was this). (2) `startFallback` in `game/path` joined a start to a cell across a wall. (3) The "cliff rim" stall on seed 2024 at (-107.0, -147.2) was really a plan along a 4.4-steep face where the stepper stalled 0.26 m beside the line. (4) Two mind bugs, found on the way: `onPick` counted only driftwood as picked, so a cut-short home load laid at the tideline was laid but never counted picked (`mindLife7.walked` stream 1); and `layAt` (the exact drop of a stray into the ring): the standing point could lie where a stray pile within join distance swallowed the lay, so no ring pile and no fire all evening (HEAD: 1 of 12 start times of the hearth scene made a fire, 5 of 12 before the fix, 0 of 7 after: the fix is that other approaches are tried).
+
+**The fixes.**
+
+- **Route nodes (`game/fine` `createRouteNodes`, `path.route`):** a 0.5 m lattice (`ROUTE_SAMPLE`) of standable points on cells whose middle cannot be stood on, where the slope is at least `ROUTE_SLOPE` 0.3 or a climbing route; made lazily in 4 x 4-cell blocks (`ROUTE_BLOCK` 4, `ROUTE_CELLS` 4), dropped when a tree is felled; linked to cell middles (`ROUTE_LINK` 2.6 m) and to each other (`ROUTE_SPAN` 1.1 m) through `staticFactor`; `game/path` expands them in the A*. What counts as standable elsewhere is unchanged.
+- **`startFallback` (`game/path`)** no longer joins a start to a cell across a wall (`terrainPace` 0 or less).
+- **`stepperOpen` (`game/walk`)** also tests the lines `LATERAL` 0.12 m to each side.
+- **Mind:** `onPick` counts every kind of load; `layAt` tries another approach (other side, up to 0.4 m farther out) when the standing point cannot be reached, would join a fuel pile within 1.2 m, or he stops over 0.35 m short.
+- Tried and dropped: a tier "start on non-standable steep ground" (no real case where it helped).
+
+**Measured: the walk set (1635 walks, seeds 1337, 2024, 7, real `stepPlayer`).** No plan 73 (4.46%) to 36 (2.20%; of the 36, 33 are unreachable on a 0.5 m lattice anyway, 3 reachable); arrived of planned 99.74% to 100%; stuck 8 to 3.
+
+**Measured: the lives (the same scripted lives, 5dca9f4, 0.33.2, to this release).**
+
+| life | stuck | nopath | noStand | collapses | max thirst | max hunger | evening fires | hut start / done | journeys started / done | stranded |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1337, 60 d, home, s0 | 2 -> 8 | 0 -> 0 | 0 -> 21 | 0 | 0.69 -> 0.70 | 0.78 -> 0.75 | 54 -> 52 | 20/22 -> 19/23 | 9/9 -> 10/10 | 0 |
+| 2024, 60 d, home, s0 | 6 -> 14 | 11 -> 0 | 1 -> 0 | 0 | 0.68 -> 0.70 | 0.74 -> 0.74 | 54 -> 53 | 23/25 -> 20/25 | 10/9 -> 10/10 | 1 -> 0 |
+| 7, 60 d, home, s0 | 3 -> 6 | 1 -> 5 | 0 | 0 | 0.79 -> 0.72 | 0.79 -> 0.88 | 51 -> 52 | 19/26 -> 26/34 | 5/5 -> 8/8 | 0 |
+| 1337 walked, 20 d, s0 | 0 -> 2 | 0 | 0 -> 1 | 0 | 0.68 -> 0.69 | 0.75 -> 0.71 | 18 -> 14 | none | 3/3 -> 3/2 | 0 |
+| 1337 walked, 30 d, s1 | 5 -> 1 | 0 | 0 | 0 | 0.68 | 0.77 -> 0.69 | 16 -> 27 | none | 5/5 -> 4/4 | 0 |
+| 24 ten-day lives (sum) | 9 -> 5 (max per life 2 -> 1) | 2 -> 0 | 14 -> 15 | 0 | 0.78 -> 0.75 | 0.86 -> 0.79 | 204 -> 209 | none | 26 -> 23 started, 16 -> 17 done | 0 |
+
+**Planning cost.** About 1.0x on short plans, 1.5 to 2.2x on long ones (300 m cold: 262 to about 400 ms mean); failing searches at worst about 4 s (3.5 s before).
+
+**Not fixed (open, in `docs/handover.md`):** the 60-day `stuck` counts rose; almost all are arrival stalls 0.2 m short of a standing point (goals fire and stores), which vary with the trajectory; seed 7 `nopath` 1 to 5 are starts boxed in by trunks (not routes); `no-stand: add` at a crowded ring middle (varies 0 to 76 between settings); new: `no-stand: buildIn` (the mind's next kind and the game's offer disagree about the held piece: he holds a branch, the game offers only lay), also at 5dca9f4 in 5 of 24 ten-day lives; 2.2% of walks with no plan, mostly unreachable targets, the two thin pockets near (-96, 99) on seed 1337; planning cost on long routes.
+
+**Tests.** `tests/routeNodes.test.js` (new, 10 tests). Changed because the lives moved (the rules are intact): the journey test "does not set out thirsty or hungry" (the drink-goal count is replaced by startThirst < 0.3; the departure thirst and hunger asserts are unchanged), `mindSim` seed 1337 s0 (no `no-stand` events except `buildIn`, a separate known mismatch), the spear test "makes one" (window 1500 to 4000 s), the version assertion in `tests/devPanel.test.js`. Full `npm test`: green, 86 files, 1454 tests, 250 s. `npm run build && npm run smoke`: ok, 783 s.
+
 ## 0.33.2 "Mend" — 2026-11-12
 
 A maintenance release (render agreed with the user, the stalls found by measuring): **the hut looks right while it is built, the need marks tell more, and a few small stalls of Dave's are gone.**

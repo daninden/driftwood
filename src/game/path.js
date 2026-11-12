@@ -11,12 +11,15 @@
  * module depend on game state; it is read through the cached camp view (`obstacles.camp`). A grid edge that comes nearer to a camp circle than its
  * radius (plus the planning margin), and every edge that ends in one, is closed on the fly (never cached). Where the grid is too coarse, the fine layer
  * (game/fine) adds nodes round the piles, fires and lean-tos, joined to each other and to the cells near them.
+ * 0.33.3 "Routes": route nodes (game/fine `createRouteNodes`, `path.route`): a 0.5 m lattice of places he can stand on, on cells whose middle he cannot, on steep ground or a climbing route, made lazily where the search comes (a steep stretch of 1 to 2 m
+ * between two such cell middles used to have no node and no edge: no plan). They are joined to the cell middles within 2.6 m and to each other by the same rule of game/walk; the grid, `path.isStand` and everything else that decides what can be stood on are as before.
  * A* over cells + fine nodes with a straight-line guess. `allow` keeps a walk inside a part of the island (game/mind passes "known ground").
  * Start and goal points join the graph by several connections (the 4 nearest cells within 4.5 m and every fine node within 4.5 m whose straight line
  * from the exact point is open by game/walk, a trunk or boulder on it closing the connection; only when nothing else is left it is dear). A start that already lies inside a camp circle (a pile laid under him, the wall zone of a lean-to being
  * built) may leave it along any line that does not get nearer to that circle's middle (movement's escape rule), and, when that finds no way out at all (wedged between overlapping piles), by any line; a person inside a lean-to leaves
  * through its open front and a route into it enters through that opening, to the sleep point itself. A goal inside a camp circle is aimed at the
  * circle's rim (0.12 m beyond it, on the side he comes from).
+ * The old start fallback (the two nearest cells whatever lies between, f 0.5) never joins across a wall (0.33.3: terrainPace 0).
  * A failed search is remembered (same places, same camp, same known ground): a shut-in camp does not search again and again.
  *
  * C, N
@@ -35,21 +38,22 @@
  *   path.cell(v) -> the cell index of a coordinate; path.centre(i) -> the middle of cell index i
  *   path.allow           the current `allow(x, z)` predicate (assignable); path.dynamic: true when there is a camp; path.camp, path.fine: the camp view and the fine layer (or null)
  *   path.grid            { C, N, cell, centre, isStand } the grid helpers (isStand: the island only), shared with game/fine
+ *   path.route           the route nodes (game/fine createRouteNodes): path.route.count (made so far), .base (the id of the first; a pts[i].id of that or more is a route node), .byId
  *   path.stats           { finds, nulls, cached (answers from the failure memory), expanded (nodes looked at in all) } for the tests and the benchmarks
  *
  * Pure functions on a world; no DOM, no Three.js.
  *
- * Depends on: game/movement, game/walk, game/fine, game/felled, world/constants
+ * Depends on: game/movement, game/walk, game/fine (camp nodes and route nodes), game/felled, world/constants
  */
 import { canStand } from './movement.js';
 import { HALF } from '../world/constants.js';
-import { staticFactor, campOpen, segmentClear, asCamp, PLAN_MARGIN } from './walk.js';
-import { createFine, FINE_LINK } from './fine.js';
+import { staticFactor, terrainPace, campOpen, segmentClear, asCamp, PLAN_MARGIN } from './walk.js';
+import { createFine, createRouteNodes, FINE_LINK, ROUTE_LINK } from './fine.js';
 import { felledStamp } from './felled.js';
 
 export const C = 1.5, N = Math.round(2 * HALF / C);
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-const CONN = 4.5, CONN_CELLS = 4;   // how far (m) and how many cells a start or goal point joins
+const CONN = 4.5, CONN_CELLS = 4, CONN_ROUTE = 4, CONN_ROUTE_AT = 3;   // how far (m) and how many cells a start or goal point joins
 const MIN = 0.05, START = -1, GOAL = -3;
 const EK = 1 << 26;
 
@@ -65,7 +69,7 @@ export function createPath(world, opts = {}) {
   const camp = asCamp(opts.obstacles), dynamic = !!camp, stats = { finds: 0, nulls: 0, cached: 0, expanded: 0 };
   const centre = i => (i + 0.5) * C - HALF, cell = v => Math.floor((v + HALF) / C);
   let stamp = felledStamp(world);
-  const sync = () => { const s = felledStamp(world); if (s !== stamp) { stamp = s; stand.clear(); efs.clear(); neg.clear(); } };   // 0.31 "Axe": a tree was felled (or another game's overlay took over): what was cached about the trunks is thrown away
+  const sync = () => { const s = felledStamp(world); if (s !== stamp) { stamp = s; stand.clear(); efs.clear(); neg.clear(); rn.reset(); } };   // 0.31 "Axe": a tree was felled (or another game's overlay took over): what was cached about the trunks is thrown away
   const standT = (ix, iz) => {   // the island only: cached until a tree is felled
     sync();
     if (ix < 0 || iz < 0 || ix >= N || iz >= N) return false;
@@ -77,6 +81,7 @@ export function createPath(world, opts = {}) {
   const edgeKey = (u, v) => (u + 1024) * EK + (v + 1024);
   const path = { grid: null, allow: opts.allow || null, allowVersion: opts.allowVersion || null, dynamic, camp, fine: null, isStand, centre, cell, find, findAny, cost, nearestCell, clear, open, campKey, edgeKey, stats };
   const grid = path.grid = { C, N, cell, centre, isStand: standT };
+  const rn = path.route = createRouteNodes(world, grid);   // 0.33.3: nodes on steep stretches and climbing routes between cell middles that cannot be stood on
   const fine = path.fine = camp && camp.groups ? createFine(world, grid) : null;
   const ok = (ix, iz) => !path.allow || path.allow(centre(ix), centre(iz));
   const okAt = (x, z) => !path.allow || path.allow(x, z);
@@ -151,6 +156,17 @@ export function createPath(world, opts = {}) {
       const f = leave ? line(pt, n) : line(n, pt);
       if (f > MIN && !(closedSet && closedSet.has(leave ? edgeKey(START, n.id) : edgeKey(n.id, towards)))) out.push({ id: n.id, x: n.x, z: n.z, f });
     }
+    // 0.33.3: the nearest route nodes within CONN_ROUTE_AT (a point on a steep stretch or beside a climbing route joins it where the cell middles are out of reach)
+    rn.ensure(pt.x, pt.z, CONN_ROUTE_AT);
+    const rl = rn.near(pt.x, pt.z, CONN_ROUTE_AT).sort((p, q) => Math.hypot(p.x - pt.x, p.z - pt.z) - Math.hypot(q.x - pt.x, q.z - pt.z));
+    let rt = 0;
+    for (const n of rl) {
+      if (rt >= CONN_ROUTE) break;
+      if (!leave && !okAt(n.x, n.z)) continue;
+      if (!rn.leadsOut(n)) continue;   // (a short chain of route nodes that touches no cell is no way out: the fallbacks below stay in reach)
+      const f = leave ? line(pt, n) : line(n, pt);
+      if (f > MIN && !(closedSet && closedSet.has(leave ? edgeKey(START, n.id) : edgeKey(n.id, towards)))) { out.push({ id: n.id, x: n.x, z: n.z, f }); rt++; }
+    }
     return out;
   }
 
@@ -164,6 +180,7 @@ export function createPath(world, opts = {}) {
       const c = { x: centre(cx), z: centre(cz) }, id = cz * N + cx;
       if (camp && camp.count && !campOpen(camp, from, c, PLAN_MARGIN, 'lenient')) continue;
       if (closedSet && closedSet.has(edgeKey(START, id))) continue;
+      if (terrainPace(world, from, c) <= 0) continue;   // 0.33.3: no line across a wall (a rim, a drop or rise beyond what he can step, by the stepper's own test): the cell below a cliff is no connection
       out.push({ id, x: c.x, z: c.z, f: 0.5 });
     }
     return out;
@@ -207,15 +224,15 @@ export function createPath(world, opts = {}) {
     for (const g of gl) { gx += g.x; gz += g.z; } gx /= gl.length; gz /= gl.length;
     for (const g of gl) slack = Math.max(slack, Math.hypot(g.x - gx, g.z - gz));
     const hf = (x, z) => { const dx = Math.abs(x - gx), dz = Math.abs(z - gz); return Math.max(0, Math.max(dx, dz) + 0.414 * Math.min(dx, dz) - slack) * 1.1; };
-    const NN = N * N, gs = new Map(), came = new Map(), h = new Heap(), closed = new Set();
-    const cx = k => centre(k % N), cz = k => centre(Math.floor(k / N));
+    const NN = N * N, cx = k => centre(k % N), cz = k => centre(Math.floor(k / N));
+    const gs = new Map(), came = new Map(), h = new Heap(), closed = new Set();
+    let exp = 0, found = null;
     for (const c of sc) { const g0 = Math.hypot(c.x - from.x, c.z - from.z) / c.f; gs.set(c.id, g0); came.set(c.id, START); h.push(g0 + hf(c.x, c.z), c.id); }
     const relax = (u, g0, v, vx, vz, len, f) => {
       if (closedSet && closedSet.has(edgeKey(u, v))) return;
       const ng = g0 + len / f;
       if (ng < (gs.get(v) ?? 1e18)) { gs.set(v, ng); came.set(v, u); h.push(ng + (v <= GOAL ? 0 : hf(vx, vz)), v); }
     };
-    let exp = 0, found = null;
     while (h.size) {
       const [, k] = h.pop(); if (closed.has(k)) continue; closed.add(k);
       if (k <= GOAL) { found = k; break; }
@@ -235,6 +252,24 @@ export function createPath(world, opts = {}) {
           const f = fine.cellLinks(n, camp).get(k); if (f === undefined) continue;
           relax(k, g0, n.id, n.x, n.z, Math.hypot(n.x - x, n.z - z), f);
         }
+        rn.ensure(x, z, ROUTE_LINK);
+        for (const n of rn.near(x, z, ROUTE_LINK)) {   // 0.33.3: route nodes (the camp is asked here, on the fly)
+          if (closed.has(n.id) || !okAt(n.x, n.z) || (path.allow && !lineOk({ x, z }, n))) continue;
+          const f = rn.cellLinks(n).get(k); if (f === undefined || (camp && camp.count && !campOpen(camp, { x, z }, n, PLAN_MARGIN, false))) continue;
+          relax(k, g0, n.id, n.x, n.z, Math.hypot(n.x - x, n.z - z), f);
+        }
+      } else if (k >= rn.base) {
+        const n = rn.byId.get(k); if (!n) continue;
+        for (const [ck, f] of rn.cellLinks(n)) {
+          if (closed.has(ck)) continue;
+          const ix = ck % N, iz = (ck - ix) / N, cp = { x: centre(ix), z: centre(iz) };
+          if (!ok(ix, iz) || (path.allow && !lineOk(n, cp)) || (camp && camp.count && !campOpen(camp, n, cp, PLAN_MARGIN, false))) continue;
+          relax(k, g0, ck, cp.x, cp.z, Math.hypot(cp.x - n.x, cp.z - n.z), f);
+        }
+        for (const [m, f] of rn.nodeLinks(n)) {
+          if (closed.has(m.id) || !okAt(m.x, m.z) || (path.allow && !lineOk(n, m)) || (camp && camp.count && !campOpen(camp, n, m, PLAN_MARGIN, false))) continue;
+          relax(k, g0, m.id, m.x, m.z, Math.hypot(m.x - n.x, m.z - n.z), f);
+        }
       } else {
         const n = fine.byId.get(k); if (!n) continue;
         for (const [ck, f] of fine.cellLinks(n, camp)) {
@@ -252,7 +287,7 @@ export function createPath(world, opts = {}) {
     if (found === null) return fail();
     const gi = GOAL - found, pts = [{ x: gl[gi].x, z: gl[gi].z, id: found }];
     for (let k = came.get(found); k !== START && k !== undefined; k = came.get(k)) {
-      if (k < NN) pts.push({ x: cx(k), z: cz(k), id: k }); else { const n = fine.byId.get(k); pts.push({ x: n.x, z: n.z, id: k }); }
+      if (k < NN) pts.push({ x: cx(k), z: cz(k), id: k }); else { const n = k >= rn.base ? rn.byId.get(k) : fine.byId.get(k); pts.push({ x: n.x, z: n.z, id: k }); }
     }
     pts.reverse();
     return { pts, cost: gs.get(found), goal: gl[gi].src, index: gi };
