@@ -2,6 +2,22 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.35.1 "Bearings" — 2026-11-12
+
+Agreed with the user (the second step towards the AI mind of 0.36): the options of the menus of 0.35.0 now say **where** they take him (`at`, `{ x, z }`), **what the walk costs** (`cost`, seconds at full pace, `WALK_SPEED`) and **how that was found** (`est`: `'line'` a straight line / his walking speed, `'path'` a path cost the rules already compute, `null` no estimate). Nothing is player-facing (`README.md` unchanged) and, by design, nothing changes in his behaviour.
+
+**What it is.**
+
+- **Lazy.** `at`, `cost` and `est` are getters on the option, worked out from its `estimate()` the first time one is read and cached for the menu. `rulesChooser`, `isValid` and `validChoice` never read them, so normal play pays nothing. No side effects: no random number, no state change, no `markBad`, no path planned (the estimates use `scan`, `pileFinds`, `LOGS.near`, `treesWithin`, not `nearestBy`, `nextLog` or `treeReach`, which mark things bad).
+- **Per option.** drink: here at cost 0 with a full shell, else the nearest known fresh water. eat: here at 0 with carried food, else the nearest known nut, bearing bush or banana (straight line, not weighed by path, so it can differ from the rules' pick). sleep: the bed (`sleepSpot`; `journeyBed` on a journey). fire, stores: the fire spot. idle: none. gaze: the shore spot it walks to (`gazeSpot()`, split out of `gaze`, same code), else beside the fire. ember: the fire spot. strays: the nearest stray pile. home: the site or the lean-to of the next piece. spear: the nearest loose branch (else stone). axe: the camp when the axe is still to be made, else the nearest log, else the nearest standing tree of the clearing (the reachability test of `treeReach` is left out because it marks trees bad). tide: `tideTarget()`, est `'path'` (the rules' own cost), else the nearest wet strip by line. fish: `bestFishSpot()`, est `'path'`. stroll: the nearest place of any kind at least 6 m off, from the objects' own positions (`strollCands` draws random numbers; the kind is chosen later). explore, journey: no `at`, `cost` or `est`, and `note: 'chosen on the way'` (their targets come from their own random streams). onward, linger and the events: none.
+- `tests/helpers/mindSim.js` `runMind` takes a `chooser`.
+
+**Measured.** The 38 lives of 0.35.0 (same script, 4 in parallel), against the 0.35.0 baseline: with the default chooser **38 of 38 identical** (event log, stats, report, final state, every tick), 204 s against 217 s; with a test chooser that **reads at, cost and est of every option** at every decision and then returns the rules' answer **38 of 38 identical too** (so reading has no side effect, no draw and no state change; 2,264 to 11,783 menu reads per life), 257 s wall and 741 s of life time against 678 s (about +9%: that is what reading every estimate costs, paid only by a chooser that asks).
+
+**Choices made that the user did not decide:** straight lines, not planned paths, except the two costs the rules compute anyway (fishing and the tide round, est `'path'`); a planned-path estimate (`menu.plan()`) can come later if the AI needs it; the cost is at full pace although idle pastimes walk at `PACE` (0.65); the stroll's `at` is the nearest place of any kind, not of the kind that will be chosen; `note` ('chosen on the way') is a hidden property of the option, not a field of the shape, because `why` already holds the reason code; no player-facing change.
+
+**Tests:** `tests/intent.test.js`: laziness (nothing computed until read, once per option), the rules never read at, cost or est (getters that throw), a drink from a full shell is here at cost 0 and else the nearest known water, and a two-day life through a reading chooser (every estimate is a line, a path or nothing, sleep and stroll have a bearing, explore, journey, idle and linger none, and the run equals the run without reading).
+
 ## 0.35.0 "Intentions" — 2026-11-12
 
 Agreed with the user (the groundwork for the AI mind of 0.36, see *Castaway's mind (AI)* in `docs/design.md`): Dave's decisions are split into three parts: (1) a **menu** of the options he has now, (2) a **chooser** that picks one, (3) the **execution** (the generators for walking, carrying and building), unchanged. In this version the chooser is the present rules, so **his behaviour does not change at all**, and nothing is visible to a player.

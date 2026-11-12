@@ -19,7 +19,7 @@ const ctxOf = (o = {}) => ({ rand: rigged(0.5), ex: rigged(0.5), fish: rigged(0.
 describe('options and menus', () => {
   it('an option has the whole shape, with the rule hidden', () => {
     const o = option({ id: 'x', goal: 'idle', what: 'do x', why: 'because' }, { ok: () => true });
-    expect(o).toEqual({ id: 'x', goal: 'idle', what: 'do x', at: null, cost: null, why: 'because', forced: false });
+    expect(o).toEqual({ id: 'x', goal: 'idle', what: 'do x', at: null, cost: null, est: null, why: 'because', forced: false });
     expect(Object.keys(o)).not.toContain('rule');
     expect(POINTS).toEqual(['goal', 'pastime', 'event']);
   });
@@ -49,7 +49,7 @@ describe('options and menus', () => {
 
   it('the event menu has the one option continue; the rules and the fake both take it', () => {
     const m = eventMenu('stuck', 'drink');
-    expect(m.options).toEqual([{ id: 'continue', goal: 'drink', what: 'carry on', at: null, cost: null, why: 'stuck', forced: false }]);
+    expect(m.options).toEqual([{ id: 'continue', goal: 'drink', what: 'carry on', at: null, cost: null, est: null, why: 'stuck', forced: false }]);
     expect(rulesChooser('event', m, ctxOf())).toBe('continue'); expect(firstChooser('event', m)).toBe('continue');
     expect(validChoice(m, 'continue')).toBe(true); expect(validChoice(m, 'sleep')).toBe(false);
   });
@@ -68,6 +68,23 @@ describe('options and menus', () => {
     const m = pastimeMenu('day', { home: false, tide: true });
     expect(validChoice(m, 'tide')).toBe(true); expect(validChoice(m, { id: 'tide' })).toBe(true);
     expect(validChoice(m, 'home')).toBe(false); expect(validChoice(m, 'nonsense')).toBe(false); expect(validChoice(m, null)).toBe(false); expect(choiceId({ id: 'a', kind: 'shore' })).toBe('a'); expect(choiceId(null)).toBeNull();
+  });
+});
+
+describe('estimates (0.35.1 "Bearings")', () => {
+  it('at, cost and est are worked out only when read, once per option, and the rules never read them', () => {
+    let n = 0;
+    const est = () => { n++; return { at: { x: 1, z: 2 }, cost: 3, est: 'line' }; };
+    const m = pastimeMenu('day', { home: { ok: true, estimate: est }, tide: { ok: false, estimate: est }, explore: { ok: true, chance: 1, draw: 'ex', estimate: () => { n++; return { at: null, cost: null, est: null, note: 'chosen on the way' }; } } });
+    expect(rulesChooser('pastime', m, ctxOf({ ex: () => 0 }))).toBe('home');
+    expect(isValid(m.options[0])).toBe(true); expect(n).toBe(0);
+    const o = m.options[0];
+    expect(o.at).toEqual({ x: 1, z: 2 }); expect(o.cost).toBe(3); expect(o.est).toBe('line'); expect(n).toBe(1);   // (one computation for the three fields)
+    const e = m.options.find(x => x.id === 'explore'); expect([e.at, e.cost, e.est, e.note]).toEqual([null, null, null, 'chosen on the way']);
+    const l = m.options.find(x => x.id === 'linger'); expect([l.at, l.cost, l.est]).toEqual([null, null, null]);
+    const g = goalMenu(calm({ thirst: 0.5 }), chooseGoal, limits, { drink: est });
+    expect(rulesChooser('goal', g, {})).toBe('drink');
+    const before = n; expect(g.options[0].cost).toBe(3); expect(n).toBe(before + 1);
   });
 });
 
@@ -144,5 +161,51 @@ describe('lives through the menu', () => {
     const calls = []; const q = life((point, menu, ctx) => { if (point === 'event') calls.push(menu.options[0].why); return rulesChooser(point, menu, ctx); }, 1);
     expect(q.mind.recent.length).toBeGreaterThan(0);
     for (const k of calls) expect(['stuck', 'nopath', 'no-stand', 'failed', 'dropped']).toContain(k);
+  }, 60000);
+});
+
+describe('estimates in a life (0.35.1 "Bearings")', () => {
+  it('a drink from a full shell is here at cost 0, else the nearest known water; the other goals and pastimes have a bearing or none', () => {
+    const game = createGame(w, spawn, {});
+    walkFirstDay(w, game, spawn, {}); game.known.visit(spawn.x, spawn.z);
+    const mind = createMind(w, game, {});
+    game.thirst.days = 0.5; game.shells.list = [false];
+    let d = mind.menu().options.find(o => o.id === 'drink');
+    expect(d.est).toBe('line'); expect(d.cost).toBeGreaterThanOrEqual(0); expect(Number.isFinite(d.at.x)).toBe(true);
+    game.shells.list = [true];
+    d = mind.menu().options.find(o => o.id === 'drink');
+    expect(d.cost).toBe(0); expect(d.at).toEqual({ x: game.player.x, z: game.player.z }); expect(d.est).toBe('line');
+  });
+
+  it('two days through a reading chooser: every estimate is a line or a path or nothing, no draw is made, the run is the same as without reading', () => {
+    const seen = {};
+    const reader = (point, menu, ctx) => {
+      for (const o of menu.options) { const r = { at: o.at, cost: o.cost, est: o.est }; (seen[o.id] ||= []).push(r); }
+      return rulesChooser(point, menu, ctx);
+    };
+    const a = life(reader, 2), b = life(null, 2);
+    expect(JSON.stringify(a.mind.stats)).toBe(JSON.stringify(b.mind.stats));   // reading changes nothing (no random number, no state)
+    expect([a.game.player.x, a.game.player.z, a.game.thirst.days]).toEqual([b.game.player.x, b.game.player.z, b.game.thirst.days]);
+    for (const [id, list] of Object.entries(seen)) for (const r of list) {
+      expect(['line', 'path', null], id).toContain(r.est);
+      expect(r.est === null, id).toBe(r.at === null && r.cost === null);
+      if (r.est) { expect(r.cost, id).toBeGreaterThanOrEqual(0); expect(Number.isFinite(r.at.x) && Number.isFinite(r.at.z), id).toBe(true); }
+      if (['explore', 'journey', 'idle', 'linger', 'onward'].includes(id)) expect(r.at, id).toBeNull();
+      if (r.est === 'path') expect(['fish', 'tide'], id).toContain(id);
+    }
+    expect(seen.sleep?.length, 'a sleep option was on a menu').toBeGreaterThan(0);
+    for (const r of seen.sleep) expect(r.est).toBe('line');
+    expect(seen.stroll?.some(r => r.est === 'line')).toBe(true);
+  }, 120000);
+
+  it('rulesChooser never reads at, cost or est', () => {
+    const bomb = { get() { throw new Error('read'); }, enumerable: true };
+    const mk = (id, rule) => { const o = option({ id }, rule); for (const k of ['at', 'cost', 'est']) Object.defineProperty(o, k, bomb); return o; };
+    const m = makeMenu('pastime', [mk('home', { ok: () => false }), mk('explore', { ok: () => true, chance: () => 1, draw: 'ex', always: false }), mk('linger', {})]);
+    expect(() => rulesChooser('pastime', m, ctxOf({ ex: () => 0 }))).not.toThrow();
+    expect(() => validChoice(m, 'explore')).not.toThrow();
+    expect(() => rulesChooser('goal', makeMenu('goal', [mk('idle', null)]), {})).not.toThrow();
+    const r = life((point, menu, ctx) => rulesChooser(point, menu, ctx), 0.3);   // (a whole life through it too: reading would be counted in the next test, not here)
+    expect(r.mind.stats.errors || 0).toBe(0);
   }, 60000);
 });

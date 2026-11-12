@@ -61,6 +61,7 @@
  *   'event' (stuck, nopath, no-stand, a goal failed or dropped: the only option is 'continue', which the rules take; no effect). The rules draw from the same streams in the same order as the old if-chain (the facts of each option are read lazily, in that order). The hard rules stay outside the chooser: preemption (`errandPreempts`), the crit test and the handoff. An answer that is not valid is replaced by the rules'.
  *   mind.recent: the last 20 { t, day, kind: 'goal' | 'pastime' | event kind, what, outcome } (the decisions with their outcome when they end); mind.lastDecision { point, menu: [ids], chosen }; mind.menu() the goal menu now.
  * 0.33.4 "One hearth": `fireAt` ignores a fire in the no-fire zone round a finished ring (game/leanto `noFire`, 8 m): an old fire beside the ring, from before the ring was built, is not fed (the game offers no 'feed' there), not lit again and not counted as his fire, so `feedFire`, `lightFire`, `gather` and the evening plans only know the fire in the ring and it burns out; the site choice is unchanged. The stray zone and the aside pile keep the 3.5 m of 0.31.1 (`STRAY_ZONE`).
+ * 0.35.1 "Bearings": the options of the menus carry `at`, `cost` (seconds at full pace) and `est` ('line': a straight line / WALK_SPEED; 'path': the cost fishing and the tide round compute anyway; null), worked out only when read (lazy, `GOAL_EST` and the estimates beside the pastimes: no random number, no path planned, no markBad; the rules never read them). Exploring and the journey have none: 'chosen on the way'.
  * 0.33.3 "Routes": `layAt` with an exact drop (the stray into the ring) tries another approach when the standing point cannot be reached, lies within a metre of another pile of fuel that would take the lay, or he stops more than 0.35 m short of it (found by a scene in which the pile laid beside the ring joined the stray and no fire was lit all evening).
  * 0.33.1 "Hearth": `centreStrays` asks `game.canPileAt` for the ring's middle before it takes a stray, stops for the day after a trip that left no fuel pile in the ring (stats.strayFails, strayRefused), and when the ring holds STRAY_ENOUGH (6) pieces; the walk counts a stall that ended as arrived as no stall (game/route).
  * 0.31.1 "Milk", the fire and the stone ring: with a finished ring only the stock pile in the ring can be lit (game/leanto `noFire`, game/game `lightable`); `ringMid`, `strays`, `centreStrays` carry a stray fuel pile within RING_NOFIRE of the ring's middle into the ring (idle goal at a calm moment, and before `lightFire`), and the aside pile beside a burning fire at the ring stands ASIDE_RING (RING_NOFIRE + 0.7) from it.
@@ -1182,7 +1183,7 @@ export function createMind(world, game, opts = {}) {
     chose = false; ev('sleep-refused'); return false;
   }
 
-  function* gaze() {   // around sunset: stand a while at the shore (or the fire) looking out; no pose
+  function gazeSpot() {   // 0.35.1: where the gaze would take him now (no random number, no state changed): the first shore spot round home on a way under 90 s, else beside the fire; null when neither
     const h = homeSpot(), fs = fireSpot(h), f = fireAt(fs);
     let spot = null;
     for (let r = 6; r <= 60 && !spot; r += 6) for (let i = 0; i < 24 && !spot; i++) {
@@ -1190,6 +1191,10 @@ export function createMind(world, game, opts = {}) {
       if (y > 0.3 && y < 1.2 && world.H(x + Math.sin(a) * 3, z + Math.cos(a) * 3) < y - 0.15 && inside(x, z) && canStand(world, x, z, 0) && path.cost(p, { x, z }) < 90) spot = { x, z, look: { x: x + Math.sin(a) * 10, z: z + Math.cos(a) * 10 } };
     }
     if (f && !spot) spot = { x: f.x + (p.x - f.x) * 0.4 / Math.max(0.4, dist(p, f)) * 3, z: f.z + (p.z - f.z) * 0.4 / Math.max(0.4, dist(p, f)) * 3, look: { x: f.x, z: f.z } };
+    return spot;
+  }
+  function* gaze() {   // around sunset: stand a while at the shore (or the fire) looking out; no pose
+    const spot = gazeSpot();
     if (!spot) return true;
     yield* walk(spot.x, spot.z, { stop: 0.6 });
     stats.gazes++;
@@ -2255,6 +2260,44 @@ export function createMind(world, game, opts = {}) {
     if (k) burnedLogs(w0.filter(l => !W.carried.includes(l)));   // (the piece goes on at the next step: counted when it left his arm, usually there)
     return !!k;
   }
+  // 0.35.1 "Bearings": where an option takes him and what it costs, worked out only when someone reads it (game/intent: `at`, `cost`, `est`). Straight lines (est 'line': distance / WALK_SPEED, at full pace) with no side effect: no random
+  // number, no path planned, no `markBad`; the exceptions are the costs the rules compute anyway (est 'path': fishing, the tide round). Nothing here is read by the rules.
+  const lineTo = at => at ? { at: { x: at.x, z: at.z }, cost: dist(p, at) / WALK_SPEED, est: 'line' } : null;
+  const hereNow = () => ({ at: { x: p.x, z: p.z }, cost: 0, est: 'line' });
+  const nearestOf = list => { let best = null, bd = Infinity; for (const q of list) { const d = dist(p, q); if (d < bd) { bd = d; best = q; } } return best; };
+  const nearestKnown = (kind, r = 200) => {   // the nearest loose thing or pile of a kind on known ground, by straight line (nearestBy weighs by path and marks the unreachable: not here)
+    const loose = scan(kind, p.x, p.z, r)[0] || null, piled = pileFinds(kind, p.x, p.z, r).sort((a, b) => a.d - b.d)[0] || null;
+    return nearestOf([loose, piled].filter(Boolean));
+  };
+  const estDrink = () => game.shells.full() > 0 ? hereNow() : lineTo(nearestOf(waterPts()));
+  const estEat = () => (game.berries.carried.length || game.bananas.carried.length || game.shells.nuts > 0) ? hereNow() : lineTo(nearestOf([nearestKnown('coco'), nearestKnown('berry'), nearestKnown('banana')].filter(Boolean)));
+  const estSleep = () => lineTo(journey ? journeyBed() : sleepSpot());
+  const estFire = () => lineTo(fireSpot());
+  const GOAL_EST = { drink: estDrink, eat: estEat, sleep: estSleep, fire: estFire, stores: estFire };
+  const ON_THE_WAY = { at: null, cost: null, est: null, note: 'chosen on the way' };   // exploring and the journey: the target comes from their own random streams
+  const estAxe = () => {   // what axePlan would give, without its side effects (nextLog and treeReach mark things bad): the axe is made at the camp, else the nearest log, else the nearest standing tree of the clearing (else just outside it)
+    const h = homeSpot(); if (!homeDone(h)) return null;
+    if (!A.has()) return lineTo(fireSpot(h));
+    const l = nearestOf(LOGS.near(h.lt.x, h.lt.z, AXE_RANGE).filter(q => inside(q.x, q.z) && !isBad('log', q)));
+    if (l) return lineTo(l);
+    const c = { x: h.lt.x, z: h.lt.z }, ok = t => inside(t.x, t.z) && !isBad('tree', t);
+    return lineTo(treesWithin(c, -1, AXE_CLEAR_R).find(ok) || (logTotal() < AXE_LOGS ? treesWithin(c, AXE_CLEAR_R, AXE_OUT_R).find(ok) : null));
+  };
+  const estTide = () => { const t = tideTarget(); return t ? { at: { x: t.x, z: t.z }, cost: t.cost, est: 'path' } : lineTo(scan('strip', p.x, p.z, TIDE_ROUND_RANGE)[0]); };
+  const estFish = () => { const o = bestFishSpot(STROLL_MAX_COST); return o ? { at: { x: o.x, z: o.z }, cost: o.cost, est: 'path' } : null; };
+  function estStroll() {   // the nearest place for a stroll, any kind, at least 6 m off (strollCands draws random numbers for the palms and the bushes: here their own spots instead); the kind is chosen later
+    const h = homeSpot(), cands = [];
+    for (let r = 8; r <= STROLL_RANGE; r += 8) for (let i = 0; i < 24; i++) {
+      const a = (i + (r / 8 % 2) * 0.5) * Math.PI / 12, x = h.x + Math.sin(a) * r, z = h.z + Math.cos(a) * r, y = world.H(x, z);
+      if (y > 0.3 && y < 1.2 && world.H(x + Math.sin(a) * 3, z + Math.cos(a) * 3) < y - 0.15 && inside(x, z) && canStand(world, x, z, 0)) cands.push({ x, z });
+    }
+    for (const q of waterPts()) if (Math.hypot(q.x - h.x, q.z - h.z) <= STROLL_RANGE) cands.push(q);
+    for (const t of tilesNear(h.x, h.z, STROLL_RANGE)) {
+      t.palms.forEach((o, pi) => { if (game.felled.standing(t, 'palms', pi) && Math.hypot(o.x - h.x, o.z - h.z) <= STROLL_RANGE && inside(o.x, o.z)) cands.push(o); });
+      for (const o of game.berries.plantsIn(t)) if (Math.hypot(o.x - h.x, o.z - h.z) <= STROLL_RANGE && inside(o.x, o.z)) cands.push(o);
+    }
+    return lineTo(nearestOf(cands.filter(c => dist(p, c) >= 6)));
+  }
   // 0.35 "Intentions": the idle goal's pastimes are a menu (game/intent `pastimeMenu`, two stages), the chooser picks one and the generators below run it. An option that cannot go through (a trip with nothing to do,
   // an errand that fails at the start) yields DECLINED: the options before it and it are passed over, and the chooser is asked about the rest, as the old chain went on to the next. The facts of each option are read lazily, in the order the chain read them.
   const DECLINED = Symbol('declined'), CONTINUE = Symbol('continue');
@@ -2276,9 +2319,9 @@ export function createMind(world, game, opts = {}) {
     let step, work, prepared = false;
     const prepare = () => { if (!prepared) { prepared = true; step = homeNext(homeSnap()); work = step ? homeWork(step, h) : null; } };   // 0.29.3: the next piece of his home (after the sunset gaze was passed over, before the ember)
     const out = yield* pastimes('before', {
-      gaze: () => t >= GAZE_FROM && t < GAZE_TO && gazedDay !== clock.day,
-      ember: () => { prepare(); return emberPossible(); },
-      strays: () => !isCool('stray') && strays().length && !W.load() && clock.time >= DAY_FROM && clock.time < EVENING && game.thirst.days < EXPLORE_THIRST && game.hunger.days < EXPLORE_HUNGER,   // 0.31.1: a stray pile near the ring joins the stock at a calm moment
+      gaze: { ok: () => t >= GAZE_FROM && t < GAZE_TO && gazedDay !== clock.day, estimate: () => lineTo(gazeSpot()) },
+      ember: { ok: () => { prepare(); return emberPossible(); }, estimate: () => lineTo(fireSpot()) },
+      strays: { estimate: () => lineTo(nearestOf(strays())), ok: () => !isCool('stray') && strays().length && !W.load() && clock.time >= DAY_FROM && clock.time < EVENING && game.thirst.days < EXPLORE_THIRST && game.hunger.days < EXPLORE_HUNGER },   // 0.31.1: a stray pile near the ring joins the stock at a calm moment
     }, {
       gaze: function* () { gazedDay = clock.day; yield* handoff('gaze'); return yield* gaze(); },
       ember: function* () { if (feedPassingEmber()) { yield; return true; } return DECLINED; },
@@ -2301,15 +2344,15 @@ export function createMind(world, game, opts = {}) {
     let cands = null;
     const strollOf = r => { cands = strollCands(h); return strollKind({ shore: cands.shore.length > 0, river: cands.river.length > 0, palms: cands.palms.length > 0, forest: cands.forest.length > 0, crabs: cands.crabs.length > 0 && crabTripOk(s) }, lastStroll, r()); };
     return yield* pastimes('day', {
-      journey: () => clock.day >= journeyDue && clock.day !== journeyTried && clock.time >= JOURNEY_FROM && clock.time < JOURNEY_TO && !isCool('journey') &&   // 0.30.19: now and then a journey (calm at home, in the morning, the weather fair)
-        journeyOk({ day: clock.day, time: clock.time, due: journeyDue, lean: homeSnap().lean, raining: game.weather.raining(clock.total), rainSoon: journeyRain(game.weather, clock.total), thirst: s.thirst, hunger: s.hunger, cool: s.cool }),
-      home: () => !!work && !crab(),
-      spear: () => spearMakeOk({ ...s, day: clock.day, lean: homeSnap().lean }),   // 0.30.17: he has no spear and a branch and a stone are at hand
-      axe: () => axeNext({ ...axeSnap(), thirst: s.thirst, hunger: s.hunger }) && !crab(),   // 0.31 "Axe": once the home is complete, the axe and one tree a morning
-      tide: () => clock.day !== tideDay && clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crab(),   // 0.30.13: the daily round to the strip
-      explore: { ok: () => clock.day > exploredDay && clock.time >= EXPLORE_EARLY && clock.time < EXPLORE_TO && explore().chance > 0, chance: () => explore().chance },
-      fish: { ok: () => fishCh() > 0, chance: fishCh },
-      stroll: { ok: () => s.time >= STROLL_FROM && s.time < STROLL_TO, chance: () => STROLL_CHANCE, kind: strollOf },
+      journey: { estimate: () => ON_THE_WAY, ok: () => clock.day >= journeyDue && clock.day !== journeyTried && clock.time >= JOURNEY_FROM && clock.time < JOURNEY_TO && !isCool('journey') &&   // 0.30.19: now and then a journey (calm at home, in the morning, the weather fair)
+        journeyOk({ day: clock.day, time: clock.time, due: journeyDue, lean: homeSnap().lean, raining: game.weather.raining(clock.total), rainSoon: journeyRain(game.weather, clock.total), thirst: s.thirst, hunger: s.hunger, cool: s.cool }) },
+      home: { ok: () => !!work && !crab(), estimate: () => { const w = work && (work.lt || work.site); return lineTo(w); } },
+      spear: { ok: () => spearMakeOk({ ...s, day: clock.day, lean: homeSnap().lean }), estimate: () => lineTo(scan('branch', h.x, h.z, SPEAR_RANGE)[0] || scan('stone', h.x, h.z, SPEAR_RANGE)[0]) },   // 0.30.17: he has no spear and a branch and a stone are at hand
+      axe: { ok: () => axeNext({ ...axeSnap(), thirst: s.thirst, hunger: s.hunger }) && !crab(), estimate: estAxe },   // 0.31 "Axe": once the home is complete, the axe and one tree a morning
+      tide: { estimate: estTide, ok: () => clock.day !== tideDay && clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crab() },   // 0.30.13: the daily round to the strip
+      explore: { estimate: () => ON_THE_WAY, ok: () => clock.day > exploredDay && clock.time >= EXPLORE_EARLY && clock.time < EXPLORE_TO && explore().chance > 0, chance: () => explore().chance },
+      fish: { ok: () => fishCh() > 0, chance: fishCh, estimate: estFish },
+      stroll: { ok: () => s.time >= STROLL_FROM && s.time < STROLL_TO, chance: () => STROLL_CHANCE, kind: strollOf, estimate: estStroll },
     }, {
       journey: function* () { if (yield* journeyBegin()) return yield* journeyGoal(); return DECLINED; },
       home: function* () { return yield* homeGoal(step, work); },
@@ -2429,7 +2472,7 @@ export function createMind(world, game, opts = {}) {
       const crit = game.thirst.days >= 1 || game.hunger.days >= 2 || (game.sleep.canLie(clock.time) && (clock.time >= BED_FROM || clock.time < DAWN));   // 0.29.2: at night, once he may lie down, he does not stand about first (a cold night is two sleeps and the second has little time)
       if (now < restUntil && !crit) { mind.resting = true; restSit(); if (!p.moving) stats.idleSecs += dt; return; }
       mind.resting = false;
-      const menu = goalMenu(senses(), chooseGoal, { thirst: VERY_AT, hunger: VERY_HUNGER_AT });   // the goals he could take now, in the order of the rules; the chooser picks (0.35)
+      const menu = goalMenu(senses(), chooseGoal, { thirst: VERY_AT, hunger: VERY_HUNGER_AT }, GOAL_EST);   // the goals he could take now, in the order of the rules; the chooser picks (0.35)
       const name = menu.options.length ? choiceId(decide(menu)) : 'none';
       if (name === 'idle' && now < restUntil) { mind.resting = true; restSit(); if (!p.moving) stats.idleSecs += dt; return; }   // nothing he can do about a need: no spinning
       if (name === 'none') return;
@@ -2448,7 +2491,7 @@ export function createMind(world, game, opts = {}) {
       }
     }
   }
-  mind.menu = () => goalMenu(senses(), chooseGoal, { thirst: VERY_AT, hunger: VERY_HUNGER_AT });   // 0.35: the goal menu now (for the tests)
+  mind.menu = () => goalMenu(senses(), chooseGoal, { thirst: VERY_AT, hunger: VERY_HUNGER_AT }, GOAL_EST);   // 0.35: the goal menu now (for the tests)
   mind.chose = () => chose;
   mind.lastKind = () => lastKind;
   mind.path = path; mind.strollCands = strollCands; mind.leantoSites = leantoSites; mind.tideSpot = tideSpot; mind.materialFind = (kind, range) => nearestBy(kind, range); mind.timberPlan = (src, n, o) => selectStops(src, n, o).sort((a, b) => b.cost - a.cost);

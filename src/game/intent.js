@@ -1,16 +1,19 @@
 /**
- * game/intent — what Dave could do now, and who picks (0.35 "Intentions"). Pure: no DOM, no WebGL, no random numbers of its own, no network.
+ * game/intent — what Dave could do now, and who picks (0.35 "Intentions"; 0.35.1 "Bearings": `at`, `cost` and `est` of the options, estimated lazily). Pure: no DOM, no WebGL, no random numbers of its own, no network.
  *
  * A decision of the mind has three parts: (1) a MENU of the options he has now, (2) a CHOOSER that picks one, (3) the EXECUTION (the generators of game/mind, unchanged).
  * In 0.35 the chooser is `rulesChooser`, the rules the mind always had, so the island plays exactly as before; the menu and the chooser are the place where a different
  * chooser can take over later (0.36 "Mind"). This module holds the shape of an option, the three kinds of decision point, the menus, the two choosers and the validation of a choice.
  *
- * An option: { id, goal, what, at, cost, why, forced? }
+ * An option: { id, goal, what, at, cost, est, why, forced? }
  *   id      the name the chooser answers with ('drink', 'tide', 'stroll', 'continue', ...)
  *   goal    the goal it belongs to ('drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle'), or null
  *   what    a short phrase for people and logs
- *   at      { x, z } where it takes him, or null when it is not a place (nothing is estimated yet in 0.35)
- *   cost    seconds of walking, estimated, or null (not estimated yet in 0.35)
+ *   at      { x, z } where it takes him, or null when it is not a place or not known beforehand (explore, journey: their targets come from their own random streams)
+ *   cost    seconds of walking at his full speed, estimated, or null
+ *   est     how the cost was found: 'line' (straight line / his walking speed), 'path' (a path cost the rules already compute: fishing, the tide round), or null (no estimate)
+ *   0.35.1: `at`, `cost` and `est` are LAZY: they are worked out when first read (getters) from the option's `estimate` function, once per option (so once per menu), and nothing is computed when nobody reads them (`rulesChooser` never does, so
+ *   normal play pays nothing). An estimate has no side effects: no random number, no change of state. `estimate()` -> { at, cost, est, note? } | null; `note` says why there is none ('chosen on the way').
  *   why     a short reason code ('thirst', 'afternoon', ...)
  *   forced  true for a safety option: when one is on the menu the chooser must take it
  *   (hidden, not enumerable: `rule`, the lazy facts the rules read: { ok(): bool, chance(): number, draw: 'ex' | 'fish' | 'rand', always: bool, kind(rand): string | null })
@@ -23,10 +26,10 @@
  *
  * Exports:
  *   POINTS, STAGES, PASTIMES                      the decision points, the order of the pastimes in each stage and what each is
- *   option(o, rule?) -> option                    makes an option (fills the shape; `rule` is hidden)
+ *   option(o, rule?) -> option                    makes an option (fills the shape; `rule` is hidden; o.estimate: the lazy function above, or o.at / o.cost / o.est given as values)
  *   makeMenu(point, options) -> menu
- *   goalMenu(s, choose, limits) -> menu           the goals he could take now, in the order of `choose` (game/mind chooseGoal): found by asking `choose` again with each goal found taken out. limits: { thirst, hunger } (the emergency levels)
- *   pastimeMenu(stage, facts) -> menu             facts[id]: a value, a function, or { ok, chance, draw, always, kind, at, cost }; the options without facts are left out ('onward' and 'linger' are always there); each fact is read lazily, in the rules' order
+ *   goalMenu(s, choose, limits, estimates?) -> menu   (estimates[goal]: the lazy estimate of that goal's option) the goals he could take now, in the order of `choose` (game/mind chooseGoal): found by asking `choose` again with each goal found taken out. limits: { thirst, hunger } (the emergency levels)
+ *   pastimeMenu(stage, facts) -> menu             facts[id]: a value, a function, or { ok, chance, draw, always, kind, estimate }; the options without facts are left out ('onward' and 'linger' are always there); each fact is read lazily, in the rules' order
  *   eventMenu(kind, goal) -> menu                 the one option 'continue'
  *   isValid(option) -> bool                       is the option possible now (the lazy fact `ok`)
  *   validChoice(menu, choice) -> bool             the id is on the menu, it is possible, and a forced option is taken when there is one
@@ -62,14 +65,20 @@ export const STAGES = {
 const val = v => (typeof v === 'function' ? v() : v);
 
 export function option(o, rule = null) {
-  const out = { id: o.id, goal: o.goal ?? null, what: o.what ?? o.id, at: o.at ?? null, cost: o.cost ?? null, why: o.why ?? '', forced: !!o.forced };
+  const out = { id: o.id, goal: o.goal ?? null, what: o.what ?? o.id };
+  let memo; const est = () => (memo !== undefined ? memo : (memo = (typeof o.estimate === 'function' ? o.estimate() : null) || { at: o.at ?? null, cost: o.cost ?? null, est: o.est ?? null }));
+  Object.defineProperty(out, 'at', { get: () => est().at ?? null, enumerable: true, configurable: true });
+  Object.defineProperty(out, 'cost', { get: () => est().cost ?? null, enumerable: true, configurable: true });
+  Object.defineProperty(out, 'est', { get: () => est().est ?? null, enumerable: true, configurable: true });
+  out.why = o.why ?? ''; out.forced = !!o.forced;
+  Object.defineProperty(out, 'note', { get: () => est().note ?? null, enumerable: false });
   Object.defineProperty(out, 'rule', { value: rule, enumerable: false });
   return out;
 }
 
 export function makeMenu(point, options) { return { point, options }; }
 
-export function goalMenu(s, choose, limits = { thirst: Infinity, hunger: Infinity }) {
+export function goalMenu(s, choose, limits = { thirst: Infinity, hunger: Infinity }, estimates = {}) {
   const options = [];
   if (!s.asleep) {
     const cool = { ...(s.cool || {}) };
@@ -77,7 +86,7 @@ export function goalMenu(s, choose, limits = { thirst: Infinity, hunger: Infinit
       const name = choose({ ...s, cool });
       if (!name || name === 'none' || options.some(o => o.id === name)) break;
       const forced = options.length === 0 && ((name === 'drink' && s.thirst >= limits.thirst) || (name === 'eat' && s.hunger >= limits.hunger));
-      options.push(option({ id: name, goal: name, what: name, why: GOAL_WHY[name] || name, forced }));
+      options.push(option({ id: name, goal: name, what: name, why: GOAL_WHY[name] || name, forced, estimate: estimates[name] }));
       if (name === 'idle') break;
       cool[name] = true;
     }
@@ -98,7 +107,7 @@ export function pastimeMenu(stage, facts = {}) {
       chance: f.chance === undefined ? undefined : () => val(f.chance),
       draw: f.draw ?? P.draw, always: f.always ?? (!!P.always && !!(f.draw ?? P.draw)), kind: f.kind,
     };
-    options.push(option({ id, goal: 'idle', what: P.what, why: f.why ?? P.why, at: f.at ?? null, cost: f.cost ?? null }, rule));
+    options.push(option({ id, goal: 'idle', what: P.what, why: f.why ?? P.why, at: f.at ?? null, cost: f.cost ?? null, est: f.est ?? null, estimate: f.estimate }, rule));
   }
   return makeMenu('pastime', options);
 }

@@ -9,7 +9,8 @@
 // 0.30.17 "Spear": r.spearsMade, r.hasSpear, r.spearStuck, r.fishTrips, r.fishTripTriesMax, r.fishTries, r.fishCaught, r.fishEaten, r.fishSpoiled (fish that left the row uneaten); r.mix.fish.
 // 0.30.19 "Journey": r.journeyTicks (ticks while a journey is on), r.journeyRoute (of them on a climbing route: allowed on a journey), r.journeyOutside (of them off known ground), r.legOutside (journey-finder legs while no journey is on: must be 0), r.journey = the mind's journey statistics; mind.exploring is false on a journey, so r.exploreRoute is daily exploring only.
 // 0.30.14 "Torch": r.torch = { taken, planted, litSecs } (torches taken from a fire, torches stuck in the ground, seconds of walking after dusk with a torch in hand).
-// Not a test itself. runMind(world, spawn, { days, know, dt, beachOnly }) -> report
+// 0.35.1: `chooser` (optional) is handed to the mind (a fake chooser, e.g. one that reads the estimates of every option).
+// Not a test itself. runMind(world, spawn, { days, know, dt, beachOnly, stream, chooser }) -> report
 import { createGame } from '../../src/game/game.js';
 import { createMind } from '../../src/game/mind.js';
 import { HALF, T, NT } from '../../src/world/constants.js';
@@ -43,13 +44,13 @@ export function walkFirstDay(world, game, spawn, o = {}) {
   return { points: pts.length, reached, cells: k.count };
 }
 
-export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state = null, knowOpts = {}, onTick = null, beachOnly = false, stream = 0 } = {}) {
+export function runMind(world, spawn, { days = 10, know = false, dt = 0.1, state = null, knowOpts = {}, onTick = null, beachOnly = false, stream = 0, chooser = null } = {}) {
   const game = createGame(world, spawn, state || {});
   if (beachOnly) { for (const f of [game.berries, game.bananas]) { f.bearingIn = f.plantsIn = () => []; f.find = () => null; } knowOpts = { ...knowOpts, berries: 0 }; }   // the beach alone: no berry bush or banana plant exists for him
   const walked = know ? walkFirstDay(world, game, spawn, knowOpts) : { points: 0, cells: game.known.count };
   game.known.visit(spawn.x, spawn.z);
   const known0 = new Set(game.known.state().cells);
-  const mind = createMind(world, game, { stream });
+  const mind = createMind(world, game, { stream, chooser });
   mind.engage();
   const p = game.player, clock = game.clock;
   const r = { seed: world.seed, days, walked, known0: known0.size, maxThirst: 0, maxHunger: 0, minRest: 1, collapses: 0, sleeps: [], idleSecs: 0, errors: [], exploreTicks: 0, exploreRoute: 0, journeyTicks: 0, journeyRoute: 0, journeyOutside: 0, legOutside: 0, journey: null, knownAt: { 1: 0, 5: 0, 10: 0 }, outside: 0, outsideMax: 0, lean: game.leantos.list.length, homeDay: {}, builds: 0, searchTicks: 0, stuckSelf: 0, stuckMax: 0, nopath: 0, wakes: 0, thirstyTicks: 0, hungryTicks: 0, ticks: 0, fires: 0, firesFail: 0, eaten: 0, foods: [], hungerBeforeMeal: [], crabsEaten: 0, crabsSpoiled: 0, crabsCaught: 0, digs: 0, fishEaten: 0, fishSpoiled: 0, fishCaught: 0, fishTries: 0, hungrySecs: 0, thirstySecs: 0, eveningFire: {}, noFireEvenings: 0, tide: null, torch: null, wetBurned: 0, drinks: 0, sips: 0, fills: 0, lightRefused: 0, dropped: {}, events: null };
