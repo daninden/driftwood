@@ -2,6 +2,36 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.33.2 "Mend" — 2026-11-12
+
+A maintenance release (render agreed with the user, the stalls found by measuring): **the hut looks right while it is built, the need marks tell more, and a few small stalls of Dave's are gone.**
+
+**Render.** (1) The hut's two short door logs now sit level with the walls' top row (`render/leanto` `HUT_DOOR_Y`, 0.37 m; they hung 0.1 m too low). (2) From the hut's first roof branch (part 13 of 32) the old lean-to is drawn cut off under the hut's roof (`hutCeiling`, `underHutRoof`: posts, forks, ridge, sill and roof branches cut, its five roof fronds not drawn, its side-wall fronds hung from the ceiling), so nothing pokes through; drawing only, its collision and the moment it goes are unchanged (agreed option (a)). (3) The drop and the half coconut get clearer as they empty: `fillOpacity` follows the filling linearly (faint when full, halfway at half full = the go point, clear when empty), the flash after drinking and eating kept; `CLEAR_FROM` and `CLEAR_TO` are gone (before, the opacity followed the days and was hardly clearer at the go point).
+
+**Small stalls (game).**
+
+- **A wall of trunks (`game/walk` `naturalWall`):** a planned line that cuts between two overlapping natural circles is closed in planning (seed 1337, a journey route near (-14.0, 36.4)).
+- **A piece he cannot reach (`game/mind` `reachablePiece`):** a loose piece is fetched only when he can stand on it or within 0.45 m (a log inside a boulder on seed 2024 at (179.64, 77.73) and on seed 7 at (-248.9, -8.8) gave repeated stuck).
+- **Feeding the fire (`feedFire`):** takes only from a pile with a piece the fire takes (dry at least `DRY_AT`, no frond); a pile whose taken pieces were all damp is left for 120 s (damp fresh branches beside the fire gave `no-stand: feed` 13 to 27 times an evening).
+- `nopath` after the felling days (0.31.0) did not reproduce on the current code (0 in that life before and after): removed from Open.
+
+**Measured (against 6a59ed1, 0.33.1, the same scripted lives).**
+
+| life | stuck | nopath | noStand | collapses | max thirst | max hunger | evening fires | hut start / done | stranded |
+|---|---|---|---|---|---|---|---|---|---|
+| 1337, 60 d, home | 7 -> 2 | 0 -> 0 | 31 -> 0 | 0 -> 0 | 0.70 -> 0.69 | 0.75 -> 0.78 | 55 -> 54 | 19/20 -> 20/22 | 0 -> 0 |
+| 2024, 60 d, home | 7 -> 6 | 0 -> 11 | 18 -> 1 | 0 -> 0 | 0.69 -> 0.68 | 0.74 -> 0.74 | 53 -> 54 | 21/25 -> 23/25 | 0 -> 1 |
+| 7, 60 d, home | 0 -> 3 | 3 -> 1 | 13 -> 0 | 0 -> 0 | 0.80 -> 0.79 | 0.81 -> 0.79 | 50 -> 51 | 20/29 -> 19/26 | 0 -> 0 |
+| 1337 walked s1, 30 d | 5 -> 5 | 0 -> 0 | 0 -> 0 | 0 -> 0 | 0.68 -> 0.68 | 0.77 -> 0.77 | 16 -> 16 | 26/- same | 0 -> 0 |
+| 1337 walked s0, 20 d | 0 -> 0 | 0 -> 0 | 0 -> 0 | 0 -> 0 | 0.68 | 0.75 | 18 -> 18 | none | 0 |
+| 24 ten-day lives | 31 -> 9 (max per life 8 -> 2) | 3 -> 2 | 24 -> 14 | 0 -> 0 | 0.78 | 0.86 | 205 -> 204 | none | 0 |
+
+18 more 60-day lives (streams 1 to 3): none stranded in either version, stuck 90 -> 21, noStand 996 -> 687.
+
+**Not fixed (open, in `docs/handover.md`):** a cliff-rim stroll stall on seed 2024 at (-107.0, -147.2) (planner limit 2, goes to 0.33.3 "Routes"); a stranded journey in a river gorge on seed 2024's 60-day life on day 58 (the start is on non-standable steep ground; planner limit, not caused by `naturalWall`, checked); 3 untraced new `stuck` in seed 7's 60-day life; `no-stand: add` in a crowded ring middle on seed 1337, stream 3, day 12 (705 -> 678), a camp-layout question; arrivals that stall twice 0.2 m from the fire.
+
+**Tests.** `tests/water.test.js`, `tests/hunger.test.js` (the opacity follows the filling), `tests/hut.test.js` (door logs level, the cut lean-to), `tests/mend.test.js` (new: the wall of trunks, the unreachable piece, the fire fed only from dry piles), `tests/walk.test.js`. Full `npm test`: green, 85 files, 1444 tests, 247 s. `npm run smoke:full`: ok, 965 s, 43 shots (looked at smoke-1, 23 and 39: the version panel reads v0.33.2 Mend, the need marks show, the lean-to and the upgraded lean-to with the ring look as before).
+
 ## 0.33.1 "Hearth" — 2026-11-12
 
 Found by measuring (diagnosis agreed with the user): with a finished home Dave spent 45 minutes to 2 hours of game time a day carrying wood to and fro by the stone ring, and lit fewer evening fires than he could. **The ring's middle is always a place for the fire's wood now, and he asks before he carries a stray pile there.**

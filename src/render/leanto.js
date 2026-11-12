@@ -31,7 +31,11 @@
  * When the last frond is laid the lean-to's own parts and its wall fronds are no longer drawn (the lean-to vanishes); the bed and the ring stay. The roof (frame and fronds) is drawn apart from the rest with materials that can be
  * thinned into a stipple (render/veil): while the castaway is inside the walls (`hutInside`) the roof turns see-through (VEIL_SHARE of the pixels) over about a fifth of a second, and thickens again when he leaves.
  *
- * HUT_POST_H { front, back }, HUT_ROW_Y, HUT_LOG_R   the measures (metres)
+ * 0.33.2 "Mend": the door pieces' tops are level with the walls' top row (HUT_DOOR_Y); from the hut's first roof branch on (`hutRoofBegun`) the old lean-to is drawn only up to just under the hut's roof (`hutCeiling`, `underHutRoof`:
+ * posts, forks, ridge and branches cut off, roof fronds not drawn, wall fronds hung from the ceiling), so nothing pokes through it; drawing only, its parts and collision stay until the last frond.
+ *
+ * HUT_POST_H { front, back }, HUT_ROW_Y, HUT_LOG_R, HUT_DOOR_Y   the measures (metres)
+ * hutCeiling(f) / hutRoofBegun(l) / underHutRoof(H, l, stick) -> the height the old lean-to is drawn up to at depth f / whether the hut's roof frame has begun / the stick cut under it or null. Pure.
  * hutFrame(H, l) -> { at(f, r, up = 0) -> THREE.Vector3 }   a point of the hut's frame on the ground (up above it)
  * hutPosts(H, l, p) / hutWalls(H, l, p) / hutRoofFrame(H, l, p) / hutFronds(H, l, p) -> the parts drawn at progress p (whole parts of 32): [{ a, b, r, k }] for posts, walls and the frame, [{ pos, yaw, pitch, sx, sy, sz, k }] for the fronds
  * hutInside(l, x, z) -> true when (x, z) is within the hut's walls (and the doorstep): the roof is then see-through
@@ -169,9 +173,24 @@ export function ringStones(H, l, p) {
 
 // ---- 0.33 "Hut" -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export const HUT_POST_H = { front: 1.1, back: 0.85 };   // the posts at the door side and at the back: the roof slopes from the front down to the back
-export const HUT_ROW_Y = [0.14, 0.42], HUT_LOG_R = 0.14, HUT_DOOR_Y = 0.27, HUT_DOOR_R = 0.19;   // the heights of the wall rows' axes, the log radius, the door pieces' axis and radius
+export const HUT_ROW_Y = [0.14, 0.42], HUT_LOG_R = 0.14, HUT_DOOR_R = 0.19;   // the heights of the wall rows' axes, the log radius, the door pieces' radius
+export const HUT_DOOR_Y = HUT_ROW_Y[1] + HUT_LOG_R - HUT_DOOR_R;   // 0.37: the door pieces' axis, so their top is level with the top row of the walls (0.33.2 "Mend": they hung 0.1 m too low)
 const POST_RADIUS = 0.12, BEAM_R = 0.055, RAFTER_R = 0.045, RAFTER_N = 6, HUT_PARTS = 32;
 const roofY = f => HUT_POST_H.back + 0.145 + (HUT_POST_H.front - HUT_POST_H.back) * (f - HUT.back) / (HUT.front - HUT.back);   // the top of the rafters over the ground at depth f
+
+/** 0.33.2 "Mend": the height over the ground up to which the old lean-to is drawn once the hut's roof frame has begun (a little under the rafters at depth f), and whether it has begun (the first of the 8 branches). Drawing only. */
+export const hutCeiling = f => roofY(f) - 0.12;
+export const hutRoofBegun = l => built(l, 'hut') > HUT_POSTS.length + HUT_WALL_LOGS.length;
+const localF = (l, p) => (p.x - l.x) * Math.sin(l.heading) + (p.z - l.z) * Math.cos(l.heading);   // depth f of a world point in the lean-to's frame
+
+/** A stick of the lean-to cut off where it would rise above the hut's roof ({ a, b, r, key }, or null when all of it is above). Pure. */
+export function underHutRoof(H, l, st) {
+  const lim = p => H(p.x, p.z) + hutCeiling(localF(l, p)), da = st.a.y - lim(st.a), db = st.b.y - lim(st.b);
+  if (da <= 0 && db <= 0) return st;
+  if (da > 0 && db > 0) return null;
+  const t = da / (da - db), q = new THREE.Vector3().lerpVectors(st.a, st.b, t);   // where the stick crosses the ceiling
+  return da > 0 ? { ...st, a: q } : { ...st, b: q };
+}
 
 export function hutFrame(H, l) {
   const s = Math.sin(l.heading), c = Math.cos(l.heading);
@@ -232,18 +251,21 @@ export function createLeantoView(scene, w, kit, leantos) {
   const O = new THREE.Object3D(), mm = new THREE.Matrix4();
   const build = (l, v) => {
     const g = new THREE.Group(), B = new Batch(outlineMat, poolsOf(scene)), pc = DRIFT.dry[hashInt(l.id, 3, 103) % DRIFT.dry.length], gone = hutDone(l);   // 0.33: a finished hut has no lean-to under it
+    const cut = hutRoofBegun(l);   // 0.33.2: from the hut's first branch on, the old lean-to is drawn only up to just under the hut's roof (its posts, ridge and branches are cut off, its roof fronds not drawn); collision is unchanged
     if (!gone) {
-      leantoParts(w.H, l).forEach((s, i) => {
+      leantoParts(w.H, l).forEach((s0, i) => {
+        const s = cut ? underHutRoof(w.H, l, s0) : s0; if (!s) return;
         const c = s.key === 'roof' ? BRANCH.bark[(i + l.id) % BRANCH.bark.length] : pc;
         B.add(s.key, kit.driftwood, kit.smallMat, stickMatrix(s.a, s.b, s.r / 0.09), c, { outline: 1.18 });
       });
-      leantoFronds(w.H, l).forEach(f => {
+      if (!cut) leantoFronds(w.H, l).forEach(f => {
         O.position.copy(f.pos); O.rotation.order = 'YZX'; O.rotation.set(0, f.yaw, f.pitch); O.scale.set(f.sx, f.sy, f.sz); O.updateMatrix();
         B.add('frond', kit.frond, kit.frondStillMat, O.matrix.clone(), P.frondTint[(l.id + f.k * 2) % 3 + (f.k % 2)], { depthMat: kit.frondStillDepth, receive: false });   // as the palms' fronds, no outline
       });
     }
     const up = l.up || {};
     if (up.walls > 0 && !gone) wallFronds(w.H, l, up.walls).forEach(f => {   // the length of the frond runs down, its arch bulges outward
+      if (cut) { const over = f.top.y - (w.H(f.top.x, f.top.z) + hutCeiling(localF(l, f.top))); if (over > 0) { f.top = f.top.clone(); f.top.y -= over; f.len = Math.max(0.3, f.len - over); } }   // 0.33.2: hung from the hut's ceiling instead of the lean-to's higher roof edge
       const X = f.down.clone(), Y = f.out.clone().addScaledVector(X, -f.out.dot(X)).normalize(), Z = new THREE.Vector3().crossVectors(X, Y);
       mm.makeBasis(X, Y, Z); mm.scale(new THREE.Vector3(f.len / 2, 0.14, 1.15)); mm.setPosition(f.top);
       B.add('frond', kit.frond, kit.frondStillMat, mm.clone(), P.frondTint[(l.id + f.k) % 3 + (f.k % 2)], { depthMat: kit.frondStillDepth, receive: false });

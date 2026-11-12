@@ -1,10 +1,11 @@
-// The rule of a straight line (game/walk), the cached camp view (game/obstacles campSolids), the fine layer (game/fine) and the two-layer finder (game/path), 0.30.3 "Routes".
+// The rule of a straight line (game/walk), the cached camp view (game/obstacles campSolids), the fine layer (game/fine) and the two-layer finder (game/path), 0.30.3 "Routes". 0.33.2 "Mend": a wall of trunks is closed for planning (naturalWall).
 // Flat synthetic ground, so that only the camp matters; random camps are drawn from a seeded generator.
 import { describe, it, expect } from 'vitest';
 import { mulberry32 } from '../src/core/noise.js';
 import { createPath } from '../src/game/path.js';
 import { campSolids, solidObstacles, PILE_R, FIRE_R, leantoPoint } from '../src/game/obstacles.js';
-import { campOpen, edgeFactor, segmentClear, PLAN_MARGIN } from '../src/game/walk.js';
+import { campOpen, edgeFactor, segmentClear, naturalWall, staticFactor, PLAN_MARGIN } from '../src/game/walk.js';
+import { generateWorld } from '../src/world/world.js';
 import { createRoute } from '../src/game/route.js';
 import { routeWalk } from './helpers/routeWalk.js';
 
@@ -173,4 +174,26 @@ describe('the follower (game/route)', () => {
     const on = route.pts[5]; s.wood.piles.push(pile(on.x, on.z)); route.update(p, 0.1, false); expect(route.pts).not.toBe(first); expect(route.state).toBe('going');
     expect(route.pts.every(q => !obstacles.camp.inside(q.x, q.z, 0))).toBe(true);
   });
+});
+
+// 0.33.2 "Mend": a line through a wall of trunks is closed for planning (the follower wedged between two overlapping trunks on seed 1337, near (-14.0, 36.4))
+describe('a wall of trunks (game/walk naturalWall)', () => {
+  const treeWorld = trees => { const tiles = Array(18 * 18); tiles[9 * 18 + 9] = { tx: 9, tz: 9, trees: trees.map(([x, z]) => ({ x, z, jungle: false })), pines: [], palms: [], rocks: [], crags: [], bushes: [] }; return { ...world, tiles }; };
+  it('closes a line that cuts between two overlapping trunks, but not one that grazes a single trunk or passes through a gap', () => {
+    const wall = treeWorld([[0, 0], [0.4, 0.2]]);
+    expect(naturalWall(wall, { x: 0.2, z: -2 }, { x: 0.2, z: 2 })).toBe(true);
+    expect(staticFactor(wall, { x: 0.2, z: -2 }, { x: 0.2, z: 2 })).toBe(0);                       // planning: closed, not dear
+    expect(naturalWall(wall, { x: -0.1, z: -2 }, { x: -0.1, z: 2 })).toBe(false);                  // only the first trunk is on this line: he slides round it
+    expect(staticFactor(wall, { x: -0.1, z: -2 }, { x: -0.1, z: 2 })).toBeGreaterThan(0);
+    const gap = treeWorld([[0, 0], [3, 0]]);                                                        // 3 m apart: a gap he can walk through
+    expect(naturalWall(gap, { x: 1.5, z: -2 }, { x: 1.5, z: 2 })).toBe(false);
+    expect(naturalWall(gap, { x: 0, z: -2 }, { x: 0, z: 2 })).toBe(false);                          // (one trunk)
+  });
+  it('is the pair of trunks on seed 1337 near (-14.0, 36.4): the grid edge (-14.25, 36.75) -> (-14.25, 35.25) is closed and a plan from there goes round', async () => {
+    const w = await generateWorld(1337), a = { x: -14.25, z: 36.75 }, b = { x: -14.25, z: 35.25 };
+    expect(naturalWall(w, a, b)).toBe(true); expect(staticFactor(w, a, b)).toBe(0);
+    const r = createPath(w).find(a, { x: -14.25, z: 30.75 });
+    expect(r).not.toBeNull();
+    for (let i = 1; i < r.pts.length; i++) expect(naturalWall(w, r.pts[i - 1], r.pts[i]), `segment ${i} of the plan`).toBe(false);
+  }, 120000);
 });

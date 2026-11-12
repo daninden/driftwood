@@ -14,7 +14,7 @@ import { hutCircles, leantoCircles, HUT_R, leantoPoint } from '../src/game/obsta
 import { SHELTER_SLEEP, WALLS_SLEEP, HUT_REST, createSleep, SLEEP_DAYS, REST_RATE } from '../src/game/sleep.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
 import { buttonIcons, ICONS, LABEL_OF } from '../src/render/actionButton.js';
-import { hutFrame, hutPosts, hutWalls, hutRoofFrame, hutFronds, hutInside, HUT_POST_H } from '../src/render/leanto.js';
+import { hutFrame, hutPosts, hutWalls, hutRoofFrame, hutFronds, hutInside, HUT_POST_H, HUT_ROW_Y, HUT_LOG_R, HUT_DOOR_Y, HUT_DOOR_R, hutCeiling, hutRoofBegun, underHutRoof, leantoParts } from '../src/render/leanto.js';
 import { createPath } from '../src/game/path.js';
 import { solidObstacles } from '../src/game/obstacles.js';
 import { mixOf, rainLevel, senseAround, ROOF_MUFFLE, HUT_MUFFLE } from '../src/audio/mix.js';
@@ -433,5 +433,16 @@ describe('the rain is muffled more inside a hut (audio/mix)', () => {
     const base = (o = {}) => ({ x: spawn.x, z: spawn.z, y: spawn.y, sense: senseAround(w, spawn.x, spawn.z, 0), day: 1, wind: windState(w.seed, 20, 1, 1), waterTime: 0, fire: { fires: [], torches: [], strength: () => 0, hissed: 0, hissAt: null }, birds: [], held: false, rain: 1, ...o });
     const open = mixOf(base()).rain, roof = mixOf(base({ covered: true })).rain, hut = mixOf(base({ covered: true, hut: true })).rain;
     expect(hut.gain).toBeLessThan(roof.gain); expect(roof.gain).toBeLessThan(open.gain); expect(hut.cutoff).toBeLessThan(roof.cutoff); expect(roof.cutoff).toBeLessThan(open.cutoff);
+  });
+
+  it('0.33.2 "Mend": the door pieces top out level with the walls\' top row; the old lean-to is cut under the hut roof once its frame begins', () => {
+    expect(HUT_DOOR_Y + HUT_DOOR_R).toBeCloseTo(HUT_ROW_Y[1] + HUT_LOG_R, 10);
+    const flat = () => 0, l = { id: 1, x: 0, z: 0, heading: 0, progress: 1, hut: 12 / 32 };
+    expect(hutRoofBegun(l)).toBe(false); expect(hutRoofBegun({ ...l, hut: 13 / 32 })).toBe(true);
+    const top = Math.max(...hutWalls(flat, l, 12 / 32).filter(s => s.row === 'door').map(s => Math.max(s.a.y, s.b.y) + s.r));
+    expect(top).toBeCloseTo(HUT_ROW_Y[1] + HUT_LOG_R, 1);
+    const cut = leantoParts(flat, l).map(s => underHutRoof(flat, l, s)).filter(Boolean);
+    expect(cut.length).toBeGreaterThan(0);
+    for (const s of cut) for (const p of [s.a, s.b]) expect(p.y).toBeLessThanOrEqual(hutCeiling(p.x * Math.sin(l.heading) + p.z * Math.cos(l.heading)) + 1e-6);
   });
 });

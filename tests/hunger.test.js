@@ -13,7 +13,7 @@ import { DAY_SECONDS } from '../src/game/clock.js';
 import { serialise, parseSave } from '../src/save.js';
 import { hungerFill, FILL_GO as HUNGER_FILL_GO } from '../src/game/hunger.js';
 import { HUNGER_GO } from '../src/game/mind.js';
-import { hungerClip, hungerOpacity, ate, createHungerMark, FILL_STEPS, CLEAR_FROM, CLEAR_TO } from '../src/render/hungerMark.js';
+import { hungerClip, hungerOpacity, fillOpacity, ate, createHungerMark, FILL_STEPS } from '../src/render/hungerMark.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 
 let w, spawn, logs, cocos;
@@ -149,8 +149,11 @@ describe('the half coconut mark', () => {
     expect(FILL_STEPS).toBe(48);
   });
   it('is faint when not hungry, clearer as hunger grows, and clear after eating', () => {
-    expect(hungerOpacity(0)).toBeCloseTo(REST_OPACITY, 5); expect(hungerOpacity(CLEAR_FROM)).toBeCloseTo(REST_OPACITY, 5);
-    expect(hungerOpacity(CLEAR_TO)).toBeCloseTo(PEAK_OPACITY, 5); expect(hungerOpacity(2.5)).toBeGreaterThan(REST_OPACITY);
+    expect(hungerOpacity(0)).toBeCloseTo(REST_OPACITY, 5); expect(hungerOpacity(2.5)).toBeGreaterThan(REST_OPACITY);
+    expect(hungerOpacity(STARVING_AT)).toBeCloseTo(PEAK_OPACITY, 5);
+    // 0.33.2: the opacity follows the filling: halfway at the go point (half full)
+    expect(fillOpacity(1)).toBeCloseTo(REST_OPACITY, 10); expect(fillOpacity(0)).toBeCloseTo(PEAK_OPACITY, 10);
+    expect(hungerOpacity(HUNGER_GO)).toBeCloseTo((REST_OPACITY + PEAK_OPACITY) / 2, 5);
     expect(hungerOpacity(0, 0)).toBeCloseTo(PEAK_OPACITY, 5); expect(hungerOpacity(0, HOLD + EASE + 1)).toBeCloseTo(REST_OPACITY, 5);
   });
   it('fills the half coconut like the drop: full, half when he goes to eat, a quarter when hungry, empty when starving (0.31.1)', () => {

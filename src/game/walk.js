@@ -12,12 +12,14 @@
  *     corner cutting, so a planned line is always visible to the follower (and the nodes of game/fine lie 0.06 outside a circle);
  *   - the natural circles (trunks, boulders, crags from the tiles): dear (x0.25, he slides round them and can stick between two) when planning,
  *     closed ('block') for corner cutting.
+ *     0.33.2: a line that cuts between two natural circles that overlap (a wall of trunks, `naturalWall`) is closed in planning too.
  * The circle geometry is the one `pushOut` enforces, so every planned segment can be walked.
  *
  * stepperOpen(world, a, b) -> true when stepPlayer's own test (movement stepAhead) passes at a place every DENSE along the line; terrainPace asks it where the ground along the line is at least STEEP
  * STEP, STEEP, DENSE, PLAN_MARGIN, FOLLOW_MARGIN, NATURAL_DEAR
  * terrainPace(world, a, b) -> 0 | pace   the terrain part: 0 when any step is a wall, else the harmonic mean of the steps' speed factors
  * naturalHit(world, a, b) -> the natural circle the line meets, or null
+ * naturalWall(world, a, b) -> true when the line cuts between two overlapping natural circles (0.33.2: closed in staticFactor)
  * staticFactor(world, a, b, natural?) -> terrainPace x (1 | NATURAL_DEAR | 0 for a natural hit: 'dear' (default) or 'block'); depends on the island only, so it may be cached
  * campOpen(camp, a, b, margin?, escape?) -> true when no dynamic circle closes the line (camp: the view of game/obstacles, or a plain callback wrapped by `asCamp`); escape (true) applies the leaving rule to the start a
  * edgeFactor(world, a, b, camp, { margin?, natural?, escape?, sf? }) -> 0 | 0..1   the rule: 0 when closed, else the pace (sf: a staticFactor already known, which skips the terrain steps)
@@ -88,11 +90,40 @@ export function naturalHit(world, a, b) {
   return null;
 }
 
-/** The part of the rule that depends on the island only: the terrain pace, times NATURAL_DEAR (or closed with 'block') when a natural circle is on the line. */
+/**
+ * 0.33.2 "Mend": true when the line a -> b runs through a wall of trunks: two natural circles that overlap (their radii already include his body, so a point cannot pass between them) and that the line cuts between their
+ * middles. He can slide round one circle (that is what NATURAL_DEAR prices), but a line through such a pair has no way past it along itself: he wedged between the two (seed 1337, a journey route near (-14.0, 36.4)),
+ * stalled and the follower had to close the edge and plan again.
+ */
+export function naturalWall(world, a, b) {
+  if (!world.tiles) return false;
+  const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz), l2 = dx * dx + dz * dz || 1e-9, n = Math.max(1, Math.ceil(len / 1.4));
+  const hit = new Set();
+  for (let i = 0; i <= n; i++) {
+    for (const o of obstaclesNear(world, a.x + dx * i / n, a.z + dz * i / n)) {
+      if (hit.has(o)) continue;
+      const u = Math.min(1, Math.max(0, ((o.x - a.x) * dx + (o.z - a.z) * dz) / l2));
+      if (Math.hypot(a.x + dx * u - o.x, a.z + dz * u - o.z) < o.r) hit.add(o);
+    }
+  }
+  if (hit.size < 2) return false;
+  const list = [...hit];
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const p = list[i], q = list[j], ex = q.x - p.x, ez = q.z - p.z;
+    if (Math.hypot(ex, ez) >= p.r + q.r) continue;   // a gap between them: the line may pass through it
+    // do the line a -> b and the segment p -> q cross?
+    const den = dx * ez - dz * ex; if (Math.abs(den) < 1e-9) continue;
+    const t = ((p.x - a.x) * ez - (p.z - a.z) * ex) / den, v = ((p.x - a.x) * dz - (p.z - a.z) * dx) / den;
+    if (t >= 0 && t <= 1 && v >= 0 && v <= 1) return true;
+  }
+  return false;
+}
+
+/** The part of the rule that depends on the island only: the terrain pace, times NATURAL_DEAR (or closed with 'block') when a natural circle is on the line; closed too for a wall of trunks (`naturalWall`). */
 export function staticFactor(world, a, b, natural = 'dear') {
   const f = terrainPace(world, a, b);
   if (f <= 0) return 0;
-  if (naturalHit(world, a, b)) return natural === 'block' ? 0 : f * NATURAL_DEAR;
+  if (naturalHit(world, a, b)) return natural === 'block' || naturalWall(world, a, b) ? 0 : f * NATURAL_DEAR;
   return f;
 }
 

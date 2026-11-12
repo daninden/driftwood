@@ -101,6 +101,7 @@
  *
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
+ * reachablePiece(world, x, z) -> bool   pure (0.33.2 "Mend"): a loose piece he can get his hands on (stand on it or within 0.45 m of it); the fetches (`nearestBy`, `selectStops`) skip the rest. 0.33.2: `feedFire` takes only from a pile with a piece the fire takes (dry enough, no frond).
  * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now (s.pileLogs: pieces in the biggest pile there)
  * exploreChance(s), exploreReach(day), exploreWhere(missing, trips), exploreLate(time, secs, speed?), crabDue(s)   pure (0.29.4; crabDue 0.30.16): whether, how far, where to and when to turn back, tested in tests/mind.test.js
  * journeyGap(r), journeyOk(s), journeyRain(weather, total), journeyBrake(s)   pure (0.30.19): the days to the next journey (5 to 7), whether one may start now, whether rain is forecast for it, whether it turns back (tested in tests/journey.test.js)
@@ -207,6 +208,17 @@ export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
 const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, axe: 300, explore: 600, fish: 240, spear: 300, journey: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
 const ALLOWED = ['drink', 'fill', 'pickup', 'lay', 'feed', 'husk', 'berries', 'bananas', 'roast', 'dig', 'plant', 'light', 'buildHere', 'buildIn', 'upgrade', 'torch', 'makeSpear', 'takeSpear', 'laySpear', 'fish', 'makeAxe', 'takeAxe', 'layAxe', 'fell'];   // the kinds of the arc / ring he ever chooses (the torch only from a fire, `torchFor`, 0.30.14); buildHere, buildIn and upgrade only in the home project (0.29.3, 0.32)
+
+/**
+ * 0.33.2 "Mend": can he get his hands on a loose piece of wood, a nut or a berry lying at (x, z)? He can stand on its own spot or within 0.45 m of it (the game's REACH is 0.55). A piece inside a boulder or a crag (or
+ * against a wall of steep ground) cannot be reached by any walk: he stopped a metre short, stalled four times and marked it bad for a few minutes, then tried again (seed 2024 and seed 7: `stuck` at the same spot day
+ * after day). Pure on the world.
+ */
+export function reachablePiece(world, x, z) {
+  if (canStand(world, x, z, 0)) return true;
+  for (let i = 0; i < 8; i++) if (canStand(world, x + Math.sin(i * Math.PI / 4) * 0.45, z + Math.cos(i * Math.PI / 4) * 0.45, 0)) return true;
+  return false;
+}
 
 export function fireStep(s) {
   const t = s.time;
@@ -422,10 +434,12 @@ export function createMind(world, game, opts = {}) {
     for (const t of tilesNear(x, z, r)) for (const o of SRC[kind](t)) { const d = Math.hypot(o.x - x, o.z - z); if (d <= r && inside(o.x, o.z) && !isBad(kind, o) ) out.push({ o, d, x: o.x, z: o.z, id: o.id }); }
     return out.sort((a, b) => a.d - b.d);
   };
+  const pieceReach = (x, z) => reachablePiece(world, x, z);   // 0.33.2 "Mend": a loose piece he can get his hands on (see reachablePiece)
+  const costTo = c => c.pile || pieceReach(c.x, c.z) ? path.cost(p, c) : Infinity;   // (a pile is taken from a standing point of game/stand, never from its own spot)
   const nearestBy = (kind, r = 45, k = 4) => {   // nearest loose and pile candidates, each weighed by actual walking cost
     let best = null;
     for (let rr = r; rr <= 200 && !best; rr *= 2.5) for (const c of [...scan(kind, p.x, p.z, rr).slice(0, k), ...pileFinds(kind, p.x, p.z, rr).sort((a, b) => a.d - b.d).slice(0, k)]) {
-      const cost = path.cost(p, c);
+      const cost = costTo(c);
       if (cost < Infinity && (!best || cost * (c.pile && kind === 'drift' ? TIDE_BONUS : 1) < best.cost)) best = { ...c, cost: cost * (c.pile && kind === 'drift' ? TIDE_BONUS : 1) }; else if (cost === Infinity) markBad(kind, c.o, 300);
     }
     return best;
@@ -466,6 +480,7 @@ export function createMind(world, game, opts = {}) {
   const fireSpot = h => { h = h || homeSpot(); const q = h.kind === 'leanto' ? ringCentre(h.lt) : h.kind === 'fire' ? h : { x: h.x + 1.8, z: h.z }; return standNear(q.x, q.z) || standNear(h.x, h.z) || { x: p.x, z: p.z }; };
   const sleepSpot = h => { h = h || homeSpot(); if (h.kind === 'leanto') return { x: h.x, z: h.z }; if (h.kind === 'fire') { const s = standNear(h.x + 1.4, h.z) || standNear(h.x, h.z - 1.4); return s || { x: h.x, z: h.z }; } return { x: h.x, z: h.z }; };
   const pilesNear = (kind, x, z, r) => W.piles.filter(q => q.kind === kind && Math.hypot(q.x - x, q.z - z) <= r);
+  const isBurnable = l => !l.frond && dryness(l, clock.total) >= DRY_AT;   // 0.33.2: a piece the fire takes (as game/game `fuel`)
   const fuelOfPile = q => q.logs.reduce((n, l) => n + (l.branch ? 0.5 : 1), 0);   // in pieces of driftwood (a branch burns half as long)
   const firePiles = fs => W.piles.filter(q => (q.kind === 'driftwood' || q.kind === 'branch') && Math.hypot(q.x - fs.x, q.z - fs.z) <= 2.4);
   const bestPile = fs => firePiles(fs).sort((a, b) => fuelOfPile(b) - fuelOfPile(a))[0] || null;
@@ -967,7 +982,7 @@ export function createMind(world, game, opts = {}) {
     for (let r = r0; r <= rMax; r *= 2.5) {
       const priced = [];
       for (const c of [...scan(src, p.x, p.z, r).slice(0, k), ...pileFinds(src, p.x, p.z, r).sort((a, b) => a.d - b.d).slice(0, k)]) {
-        const cost = path.cost(p, c);
+        const cost = costTo(c);
         if (cost === Infinity) { markBad(src, c.o, 300); continue; }
         const w = cost * (c.pile && src === 'drift' ? TIDE_BONUS : 1);   // 0.30.13: a dry pile at a beach edge counts less
         if (c.pile && W.load()) continue;   // with wood in his arm a pile is laid on, not taken from (the game offers no pickup): a pile is only a stop with empty arms
@@ -1098,14 +1113,16 @@ export function createMind(world, game, opts = {}) {
   function* feedFire() {   // from a pile at home (or what is carried): lay dry wood on the fire until it is full
     const fs = fireSpot(), f = fireAt(fs); if (!f) return false;
     if (wetCarried()) yield* layTideline(true);   // wet wood from a stroll is not the fire's
+    let from = null;
     if (!W.load()) {
-      const pile = [...pilesNear('driftwood', fs.x, fs.z, 8), ...pilesNear('branch', fs.x, fs.z, 8)].filter(q => q.logs.length && !isBad('feedpile', q)).sort((a, b) => dist(a, f) - dist(b, f))[0];
+      // 0.33.2 "Mend": only a pile with a piece the fire takes (dry enough, no frond): a pile of damp branches beside the fire was taken, carried to the fire, not fed (the game offers no feed for wet wood: `no-stand: feed`) and laid back, again and again all evening
+      const pile = [...pilesNear('driftwood', fs.x, fs.z, 8), ...pilesNear('branch', fs.x, fs.z, 8)].filter(q => q.logs.some(isBurnable) && !isBad('feedpile', q)).sort((a, b) => dist(a, f) - dist(b, f))[0];
       if (!pile) return false;
       think('fireLow');
-      if (yield* goStand('take', pile)) { if (pressKind(['pickup'], o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === pile)) yield* waitIdle(); } else { markBad('feedpile', pile, 120); return false; }
+      if (yield* goStand('take', pile)) { from = pile; if (pressKind(['pickup'], o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === pile)) yield* waitIdle(); } else { markBad('feedpile', pile, 120); return false; }
     }
     think('fireLow');
-    if (!(yield* goStand('feed', f))) { yield* layDown(); return false; }   // 0.30.3: where the arc really feeds THIS fire
+    if (!(yield* goStand('feed', f))) { if (from && !W.carried.some(isBurnable)) markBad('feedpile', from, 120); yield* layDown(); return false; }   // 0.30.3: where the arc really feeds THIS fire (0.33.2: a pile whose top pieces were all damp is left alone for a while)
     const fed0 = W.carried.slice();
     for (let i = 0; i < 4; i++) { if (!pressKind(['feed'])) break; yield* waitIdle(); }
     burnedLogs(fed0.filter(l => !W.carried.includes(l)));

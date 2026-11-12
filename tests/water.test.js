@@ -13,7 +13,7 @@ import { DAY_SECONDS } from '../src/game/clock.js';
 import { serialise, parseSave } from '../src/save.js';
 import { thirstFill, FILL_GO as THIRST_FILL_GO } from '../src/game/thirst.js';
 import { THIRST_GO } from '../src/game/mind.js';
-import { dropClip, thirstOpacity, drank, createThirstMark, FILL_STEPS } from '../src/render/thirstMark.js';
+import { dropClip, thirstOpacity, fillOpacity, drank, createThirstMark, FILL_STEPS } from '../src/render/thirstMark.js';
 import { burntOpacity, BURNT_PEAK, BURNT_FLOOR } from '../src/render/fire.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 
@@ -228,6 +228,11 @@ describe('the drop mark', () => {
     expect(thirstOpacity(0)).toBeCloseTo(REST_OPACITY);
     let prev = 0; for (const d of [0, 0.5, 1, 1.5, 2]) { const o = thirstOpacity(d); expect(o).toBeGreaterThanOrEqual(prev); prev = o; }
     expect(thirstOpacity(COLLAPSE_AT)).toBeCloseTo(PEAK_OPACITY); expect(thirstOpacity(THIRSTY_AT)).toBeGreaterThan(thirstOpacity(0.3));
+  });
+  it('follows the filling (0.33.2): faint when full, halfway at the go point (half full), clear when empty', () => {
+    expect(fillOpacity(1)).toBeCloseTo(REST_OPACITY, 10); expect(fillOpacity(0)).toBeCloseTo(PEAK_OPACITY, 10);
+    expect(fillOpacity(0.5)).toBeCloseTo((REST_OPACITY + PEAK_OPACITY) / 2, 10);
+    expect(thirstOpacity(THIRST_GO)).toBeCloseTo((REST_OPACITY + PEAK_OPACITY) / 2, 5);
   });
   it('is clear for a moment after drinking, then fades back', () => {
     expect(thirstOpacity(0, 0)).toBeCloseTo(PEAK_OPACITY); expect(thirstOpacity(0, HOLD)).toBeCloseTo(PEAK_OPACITY);
