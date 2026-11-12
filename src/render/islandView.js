@@ -57,7 +57,7 @@ import { buildWater } from './water.js';
 import { buildFarTiles, pumpFarTiles, updateFarTiles } from './farTiles.js';
 import { SUMMIT_MAX } from './camera.js';
 import { T, HALF, NT } from '../world/constants.js';
-import { buildNearTile, disposeGroup, rebuildTrees } from './nearTile.js';
+import { buildNearTile, disposeGroup, rebuildTrees, rebuildCover } from './nearTile.js';
 import { poolsOf, releaseGroup } from './batch.js';
 import { rebuildTiles } from './tileRebuild.js';
 import { createStreamer, tileInView } from './streaming.js';
@@ -112,6 +112,7 @@ export async function createIslandView(world, container, progress, start, opts =
     onReady: (tile, v) => {
       stage.tagTerrain(v.group); scene.add(v.group); near.set(tile, v);
       if (game && v.fv !== game.felled.version) rebuildTrees(world, kit, tile, v.group, pools);   // a tree was felled while the tile was being built
+      if (game && v.gv !== game.ground.version) rebuildCover(world, kit, tile, v.group, pools);   // 0.36.2: ground was cleared while the tile was being built
       if (woodView) { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); timberView.addTile(tile); }
     },
     onDrop: (tile, v) => { if (v) disposeGroup(v.group); near.delete(tile); if (woodView) { woodView.dropTile(tile); cocoView.dropTile(tile); branchView.dropTile(tile); findsView.dropTile(tile); berryView.dropTile(tile); bananaView.dropTile(tile); timberView.dropTile(tile); } },
@@ -148,12 +149,19 @@ export async function createIslandView(world, container, progress, start, opts =
     rebuildTiles(near, d, world.tiles, (tile, v) => rebuildTrees(world, kit, tile, v.group, pools));
   }
 
+  /** 0.36.2 "Ground": tiles whose scenery a building cleared since the last frame: the cover group (rocks, bushes, grass, ferns) of the detailed tiles is drawn again and the far tiles in view are filled again. */
+  function refreshGround() {
+    const d = game.ground.dirty; if (!d.size) return;
+    for (const k of d) { const tile = world.tiles[k], g = tile && far.map.get(tile); if (g && g.userData.slots) { releaseGroup(g); g.userData.fill(); } }
+    rebuildTiles(near, d, world.tiles, (tile, v) => rebuildCover(world, kit, tile, v.group, pools));
+  }
+
   function render(player, info, dt) {
     const t = info.terrain, aspect = window.innerWidth / window.innerHeight, sea = info.sea || 0;
     cam.follow(player, dt, t.L > 4.25);
     water.setSea(sea);
     const total = game ? game.clock.total : 0;
-    if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); findsView.update(); berryView.update(); bananaView.update(); leantoView.update(player, dt); refreshTrees(); fellingView.update(dt); timberView.update(); }
+    if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); findsView.update(); berryView.update(); bananaView.update(); leantoView.update(player, dt); refreshTrees(); refreshGround(); fellingView.update(dt); timberView.update(); }
     hero.update(player, t.depth, game ? loadOf(game.wood, total) : NO_LOAD, game ? game.wood.log : null);
     steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver, info.total);
     steps.wash(sea);
@@ -188,6 +196,10 @@ export async function createIslandView(world, container, progress, start, opts =
     near.forEach((v, tile) => { woodView.addTile(tile); cocoView.addTile(tile); branchView.addTile(tile); findsView.addTile(tile); berryView.addTile(tile); bananaView.addTile(tile); timberView.addTile(tile); });
     if (g.felled.ids.size) {   // trees felled in a saved game: the tiles built before the game was there still draw them
       g.felled.dirty.clear(); near.forEach((v, tile) => rebuildTrees(world, kit, tile, v.group, pools));
+      far.map.forEach(grp => { if (grp.userData.slots) { releaseGroup(grp); grp.userData.fill(); } });
+    }
+    if (g.ground.list.length) {   // ground cleared in a saved game: the tiles built before the game was there still draw it
+      g.ground.dirty.clear(); near.forEach((v, tile) => rebuildCover(world, kit, tile, v.group, pools));
       far.map.forEach(grp => { if (grp.userData.slots) { releaseGroup(grp); grp.userData.fill(); } });
     }
     lightLayer = createLightLayer(container);   // the glow of the fires and the fireflies share one small canvas

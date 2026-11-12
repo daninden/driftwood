@@ -14,9 +14,10 @@
  *   instanced pools of the scene (render/batch, 0.27.8) only while the tile is visible: they are made again (cheap, from the tile's own
  *   seed, so the same) when it comes into view and given back when it goes out of view; a hidden tile holds only its ground mesh.
  *
+ * 0.36.2 "Ground": the small rocks and bushes under the ground a building cleared (game/ground, through `groundOf(world)`) are left out as well.
  * 0.31 "Axe": the crowns of felled trees (game/felled, through `felledOf(world)`) are left out when the tile is filled; render/islandView fills a visible tile again after a felling.
  *
- * Depends on: three, core/noise, core/slicer, render/*, game/felled (read only)
+ * Depends on: three, core/noise, core/slicer, render/*, game/felled, game/ground, game/movement (STONE_MIN; read only)
  */
 import * as THREE from 'three';
 import { mulberry32, hashInt, pick } from '../core/noise.js';
@@ -29,6 +30,8 @@ import { rockColor } from './props.js';
 import { treeHeight, treeScale } from '../world/vegetation.js';
 import { tileGeometry, tileTexture } from './terrainTile.js';
 import { felledOf, treeId } from '../game/felled.js';
+import { groundOf } from '../game/ground.js';
+import { STONE_MIN } from '../game/movement.js';
 
 const NOTHING = { add() {} };
 
@@ -41,8 +44,9 @@ function fillFarTile(w, kit, tile, grp, pools) {
   tile.pines.forEach((t, i) => into('pines', i).add('p', kit.pineLod, kit.farCanopyMat, mat4(t.x, t.y + treeHeight(t, 'pine') * 0.6, t.z, 0.6 * Math.pow(treeScale(t, 'pine'), 0.6), treeHeight(t, 'pine') * 1.1, 0.6 * Math.pow(treeScale(t, 'pine'), 0.6), r() * 6), pick(r, P.pine), { outline: 1.06 }));
   tile.palms.forEach((t, i) => into('palms', i).add('pa', kit.canopyLod, kit.farCanopyMat, mat4(t.x, t.y + treeHeight(t, 'palm') * 0.93, t.z, 1.1 * Math.sqrt(treeScale(t, 'palm')), 0.35, 1.1 * Math.sqrt(treeScale(t, 'palm')), r() * 6), 0x7f9c48, {}));
   tile.crags.forEach(t => B.add('k', kit.rockLod, kit.rockMat, mat4(t.x, t.y - t.s * 0.35, t.z, t.s * 1.3, t.s * 0.55, t.s, r() * 6), rockColor(r), {}));
-  tile.rocks.forEach(t => B.add('k', kit.rockLod, kit.rockMat, mat4(t.x, t.y - t.s * 0.2, t.z, t.s, t.s * 0.7, t.s, r() * 6), t.moss ? 0x7b8456 : rockColor(r), {}));
-  tile.bushes.forEach(t => B.add('b', kit.bushLod, kit.farCanopyMat, mat4(t.x, t.y + 0.1, t.z, 0.35, 0.25, 0.35, r() * 6), pick(r, BUSHC[t.k]), {}));
+  const cleared = groundOf(w);   // 0.36.2 "Ground": the small rocks and bushes a building cleared are left out (their random numbers are used up all the same)
+  tile.rocks.forEach(t => (cleared && cleared.rockGone(t, STONE_MIN) ? NOTHING : B).add('k', kit.rockLod, kit.rockMat, mat4(t.x, t.y - t.s * 0.2, t.z, t.s, t.s * 0.7, t.s, r() * 6), t.moss ? 0x7b8456 : rockColor(r), {}));
+  tile.bushes.forEach(t => (cleared && cleared.bushGone(t) ? NOTHING : B).add('b', kit.bushLod, kit.farCanopyMat, mat4(t.x, t.y + 0.1, t.z, 0.35, 0.25, 0.35, r() * 6), pick(r, BUSHC[t.k]), {}));
   B.build(grp);
 }
 

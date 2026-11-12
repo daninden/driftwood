@@ -18,6 +18,7 @@
  *   logs.lying(tile)          the logs lying on a tile (for the renderer)
  *   logs.onGround(l)          true while the log lies where it was made
  *   logs.piece(id)            the log with that id (lying or not), or null
+ *   logs.move(l, x, z, a?) -> the log (moved in place) | null   (0.36.2 "Ground") a lying log is moved (a building cleared its place); null when it is not lying
  *   logs.take(l) -> true when it was lifted off the ground (false: gone already)
  *   logs.state() -> { list: [{ id, x, y, z, len, a, rad }], taken: [id] }   plain, for saving; saved: such a state
  *
@@ -31,7 +32,7 @@ const tileOf = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF)
 export function createLogs(w, saved) {
   const all = new Map(), taken = new Set();
   let next = LOG_ID0;
-  const logs = { all, version: 0, dirty: new Set(), add, near, lying, onGround, piece, take, state };
+  const logs = { all, version: 0, dirty: new Set(), add, near, lying, onGround, piece, take, move, state };
   if (saved) {
     for (const e of saved.list || []) {
       if (!e || ![e.id, e.x, e.y, e.z, e.len, e.a, e.rad].every(Number.isFinite) || !Number.isInteger(e.id) || e.id < LOG_ID0 || all.has(e.id)) continue;
@@ -54,6 +55,10 @@ export function createLogs(w, saved) {
   function take(l) {
     if (!l || !l.timber || taken.has(l.id) || !all.has(l.id)) return false;
     taken.add(l.id); logs.dirty.add(tileOf(l.x, l.z)); logs.version++; return true;
+  }
+  function move(l, x, z, a) {
+    if (!l || !l.timber || taken.has(l.id) || !all.has(l.id)) return null;
+    logs.dirty.add(tileOf(l.x, l.z)); l.x = x; l.z = z; l.y = w.H(x, z); if (Number.isFinite(a)) l.a = a; logs.dirty.add(tileOf(x, z)); logs.version++; return l;
   }
   function state() { return { list: [...all.values()].map(l => ({ id: l.id, x: l.x, y: l.y, z: l.z, len: l.len, a: l.a, rad: l.rad })), taken: [...taken] }; }
   return logs;

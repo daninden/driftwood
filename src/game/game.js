@@ -8,7 +8,7 @@
  * the rivers (game/thirst, game/water), and sleeping now and then (game/sleep). The state is kept small and plain so it can be saved later
  * (see docs/architecture.md, "Saving").
  *
- * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire, thirst, hunger, branches, fronds, stones, leantos, crabs, spear, axe, felled, logs, fish, shells, berries, bananas, known }?) -> game
+ * createGame(world, spawn, { time, day, player, wood, sleep, fibre, fire, thirst, hunger, branches, fronds, stones, leantos, crabs, spear, axe, felled, ground, logs, fish, shells, berries, bananas, known }?) -> game
  *   The options are what state() returns, so restoring a save is
  *   createGame(world, spawn, saved) (see save.js): each part starts from its
  *   saved state. A saved player { x, z, heading } stays exactly where he
@@ -176,7 +176,11 @@
  *
  * 0.30.10 "Walls": a new pile keeps CAMP_GAP (game/obstacles) of walking room from every other pile, fire place and burnt place (a lean-to's walls excepted): `blockedAt(x, z, rs)` holds the rule for `wood.drop` and for the leftovers of a build (`layLeftovers`). With no such spot within 3.45 m the wood stays in his arms, as on wet ground.
  *
- * Depends on: game/felled, game/logs, game/axe, game/path, game/route, game/stand, game/known, game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
+ * 0.36.2 "Ground" (game/ground): `game.ground` holds the ground the buildings cleared. When the first piece of a lean-to is built in, and when the first part of a hut is, `clearGround(l)` adds the building's region (leanto `keepFree`)
+ *   to it (bushes, grass, ferns and small rocks there are gone, berries and bananas included) and moves the loose pieces lying in it (stones, driftwood, branches, fronds, coconuts, felled logs) to the nearest free, dry spot just
+ *   outside (`findSpot`; the camp's walking room kept where there is one); the summary is `ground.last`. A new fuel pile laid in a finished stone ring lies in the ring's exact middle (`lay` passes `leantos.ringMiddle` to `wood.drop`).
+ *
+ * Depends on: game/ground, game/felled, game/logs, game/axe, game/path, game/route, game/stand, game/known, game/forage, game/shells, game/movement, game/clock, game/wood, game/branches, game/fronds, game/stones, game/leanto, game/tide, game/sleep,
  *   game/fibre, game/fire, game/lack, game/thirst, game/hunger, game/breath, game/crabs, game/spear, game/fish, game/water, game/wildlife, game/fireflies, game/weather
  */
 import { BODY, createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, canStand, nearestStandable, weariStride, paceOf, paceStride, obstaclesNear } from './movement.js';
@@ -190,8 +194,9 @@ import { createShells, FILL_TIME, SIP_TIME, EAT_TIME, SIP_DRINK, DRINK_AT, SIP_A
 import { createBranches } from './branches.js';
 import { createFronds } from './fronds.js';
 import { createStones } from './stones.js';
+import { createGround, findSpot, MOVE_FAR } from './ground.js';
 import { createForage, BERRIES, BANANAS, BERRY_FOOD, BANANA_FOOD } from './forage.js';
-import { createLeantos, keepFree, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH, hutReady, hutDone, hutBegun, hutKind, inHutBox, HUT, HUT_REACH } from './leanto.js';
+import { createLeantos, keepFree, built, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH, hutReady, hutDone, hutBegun, hutKind, inHutBox, HUT, HUT_REACH } from './leanto.js';
 import { YAW } from '../core/view.js';
 import { createThirst } from './thirst.js';
 import { createHunger } from './hunger.js';
@@ -236,17 +241,18 @@ export const wantsToMove = input => !!(input.up || input.down || input.left || i
 
 export function createGame(world, spawn, opts = {}) {
   const felled = createFelled(world, opts.felled);   // first: the trunk circles of game/movement ask the world's overlay (game/felled)
+  const ground = createGround(world, opts.ground);   // 0.36.2 "Ground": likewise the bushes of game/movement and the plants of game/forage ask the world's overlay of cleared ground (game/ground)
   const clock = createClock(opts.time, opts.day);
   const sea0 = seaLevel(clock.total), saved = opts.player && (canOccupy(world, opts.player.x, opts.player.z, sea0) ? { x: opts.player.x, z: opts.player.z } : nearestStandable(world, opts.player.x, opts.player.z, sea0));
-  const player = createPlayer(saved ? { x: saved.x, z: saved.z, y: world.H(saved.x, saved.z) } : spawn), logs = createLogs(world, opts.logs), branches = createBranches(world, opts.branches, felled), fronds = createFronds(world, opts.fronds, felled), stones = createStones(world, opts.stones), wood = createWood(world, opts.wood, branches, fronds, stones, logs), leantos = createLeantos(world, opts.leantos), sleep = createSleep(opts.sleep);
-  const fibre = createFibre(world, opts.fibre, felled), axe = createAxe(opts.axe), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger), breath = createBreath(), crabs = createCrabs(world.seed, opts.crabs), spear = createSpear(opts.spear), fish = createFish(world.seed, opts.fish), shells = createShells(opts.shells), berries = createForage(world, BERRIES, opts.berries), bananas = createForage(world, BANANAS, opts.bananas), known = createKnown(opts.known), movement = { obstacles: solidObstacles(wood, fire, leantos) };
+  const player = createPlayer(saved ? { x: saved.x, z: saved.z, y: world.H(saved.x, saved.z) } : spawn), logs = createLogs(world, opts.logs), branches = createBranches(world, opts.branches, felled, ground), fronds = createFronds(world, opts.fronds, felled, ground), stones = createStones(world, opts.stones), wood = createWood(world, opts.wood, branches, fronds, stones, logs), leantos = createLeantos(world, opts.leantos), sleep = createSleep(opts.sleep);
+  const fibre = createFibre(world, opts.fibre, felled, ground), axe = createAxe(opts.axe), fire = createFire(world, opts.fire), thirst = createThirst(opts.thirst), hunger = createHunger(opts.hunger), breath = createBreath(), crabs = createCrabs(world.seed, opts.crabs), spear = createSpear(opts.spear), fish = createFish(world.seed, opts.fish), shells = createShells(opts.shells), berries = createForage(world, BERRIES, opts.berries, ground), bananas = createForage(world, BANANAS, opts.bananas, ground), known = createKnown(opts.known), movement = { obstacles: solidObstacles(wood, fire, leantos) };
   if (!known.count) known.visit(player.x, player.z);   // no memory saved (a new game, an older save): the ground round him is known
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.spear = spear.hand; player.axe = axe.hand; player.thirsty = thirst.level(); player.hungry = hunger.level();
   const voiceListeners = new Set();
   const notifyAction = kind => { for (const listener of voiceListeners) listener({ kind, x: player.x, z: player.z }); };
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, hutFits, canPileAt, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, ground, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, hutFits, canPileAt, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
   const stand = game.stand = createStand(game, world, { BESIDE });   // 0.30.3 "Routes": standing points (game/stand), asked by the click on a pile or fire and by the walk to the spot of a light, a build or an upgrade
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
@@ -272,7 +278,7 @@ export function createGame(world, spawn, opts = {}) {
     return leantos.list.some(l => keepFree(l).touches(x, z, rr)) || !gapFree(movement.obstacles.camp, x, z, rr, sameFirePlace(x, z));   // 0.30.3 rule (a): the inside of a lean-to and the area in front of its opening stay free of wood
   };
   function canPileAt(x, z, rs) { return !wet(hereAt(x, z)) && !blockedAt(x, z, rs); }   // 0.33.1: may a new pile (walk-blocking radius rs, default a driftwood pile's) be laid with its middle at (x, z)? Pure; the check `lay` makes
-  const lay = heading => wood.drop(player.x, player.z, heading, wet(here()), (x, z) => wet(terrainAt(world, x, z, game.sea)), blockedAt);   // a pile never goes in the water
+  const lay = heading => wood.drop(player.x, player.z, heading, wet(here()), (x, z) => wet(terrainAt(world, x, z, game.sea)), blockedAt, leantos.ringMiddle);   // a pile never goes in the water; 0.36.2: a new fuel pile in a finished ring lies in the ring's exact middle
   const meanDry = logs => logs.reduce((s, l) => s + dryness(l, clock.total), 0) / Math.max(1, logs.length);
   const face = th => { player.heading = Math.atan2(th.x - player.x, th.z - player.z) || player.heading; };
   const fuel = l => !l.frond && dryness(l, clock.total) >= TORCH_DRY;   // a frond never burns
@@ -382,6 +388,26 @@ export function createGame(world, spawn, opts = {}) {
     return true;
   }
   // the kind of hut piece he could build into finished lean-to l with what he holds (the first part also needs the footprint to fit)
+  // 0.36.2 "Ground": the first piece of a lean-to, and the first part of a hut, clear the ground under the building (game/ground): the bushes, grass, ferns and small rocks there are gone for good (berries and bananas too), and
+  // the loose pieces lying there (stones, driftwood, branches, fronds, coconuts, felled logs; not piles) are moved to the nearest free, dry spot just outside the region, with the camp's walking room kept where there is one
+  // (else where only the solids are respected), so no material is lost. A piece that finds no spot at all (nowhere dry within MOVE_FAR) stays where it lies.
+  const okLoose = (x, z) => {
+    const t = hereAt(x, z); if (wet(t) || t.y < 0.25 || !canStand(world, x, z, game.sea)) return false;
+    return !obstaclesNear(world, x, z).some(o => Math.hypot(o.x - x, o.z - z) < o.r - BODY) && !movement.obstacles.camp.near(x, z, 1.5).some(c => Math.hypot(c.x - x, c.z - z) < c.r);
+  };
+  const okSpaced = (x, z) => okLoose(x, z) && !blockedAt(x, z, 0.1);
+  function clearGround(lt) {
+    const region = ground.add({ x: lt.x, z: lt.z, heading: lt.heading, hut: (lt.hut || 0) > 0 ? 1 : 0 });
+    for (const k of region.tiles) { berries.touch(k); bananas.touch(k); }
+    const near = wood.near(lt.x, lt.z, MOVE_FAR + 2).filter(l => kindOf(l) !== 'driftwood' || wood.onBeach(l));   // every loose piece around (the world's first logs also come as taken: onBeach)
+    const nuts = region.tiles.flatMap(k => fibre.groundCocos(world.tiles[k])).filter(c => ground.covers(c.x, c.z, 0.12));
+    const inside = near.filter(l => ground.coversPiece(l)).sort((a, b) => b.len - a.len);   // the longest first
+    const others = near.filter(l => !inside.includes(l)).map(l => ({ x: l.x, z: l.z, len: l.len })), sum = { x: lt.x, z: lt.z, hut: region.hut, moved: 0, stuck: 0 };
+    const put = (p, oks, move) => { const s = findSpot(ground, p, oks, others); if (!s || !move(s)) { sum.stuck++; return; } others.push({ x: s.x, z: s.z, len: p.len || 0 }); sum.moved++; };
+    for (const l of inside) put(l, [okSpaced, okLoose], s => l.stone ? stones.move(l, s.x, s.z, s.a) : l.branch ? branches.move(l, s.x, s.z, s.a, clock.total) : l.frond ? fronds.move(l, s.x, s.z, s.a, clock.total) : l.timber ? logs.move(l, s.x, s.z, s.a) : wood.relocate(l, s.x, s.z, s.a));
+    for (const c of nuts) put({ x: c.x, z: c.z, len: 0, rad: 0.1, a: c.a }, [okSpaced, okLoose], s => fibre.move(c, s.x, s.z, clock.total));
+    ground.last = sum;
+  }
   const hutPiece = (l, have) => { const k = hutKind(l); return k && have.has(k) && (hutBegun(l) || hutFits(l)) ? k : null; };
   function siteIn(px, pz) {   // a piece he could build in now: into a half-built lean-to within LEANTO_REACH that needs the kind of a piece he holds, else into an upgrade of a finished one within UP_REACH (nearest first)
     if (wet(hereAt(px, pz)) || !handsFree()) return null;
@@ -608,6 +634,7 @@ export function createGame(world, spawn, opts = {}) {
       if (wk.what === 'hut' && !hutBegun(lt) && !hutFits(lt)) return;   // 0.33: the first part of a hut only if it still fits
       if (!kind || (wk.what !== 'leanto' && lt.progress < 1) || !takePiece(kind)) { if (wk.site) leantos.list.splice(leantos.list.indexOf(lt), 1); return; }
       leantos.build(lt, wk.what);
+      if ((wk.what === 'leanto' && built(lt) === 1) || (wk.what === 'hut' && built(lt, 'hut') === 1)) clearGround(lt);   // 0.36.2: the first piece of the lean-to, the first part of the hut
       return;
     }
     if (wk.kind === 'husk') {
@@ -768,7 +795,7 @@ export function createGame(world, spawn, opts = {}) {
     return { distance: res.distance, terrain: here(), time: clock.time, total: clock.total, sea: game.sea, rest: sleep.rest() };
   }
   function state() {
-    return { seed: world.seed, time: clock.time, day: clock.day, player: { x: player.x, z: player.z, heading: player.heading }, sleep: sleep.state(), wood: wood.state(), fibre: fibre.state(), fire: fire.state(), thirst: thirst.state(), hunger: hunger.state(), branches: branches.state(), fronds: fronds.state(), stones: stones.state(), leantos: leantos.state(), crabs: crabs.state(), spear: spear.state(), axe: axe.state(), felled: felled.state(), logs: logs.state(), fish: fish.state(), shells: shells.state(), berries: berries.state(), bananas: bananas.state(), known: known.state() };
+    return { seed: world.seed, time: clock.time, day: clock.day, player: { x: player.x, z: player.z, heading: player.heading }, sleep: sleep.state(), wood: wood.state(), fibre: fibre.state(), fire: fire.state(), thirst: thirst.state(), hunger: hunger.state(), branches: branches.state(), fronds: fronds.state(), stones: stones.state(), leantos: leantos.state(), crabs: crabs.state(), spear: spear.state(), axe: axe.state(), felled: felled.state(), ground: ground.state(), logs: logs.state(), fish: fish.state(), shells: shells.state(), berries: berries.state(), bananas: bananas.state(), known: known.state() };
   }
   return game;
 }

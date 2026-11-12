@@ -27,7 +27,9 @@
  *   stones.onGround(s)      true while the stone lies there
  *   stones.piece(id)        the stone with that id (taken or not), or null
  *   stones.take(s)          -> true when it was taken off the ground (false: gone already)
- *   stones.state() -> { taken: [id] }   plain, for saving
+ *   stones.move(s, x, z, a?) -> the stone now at (x, z) | null   (0.36.2 "Ground") a stone lying on the ground is moved (a building cleared its place): a generated stone is taken for good and a new extra stone (id from
+ *     EXTRA_ID0, `extra: true`) lies at (x, z); an extra moves itself; null when it is gone. Nothing is lost: the count of stones lying about stays the same
+ *   stones.state() -> { taken: [id], extra?: [[id, x, z, len, a, rad]] }   plain, for saving
  *   saved: such a state, to start from
  *
  * Depends on: core/noise, world/constants
@@ -37,6 +39,7 @@ import { HALF, T, NT } from '../world/constants.js';
 
 export const STONE_ID0 = 3 << 24;          // stone ids start here, above the frond ids
 const TILE_SPAN = 4096;
+export const EXTRA_ID0 = STONE_ID0 + NT * NT * TILE_SPAN;   // 0.36.2 "Ground": the stones a building moved out of its way get ids from here, above every tile's own (still below the log ids)
 const tileOfId = id => Math.floor((id - STONE_ID0) / TILE_SPAN);   // the index in world.tiles that a stone's id points to
 export const STONE_MAX = 2;
 export const STONE_RAD = [0.08, 0.13];
@@ -71,28 +74,46 @@ export function stonesOfTile(w, tile) {
 }
 
 export function createStones(w, saved) {
-  const taken = new Set();
-  const stones = { version: 0, dirty: new Set(), groundStones, near, onGround, piece, take, state };
-  if (saved) for (const id of saved.taken || []) if (piece(id)) taken.add(id);
+  const taken = new Set(), extras = new Map();   // extras: id -> a stone a building moved (0.36.2)
+  const stones = { version: 0, dirty: new Set(), groundStones, near, onGround, piece, take, move, state };
+  const tileOfPos = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
+  const tileIdx = s => s.extra ? tileOfPos(s.x, s.z) : tileOfId(s.id);
+  if (saved) {
+    for (const e of saved.extra || []) if (Array.isArray(e) && e.length === 6 && e.every(Number.isFinite) && e[0] >= EXTRA_ID0 && !extras.has(e[0])) extras.set(e[0], { id: e[0], x: e[1], y: w.H(e[1], e[2]), z: e[2], len: e[3], a: e[4], rad: e[5], stone: true, extra: true });
+    for (const id of saved.taken || []) if (piece(id)) taken.add(id);
+  }
 
   function piece(id) {
+    if (id >= EXTRA_ID0) return extras.get(id) || null;
     const s = id - STONE_ID0; if (!Number.isInteger(s) || s < 0) return null;
     const tile = w.tiles[Math.floor(s / TILE_SPAN)]; if (!tile) return null;
     return stonesOfTile(w, tile)[s % TILE_SPAN] || null;
   }
   function onGround(s) { return !taken.has(s.id); }
-  function groundStones(tile) { return stonesOfTile(w, tile).filter(onGround); }
+  function groundStones(tile) {
+    const out = stonesOfTile(w, tile).filter(onGround), k = tile.tz * NT + tile.tx;
+    for (const s of extras.values()) if (!taken.has(s.id) && tileOfPos(s.x, s.z) === k) out.push(s);
+    return out;
+  }
   function near(x, z, reach) {
     const out = [], m = reach + 3;   // stones lie up to 2.5 m from the rock or the bank spot that made them
     const t0x = Math.max(0, Math.floor((x - m + HALF) / T)), t1x = Math.min(NT - 1, Math.floor((x + m + HALF) / T));
     const t0z = Math.max(0, Math.floor((z - m + HALF) / T)), t1z = Math.min(NT - 1, Math.floor((z + m + HALF) / T));
     for (let tz = t0z; tz <= t1z; tz++) for (let tx = t0x; tx <= t1x; tx++) { const t = w.tiles[tz * NT + tx]; if (t) for (const s of stonesOfTile(w, t)) if (!taken.has(s.id)) out.push(s); }
+    for (const s of extras.values()) if (!taken.has(s.id) && Math.abs(s.x - x) <= m && Math.abs(s.z - z) <= m) out.push(s);
     return out;
   }
   function take(s) {
     if (!s || !s.stone || taken.has(s.id) || !piece(s.id)) return false;
-    taken.add(s.id); stones.dirty.add(tileOfId(s.id)); stones.version++; return true;
+    taken.add(s.id); stones.dirty.add(tileIdx(s)); stones.version++; return true;
   }
-  function state() { return { taken: [...taken] }; }
+  function move(s, x, z, a) {
+    if (!s || !s.stone || taken.has(s.id) || !piece(s.id)) return null;
+    if (s.extra) { stones.dirty.add(tileIdx(s)); s.x = x; s.z = z; s.y = w.H(x, z); if (Number.isFinite(a)) s.a = a; stones.dirty.add(tileIdx(s)); stones.version++; return s; }
+    taken.add(s.id); stones.dirty.add(tileOfId(s.id));
+    const id = EXTRA_ID0 + extras.size, n = { id, x, y: w.H(x, z), z, len: s.len, a: Number.isFinite(a) ? a : s.a, rad: s.rad, stone: true, extra: true };
+    extras.set(id, n); stones.dirty.add(tileIdx(n)); stones.version++; return n;
+  }
+  function state() { return { taken: [...taken], ...(extras.size ? { extra: [...extras.values()].map(s => [s.id, s.x, s.z, s.len, s.a, s.rad]) } : {}) }; }
   return stones;
 }

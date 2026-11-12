@@ -27,14 +27,16 @@
  * BERRY_FOOD, BANANA_FOOD  days of hunger one handful or one bunch takes away
  * plantsOfTile(w, tile, kind) -> [plant]   the plants of a tile (picked or not): { id, x, y, z, r, k, bush }
  *   (kind: BERRIES or BANANAS; r: the reach radius; bush: the world bush it belongs to; the banana plant stands beside it)
- * createForage(w, kind, saved?) -> forage
+ * createForage(w, kind, saved?, ground?) -> forage   ground: game/ground; a plant under a cleared region (0.36.2 "Ground": a building cleared it) bears no more and never grows back
  *   forage.carried          [total]  the game clock (days) at which each handful or bunch was picked, oldest first
  *   forage.picked           Map plantId -> total at which it was picked
  *   forage.version          goes up with every change, for the renderer
  *   forage.dirty            a Set of the indices of the tiles (world.tiles) whose pieces changed since the view last looked (taken, grown back), so the view
  *                           rebuilds just those; the view empties it. Not saved
  *   forage.plantsIn(tile)   the plants of a tile, picked or not
- *   forage.bearing(p)       true while the plant has its berries or bunch
+ *   forage.bearing(p)       true while the plant has its berries or bunch (and no building has cleared it)
+ *   forage.gone(p)          0.36.2: true when a building cleared the plant (it is not drawn at all, not even bare)
+ *   forage.touch(k)         0.36.2: the plants of tile k changed (a clearing): marks it dirty for the view and bumps the version
  *   forage.bearingIn(tile)  the plants of a tile that bear now
  *   forage.find(x, z, reach) -> { kind: 'berries' | 'bananas', plant, x, z, d } | null   the nearest bearing plant (d: distance from its edge)
  *   forage.full()           true when he carries the most he can
@@ -45,7 +47,7 @@
  *   forage.state() -> { carried, picked: [[id, total]] }   plain, for saving
  *   saved: such a state, to start from (missing or bad parts are dropped)
  *
- * Depends on: core/noise, world/constants, world/vegetation
+ * Depends on: core/noise, world/constants, world/vegetation, game/ground (read only)
  */
 import { hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -78,9 +80,9 @@ export function plantsOfTile(w, tile, kind) {
   return list;
 }
 
-export function createForage(w, kind, saved) {
+export function createForage(w, kind, saved, ground = null) {
   const byId = new Map(), picked = new Map();   // picked: id -> the day it was picked
-  const forage = { carried: [], picked, version: 0, dirty: new Set(), plantsIn, bearing, bearingIn, find, full, pick, stow, eat, update, state };
+  const forage = { carried: [], picked, version: 0, dirty: new Set(), plantsIn, bearing, bearingIn, find, full, pick, stow, eat, update, touch, gone: p => cleared(p), state };
   const plant = id => {
     if (byId.has(id)) return byId.get(id);
     const tile = w.tiles[Math.floor(id / TILE_SPAN)];
@@ -95,7 +97,9 @@ export function createForage(w, kind, saved) {
   }
 
   function plantsIn(tile) { return plantsOfTile(w, tile, kind); }
-  function bearing(p) { return !picked.has(p.id); }
+  const cleared = p => !!ground && ground.plantGone(p, kind === BERRIES);   // 0.36.2: under a building's cleared region
+  function bearing(p) { return !picked.has(p.id) && !cleared(p); }
+  function touch(k) { forage.dirty.add(k); forage.version++; }
   function bearingIn(tile) { return plantsOfTile(w, tile, kind).filter(bearing); }
   function find(x, z, reach) {
     let best = null, bd = reach;
@@ -103,7 +107,7 @@ export function createForage(w, kind, saved) {
     for (const dz of [-1, 0, 1]) for (const dx of [-1, 0, 1]) {
       const k = k0 + dz * NT + dx; if (seen.has(k) || k < 0 || k >= w.tiles.length) continue; seen.add(k);
       for (const p of plantsOfTile(w, w.tiles[k], kind)) {
-        if (picked.has(p.id)) continue;
+        if (picked.has(p.id) || cleared(p)) continue;
         const d = Math.max(0, Math.hypot(p.x - x, p.z - z) - p.r);
         if (d < bd) { bd = d; best = { kind: kind.name, plant: p, x: p.x, z: p.z, d }; }
       }
@@ -112,7 +116,7 @@ export function createForage(w, kind, saved) {
   }
   function full() { return forage.carried.length >= kind.max; }
   function pick(p, total) {
-    if (!p || picked.has(p.id) || !plant(p.id)) return false;
+    if (!p || picked.has(p.id) || cleared(p) || !plant(p.id)) return false;
     picked.set(p.id, total); forage.dirty.add(Math.floor(p.id / TILE_SPAN)); forage.version++; return true;
   }
   function stow(total) { if (full()) return false; forage.carried.push(total); forage.version++; return true; }

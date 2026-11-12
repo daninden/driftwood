@@ -68,6 +68,7 @@
  *   leantos.dry(x, z, 'wood' | 'fire') -> true when wood (or a fire and torches) there stays dry (0.33: also inside a finished hut): within WOOD_SHELTER / FIRE_SHELTER of a finished
  *     lean-to, or WALLS_WOOD / WALLS_FIRE when that one has side walls
  *   leantos.ring(x, z) -> true when (x, z) is within RING_R of the middle of a finished lean-to's finished stone ring
+ *   leantos.ringMiddle(x, z) -> { x, z } | null   (0.36.2 "Ground") the middle of that ring (the nearest one when two overlap), or null when (x, z) is in none: a fuel pile laid in the ring lies exactly there (game/game)
  *   leantos.inHut(x, z) -> the lean-to whose finished hut holds (x, z) inside its walls (0.33), or null
  *   leantos.noFire(x, z) -> true when (x, z) lies in the ring of no fire (0.31.1 "Milk"; 0.33: or in or within half a metre of a finished hut's walls): more than RING_R but at most RING_NOFIRE (3.5 m until 0.33.3, 8 m from 0.33.4 "One hearth") from the middle of a finished lean-to's finished stone ring. A fire cannot be lit there (game/game `lightable`) and a fire already there is not fed (game/game `actionsAt`: no 'feed'; it burns out): beside a ring the fire is the one in the ring.
  *   leantos.covers(x, z, r) -> true when a finished lean-to's centre is within r (the rain stays off wood and fires there, game/weather)
@@ -160,7 +161,7 @@ export function ringCentre(l) { return { x: l.x + Math.sin(l.heading) * RING_AT,
 const has = (l, what) => !!l.up && l.up[what] >= 1;
 
 export function createLeantos(w, saved) {
-  const leantos = { list: [], version: 0, start, build, unfinished, shelter, covers, has, upgraded, home, nearFinished, dry, ring, noFire, inHut, flood, state };
+  const leantos = { list: [], version: 0, start, build, unfinished, shelter, covers, has, upgraded, home, nearFinished, dry, ring, ringMiddle, noFire, inHut, flood, state };
   let nextId = 0;
   if (saved) {
     leantos.list = (saved.list || []).map(l => ({ id: l.id, x: l.x, z: l.z, heading: l.heading, progress: whole(l.progress, PARTS.leanto.length), ...cleanUp(l.up), ...cleanHut(l) }));
@@ -212,9 +213,12 @@ export function createLeantos(w, saved) {
     const base = kind === 'fire' ? FIRE_SHELTER : WOOD_SHELTER, wide = kind === 'fire' ? WALLS_FIRE : WALLS_WOOD;
     return leantos.list.some(l => l.progress >= 1 && (Math.hypot(l.x - x, l.z - z) <= (has(l, 'walls') ? wide : base) || (hutDone(l) && inHutBox(l, x, z, 0))));   // 0.33: and inside a finished hut
   }
-  function ring(x, z) {
-    return leantos.list.some(l => { if (l.progress < 1 || !has(l, 'ring')) return false; const c = ringCentre(l); return Math.hypot(c.x - x, c.z - z) <= RING_R; });
+  function ringMiddle(x, z) {
+    let best = null, bd = RING_R;
+    for (const l of leantos.list) { if (l.progress < 1 || !has(l, 'ring')) continue; const c = ringCentre(l), d = Math.hypot(c.x - x, c.z - z); if (d <= bd) { bd = d; best = c; } }
+    return best;
   }
+  function ring(x, z) { return ringMiddle(x, z) !== null; }
   function noFire(x, z) {
     return leantos.list.some(l => { if (l.progress < 1 || !has(l, 'ring')) return false; const c = ringCentre(l), d = Math.hypot(c.x - x, c.z - z); return d > RING_R && d <= RING_NOFIRE; }) || leantos.list.some(l => hutDone(l) && inHutBox(l, x, z, -0.5));   // 0.33: and in or at a finished hut: no fire inside
   }

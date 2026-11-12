@@ -106,7 +106,7 @@ export function addBanana(B, kit, p, bearing) {
 export function createBananaView(scene, w, kit, forage) {
   const tiles = new Map();   // tile -> group of its banana plants
   let seen = forage.version;
-  const tileGroup = tile => { const g = new THREE.Group(), B = new Batch(outlineMat, poolsOf(scene)); for (const p of forage.plantsIn(tile)) addBanana(B, kit, p, forage.bearing(p)); B.build(g); scene.add(g); return g; };
+  const tileGroup = tile => { const g = new THREE.Group(), B = new Batch(outlineMat, poolsOf(scene)); for (const p of forage.plantsIn(tile)) if (!forage.gone(p)) addBanana(B, kit, p, forage.bearing(p)); B.build(g); scene.add(g); return g; };
   function addTile(tile) { if (forage.plantsIn(tile).length && !tiles.has(tile)) tiles.set(tile, tileGroup(tile)); }
   function dropTile(tile) { const g = tiles.get(tile); if (g) { disposeGroup(g); tiles.delete(tile); } }
   function update() {

@@ -19,7 +19,7 @@
  *
  * FIBRE_MAX, EXTRA_ID0, REGROW, REGROW_SPREAD, NUT_SHARE
  * nutsOfTile(w, tile) -> [coco]   the nuts that exist at all in a tile (at most one per palm); `onGround` says which lie there now
- * createFibre(world, saved?, felled?) -> fibre   felled: game/felled; a nut under a felled palm does not fall again once it is taken
+ * createFibre(world, saved?, felled?, ground?) -> fibre   felled: game/felled; a nut under a felled palm does not fall again once it is taken; ground: game/ground (0.36.2 "Ground": nor one lying under a cleared region)
  *   fibre.carried            tufts carried (0..FIBRE_MAX)
  *   fibre.version            goes up with every change, for the renderer
  *   fibre.dirty            a Set of the indices of the tiles (world.tiles) whose pieces changed since the view last looked (taken, grown back), so the view
@@ -34,11 +34,12 @@
  *   fibre.tuft() -> true when a tuft was added (room under FIBRE_MAX)
  *   fibre.use() -> true when a tuft was used up
  *   fibre.update(total)      lets taken nuts fall again when their time has come
+ *   fibre.move(c, x, z, total?) -> the nut now at (x, z) | null   (0.36.2 "Ground") a nut lying on the ground is moved: a nut of a palm is taken for good (nothing is carried) and a new extra lies at (x, z), an extra moves itself
  *   fibre.addExtra({ x, z, a? }) -> coco   (0.31 "Axe") a whole nut a felled palm leaves: an id from EXTRA_ID0 up, `extra: true`, palm -1, never grows back once taken; groundCocos(tile) and find include it
  *   fibre.state() -> { carried, taken: [[id, total]], extra?: [[id, x, z, a]] }   plain, for saving
  *   saved: such a state, to start from
  *
- * Depends on: core/noise, world/constants, game/felled (treeId)
+ * Depends on: core/noise, world/constants, game/felled (treeId), game/ground (read only)
  */
 import { hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -63,12 +64,12 @@ export function nutsOfTile(w, tile) {
 
 const tileOf = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
 
-export function createFibre(w, saved, felled = null) {
+export function createFibre(w, saved, felled = null, ground = null) {
   const byId = new Map(), tileOfNut = new Map();   // tileOfNut: id -> the index of its tile in world.tiles
   w.tiles.forEach((t, k) => { for (const c of nutsOfTile(w, t)) { byId.set(c.id, c); tileOfNut.set(c.id, k); } });
   const taken = new Map();   // id -> the day it was taken
   const extras = new Map();  // id -> a nut a felled palm left (never grows back): { id, x, y, z, a, palm: -1, extra: true }
-  const fibre = { carried: 0, version: 0, dirty: new Set(), onGround, groundCocos, find, take, husk, tuft, use, update, addExtra, state };
+  const fibre = { carried: 0, version: 0, dirty: new Set(), onGround, groundCocos, find, take, husk, tuft, use, update, addExtra, move, state };
   const putExtra = (id, x, z, a) => { const c = { id, x, y: w.H(x, z), z, a, palm: -1, extra: true }; extras.set(id, c); byId.set(id, c); tileOfNut.set(id, tileOf(x, z)); return c; };
   if (saved) {
     for (const e of saved.extra || []) if (Array.isArray(e) && e.length === 4 && e.every(Number.isFinite) && e[0] >= EXTRA_ID0 && !extras.has(e[0])) putExtra(e[0], e[1], e[2], e[3]);
@@ -80,6 +81,7 @@ export function createFibre(w, saved, felled = null) {
   const gone = id => {   // a nut of a felled crown, or one under a felled palm, does not grow back
     if (id >= EXTRA_ID0) return true;
     const c = byId.get(id), k = tileOfNut.get(id);
+    if (c && ground && ground.list.length && ground.covers(c.x, c.z, 0.12)) return true;   // 0.36.2: under a building's cleared region
     return !!felled && !!c && k !== undefined && c.palm >= 0 && felled.has(treeId(w.tiles[k], 'palms', c.palm));
   };
   function mark(id) { const k = tileOfNut.get(id); if (k !== undefined) fibre.dirty.add(k); }
@@ -93,6 +95,12 @@ export function createFibre(w, saved, felled = null) {
   function addExtra(s) {
     const c = putExtra(EXTRA_ID0 + extras.size, s.x, s.z, s.a || 0);
     fibre.dirty.add(tileOf(c.x, c.z)); fibre.version++; return c;
+  }
+  function move(c, x, z, total = 0) {
+    if (!c || taken.has(c.id) || !byId.has(c.id)) return null;
+    if (c.extra) { mark(c.id); c.x = x; c.z = z; c.y = w.H(x, z); tileOfNut.set(c.id, tileOf(x, z)); mark(c.id); fibre.version++; return c; }
+    taken.set(c.id, total); mark(c.id);
+    return addExtra({ x, z, a: c.a });
   }
   function find(x, z, reach) {
     let best = null, bd = reach;

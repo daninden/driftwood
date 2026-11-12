@@ -1825,7 +1825,7 @@ export function createMind(world, game, opts = {}) {
     const around = (o, d) => { const a = rand() * Math.PI * 2; return standNear(o.x + Math.sin(a) * d, o.z + Math.cos(a) * d, 1.5); };
     for (const t of tiles) {
       t.palms.forEach((o, pi) => { if (!game.felled.standing(t, 'palms', pi)) return; if (Math.hypot(o.x - centre.x, o.z - centre.z) <= range && inside(o.x, o.z)) { const st = around(o, 2.4); if (st) out.palms.push({ x: st.x, z: st.z, px: o.x, pz: o.z }); } });   // (0.31: a felled palm is no stroll's goal)
-      for (const o of game.berries.plantsIn(t)) if (Math.hypot(o.x - centre.x, o.z - centre.z) <= range && inside(o.x, o.z)) { const st = around(o, 1.8); if (st) out.forest.push({ x: st.x, z: st.z, px: o.x, pz: o.z }); }
+      for (const o of game.berries.plantsIn(t)) if (!game.berries.gone(o) && Math.hypot(o.x - centre.x, o.z - centre.z) <= range && inside(o.x, o.z)) { const st = around(o, 1.8); if (st) out.forest.push({ x: st.x, z: st.z, px: o.x, pz: o.z }); }
     }
     return out;
   }
@@ -2296,7 +2296,7 @@ export function createMind(world, game, opts = {}) {
     for (const q of waterPts()) if (Math.hypot(q.x - h.x, q.z - h.z) <= STROLL_RANGE) cands.push(q);
     for (const t of tilesNear(h.x, h.z, STROLL_RANGE)) {
       t.palms.forEach((o, pi) => { if (game.felled.standing(t, 'palms', pi) && Math.hypot(o.x - h.x, o.z - h.z) <= STROLL_RANGE && inside(o.x, o.z)) cands.push(o); });
-      for (const o of game.berries.plantsIn(t)) if (Math.hypot(o.x - h.x, o.z - h.z) <= STROLL_RANGE && inside(o.x, o.z)) cands.push(o);
+      for (const o of game.berries.plantsIn(t)) if (!game.berries.gone(o) && Math.hypot(o.x - h.x, o.z - h.z) <= STROLL_RANGE && inside(o.x, o.z)) cands.push(o);
     }
     return lineTo(nearestOf(cands.filter(c => dist(p, c) >= 6)));
   }

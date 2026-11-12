@@ -6,7 +6,7 @@
  * beside it) costs its length divided by its pace, so steep scrambles, bushes and wading are dearer than open ground. The line between two cells is
  * checked by game/walk (steps of 0.25 m, the probe of `stepPlayer`): a wall, or water deeper than WADE_MAX, anywhere on it closes the edge; a trunk,
  * boulder or crag on the line makes it four times dearer (he slides round it, and can stick between two). Standability and these edge factors depend
- * on the island only, so they are cached for the life of the finder, with or without a camp (0.31 "Axe": until a tree is felled, game/felled `felledStamp`; then the caches start over).
+ * on the island only, so they are cached for the life of the finder, with or without a camp (0.31 "Axe": until a tree is felled, game/felled `felledStamp`; 0.36.2: or a building clears the ground, game/ground `groundStamp`; then the caches start over).
  * Camp layer: an optional `obstacles` option supplies the changing solids of the camp (game/obstacles: piles, fires, lean-tos) without making this
  * module depend on game state; it is read through the cached camp view (`obstacles.camp`). A grid edge that comes nearer to a camp circle than its
  * radius (plus the planning margin), and every edge that ends in one, is closed on the fly (never cached). Where the grid is too coarse, the fine layer
@@ -43,13 +43,14 @@
  *
  * Pure functions on a world; no DOM, no Three.js.
  *
- * Depends on: game/movement, game/walk, game/fine (camp nodes and route nodes), game/felled, world/constants
+ * Depends on: game/movement, game/walk, game/fine (camp nodes and route nodes), game/felled, game/ground, world/constants
  */
 import { canStand } from './movement.js';
 import { HALF } from '../world/constants.js';
 import { staticFactor, terrainPace, campOpen, segmentClear, asCamp, PLAN_MARGIN } from './walk.js';
 import { createFine, createRouteNodes, FINE_LINK, ROUTE_LINK } from './fine.js';
 import { felledStamp } from './felled.js';
+import { groundStamp } from './ground.js';
 
 export const C = 1.5, N = Math.round(2 * HALF / C);
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
@@ -68,8 +69,8 @@ export function createPath(world, opts = {}) {
   const stand = new Map(), efs = new Map(), neg = new Map();
   const camp = asCamp(opts.obstacles), dynamic = !!camp, stats = { finds: 0, nulls: 0, cached: 0, expanded: 0 };
   const centre = i => (i + 0.5) * C - HALF, cell = v => Math.floor((v + HALF) / C);
-  let stamp = felledStamp(world);
-  const sync = () => { const s = felledStamp(world); if (s !== stamp) { stamp = s; stand.clear(); efs.clear(); neg.clear(); rn.reset(); } };   // 0.31 "Axe": a tree was felled (or another game's overlay took over): what was cached about the trunks is thrown away
+  let stamp = felledStamp(world), gstamp = groundStamp(world);   // 0.36.2 "Ground": a cleared bush no longer slows a step, so a clearing starts the caches over too
+  const sync = () => { const s = felledStamp(world), g = groundStamp(world); if (s !== stamp || g !== gstamp) { stamp = s; gstamp = g; stand.clear(); efs.clear(); neg.clear(); rn.reset(); } };   // 0.31 "Axe": a tree was felled (or another game's overlay took over): what was cached about the trunks is thrown away
   const standT = (ix, iz) => {   // the island only: cached until a tree is felled
     sync();
     if (ix < 0 || iz < 0 || ix >= N || iz >= N) return false;

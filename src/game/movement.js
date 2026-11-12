@@ -36,7 +36,7 @@
  *   not symmetric on purpose (only going deeper is blocked).
  * obstaclesNear(world, x, z, opts?) -> [{ x, z, r }] blocking circles from the tiles (0.31: not the trunks of felled trees, game/felled; a tree circle carries its `tree` id)
  *   around (x, z); r already includes the castaway's own radius (BODY)
- * bushFactor(world, x, z) -> speed factor 0..1 from bushes at (x, z)
+ * bushFactor(world, x, z) -> speed factor 0..1 from bushes at (x, z) (0.36.2: not from the bushes a building cleared, game/ground)
  * pushOut(world, from, x, z, opts?) -> { x, z } moved back onto the rim of any
  *   obstacle that stepping from `from` to (x, z) would enter
  * canStand(world, x, z, sea?, opts?) -> true when the castaway can be put at (x, z):
@@ -62,12 +62,13 @@
  *
  * An ejection by pushOut (from inside a solid) never carries him farther than the step he took, where pushOut's own rule allows that point.
  *
- * Depends on: core/view, world/constants, world/vegetation, game/felled
+ * Depends on: core/view, world/constants, world/vegetation, game/felled, game/ground (read only)
  */
 import { YAW, basis } from '../core/view.js';
 import { HALF, T, NT } from '../world/constants.js';
 import { bushSize } from '../world/vegetation.js';
 import { felledOf, treeId, trunkRadius, sizeKind } from './felled.js';
+import { groundOf } from './ground.js';
 
 export const WALK_SPEED = 2.9;
 export const RUN_SPEED = 5.5;   // a run is short: game/breath limits it
@@ -111,15 +112,17 @@ function tileObstacles(w, tile) {
 const bushCache = new WeakMap();
 function tileBushes(tile) {
   let list = bushCache.get(tile);
-  if (!list) { list = tile.bushes.map(b => ({ x: b.x, z: b.z, r: bushSize(b) + BODY * 0.5 })); bushCache.set(tile, list); }
+  if (!list) { list = tile.bushes.map(b => ({ x: b.x, z: b.z, r: bushSize(b) + BODY * 0.5, b })); bushCache.set(tile, list); }
   return list;
 }
 export function bushFactor(w, x, z) {
   const tile = w.tiles[Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T)];
   let f = 1;
   if (!tile) return f;
+  const g = groundOf(w), cleared = g && g.list.length ? g : null;   // 0.36.2 "Ground": a bush a building cleared slows no step (the tile lists are shared by every game on the world; the overlay of the game made last is asked)
   for (const t of [tile, ...neighbours(w, tile, x, z)]) for (const b of tileBushes(t)) {
     const d = Math.hypot(x - b.x, z - b.z); if (d >= b.r) continue;
+    if (cleared && cleared.bushGone(b.b)) continue;
     const p = Math.min(1, Math.max(0, (1 - d / b.r - 0.25) / 0.5)), e = p * p * (3 - 2 * p);   // eases in: brushing the edge costs (almost) nothing
     f = Math.min(f, 1 - BUSH_SLOW * e);
   }

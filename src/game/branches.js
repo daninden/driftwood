@@ -27,7 +27,7 @@
  *
  * BRANCH_ID0, EXTRA_ID0, GROWN_KEEP, REGROW, REGROW_SPREAD, BRANCH_LEN, BRANCH_RAD
  * branchesOfTile(world, tile) -> [branch]   all the branches of a tile (taken or not)
- * createBranches(world, saved?, felled?) -> branches   felled: game/felled; a branch under a felled tree is not grown again once it is taken
+ * createBranches(world, saved?, felled?, ground?) -> branches   felled: game/felled; a branch under a felled tree is not grown again once it is taken; ground: game/ground (0.36.2 "Ground": a branch taken from, or moved out of, a cleared region does not grow back there)
  *   branches.version          goes up with every change, for the renderer
  *   branches.dirty                 a Set of the indices of the tiles (world.tiles) whose pieces changed since the view last looked (take, regrowth), for
  *                           the renderer to rebuild just those; the view empties it. Plain data, nothing is saved from it
@@ -38,11 +38,12 @@
  *   branches.take(b, total)   -> true when it was taken off the ground (false: gone
  *                             already); total: the days on the clock, for when it grows back
  *   branches.update(total)    lets taken branches grow again when their time has come
+ *   branches.move(b, x, z, a?, total?) -> the piece now at (x, z) | null   (0.36.2 "Ground") a loose branch is moved: a branch of a tree is taken for good (`total`) and a new extra lies at (x, z), a branch that is an extra moves itself; null when it is gone
  *   branches.addExtra({ x, z, len, a, rad }) -> branch   (0.31 "Axe") a loose branch a felled crown leaves: an id from EXTRA_ID0 up, `extra: true`, never grows back once taken
  *   branches.state() -> { taken: [[id, total]], grown?: [[id, g]], extra?: [[id, x, z, len, a, rad]] }   plain, for saving
  *   saved: such a state, to start from
  *
- * Depends on: core/noise, world/constants, game/felled (treeId)
+ * Depends on: core/noise, world/constants, game/felled (treeId), game/ground (read only)
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -82,14 +83,14 @@ export function branchesOfTile(w, tile) {
 
 const regrownOf = new WeakMap();   // world -> Set of the pieces a game put in the shared lists when a branch grew back
 
-export function createBranches(w, saved, felled = null) {
+export function createBranches(w, saved, felled = null, ground = null) {
   let regrown = regrownOf.get(w); if (!regrown) regrownOf.set(w, regrown = new Set());
   for (const b of regrown) { delete b.g; delete b.t; }   // another game on this world object grew these back: they are the original branches again
   regrown.clear();
   const taken = new Map();   // id -> the day it was taken
   const grown = new Map();   // id -> the day a regrown branch grew, kept for GROWN_KEEP days (saved, so the rain of before it grew stays off it)
   const extras = new Map();   // id -> a branch a felled crown left (never grows back)
-  const branches = { version: 0, dirty: new Set(), groundBranches, near, onGround, piece, take, update, addExtra, state };
+  const branches = { version: 0, dirty: new Set(), groundBranches, near, onGround, piece, take, update, addExtra, move, state };
   if (saved) {
     for (const e of saved.extra || []) if (Array.isArray(e) && e.length === 6 && e.every(Number.isFinite) && e[0] >= EXTRA_ID0 && !extras.has(e[0])) extras.set(e[0], { id: e[0], x: e[1], y: w.H(e[1], e[2]), z: e[2], len: e[3], a: e[4], rad: e[5], branch: true, extra: true });
     for (const [id, at] of saved.taken || []) if (piece(id)) taken.set(id, at);
@@ -119,6 +120,13 @@ export function createBranches(w, saved, felled = null) {
     const k = Math.floor(s / TILE_SPAN), tile = w.tiles[k]; if (!tile) return null;
     return branchesOfTile(w, tile)[s % TILE_SPAN] || null;
   }
+  const kept = id => { if (!ground || !ground.list.length) return false; const b = piece(id); return !!b && ground.coversPiece(b); };   // 0.36.2: the spot lies under a building's cleared region
+  function move(b, x, z, a, total = 0) {
+    if (!b || !b.branch || taken.has(b.id) || !piece(b.id)) return null;
+    if (b.extra) { branches.dirty.add(tileOf(b.x, b.z)); b.x = x; b.z = z; b.y = w.H(x, z); if (Number.isFinite(a)) b.a = a; branches.dirty.add(tileOf(x, z)); branches.version++; return b; }
+    taken.set(b.id, total); branches.dirty.add(tileOfId(b.id));
+    return addExtra({ x, z, len: b.len, a: Number.isFinite(a) ? a : b.a, rad: b.rad });
+  }
   function onGround(b) { return !taken.has(b.id); }
   function groundBranches(tile) {
     const out = branchesOfTile(w, tile).filter(onGround), k = tile.tz * NT + tile.tx;
@@ -141,7 +149,7 @@ export function createBranches(w, saved, felled = null) {
     let n = 0;
     taken.forEach((at, id) => {
       const when = back(id, at);
-      if (total < when || id >= EXTRA_ID0 || treeFelled(id)) return;   // a branch of a felled crown, or one under a felled tree, stays gone
+      if (total < when || id >= EXTRA_ID0 || treeFelled(id) || kept(id)) return;   // a branch of a felled crown, or one under a felled tree, stays gone
       taken.delete(id); n++; branches.dirty.add(tileOfId(id)); regrow(id, when);
     });
     for (const [id, g] of grown) if (total - g > GROWN_KEEP) grown.delete(id);
