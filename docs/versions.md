@@ -2,6 +2,32 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.33.4 "One hearth" — 2026-11-12
+
+Agreed with the user (the simplest fix): **beside a finished stone ring the fire is the one in the ring.** A second fire beside the ring arose when a fire already burned there before the ring was built: Dave chooses his site 5, 6.2 or 7.5 m from his fire (`SITE_RINGS`) and the ring stands `RING_AT` 2.2 m to the side of the lean-to, so the ring's middle lies sqrt(r^2 + 2.2^2) = 5.46, 6.58 or 7.82 m from the old fire; the 0.31.1 zone (`leantos.noFire`, 1 to 3.5 m) only stopped new fires, and the old one was fed on.
+
+**Cause.** The no-fire zone stopped lighting only; the arc offered 'feed' for any fire, and `fireAt` (game/mind) took any fire within 3.5 m of the fire spot as his fire (a ring 2.8 to 3.5 m from the old fire made him feed it).
+
+**The fix.**
+
+- **The radius (`game/leanto` `RING_NOFIRE`):** 8 m (was 3.5), still excluding the ring itself (d <= `RING_R`). Chosen because the farthest old fire of any site Dave can choose lies 7.82 m from the ring's middle (r = 7.5); 8 m holds it with 0.18 m to spare (the three cases 5.46, 6.58, 7.82 m are in `tests/oneHearth.test.js`, with the first 20 real sites on seed 1337). 6 m, as first said, would not have held the 6.2 and 7.5 m sites.
+- **Feeding (`game/game` `actionsAt`):** no 'feed' for a fire for which `leantos.noFire` holds, for the player and for Dave alike; the fire in the ring and any fire away from the ring are fed as before. An old fire beside the ring burns out and its burnt place fades as any. Lighting is refused there as before (`lightable`, 'kindle', the drill), now with the bigger radius.
+- **Torches:** unchanged; a torch can still be taken from such a fire while it burns (no inconsistency: the old fire is only left alone, not removed), and a torch can still be planted anywhere it could be.
+- **Dave (`game/mind` `fireAt`):** ignores a fire in the zone, so `feedFire`, `lightFire`, `gather` and the evening plans only know the fire in the ring; the site choice is unchanged, the hut's own no-fire rule is unchanged. The stray logic keeps its 3.5 m (`STRAY_ZONE`, and `ASIDE_RING` 4.2) so nothing else moves.
+
+**Measured (HEAD 0514f6d, 0.33.3, to this release; the same scripted lives; "zone" = a fire with flames more than `RING_R` and at most 8 m from the ring's middle, counted from the moment the ring is finished).**
+
+| life | zone fire hours (fires, feeds) | stuck | nopath | noStand | collapses | max thirst | max hunger | evenings with a fire in the ring |
+|---|---|---|---|---|---|---|---|---|
+| 1337, 60 d, home, s0 | 0 -> 0 | 8 -> 8 | 0 -> 0 | 21 -> 21 | 0 | 0.70 -> 0.70 | 0.75 -> 0.75 | 44 -> 44 of 60 |
+| 2024, 60 d, home, s0 | 0 -> 0 | 14 -> 14 | 0 | 0 | 0 | 0.70 | 0.74 | 44 -> 44 of 60 |
+| 7, 60 d, home, s0 | 0 -> 0 | 6 -> 6 | 5 -> 5 | 0 | 0 | 0.72 | 0.88 | 46 -> 46 of 60 |
+| 24 ten-day lives (sum) | 69.1 h in 6 lives (6 fires, 49 feeds) -> 0.3 h in 1 life (1 fire, 0 feeds) | 5 -> 5 | 0 -> 0 | 15 -> 14 | 0 | 0.75 -> 0.70 | 0.79 -> 0.82 | 41 -> 49 of 58 |
+
+The 60-day finished-home lives start with a burnt place at the old fire, so no old fire burns there (identical before and after, as intended: no regression). The 24 lives build the home from nothing: the six zone fires lasted 2.5 to 25.2 h each before (the old fire fed 6 to 15 times); now the one left burned 18 minutes after the ring was finished (it was already burning at that moment, nothing fed it), no second fire is lit in the zone (0 lit before and after), and evening fires in the ring 41 -> 49 of the 58 evenings after a ring (all evening fires, anywhere: 209 -> 211). The highest hunger of the 24 lives rose 0.79 -> 0.82 (one life, bound 1.5).
+
+**Tests.** `tests/oneHearth.test.js` (new, 5 tests: the geometry of the sites, the arc offers no feed for a fire 1.5, 5 or 7.5 m from a finished ring and does for one in the ring, beyond 8 m and with no ring, and a scripted evening of Dave with an old fire burning 5.5 m from his finished ring: he never feeds it, it burns out, he lights the ring's fire and no second fire is lit in the zone); `tests/fireRing.test.js` (the zone is 8 m, no flame offered for a pile 1.1 to 7.9 m from the ring's middle, one at 8.3 m is); the version assertion in `tests/devPanel.test.js`. Full `npm test`: green, 87 files, 1459 tests, 259 s. No render change, so no smoke.
+
 ## 0.33.3 "Routes" — 2026-11-12
 
 Agreed with the user: **make the planner reliable where it failed; no new behaviour.** `JOURNEY_RIM` and all rules of the mind are unchanged. Of two options, (a) fine nodes along routes was chosen over (b) (measured on 1635 walks: (b) no plan 3.0%, arrived 99.62%, stuck 21; (a) final no plan 2.2%, arrived 100%, stuck 3).

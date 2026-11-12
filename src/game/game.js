@@ -162,6 +162,7 @@
  *   `pieceCost('hut')` rest a piece. In a finished hut (`hutDone`) the sleep gets `hut: true` (game/sleep), no fire can be lit in or within half a metre of its walls (`leantos.noFire`), no torch is planted there and a burning torch
  *   is doused when he walks in.
  * 0.33.1 "Hearth": the middle of a finished stone ring takes a fuel pile despite the keep-free apron of the lean-to or hut (tested against the pile's own circle only) and CAMP_GAP (`blockedAt`: otherwise only a solid that really overlaps refuses it).
+ * 0.33.4 "One hearth": the no-fire zone round a finished stone ring is RING_NOFIRE (8 m, was 3.5) from the ring's middle, and 'feed' is not offered for a fire that lies in it (leantos.noFire): a fire beside the ring that burned before the ring was built is not fed and burns out, for the player and for Dave; the fire in the ring itself (and any fire away from the ring) is fed as before. Torches are unchanged (a torch can still be taken from such a fire while it burns).
  * 0.31.1 "Milk": 'light' (and 'kindle') is not offered for a pile that lies more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring (leantos.noFire): beside a ring a fire is lit only in the ring itself; a pile elsewhere is unaffected. It is not started either when the pile moved there meanwhile (no fibre is used).
  * 0.31 "Axe" (game/axe, game/felled, game/logs): small kinds `makeAxe` (no axe exists, no spear or torch in hand, exactly one branch under his arm and nothing else, a loose stone within REACH or a pile of stones within BESIDE, a tuft of fibre,
  *   dry ground: work kind 'makeAxe', AXE MAKE_TIME of kneeling; the branch, the stone and the tuft are all used up; after 'lay', before `makeSpear`, so the arc), `takeAxe` (empty arms and hands, the lying axe within REACH) and `layAxe` (the axe in his hand, dry
@@ -427,7 +428,7 @@ export function createGame(world, spawn, opts = {}) {
     const load = wood.load(), torch = !!fire.torch, swim = wet(hereAt(px, pz)), hand = spear.hand || axe.hand;   // 0.30.17: a spear in his hand fills it like a torch (no wood, no stone, no torch); 0.31: an axe too (only one of spear, axe and torch)
     const small = [];
     const blaze = load ? fire.find(px, pz, BESIDE, 'fire') : null;
-    if (blaze && dryPiece() && !full(blaze.fire)) small.push({ kind: 'feed', fire: blaze.fire, thing: blaze });   // dry wood beside a fire feeds it, whatever else is near
+    if (blaze && dryPiece() && !full(blaze.fire) && !leantos.noFire(blaze.fire.x, blaze.fire.z)) small.push({ kind: 'feed', fire: blaze.fire, thing: blaze });   // dry wood beside a fire feeds it, whatever else is near
     const cands = [];   // what else he could do; the nearest first
     if (!torch && !hand) {   // stones go in his hands (at most STONE_MAX), everything else under his arm (at most CARRY_MAX)
       const room = l => wood.log ? false : l.timber ? load === 0 : l.stone ? wood.stones.length < STONE_MAX : wood.carried.length < CARRY_MAX;   // 0.31: a log is carried alone

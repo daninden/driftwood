@@ -22,10 +22,10 @@ beforeAll(async () => {
 const lt = (x, z, up = { ring: 1 }) => ({ id: 0, x, z, heading: 0.7, progress: 1, up });
 
 describe('the zone where no fire is lit (game/leanto)', () => {
-  it('is more than the ring (1 m) and at most 3.5 m from its middle, only for a finished lean-to with a finished ring', () => {
+  it('is more than the ring (1 m) and at most 8 m from its middle, only for a finished lean-to with a finished ring', () => {
     const l = lt(spawn.x, spawn.z), rc = ringCentre(l), mk = list => { const s = createLeantos(); s.list.push(...list); return s; };
     const s = mk([l]);
-    expect(RING_NOFIRE).toBe(3.5);
+    expect(RING_NOFIRE).toBe(8);   // 0.33.4: was 3.5
     expect(s.noFire(rc.x, rc.z)).toBe(false); expect(s.noFire(rc.x + RING_R, rc.z)).toBe(false);          // in the ring itself
     expect(s.noFire(rc.x + RING_R + 0.05, rc.z)).toBe(true); expect(s.noFire(rc.x + 2, rc.z)).toBe(true); expect(s.noFire(rc.x, rc.z + RING_NOFIRE)).toBe(true);
     expect(s.noFire(rc.x + RING_NOFIRE + 0.1, rc.z)).toBe(false);                                           // further out: unaffected
@@ -43,10 +43,10 @@ describe('lighting beside the ring (game rule, the player and Dave alike)', () =
     return createGame(w, at, { time: 0.5, leantos: { list: [l], nextId: 1 }, wood: { carried: [], piles: [pile] }, fibre: { carried: 2 } });
   };
   const offers = g => g.actions().some(o => o.kind === 'light');
-  it('offers to light a pile in the ring, not one 1.1 to 3.5 m from its middle, and one further out as ever', () => {
+  it('offers to light a pile in the ring, not one 1.1 to 7.9 m from its middle (0.33.4: 8 m), and one further out as ever', () => {
     expect(offers(scene(0.3, 0))).toBe(true);
-    for (const d of [1.1, 1.9, 2.4, 3.4]) expect(offers(scene(d, 0)), 'd ' + d).toBe(false);
-    expect(offers(scene(4.2, 0))).toBe(true);
+    for (const d of [1.1, 1.9, 2.4, 3.4, 4.2, 5.5, 7.9]) expect(offers(scene(d, 0)), 'd ' + d).toBe(false);
+    expect(offers(scene(8.3, 0))).toBe(true);
     expect(offers(scene(1.9, 0, {}))).toBe(true);                       // no ring built: as before
   });
   it('does not start a fire from a pile beside the ring even when told to (no fibre is used)', () => {

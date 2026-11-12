@@ -56,6 +56,7 @@
  *   and the logs lying about within HOME_MAX_COST of walking), then loads of three branches and three fronds (as for the lean-to); needs and errands break in as ever (a log on his shoulder goes to a log pile: `handoff`), a piece of the hut built counts as a piece of the home built today (`builtDay`: the axe waits for another morning, and after the hut has used its twelve the
  *   axe's own rule, fewer than AXE_LOGS stored, fills a log pile again: timber for later). Before the first part the footprint must be clear (game `hutFits`): his own piles in it are carried out, a load at a time (`clearFootprint`: logs to a log pile, dry fuel, fronds and stones to a spot behind the hut, wet wood to the tideline), a fire place or burnt place is
  *   waited out (it fades in two days), a trunk, a boulder or ground that does not fit (or HUT_REFUSALS refusals by the game) means no hut there for good (`hutNever`; the home stays a lean-to). The reason `hutIntent` is said once, when the errand starts. `mind.stats.hut`, events `hut-start`, `hut-clear`, `hut-done`, `hut-never`, hooks `mind.hutPlan`, `mind.hutNever`, `mind.clearingTrees`, `mind.hutBlockers`, `mind.logsAvail`.
+ * 0.33.4 "One hearth": `fireAt` ignores a fire in the no-fire zone round a finished ring (game/leanto `noFire`, 8 m): an old fire beside the ring, from before the ring was built, is not fed (the game offers no 'feed' there), not lit again and not counted as his fire, so `feedFire`, `lightFire`, `gather` and the evening plans only know the fire in the ring and it burns out; the site choice is unchanged. The stray zone and the aside pile keep the 3.5 m of 0.31.1 (`STRAY_ZONE`).
  * 0.33.3 "Routes": `layAt` with an exact drop (the stray into the ring) tries another approach when the standing point cannot be reached, lies within a metre of another pile of fuel that would take the lay, or he stops more than 0.35 m short of it (found by a scene in which the pile laid beside the ring joined the stray and no fire was lit all evening).
  * 0.33.1 "Hearth": `centreStrays` asks `game.canPileAt` for the ring's middle before it takes a stray, stops for the day after a trip that left no fuel pile in the ring (stats.strayFails, strayRefused), and when the ring holds STRAY_ENOUGH (6) pieces; the walk counts a stall that ended as arrived as no stall (game/route).
  * 0.31.1 "Milk", the fire and the stone ring: with a finished ring only the stock pile in the ring can be lit (game/leanto `noFire`, game/game `lightable`); `ringMid`, `strays`, `centreStrays` carry a stray fuel pile within RING_NOFIRE of the ring's middle into the ring (idle goal at a calm moment, and before `lightFire`), and the aside pile beside a burning fire at the ring stands ASIDE_RING (RING_NOFIRE + 0.7) from it.
@@ -159,7 +160,7 @@ import { freshWater } from './water.js';
 import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX, PILE_FRONT, pileSolidRadius } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius, isGiant, treeInfo } from './felled.js';
 import { FIRE_MIN, FUEL_MAX, TORCH_DRY, BURN, DOUSE_DEPTH } from './fire.js';
-import { ringCentre, keepFree, KEEP, UPGRADES, RING_AT, RING_R, RING_NOFIRE, partsOf, built, nextKind, standFor, hutReady, hutDone, hutBegun, inHutBox, REACH as LEANTO_REACH } from './leanto.js';
+import { ringCentre, keepFree, KEEP, UPGRADES, RING_AT, RING_R, partsOf, built, nextKind, standFor, hutReady, hutDone, hutBegun, inHutBox, REACH as LEANTO_REACH } from './leanto.js';
 import { DAWN as SLEEP_DAWN, isNight } from './sleep.js';
 import { seaLevel } from './tide.js';
 import { EAT_AT } from './shells.js';
@@ -485,7 +486,7 @@ export function createMind(world, game, opts = {}) {
   const fuelOfPile = q => q.logs.reduce((n, l) => n + (l.branch ? 0.5 : 1), 0);   // in pieces of driftwood (a branch burns half as long)
   const firePiles = fs => W.piles.filter(q => (q.kind === 'driftwood' || q.kind === 'branch') && Math.hypot(q.x - fs.x, q.z - fs.z) <= 2.4);
   const bestPile = fs => firePiles(fs).sort((a, b) => fuelOfPile(b) - fuelOfPile(a))[0] || null;
-  const fireAt = fs => game.fire.fires.find(f => dist(f, fs) < 3.5 && (f.fuel > 0.005 || f.embers > 0.005)) || null;
+  const fireAt = fs => game.fire.fires.find(f => dist(f, fs) < 3.5 && (f.fuel > 0.005 || f.embers > 0.005) && !game.leantos.noFire(f.x, f.z)) || null;   // 0.33.4: a fire in the no-fire zone round a finished ring (an old fire beside it) is not his fire: not fed, not lit, not counted
   const pileKind = kind => kind === 'drift' || kind === 'timber' ? 'driftwood' : kind;
   const ownPile = q => {
     const fs = fireSpot();
@@ -919,10 +920,10 @@ export function createMind(world, game, opts = {}) {
   }
   // 0.31.1 "Milk": the stone ring's middle (null without a finished ring), the strays near it (piles of fuel more than a ring's radius from the middle but within the zone where no fire can be lit, game/leanto `noFire`),
   // and how a stray is carried into the ring: taken up, laid at the ring's middle (the pile that stands there, else a first pile by `exactPileDrop`). Only with no fire there (a fire is fed, not laid beside).
-  const ASIDE_RING = RING_NOFIRE + 0.7, STRAY_ENOUGH = 6;
+  const STRAY_ZONE = 3.5, ASIDE_RING = STRAY_ZONE + 0.7, STRAY_ENOUGH = 6;   // 0.33.4: the stray zone and the aside pile keep the 3.5 m of 0.31.1 (RING_NOFIRE is 8 m now, the whole zone where no fire is lit or fed)
   const ringMid = () => { const h = homeSpot(); return h.kind === 'leanto' && h.lt && game.leantos.has(h.lt, 'ring') ? ringCentre(h.lt) : null; };
   const isFuel = q => q.kind === 'driftwood' || q.kind === 'branch';
-  const strays = () => { const rc = ringMid(); return rc ? W.piles.filter(q => isFuel(q) && dist(q, rc) > RING_R - 0.1 && dist(q, rc) <= RING_NOFIRE + 0.3) : []; };
+  const strays = () => { const rc = ringMid(); return rc ? W.piles.filter(q => isFuel(q) && dist(q, rc) > RING_R - 0.1 && dist(q, rc) <= STRAY_ZONE + 0.3) : []; };
   let strayFailDay = -1;   // 0.33.1 "Hearth": the day a trip left no fuel pile in the ring: no more stray trips that day (never more than one failed trip an evening)
   function* centreStrays() {   // true when he moved wood
     const rc = ringMid(); if (!rc || fireAt(rc) || strayFailDay === clock.day) return false;

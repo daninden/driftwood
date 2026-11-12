@@ -69,7 +69,7 @@
  *     lean-to, or WALLS_WOOD / WALLS_FIRE when that one has side walls
  *   leantos.ring(x, z) -> true when (x, z) is within RING_R of the middle of a finished lean-to's finished stone ring
  *   leantos.inHut(x, z) -> the lean-to whose finished hut holds (x, z) inside its walls (0.33), or null
- *   leantos.noFire(x, z) -> true when (x, z) lies in the ring of no fire (0.31.1 "Milk"; 0.33: or in or within half a metre of a finished hut's walls): more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring. A fire cannot be lit there (game/game `lightable`): beside a ring a fire is lit only in the ring itself.
+ *   leantos.noFire(x, z) -> true when (x, z) lies in the ring of no fire (0.31.1 "Milk"; 0.33: or in or within half a metre of a finished hut's walls): more than RING_R but at most RING_NOFIRE (3.5 m until 0.33.3, 8 m from 0.33.4 "One hearth") from the middle of a finished lean-to's finished stone ring. A fire cannot be lit there (game/game `lightable`) and a fire already there is not fed (game/game `actionsAt`: no 'feed'; it burns out): beside a ring the fire is the one in the ring.
  *   leantos.covers(x, z, r) -> true when a finished lean-to's centre is within r (the rain stays off wood and fires there, game/weather)
  *   leantos.flood(sea) -> number of lean-tos the sea took
  *   leantos.state() -> { list, nextId }   plain, for saving
@@ -111,7 +111,7 @@ export const HUT_WALL_LOGS = [
 ];
 export const HUT_FRAME_N = 8, HUT_FRONDS_N = 12;
 export const HUT_REACH = 2.6;
-export const WALLS_WOOD = 2.5, WALLS_FIRE = 3, RING_AT = 2.2, RING_R = 1, RING_NOFIRE = 3.5;
+export const WALLS_WOOD = 2.5, WALLS_FIRE = 3, RING_AT = 2.2, RING_R = 1, RING_NOFIRE = 8;   // 0.33.4: 8 m (was 3.5): Dave's site is 5, 6.2 or 7.5 m from his fire and the ring RING_AT to the side, so the old fire lies sqrt(r^2 + RING_AT^2) = 5.46, 6.58 or 7.82 m from the ring's middle: always inside
 
 export const partsOf = what => PARTS[what];
 export const pieceCost = what => (what === 'leanto' ? BUILD_COST : what === 'hut' ? HUT_COST : UP_COST) / PARTS[what].length;
