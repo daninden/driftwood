@@ -10,7 +10,7 @@
  *
  * LOG_SEGS, pileSlots(n) -> [{ row, side }]   the layout of a pile (pure): lateral place in units of PITCH and the row of each log, bottom row first
  * logEnds(H, log) -> [A, B]   the two ends of a lying log (THREE.Vector3, on the ground)
- * addLog(B, H, log)   one lying log; addTimberPile(B, H, pile)   a pile of logs; addCutMarks(B, kit, w, tile, felled)   the cut marks of the felled trees that stood on a tile
+ * addRound(B, a, b, r, id)   one log between two points with its outline hull (0.33: the hut's posts and walls are drawn with it); addLog(B, H, log)   one lying log; addTimberPile(B, H, pile)   a pile of logs; addCutMarks(B, kit, w, tile, felled)   the cut marks of the felled trees that stood on a tile
  * timberGeo, timberMat   the shape and material (shared; the carried log of render/hero and the falling tree use them)
  * createTimberView(scene, world, kit, logs) -> { addTile, dropTile, update, hold }   the logs lying on each detailed tile, rebuilt only on the tiles in logs.dirty when logs.version changes;
  *   hold(ids | null)   keeps those logs out of sight (the tree that left them is still falling, render/felling), null shows them again
@@ -56,7 +56,7 @@ export function logEnds(H, log) {
 }
 
 /** One log between two points: the log itself and its outline hull (a hull of its own, reaching a finger's width past the ends). */
-function addRound(B, a, b, r, id) {
+export function addRound(B, a, b, r, id) {
   B.add('tbr', timberGeo, timberMat, stickMatrix(a, b, r), shade(id), {});
   const d = new THREE.Vector3().subVectors(b, a).normalize().multiplyScalar(0.03);
   B.add('tbo', timberGeo, outlineMat, stickMatrix(a.clone().sub(d), b.clone().add(d), r * 1.14 + 0.004), 0xffffff, { cast: false, receive: false });

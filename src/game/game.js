@@ -56,6 +56,7 @@
  *   game.wildlife               crabs, fish and birds within 30 m of him: atmosphere only, not saved (game/wildlife)
  *   game.fireflies              the fireflies within 30 m of him, from dusk to an hour before sunrise: atmosphere only, not saved (game/fireflies)
  *   game.siteFits(c)            0.32: does a lean-to fit at c = { x, z, heading } (dry ground, no other site within SITE_APART, nothing in its walls or in the region that stays free); game.yaw(y?) reads (and with a number sets) the camera yaw a new lean-to opens towards (update reads input.yaw into it)
+ *   game.hutFits(l)             0.33 "Hut": does a hut fit round finished lean-to l (`hutReady`): dry, standable, level (HUT_SLOPE 0.5 m) ground at its corners, door and middle, no other site within HUT_APART 4.8 m, no trunk, boulder, pile, fire place or burnt place touching its walls or inside it (the stone ring and the lean-to are no hindrance); pure. Not asked once the first part is built
  *   game.lackAt(x?, z?)         0.30.20: what is missing for an action that is almost possible there (default: where he stands): 'needSpear' | 'spearAway' | 'needFibre' | 'needMoreWood' | null (pure, game/lack; the voice says it)
  *   game.onAction(listener)     optional presentation notification when a deliberate action is accepted; listeners receive { kind, x, z }, alter no game state and are not saved
  *   game.weather                the schedule of showers (game/weather); game.rain: the intensity of the rain now, 0..1 (0.21:
@@ -155,6 +156,10 @@
  * 0.30.17 "Spear" (game/spear, game/fish): `makeSpear` (a small kind, after 'lay', so the arc and not the ring: no spear exists, exactly one branch under his arm and nothing else carried, a stone loose within REACH or a pile of stones within BESIDE, on dry ground; MAKE_TIME of kneeling, the branch is used up, the stone stays; the spear is in his hand), `fish` (the spear in his hand, standing in shallow sea water, `fishableAt`, fewer than 2 fish carried: the ring; FISH_TIME standing, a fish with the seed's chance),
  *   `takeSpear` (empty arms and hands, the lying spear within REACH, nearest first with the other small kinds) and `laySpear` (the spear in his hand, on dry ground; always offered after the nearer things, so the arc keeps it within reach; it lies at his feet). A spear in his hand fills it like a torch: no pickup of wood, fronds or stones, no torch taken, no sitting; it goes down beside him when he sleeps. 'roast' takes a crab or a fish (`food`: whichever was caught first), game.use('fish') roasts a fish from the row. A new pile keeps 0.55 m + its own radius + BODY from a lying spear.
  *
+ * 0.33 "Hut" (part 1): the hut is built into a finished lean-to (walls, bed and ring done) with the big kind 'upgrade' and `what: 'hut'` (`piece`: the kind of the next part, `start: true` for the first part), within HUT_REACH (2.6 m)
+ *   of its middle: a log on his shoulder (wood.log; `piecesHeld` has 'log'; `wood.giveLog` uses it up) for the first 12 parts, then branches, then fronds; the first part only where `hutFits(l)`. Work kind 'upgrade', PIECE_TIME a piece,
+ *   `pieceCost('hut')` rest a piece. In a finished hut (`hutDone`) the sleep gets `hut: true` (game/sleep), no fire can be lit in or within half a metre of its walls (`leantos.noFire`), no torch is planted there and a burning torch
+ *   is doused when he walks in.
  * 0.31.1 "Milk": 'light' (and 'kindle') is not offered for a pile that lies more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring (leantos.noFire): beside a ring a fire is lit only in the ring itself; a pile elsewhere is unaffected. It is not started either when the pile moved there meanwhile (no fibre is used).
  * 0.31 "Axe" (game/axe, game/felled, game/logs): small kinds `makeAxe` (no axe exists, no spear or torch in hand, exactly one branch under his arm and nothing else, a loose stone within REACH or a pile of stones within BESIDE, a tuft of fibre,
  *   dry ground: work kind 'makeAxe', AXE MAKE_TIME of kneeling; the branch, the stone and the tuft are all used up; after 'lay', before `makeSpear`, so the arc), `takeAxe` (empty arms and hands, the lying axe within REACH) and `layAxe` (the axe in his hand, dry
@@ -183,7 +188,7 @@ import { createBranches } from './branches.js';
 import { createFronds } from './fronds.js';
 import { createStones } from './stones.js';
 import { createForage, BERRIES, BANANAS, BERRY_FOOD, BANANA_FOOD } from './forage.js';
-import { createLeantos, keepFree, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH } from './leanto.js';
+import { createLeantos, keepFree, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH, hutReady, hutDone, hutBegun, hutKind, inHutBox, HUT, HUT_REACH } from './leanto.js';
 import { YAW } from '../core/view.js';
 import { createThirst } from './thirst.js';
 import { createHunger } from './hunger.js';
@@ -200,7 +205,7 @@ import { createWildlife } from './wildlife.js';
 import { createFireflies } from './fireflies.js';
 import { createWeather, FALLING } from './weather.js';
 import { createFire, full, FIRE_MIN, DRILL_TIME, DRILL_COST, DOUSE_DEPTH, TORCH_DRY, TORCH_COST, BRANCH_BURN } from './fire.js';
-import { solidObstacles, gapFree, sameFirePlace, leantoCircles, leantoPoint, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT } from './obstacles.js';
+import { solidObstacles, gapFree, sameFirePlace, leantoCircles, leantoPoint, hutCircles, HUT_R, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT } from './obstacles.js';
 import { createPath } from './path.js';
 import { createRoute } from './route.js';
 import { createStand } from './stand.js';
@@ -237,7 +242,7 @@ export function createGame(world, spawn, opts = {}) {
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.spear = spear.hand; player.axe = axe.hand; player.thirsty = thirst.level(); player.hungry = hunger.level();
   const voiceListeners = new Set();
   const notifyAction = kind => { for (const listener of voiceListeners) listener({ kind, x: player.x, z: player.z }); };
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, hutFits, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
   const stand = game.stand = createStand(game, world, { BESIDE });   // 0.30.3 "Routes": standing points (game/stand), asked by the click on a pile or fire and by the walk to the spot of a light, a build or an upgrade
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
@@ -295,14 +300,15 @@ export function createGame(world, spawn, opts = {}) {
     return u.final ? tg : u.target;
   }
 
+  const inHutWalls = (x, z) => leantos.list.some(l => hutDone(l) && inHutBox(l, x, z, -0.5));   // 0.33: no torch in a finished hut or at its walls
   function plantSpot(px = player.x, pz = player.z) {   // a step in front, in the dry ground
     const x = px + Math.sin(player.heading) * 0.4, z = pz + Math.cos(player.heading) * 0.4;
-    return !wet(terrainAt(world, x, z, game.sea)) && !wet(hereAt(px, pz)) ? { x, z } : null;
+    return !wet(terrainAt(world, x, z, game.sea)) && !wet(hereAt(px, pz)) && !inHutWalls(x, z) ? { x, z } : null;
   }
   function plantBesideSpot(px = player.x, pz = player.z) {   // for drinking: behind or beside him, on dry ground (he stands at the water)
     for (const r of [0.4, 0.8]) for (const a of [Math.PI, Math.PI / 2, -Math.PI / 2, Math.PI * 0.75, -Math.PI * 0.75, 0]) {
       const x = px + Math.sin(player.heading + a) * r, z = pz + Math.cos(player.heading + a) * r;
-      if (!wet(terrainAt(world, x, z, game.sea))) return { x, z };
+      if (!wet(terrainAt(world, x, z, game.sea)) && !inHutWalls(x, z)) return { x, z };
     }
     return null;
   }
@@ -325,8 +331,8 @@ export function createGame(world, spawn, opts = {}) {
   }
   // 0.32 "Piece by piece": a site is built piece by piece with what he carries (game/leanto). The kinds he has: driftwood, branches and fronds under his arm, stones in his hands.
   let viewYaw = YAW;   // the camera's yaw at the last update (input.yaw): the way the open side of a new lean-to faces; the mind may write it before it presses
-  const piecesHeld = () => { const ks = new Set(wood.carried.map(kindOf)); if (wood.stones.length) ks.add('stone'); return ks; };
-  const handsFree = () => !fire.torch && !spear.hand && !axe.hand && !wood.log;
+  const piecesHeld = () => { const ks = new Set(wood.carried.map(kindOf)); if (wood.stones.length) ks.add('stone'); if (wood.log) ks.add('log'); return ks; };
+  const handsFree = () => !fire.torch && !spear.hand && !axe.hand;   // (0.33: a log on his shoulder is no hindrance: it is a piece of the hut, and no other piece is carried with it)
   const naturalNear = (x, z) => {   // the trunks, boulders and crags within 4.5 m of a point (each once)
     const seen = new Set();
     for (let dx = -3; dx <= 3; dx += 3) for (let dz = -3; dz <= 3; dz += 3) for (const o of obstaclesNear(world, x + dx, z + dz)) if (Math.hypot(o.x - x, o.z - z) < 4.5 + o.r) seen.add(o);
@@ -343,6 +349,26 @@ export function createGame(world, spawn, opts = {}) {
     for (const o of movement.obstacles.camp.near(c.x, c.z, 4.5)) { for (const h of hyp) if (Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) return false; if (keep.touches(o.x, o.z, o.r)) return false; }
     return true;
   }
+  /** 0.33 "Hut": does the hut fit round lean-to l? Its corners and middle are dry, standable ground within HUT_SLOPE of one another in height, no other site within HUT_APART, and no trunk, boulder, pile, fire place or burnt place
+   *  touches its walls or its inside (the region of `inHutBox` grown by the clearance of a wall circle); the stone ring and the lean-to itself are no hindrance (pure). */
+  const HUT_SLOPE = 0.5, HUT_APART = 4.8;
+  function hutFits(l) {
+    if (!hutReady(l)) return false;
+    const dry = (x, z) => !wet(terrainAt(world, x, z, game.sea)) && canStand(world, x, z, game.sea);
+    let lo = Infinity, hi = -Infinity;
+    for (const [f, r] of [[0, 0], [HUT.back, -HUT.half], [HUT.back, HUT.half], [HUT.front, -HUT.half], [HUT.front, HUT.half], [(HUT.back + HUT.front) / 2, -HUT.half], [(HUT.back + HUT.front) / 2, HUT.half], [HUT.back, 0], [HUT.front, -HUT.door], [HUT.front, HUT.door]]) {
+      const q = leantoPoint(l, f, r); if (!dry(q.x, q.z)) return false;
+      const y = world.H(q.x, q.z); if (y < lo) lo = y; if (y > hi) hi = y;
+    }
+    if (hi - lo > HUT_SLOPE) return false;
+    if (leantos.list.some(o => o !== l && Math.hypot(o.x - l.x, o.z - l.z) < HUT_APART)) return false;
+    const inBox = (x, z, r) => { const m = -(HUT_R + r); return inHutBox(l, x, z, m); };   // the disc of radius r at (x, z) touches the walls or the inside
+    for (const o of naturalNear(l.x, l.z)) if (inBox(o.x, o.z, o.r)) return false;
+    for (const o of movement.obstacles.camp.near(l.x, l.z, 4.5)) if (o.g.kind !== 'leanto' && inBox(o.x, o.z, o.r)) return false;
+    return true;
+  }
+  // the kind of hut piece he could build into finished lean-to l with what he holds (the first part also needs the footprint to fit)
+  const hutPiece = (l, have) => { const k = hutKind(l); return k && have.has(k) && (hutBegun(l) || hutFits(l)) ? k : null; };
   function siteIn(px, pz) {   // a piece he could build in now: into a half-built lean-to within LEANTO_REACH that needs the kind of a piece he holds, else into an upgrade of a finished one within UP_REACH (nearest first)
     if (wet(hereAt(px, pz)) || !handsFree()) return null;
     const have = piecesHeld(); if (!have.size) return null;
@@ -350,9 +376,11 @@ export function createGame(world, spawn, opts = {}) {
     for (const l of leantos.list) {
       const d = Math.hypot(l.x - px, l.z - pz);
       if (l.progress < 1) { if (d <= LEANTO_REACH && have.has(nextKind(l)) && d < bd) { bd = d; best = { kind: 'buildIn', what: 'leanto', piece: nextKind(l), leanto: l, x: l.x, z: l.z }; } continue; }
-      if (d > UP_REACH || d >= bd) continue;
-      const what = UP_ORDER.find(k => have.has(nextKind(l, k)));
-      if (what) { bd = d; best = { kind: 'upgrade', what, piece: nextKind(l, what), leanto: l, x: l.x, z: l.z }; }
+      if (d >= bd) continue;
+      const what = d <= UP_REACH ? UP_ORDER.find(k => have.has(nextKind(l, k))) : null;
+      if (what) { bd = d; best = { kind: 'upgrade', what, piece: nextKind(l, what), leanto: l, x: l.x, z: l.z }; continue; }
+      const hk = d <= HUT_REACH ? hutPiece(l, have) : null;   // 0.33: the hut, with a log on his shoulder, then branches, then fronds
+      if (hk) { bd = d; best = { kind: 'upgrade', what: 'hut', piece: hk, start: !hutBegun(l), leanto: l, x: l.x, z: l.z }; }
     }
     return best;
   }
@@ -475,7 +503,7 @@ export function createGame(world, spawn, opts = {}) {
   }
 
   function yaw(y) { if (Number.isFinite(y)) viewYaw = y; return viewYaw; }   // the way a new lean-to opens (the camera's yaw): read, or set with a number
-  const takePiece = kind => kind === 'stone' ? !!wood.giveStone() : !!wood.giveOne(l => kindOf(l) === kind);   // the piece is used up (a stone is already out of the ground)
+  const takePiece = kind => kind === 'stone' ? !!wood.giveStone() : kind === 'log' ? !!wood.giveLog() : !!wood.giveOne(l => kindOf(l) === kind);   // the piece is used up (a stone is already out of the ground)
 
   /** 0.27.2 'Row': use a drawing of the inventory row at once. kind: 'nut' | 'water' | 'berries' | 'banana' | 'crab'. Returns true when it was started
    *  (a nut, water and a crab kneel; berries and a banana are eaten at once), false when nothing happened. Hunger and thirst never go below 0,
@@ -541,7 +569,7 @@ export function createGame(world, spawn, opts = {}) {
       const have = piecesHeld(); let what = null;
       if (a.kind === 'buildHere') what = siteFits(a.site) && have.has(PARTS.leanto[0]) ? 'leanto' : null;
       else if (lt && a.kind === 'buildIn') what = lt.progress < 1 && have.has(nextKind(lt)) ? 'leanto' : null;
-      else if (lt && lt.progress >= 1) what = UP_ORDER.find(k => have.has(nextKind(lt, k))) || null;
+      else if (lt && lt.progress >= 1) what = UP_ORDER.find(k => have.has(nextKind(lt, k))) || (hutPiece(lt, have) ? 'hut' : null);
       if (what && !wet(here())) { work = { kind: a.kind === 'upgrade' ? 'upgrade' : 'build', t: 0, dur: PIECE_TIME, thing: lt, site: a.kind === 'buildHere' ? a.site : null, what }; face(a); notifyAction(a.kind === 'upgrade' ? 'upgrade' : 'build'); }
       else stoop();
       return;
@@ -563,6 +591,7 @@ export function createGame(world, spawn, opts = {}) {
         lt = leantos.start(wk.site.x, wk.site.z, wk.site.heading);
       } else if (!leantos.list.includes(lt)) return;
       const kind = wk.what === 'leanto' ? nextKind(lt) : nextKind(lt, wk.what);
+      if (wk.what === 'hut' && !hutBegun(lt) && !hutFits(lt)) return;   // 0.33: the first part of a hut only if it still fits
       if (!kind || (wk.what !== 'leanto' && lt.progress < 1) || !takePiece(kind)) { if (wk.site) leantos.list.splice(leantos.list.indexOf(lt), 1); return; }
       leantos.build(lt, wk.what);
       return;
@@ -626,10 +655,11 @@ export function createGame(world, spawn, opts = {}) {
     if (sleep.asleep) { if (wantWake && sleep.lie > 0.5) { sleep.wake(); if (input.cancelAction) input.cancelAction(); } }   // the press that woke him does nothing more
     else if (wantSleep && canSleep()) { work = null; queued = null; sleep.start(isNight(clock.time)); notifyAction('sleep'); }   // by day only a nap
     if (sleep.asleep && fire.torch && !plantTorch()) fire.douse();   // he sticks the torch in the ground before he lies down
+    if (fire.torch && leantos.inHut(player.x, player.z)) fire.douse();   // 0.33: no torch burns inside a finished hut
     if (sleep.asleep && spear.hand) spear.lay(player.x, player.z);   // 0.30.17: and lays the spear down beside him
     if (sleep.asleep && axe.hand) axe.lay(player.x, player.z);   // 0.31: and the axe
     settle();
-    const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z), { drain: thirst.drain() * hunger.drain(), faint: thirst.faint() }, (lt => lt ? { walls: leantos.has(lt, 'walls'), bed: leantos.has(lt, 'bed') } : false)(leantos.home(player.x, player.z)));
+    const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z), { drain: thirst.drain() * hunger.drain(), faint: thirst.faint() }, (lt => lt ? { walls: leantos.has(lt, 'walls'), bed: leantos.has(lt, 'bed'), hut: hutDone(lt) } : false)(leantos.home(player.x, player.z)));
     settle();
     player.lie = sleep.lie; player.tired = sleep.tired(); player.thirsty = thirst.level(); player.hungry = hunger.level();
     if (work && (sleep.asleep || wantsToMove(input))) work = null;   // stopped early

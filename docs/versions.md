@@ -2,6 +2,65 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.33.0 "Hut" — 2026-11-11
+
+Agreed in outline with the user on 2026-11-11 (the lean-to's front view needs no change: a matter of perspective; **no dry corner for firewood** in the hut; the home may grow into several small buildings later, a store being a separate annex). **A finished home (lean-to with walls, bed and ring) is rebuilt into a hut of logs, branches and fronds on the same spot, piece by piece, for the player and for Dave: 4 logs, 8 logs, 8 branches, 12 fronds. Dave builds it as the last step of his home once the trees that touch its footprint are felled and twelve logs lie ready.** Everything is in `docs/design.md` under *Hut*; the code is described in `docs/architecture.md`, *The hut*.
+
+**Part 1 (game, render, player, save).**
+
+- **The recipe (`game/leanto` `PARTS.hut`), 32 parts in this order:** 4 logs (the corner posts), 8 logs (the low walls: the back, the two sides, each in two rows, and a short log either side of the door), 8 branches (the roof frame: a beam at the front, a beam at the back, six rafters), 12 fronds (a thick roof, laid like thatch shingles across the slope). About 3 m wide and 2.5 m deep (`HUT`), the doorway (1.2 m) in the front wall towards the stone ring. The hut is the field `l.hut` (built parts / 32) of the lean-to it grows from, not a second record: the bed, the ring and every effect stay where they are; the save has an optional `hut` per lean-to (old saves have none; only a lean-to that was a home can have one).
+- **Building it (`game/game`, `game/stand`, `game/wood`):** the arc's big kind `upgrade` with `what: 'hut'` (`piece` the kind of the next part, `start: true` for the first), within `HUT_REACH` 2.6 m of the lean-to's middle, 4 s of kneeling a piece (`PIECE_TIME`), the whole hut costing twice a lean-to in rest (`HUT_COST`). A log is carried alone on the shoulder (as in 0.31) and used up (`wood.giveLog`); branches and fronds are carried as for the lean-to. The first part only where `game.hutFits(l)`: dry standable level ground (0.5 m) at its corners, door and middle, no other site within 4.8 m, and no trunk, boulder, pile, fire place or burnt place touching its walls or inside it; once begun nothing more is checked.
+- **While it rises:** the lean-to keeps its parts, effects and collision; the posts and walls are solid part by part (`game/obstacles` `hutCircles`, `HUT_R` 0.34), the door stays open and is really walked through (`game/fine` adds the outline's corners to the finer layer of the finder). The region that stays free of wood is the hut's footprint from its first part. When the last frond is laid the lean-to's parts, walls and collision go.
+- **Finished:** a cold sleep inside lasts the whole night and rests `HUT_REST` 95 % of a night's (the bed included); wood inside stays dry; the rain is muffled more and darker (`HUT_MUFFLE`, a lower cutoff); no fire and no torch inside or within half a metre of the walls (a burning torch is doused when he walks in). **The roof turns see-through** (`render/veil`: a stipple of an ordered 4 x 4 pattern fixed to the screen, 60 % thrown away, eased in and out, per hut) while the castaway is inside; the walls stay.
+- **Render and icons:** exactly the parts built so far (logs drawn with `timber.addRound`, a finished hut has no lean-to under it), two new ink icons (a small hut with its door open; the same with a log and an arrow down into it). `scripts/hut-smoke.js` (`npm run smoke:hut`) shows the stages.
+- **Part 1's open points (looked at in the smoke images, not changed):** the log on either side of the door (the "door" logs) look slightly lower than the other walls; the old lean-to's front posts poke through the new roof while the hut is being built (they go when the roof is closed).
+- **Tests:** `tests/hut.test.js`, 42 tests (the recipe, when a hut can start and `hutFits`, building it piece by piece, collision with the door open really walked through, the fine layer following a hut that rises, what a finished hut does, saving and old saves, the drawing, the icons, the veil, the rain inside).
+
+**Part 2 (`game/mind`, Dave's hut).**
+
+- **The step (`homeNext` 'hut', `hutPlan`):** after the walls, ring and bed. The hut has its turn when **no standing tree he can reach touches the footprint** (`clearingTrees`: the axe fells nearest first; the rest of its 10 m clearing is no condition) and **12 logs** (`HUT_LOGS`: what the first twelve parts need) lie in the log piles, about or on his shoulder; the footprint must fit or be clearable. Otherwise the reason is kept (`mind.stats.hut.waits`): trees, logs, fire, never.
+- **A unit is one log, then loads of three:** the log from the nearest (by walking cost, at most `HOME_MAX_COST`) log pile (its top log) or a log lying about (`fetchHutLog`), carried alone to the hut and built in with the arc's 'upgrade'; then loads of three branches and three fronds as for the lean-to. He keeps at it unit after unit in the home's window (`HOME_FROM` to `HOME_TO`) while he finds material; needs and errands break in as ever, and a log on his shoulder at a need goes to a log pile (`handoff`). A piece of the hut built counts as a piece of the home built that day: the axe waits for another morning.
+- **The axe and the hut:** the hut is a home step, so it comes before the axe in the idle goal; on a morning with no material for it the project cools down and the axe has its turn. The axe's rule is unchanged: when the hut has used its twelve logs, fewer than twelve are stored and it fells (clearing first, then the nearest trees up to 32 m) and fills a log pile again: timber for later.
+- **The footprint (`clearFootprint`, `hutBlockers`, `hutSpot`):** before the first part his own piles in it are carried out, one load at a time (at most `HUT_CLEAR_TRIPS` 14): logs to a log pile, dry fuel, fronds and stones to a spot behind the hut (`hutSpot`, 4.6 to 6.2 m from its middle on its back half; fuel is fetched from there like any pile when the stock at the ring runs low), wet wood to the tideline. A fire place or a burnt place is waited out (a burnt place fades in two days). A trunk, a boulder or ground that does not fit, or three refusals by the game at the first part, means no hut there (`hutNever`): the home stays a lean-to.
+- **Voice:** one reason, `hutIntent` ("Time for a proper roof.", "A real hut, at last.", "This shelter can become a hut.", "I want walls and a proper roof."), said once when the hut errand starts.
+- **Choices made while building it that the user did not decide:** (1) the hut waits only for the trees that touch its footprint, not for the whole 10 m clearing (a forest island's clearing takes the axe one tree a morning for months: seed 7 had 19 trees standing within 10 m after 42 days); (2) it starts with 12 logs ready and no sooner (not with the first log: a half-built hut would stand, solid, for weeks); (3) one log a unit (a log is carried alone); (4) the hut comes before the axe in the idle goal and the axe refills a log pile afterwards (the agreed "at least one pile"); (5) a pile in the way is never carried back to the ring: a pile laid near the one in the way joins it (measured: a loop of 42 trips) and off-axis piles round the door crowd it (stuck 53 against 6), so fuel, fronds and stones go to a spot behind the hut and the evening's gathering fetches the fuel from there; (6) no hut on a footprint that cannot fit (the ground is not changed); (7) numbers: `HUT_TREE_R` 5 m, `HUT_REFUSALS` 3, `HUT_PLAN_SECS` 10.
+- **Three things the long runs found and part 2 fixed (the ten-day lives never reach a hut):** (a) *walled in:* on seed 7 he stood in the pocket between the lean-to's side wall and the hut's right wall when the part there rose, and was embedded in it for good (70 collapses, hunger 3): the standing points of the hut (`game/stand`) are now never inside the hut's walls or within a body of them; (b) *the keep-free region:* part 1 widened it to the hut's footprint as soon as a home was complete, which pushed the piles of every complete home into scattered piles round the door (a 30-day life: stuck 15 to 143); it now widens when the first part is begun, and Dave carries the piles out of the footprint first (`clearFootprint`); (c) *wood he could not put down:* with the hut begun, the spots of `campSpot` (the handoff's fallback) lay in the region the game refuses, so three branches stayed in his arms for days; `campSpot` now avoids every keep-free region.
+- **Tests:** `tests/hutMind.test.js`, 13 tests (`homeNext` pure; when it starts: each reason told apart, logs lying about count, never where it cannot fit; the whole build over days: 32 parts in order, one tick a part, several units a day, loads of one log, three branches, three fronds, the lean-to solid until the last frond, every night after it in the hut, the axe lying at the camp, no collapse, no thirst or hunger beyond the bounds; the standing points of the hut (never inside its walls); a thirst in the middle of it goes to drink first, no log lost; an old-save camp with piles of fuel and fronds in the footprint gets them moved and then builds; a burnt place in the footprint is waited out); `tests/clearing.test.js` runs without the hut (`hutNever`: the axe's rules are looked at on their own); `tests/voice.test.js` lists `hutIntent`.
+- **Result of the full `npm test` before the push:** green, 83 files, 1433 tests, 218 s on four cores.
+- **Measured** (scratch copy of 0.32.1 at 89769ab against 0.33.0; scripts in the session's scratch folder, not in the repository):
+
+| 24 ten-day lives (seeds 1337, 2024, 7, walked and fresh, streams 0 to 3) | 0.32.1 | 0.33.0 |
+|---|---|---|
+| lean-to / walls / ring / bed: lives, mean day | 22 / 4.2, 20 / 6.2, 18 / 6.7, 13 / 7.2 | the same |
+| huts started | (none) | 0 (the home is complete on day 7 at the earliest and the hut needs a clearing and 12 logs: it never comes within ten days) |
+| max thirst / max hunger | 0.78 / 0.86 | 0.78 / 0.86 |
+| collapses / errors | 0 / 0 | 0 / 0 |
+| stuck / nopath | 94 / 3 | 94 / 3 |
+| nights slept (of 216), journeys, exploring trips, fishing trips | 210, 27, 43, 24 | 210, 27, 43, 24 |
+| crabs eaten | 77 | 76 |
+
+The ten-day lives are the same as before but for one crab (so the safety bounds of `tests/mindLife*` hold with their numbers unchanged).
+
+| 8 thirty-day lives (1337 and 2024, walked and fresh, streams 0 and 1) | |
+|---|---|
+| huts started / finished within the 30 days | 6 / 3 (started on days 25 to 29; 24, 18, 8 of 32 parts at day 30 in the others) |
+| waiting for trees (1337 walked 1) / no hut on this footprint (1337 walked 0, `hutNever`, once) | 1 / 1 |
+| max thirst / max hunger, collapses, errors | 0.70 / 0.77, 0, 0 |
+| stuck (355; 206 of them in 1337 walked 1, as at 0.32.1) / nopath | 355 / 0 |
+| nights slept in the hut (after the roof) | 0 to 2 in the lives that finished |
+
+| "Finished home on day 2" (the first site he would choose, ground of a first day known, 60 days, streams 0 and 1) | hut starts / done (day) | days it took | logs fetched | footprint refusals / never | piles cleared | nights in the hut | max thirst / hunger | collapses | stuck (0.32.1) / nopath |
+|---|---|---|---|---|---|---|---|---|---|
+| 1337, stream 0 | 25 / 28 | 3 | 12 | 0 / 0 | 3 | 28 of 61 | 0.69 / 0.77 | 0 | 272 (105) / 0 |
+| 1337, stream 1 | 19 / 22 | 3 | 13 | 0 / 0 | 0 | 34 of 62 | 0.68 / 0.77 | 0 | 43 / 0 |
+| 2024, stream 0 | 20 / 24 | 4 | 13 | 0 / 0 | 0 | 32 of 61 | 0.70 / 0.77 | 0 | 222 (256) / 2 |
+| 2024, stream 1 | 20 / 25 | 5 | 13 | 0 / 0 | 0 | 32 of 61 | 0.70 / 0.72 | 0 | 69 / 1 |
+| 7, stream 0 | 20 / 30 | 10 | 12 | 0 / 0 | 1 | 31 of 60 | 0.80 / 0.82 | 0 | 146 / 0 |
+| 7, stream 1 | 17 / 27 | 10 | 13 | 0 / 0 | 0 | 33 of 61 | 0.79 / 0.81 | 0 | 58 / 2 |
+
+  The hut starts on day 17 to 26 after a home that was finished on day 2 (the axe's clearing of the footprint's trees and twelve logs take that long: one tree a morning), and takes 3 to 10 days (the mornings of the home's window, with the journeys and crab trips in between). The stuck counts are the old stalls at the log piles (0.32.1: 105 and 256 in the same runs), not at the hut. "Logs fetched" can exceed twelve by a log carried to a pile again at a need.
+- **Smoke:** `npm run build` and the quick `npm run smoke` (CHROME_PATH set): ok, no error, 12 min 52 s.
+
 ## 0.32.1 "Watcher" — 2026-11-11
 
 Tooling cleanup agreed with the user. **The playtest bot only watches now:** its own scripted player (its goals, building from piles, clicking and choosing actions, its own path finding and bans) is gone; `npm run playtest` always lets Dave's own habit (`game/mind`) live in the built page and logs metrics, events, errors, screenshots and the daily save/load round trip (`--mind` is still accepted and does nothing). `scripts/playtest-lib.js` exports only `createMind`; the playtest takes `CHROME_PATH` like the other smoke scripts. `game/path`: `ban`/`banned` removed (nothing used them any more). No change to the game.

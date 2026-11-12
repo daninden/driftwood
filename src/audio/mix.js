@@ -26,10 +26,10 @@
  * stepsCrossed(prev, phase) -> how many steps the figure took between two walk phases (one per PI)
  * stepOf(ground, player, carried) -> { ground, gain, heavy, run }   one footstep
  * gullLevel(birds, x, z) -> 0..1
- * rainLevel(rain, covered) -> 0..1 the rain layer's share of LEVELS.rain: the intensity, less than half of it under a roof
+ * rainLevel(rain, covered, hut) -> 0..1 the rain layer's share of LEVELS.rain: the intensity, less than half of it under a roof (ROOF_MUFFLE), a quarter of it inside a finished hut (0.33, HUT_MUFFLE)
  * hissLevel(d) -> 0..1 how loud a fire put out by the rain d metres away is heard (0 beyond HISS_REACH)
  * mixOf(s) -> { surf, river, wind, rustle, howl, fire, crickets, gulls, rain }   the targets, each { gain, ... }
- *   (s.rain: the intensity 0..1, s.covered: standing under a lean-to; both optional)
+ *   (s.rain: the intensity 0..1, s.covered: standing under a lean-to, s.hut: inside the walls of a finished hut (darker still, 0.33); all optional)
  * createMixer(world) -> { update(s, dt) -> { levels, steps, work, hisses, pant }, reset() }   remembers the walk phase and
  *   looks round him only about four times a second (or when he has gone a few metres); hisses: [gain] for each fire the
  *   rain put out since the last call (s.fire.hissed counted up, heard from s.fire.hissAt; none on the first call);
@@ -48,6 +48,7 @@ export const LEVELS = { surf: 0.34, river: 0.17, wind: 0.14, rustle: 0.07, howl:
 
 export const COAST_REACH = 100, RIVER_REACH = 12, FIRE_REACH = 15, GULL_REACH = 30, HISS_REACH = 30;
 export const ROOF_MUFFLE = 0.45;   // under a lean-to the rain is this much of its loudness, and darker
+export const HUT_MUFFLE = 0.25;   // 0.33 "Hut": inside the walls of a finished hut it is muffled more, and darker still
 const RAYS = 16, RAY_STEPS = [1.5, 3, 5, 8, 12, 18, 26, 36, 48, 64, 84, 100];
 export const SWELL_MAX = 0.045;   // metres: the most `breath` swings (0.03 + 0.015)
 export const WET_BAND = 0.3;      // sand lower than this above the sea is wet
@@ -104,7 +105,7 @@ export function fireLevel(fire, x, z, held = false) {
   return clamp(best, 0, 1);
 }
 
-export const rainLevel = (rain, covered = false) => clamp(rain || 0, 0, 1) * (covered ? ROOF_MUFFLE : 1);
+export const rainLevel = (rain, covered = false, hut = false) => clamp(rain || 0, 0, 1) * (hut ? HUT_MUFFLE : covered ? ROOF_MUFFLE : 1);
 export const hissLevel = d => (1 / (1 + (d / 6) ** 2)) * (1 - ss(HISS_REACH - 8, HISS_REACH, d));
 
 export function groundOf(t, sea) {
@@ -147,7 +148,7 @@ export function mixOf(s) {
     fire: { gain: LEVELS.fire * fl, rate: fl > 0.005 ? 3 + 22 * fl : 0 },
     crickets: { gain: LEVELS.crickets * night * s.sense.forest },
     gulls: { gain: LEVELS.gulls * gl, rate: gl > 0.01 ? 0.06 + 0.5 * gl : 0 },
-    rain: { gain: LEVELS.rain * rainLevel(s.rain, s.covered), cutoff: s.covered ? 1900 : 7500 },
+    rain: { gain: LEVELS.rain * rainLevel(s.rain, s.covered, s.hut), cutoff: s.hut ? 1100 : s.covered ? 1900 : 7500 },
   };
 }
 
@@ -159,7 +160,7 @@ export function createMixer(world) {
     if (!sense || sinceSense >= SENSE_EVERY || Math.hypot(p.x - at.x, p.z - at.z) > SENSE_MOVED) {
       sense = senseAround(world, p.x, p.z, s.sea); at = { x: p.x, z: p.z }; sinceSense = 0;
     }
-    const levels = mixOf({ x: p.x, y: p.y, z: p.z, sense, day: s.day, wind: s.wind, waterTime: s.waterTime, fire: s.fire, birds: s.birds, held: !!p.torch, rain: s.rain, covered: s.covered });
+    const levels = mixOf({ x: p.x, y: p.y, z: p.z, sense, day: s.day, wind: s.wind, waterTime: s.waterTime, fire: s.fire, birds: s.birds, held: !!p.torch, rain: s.rain, covered: s.covered, hut: s.hut });
     const hisses = [], hissed = s.fire.hissed || 0;
     if (hissedBefore !== null && hissed > hissedBefore && s.fire.hissAt) hisses.push(LEVELS.hiss * hissLevel(Math.hypot(s.fire.hissAt.x - p.x, s.fire.hissAt.z - p.z)));
     hissedBefore = hissed;

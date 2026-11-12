@@ -36,11 +36,18 @@
  *   camp.hit(a, b, margin?) -> the first circle the segment a -> b comes nearer to than r + margin (no escape rule), or null
  * solidObstacles(wood, fire, leantos) -> (x, z, reach?) -> [{ x, z, r, dynamic }]   the callback game/movement and game/path take as `obstacles`; its `.camp` is the camp view
  *
- * Depends on: game/movement (BODY), game/wood (pileSolidRadius), game/leanto (solid)
+ * 0.33 "Hut": a lean-to with a hut (`l.hut`, game/leanto) has the circles of the hut's parts built so far (`hutCircles(l, n)`: a post is one circle, a wall a connected line of circles from its first log on, the
+ * opening in the front wall stays open: 0.52 m between the end circles for his centre); the lean-to's own circles stand until the hut is finished (`hutDone`) and then go. The group of a lean-to that has begun a hut
+ * carries `hut: true` and a `:h` in its id (game/fine makes the hut's outline nodes for it).
+ *
+ * HUT_R   the clearance radius of a hut's post or wall circle (the log, 0.14, and the body)
+ * hutCircles(l, n = 32) -> [{ x, z, r }]   the collision circles of l's hut with its first n parts built (real or hypothetical)
+ *
+ * Depends on: game/movement (BODY), game/wood (pileSolidRadius), game/leanto (solid, built, hutDone, HUT_POSTS, HUT_WALL_LOGS)
  */
 import { BODY } from './movement.js';
 import { pileSolidRadius } from './wood.js';
-import { solid } from './leanto.js';
+import { solid, built, hutDone, HUT_POSTS, HUT_WALL_LOGS } from './leanto.js';
 
 // Dynamic obstacles give movement the clearance to a castaway's centre, unlike
 // rendered dimensions which stop at the visible edge.
@@ -52,6 +59,7 @@ const PLAN_MARGIN = 0.05;   // the clearance game/walk keeps from a circle when 
 export const CAMP_GAP = 2 * BODY + 2 * PLAN_MARGIN;
 const FIRE_SAME = 0.8;
 
+export const HUT_R = 0.34;
 export const LEANTO_BACK = -0.8, LEANTO_SIDE = 0.92, LEANTO_FRONT = 0.65;
 const LEANTO_STEP = 0.3, BUCKET = 3;
 const EMPTY = Object.freeze([]);
@@ -83,6 +91,18 @@ export function leantoCircles(l) {
   return out;
 }
 
+/** 0.33: the circles of a hut's first n parts: the posts (parts 1 to 4), then each wall line from its first solid log on (the door pieces and the low row of the back and the sides). Connected, 0.3 m apart. */
+export function hutCircles(l, n = 32) {
+  const out = [], put = (f, r) => { const q = leantoPoint(l, f, r); out.push({ x: q.x, z: q.z, r: HUT_R }); };
+  HUT_POSTS.forEach(([f, r], i) => { if (n > i) put(f, r); });
+  HUT_WALL_LOGS.forEach((w, i) => {
+    if (!w.solid || n < 5 + i) return;
+    const k = Math.max(1, Math.ceil(Math.hypot(w.f1 - w.f0, w.r1 - w.r0) / LEANTO_STEP));
+    for (let j = 0; j <= k; j++) put(w.f0 + (w.f1 - w.f0) * j / k, w.r0 + (w.r1 - w.r0) * j / k);
+  });
+  return out;
+}
+
 const mm = v => Math.round(v * 1000);
 
 /** The cached camp view (see the header). */
@@ -97,20 +117,21 @@ export function campSolids(wood, fire, leantos) {
     for (const p of wood.piles) { mix(1); mix(mm(p.x)); mix(mm(p.z)); mix(mm(pileSolidRadius(p))); }
     for (const f of fire.fires) { mix(2); mix(mm(f.x)); mix(mm(f.z)); }
     for (const f of fire.burnt) { mix(3); mix(mm(f.x)); mix(mm(f.z)); }
-    for (const l of leantos.list) { mix(4); mix(mm(l.x)); mix(mm(l.z)); mix(mm(l.heading)); mix(solid(l) ? 1 : 0); }
+    for (const l of leantos.list) { mix(4); mix(mm(l.x)); mix(mm(l.z)); mix(mm(l.heading)); mix(solid(l) ? 1 : 0); mix(built(l, 'hut')); mix(hutDone(l) ? 1 : 0); }
     return [a, b, n];
   }
 
   function rebuild() {
     const circles = [], groups = [];
-    const group = (kind, q, r, extra) => { const g = { id: `${kind[0]}:${mm(q.x)}:${mm(q.z)}:${mm(r)}${extra ? ':' + mm(extra.heading) : ''}`, kind, x: q.x, z: q.z, r, ...(extra || {}) }; groups.push(g); return g; };
+    const group = (kind, q, r, extra) => { const g = { id: `${kind[0]}:${mm(q.x)}:${mm(q.z)}:${mm(r)}${extra ? ':' + mm(extra.heading) + (extra.hut ? ':h' : '') : ''}`, kind, x: q.x, z: q.z, r, ...(extra || {}) }; groups.push(g); return g; };
     const add = (g, q, r) => circles.push({ x: q.x, z: q.z, r, dynamic: true, g });
     for (const p of wood.piles) { const r = pileSolidRadius(p) + BODY; add(group('pile', p, r), p, r); }
     for (const f of fire.fires) add(group('fire', f, FIRE_R), f, FIRE_R);
     for (const b of fire.burnt) add(group('burnt', b, FIRE_R), b, FIRE_R);
     for (const l of leantos.list) {
-      const g = group('leanto', l, LEANTO_R, { heading: l.heading });
-      if (solid(l)) for (const c of leantoCircles(l)) add(g, c, c.r);   // (the shape is shared with the hypothetical lean-to of game/mind's siting); 0.32: a site has walls from its first roof branch on
+      const nh = built(l, 'hut'), g = group('leanto', l, LEANTO_R, { heading: l.heading, ...(nh > 0 ? { hut: true } : {}) });
+      if (solid(l) && !hutDone(l)) for (const c of leantoCircles(l)) add(g, c, c.r);
+      if (nh > 0) for (const c of hutCircles(l, nh)) add(g, c, c.r);   // (the shape is shared with the hypothetical lean-to of game/mind's siting); 0.32: a site has walls from its first roof branch on
     }
     buckets = new Map(); rmax = 0; x0 = z0 = Infinity; x1 = z1 = -Infinity;
     for (const o of circles) {

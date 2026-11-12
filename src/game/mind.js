@@ -6,7 +6,7 @@
  * (a walk target, a press of the action button, a click on an icon of the arc, Z, a click on the row) and so can do only what a
  * player could do. It looks at the island only where the castaway has been (game/known): its targets and its paths stay inside the
  * known cells and 1.5 m away from their edge (`inside`), so he does not wander off into land he has not seen, except on a search (below) and on an exploring trip (0.29.4). Since 0.29.9 a target at a dynamic solid's centre is approached at its rim, so the same actions still work. It never wakes him from sleep and never starts a sleep before he could choose to.
- * It builds only one thing: his home (0.29.3 "Homestead", below); every other kind of the arc it never chooses, except (0.31 "Axe", below) making the one axe, felling trees with it and carrying and piling the logs once his home is complete.
+ * It builds only one thing: his home (0.29.3 "Homestead", below; since 0.33 "Hut" it ends in a hut); every other kind of the arc it never chooses, except (0.31 "Axe", below) making the one axe, felling trees with it and carrying and piling the logs once his home is complete.
  *
  * What he does, in this order of priority (`chooseGoal`, pure, on a plain snapshot of the needs and the time of day):
  *   1 drink   thirst >= THIRST_GO (0.35 days; BED_THIRST 0.25 from SUPPER_FROM 0.64 to LIGHT_FROM 0.74): a full shell is drunk, else he walks to the nearest known fresh river water and kneels (knowing none, he searches, below);
@@ -51,6 +51,11 @@
  *   (`journeyLight`: `goStand('light')` and the arc's light, up to the tufts he has); he builds nothing and sleeps on the ground by it. If there is no wood, no fibre or the lighting fails, he sleeps cold. In the morning he walks home by the planner (a fall back to the known ground and then to `pathFree`) and the journey ends when he is home. He turns back at once
  *   at thirst VERY_AT or hunger VERY_HUNGER_AT or when rain comes (`journeyBrake`, pure). `mind.stats.journey` counts them; `mind.journeyAim` is the test hook for the target.
  * 0.31.1 "Milk": on a journey, more than MILK_AWAY (60 m) from home, when the drink goal fires with no full shell and known fresh water further than MILK_WATER (60) of path cost, `milkGoal` husks a coconut from the ground within MILK_NUT_COST (40) of path and drinks its milk (a nut the game keeps carried because hunger is low is eaten at once through the row; never a carried nut of the stores), up to MILK_MAX (3) while still thirsty; else the drink goal as before. `journeyFill` (end of `journeyBegin`) fills empty shells at known water within NEAR_WATER (40 m, path cost at most FILL_BEGIN_COST 60) before he leaves. `mind.stats.journey.milk`, `.milkTrips`, `.filled` count them.
+ * 0.33 "Hut": THE HUT, the last step of the home project (`homeNext` 'hut', `hutPlan`, `fetchHutLog`, `clearFootprint`, `hutSpot`; docs/architecture.md, "The hut"). When his home is complete (lean-to, walls, ring, bed), no standing tree he can reach touches the hut's footprint (`clearingTrees`: the axe fells nearest first; the rest of its 10 m clearing is no condition) and
+ *   HUT_LOGS (12: what the first twelve parts need) logs lie in the log piles, about or on his shoulder, he rebuilds the lean-to into a hut through the player's own 'upgrade' action (`what: 'hut'`), piece by piece, in the home's window and at its pace: a UNIT is one log (carried alone: `fetchHutLog` takes the nearest of the log piles' top logs
+ *   and the logs lying about within HOME_MAX_COST of walking), then loads of three branches and three fronds (as for the lean-to); needs and errands break in as ever (a log on his shoulder goes to a log pile: `handoff`), a piece of the hut built counts as a piece of the home built today (`builtDay`: the axe waits for another morning, and after the hut has used its twelve the
+ *   axe's own rule, fewer than AXE_LOGS stored, fills a log pile again: timber for later). Before the first part the footprint must be clear (game `hutFits`): his own piles in it are carried out, a load at a time (`clearFootprint`: logs to a log pile, dry fuel, fronds and stones to a spot behind the hut, wet wood to the tideline), a fire place or burnt place is
+ *   waited out (it fades in two days), a trunk, a boulder or ground that does not fit (or HUT_REFUSALS refusals by the game) means no hut there for good (`hutNever`; the home stays a lean-to). The reason `hutIntent` is said once, when the errand starts. `mind.stats.hut`, events `hut-start`, `hut-clear`, `hut-done`, `hut-never`, hooks `mind.hutPlan`, `mind.hutNever`, `mind.clearingTrees`, `mind.hutBlockers`, `mind.logsAvail`.
  * 0.31.1 "Milk", the fire and the stone ring: with a finished ring only the stock pile in the ring can be lit (game/leanto `noFire`, game/game `lightable`); `ringMid`, `strays`, `centreStrays` carry a stray fuel pile within RING_NOFIRE of the ring's middle into the ring (idle goal at a calm moment, and before `lightFire`), and the aside pile beside a burning fire at the ring stands ASIDE_RING (RING_NOFIRE + 0.7) from it.
  * 0.30.21: journey beds and the sleep fallback are never on a climbing route (the sleep key is refused there): `journeyBed` takes a spot beside the fire on ordinary ground, and the refusal fallback of `sleepGoal` (`ringSpot`) prefers ordinary ring spots, keeping the old one if none qualifies.
  * 0.29.4 "Wander": EXPLORING, a pastime of the idle goal. Now and then (`exploreChance`, pure: by day, EXPLORE_FROM 0.2 to EXPLORE_TO 0.52, thirst and hunger well below the point where he goes for them, no crab trip to make; at most one trip a day, one in
@@ -104,7 +109,8 @@
  * sitKind(s) -> 'gaze' | 'fire' | 'rest' | null   pure (0.29.2): whether he sits while he rests (s: time, long, fireNear, gazing)
  * DRY_AT, TIDE_LAND, TIDE_NEAR, TIDE_CAMP, TIDE_APART, TIDE_JOIN_MAX, TIDE_COST, STOCK_MAX_COST, TORCH_TRIP, TORCH_FUEL   (0.30.13 / 0.30.14) the numbers of the tideline and of the torch
  * axeNext(s) -> bool   pure (0.31): does the axe project have its turn now (s: day, time, done (the home is complete), builtDay, axeDay, thirst, hunger, cool)
- * homeNext(s) -> 'leanto' | 'walls' | 'ring' | 'bed' | null   pure (0.29.3): the next piece of his home now (s: day, time, fire (he has a camp), lean ('none' | 'half' | 'done' | 'other'), up {walls, ring, bed: 0..1}, cool); HOME_FROM, HOME_TO (0.32: until the afternoon), AXE_TO (the axe's morning window)
+ * HUT_TREE_R, HUT_LOGS, HUT_CLEAR_TRIPS, HUT_PILE_RINGS, HUT_REFUSALS, HUT_PLAN_SECS   (0.33 "Hut") the numbers of Dave's hut: the trees that count for the footprint, the logs that must lie ready, the trips to clear it, where the piles carried out go, the refusals he takes, the plan's lifetime
+ * homeNext(s) -> 'leanto' | 'walls' | 'ring' | 'bed' | 'hut' | null   pure (0.29.3): the next piece of his home now (s: day, time, fire (he has a camp), lean ('none' | 'half' | 'done' | 'other'), up {walls, ring, bed: 0..1}, hut (0.33: the hut has its turn), cool); HOME_FROM, HOME_TO (0.32: until the afternoon), AXE_TO (the axe's morning window)
  * SET_SPAN, HANDOFF_SECS   (0.30.4) the reach of a set of pieces to fetch (m of walking beyond the nearest) and the time a goal gets on top of its limit for the handoff
  * RANK   the priority of each goal (lower wins)
  * errandPreempts(current, next, errand, thirst, hunger) -> bool  0.29.8 preemption rule, pure
@@ -136,7 +142,7 @@
  * 0.30.10 "Walls": he is never boxed in by his own camp. Every pile he lays (through the game's lay, `wood.drop`), the pile places of the upgrades (`homeNeed`, a gap from every pile and fire place instead of the 1.5 m from other piles), the tideline spot (`tideSpot`) and the leftovers of a build keep CAMP_GAP of walking room from the other solids (game/obstacles `gapFree`), so no ring of solids can close round him. (0.32: the building piles, their pair and the pile places of the upgrades are gone.)
  *
  * 0.32 "Piece by piece": the shelter is built from pieces he holds (game/leanto, game/game kinds 'buildHere', 'buildIn', 'upgrade'), not from piles; the home project above (HOME_FROM to HOME_TO, a load of up to three pieces at a time, built in piece by piece) replaces the pile pair, the upgrade piles, `wetForSite`, the one-piece-a-day limit and the adopting of a player's pair of piles.
- * Depends on: game/felled (treeId, treeInfo, trunkRadius ...), game/axe and game/logs (through game), game/path, game/route, game/stand (through game.stand), game/weather (through game.weather: the forecast and the rain of a journey), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (PARTS, built, nextKind, standFor, UPGRADES, ringCentre, keepFree), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
+ * Depends on: game/felled (treeId, treeInfo, trunkRadius ...), game/axe and game/logs (through game), game/path, game/route, game/stand (through game.stand), game/weather (through game.weather: the forecast and the rain of a journey), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (PARTS, built, nextKind, standFor, UPGRADES, ringCentre, keepFree, hutReady, hutDone, hutBegun, inHutBox), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -144,13 +150,13 @@ import { createPath } from './path.js';
 import { createRoute } from './route.js';
 import { canStand, terrainAt, obstaclesNear, PACE, WALK_SPEED, BODY } from './movement.js';
 import { asCamp, segmentClear } from './walk.js';
-import { leantoCircles, leantoPoint, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT, PILE_R, CAMP_GAP, gapFree } from './obstacles.js';
+import { leantoCircles, leantoPoint, LEANTO_BACK, LEANTO_SIDE, LEANTO_FRONT, PILE_R, CAMP_GAP, gapFree, HUT_R } from './obstacles.js';
 import { DAY_SECONDS } from './clock.js';
 import { freshWater } from './water.js';
 import { dryness, logTop, kindOf, inStripY, CARRY_MAX, STONE_MAX, PILE_FRONT, pileSolidRadius } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius, isGiant, treeInfo } from './felled.js';
 import { FIRE_MIN, FUEL_MAX, TORCH_DRY, BURN, DOUSE_DEPTH } from './fire.js';
-import { ringCentre, keepFree, KEEP, UPGRADES, RING_AT, RING_R, RING_NOFIRE, partsOf, built, nextKind, standFor, REACH as LEANTO_REACH } from './leanto.js';
+import { ringCentre, keepFree, KEEP, UPGRADES, RING_AT, RING_R, RING_NOFIRE, partsOf, built, nextKind, standFor, hutReady, hutDone, hutBegun, inHutBox, REACH as LEANTO_REACH } from './leanto.js';
 import { DAWN as SLEEP_DAWN, isNight } from './sleep.js';
 import { seaLevel } from './tide.js';
 import { EAT_AT } from './shells.js';
@@ -173,6 +179,8 @@ export const CRAB_TIDE = -0.2, CRAB_FROM = 0.38, CRAB_TO = 0.66, CRAB_FOOD_TO = 
 export const HOME_DAY = 2, HOME_FROM = 0.21, HOME_TO = 0.56, AXE_TO = 0.44, HOME_LIMIT = 480, HOME_MAX_COST = 50, HOME_ORDER = ['walls', 'ring', 'bed'];   // 0.29.3 "Homestead": he builds his home from day 2 (the third day); 0.32 "Piece by piece": from the morning (HOME_FROM) to HOME_TO (a little before the evening's chores begin, EVENING 0.6), piece after piece while he finds material, no limit of a piece a day; the axe keeps the old morning window (HOME_FROM to AXE_TO). A crab trip at low water comes first
 // 0.31 "Axe": once the home is complete (lean-to, walls, ring, bed) he makes ONE axe and then fells at most one tree a morning (the home's window): first every tree whose trunk stands within AXE_CLEAR_R of the lean-to's middle, nearest first, then, while fewer than AXE_LOGS logs are stored, the nearest trees just beyond it (up to AXE_OUT_R)
 export const AXE_CLEAR_R = 10, AXE_OUT_R = 32, AXE_LOGS = 12, AXE_LIMIT = 540, AXE_RANGE = 60, AXE_FIBRE = 2, AXE_THIRST = 0.25, AXE_HUNGER = 0.3, AXE_RETRY_DAYS = 6, LOG_RING = [11.6, 12.1, 12.6];   // a tree he cannot reach is asked again after AXE_RETRY_DAYS; the log piles stand 11.6 to 12.6 m from the lean-to's middle
+// 0.33 "Hut": the last step of the home project: the lean-to is rebuilt into a hut, piece by piece (4 logs, 8 logs, 8 branches, 12 fronds). It starts when the home is complete, the clearing is open (no standing tree he can reach touches the hut's footprint: the axe fells the nearest trees first, so these go first; the rest of the 10 m clearing is no condition) and HUT_LOGS (12: the logs of the first twelve parts) lie in the log piles or about; before the first part the movable piles in the footprint are carried out (HUT_CLEAR_TRIPS at most), a burnt place or fire place in it is waited out, a trunk, boulder or a ground that does not fit means no hut there (`hutNever`)
+export const HUT_TREE_R = 5, HUT_LOGS = 12, HUT_CLEAR_TRIPS = 14, HUT_PILE_RINGS = [4.6, 5.4, 6.2], HUT_REFUSALS = 3, HUT_PLAN_SECS = 10;   // HUT_REFUSALS: refusals by the game at the first part before he gives the hut up; HUT_PLAN_SECS: how long a plan of `hutPlan` is kept
 export const SITE_RINGS = [5, 6.2, 7.5], SITE_HIGH = 0.8, SITE_LEVEL = 0.3, SITE_SLOPE = 0.25, SURROUND = 2.1, UP_NEAR = 4;   // UP_NEAR: the camp round a finished lean-to (the piles within it are his own, `ownPile`)   // the lean-to's site: 4 to 7 m from the home fire, 0.8 m above the high-water line (the sea stands at 0 at high water), the footprint level within 0.3 m
 // 0.29.4 "Wander": now and then, by day and when nothing presses, he goes exploring to the edge of what he knows, on his own terrace, and is home well before dark
 export const EXPLORE_FROM = 0.2, EXPLORE_TO = 0.52, EXPLORE_BACK = 0.6, EXPLORE_MARGIN = 0.012, EXPLORE_DETOUR = 1.5, EXPLORE_SPARE = 45, EXPLORE_LIMIT = 900, EXPLORE_ROUTE = 0.12;   // starts between FROM and TO, is home by BACK (where the evening's chores begin), with a margin; ground with a climbing route of more than EXPLORE_ROUTE is closed
@@ -232,7 +240,7 @@ export function homeNext(s) {
   if (s.lean === 'half') return 'leanto';
   if (s.lean === 'none') return s.fire ? 'leanto' : null;
   if (s.lean !== 'done') return null;
-  return HOME_ORDER.find(k => !(s.up && s.up[k] >= 1)) || null;
+  return HOME_ORDER.find(k => !(s.up && s.up[k] >= 1)) || (s.hut ? 'hut' : null);   // 0.33: then the hut (s.hut: the clearing is open, the logs lie ready and the footprint fits or can be cleared)
 }
 
 /** 0.31 "Axe": does the axe project have its turn now (pure)? His home is complete (s.done: lean-to, walls, ring and bed), the day is from HOME_DAY, it is the home's morning window (HOME_FROM to HOME_TO), no piece of the home was finished today and no unit of the axe's work was done today (one tree, one log, or the axe itself a day),
@@ -361,7 +369,7 @@ export function createMind(world, game, opts = {}) {
   const MARGIN = 1.5, DIAG = MARGIN * 0.75;
   const inside = (x, z) => known.hasAround(x, z, MARGIN, DIAG);   // the nine points: (x, z), MARGIN along the axes, DIAG on the diagonals (0.30.5 "Quicker": one lookup where they share a cell)
   const path = createPath(world, { allow: inside, allowVersion: () => known.count, obstacles: game.movement.obstacles }), pathFree = createPath(world, { obstacles: game.movement.obstacles });   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
-  const stats = { axe: { made: 0, madeDay: -1, trips: 0, felled: 0, inner: 0, outer: 0, palms: 0, giants: 0, logs: 0, laid: 0, skipped: 0, stuck: 0, fails: 0, felledDays: [], list: [] }, tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, spearsMade: 0, spearStuck: 0, fishTrips: 0, fishTries: 0, fishTripTriesMax: 0, fishCaught: 0, fishEaten: 0, journey: { started: 0, completed: 0, nights: 0, fires: 0, cold: 0, noTarget: 0, back: { thirst: 0, hunger: 0, rain: 0, nopath: 0, late: 0 }, stranded: 0, wood: 0, husked: 0, milk: 0, milkTrips: 0, filled: 0, list: [] }, events: [] };
+  const stats = { axe: { made: 0, madeDay: -1, trips: 0, felled: 0, inner: 0, outer: 0, palms: 0, giants: 0, logs: 0, laid: 0, skipped: 0, stuck: 0, fails: 0, felledDays: [], list: [] }, tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, hut: { units: 0, parts: 0, startDay: -1, startTime: null, doneDay: -1, doneTime: null, logsFetched: 0, noLog: 0, cleared: 0, clearFails: 0, never: 0, refused: 0, waits: {} }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, spearsMade: 0, spearStuck: 0, fishTrips: 0, fishTries: 0, fishTripTriesMax: 0, fishCaught: 0, fishEaten: 0, journey: { started: 0, completed: 0, nights: 0, fires: 0, cold: 0, noTarget: 0, back: { thirst: 0, hunger: 0, rain: 0, nopath: 0, late: 0 }, stranded: 0, wood: 0, husked: 0, milk: 0, milkTrips: 0, filled: 0, list: [] }, events: [] };
   const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring && !journeyLeg; }, get journeying() { return !!journey; }, get journeyLeg() { return journeyLeg; }, get journey() { return journey; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let journey = null, journeyLeg = false, journeyDue = JOURNEY_DAY, journeyTried = -9;   // 0.30.19: the journey in hand (it outlasts goals and sleep), the first day of the next one, the day a start was last tried
   const hb = opts.saved && typeof opts.saved === 'object' ? opts.saved : null, wholeDay = v => Number.isInteger(v) && v >= -9 && v < 1e6;   // 0.31.1: what a reload remembers of his habits (`mind.state`); a bad or missing field keeps its start value
@@ -1146,7 +1154,7 @@ export function createMind(world, game, opts = {}) {
     const h = homeSpot(); let lean = 'none', up = null;
     if (h.kind === 'leanto') { lean = 'done'; up = h.lt.up || {}; }
     else if (game.leantos.list.length) lean = game.leantos.list.some(l => l.progress < 1 && inside(l.x, l.z)) ? 'half' : 'other';
-    return { day: clock.day, time: clock.time, fire: h.kind === 'fire' || h.kind === 'bed', lean, up, builtDay, cool: { home: isCool('home') } };
+    return { day: clock.day, time: clock.time, fire: h.kind === 'fire' || h.kind === 'bed', lean, up, hut: h.kind === 'leanto' && hutPlan(h).go, builtDay, cool: { home: isCool('home') } };
   }
   // ---------- the lean-to's site (0.30.7 "Clearing") ----------
   // A site is a lean-to { x, z, heading } checked as the real one: its collision circles (game/obstacles `leantoCircles`, the very ones `campSolids` gives the built lean-to) and its keep-free region (game/leanto `keepFree`) must not touch a trunk, boulder or crag nor a solid of the camp;
@@ -1240,10 +1248,9 @@ export function createMind(world, game, opts = {}) {
     return h.kind === 'leanto' && nextKind(h.lt, what) ? { what, lt: h.lt } : null;
   }
   const remaining = w => partsOf(w.what).slice(w.lt ? built(w.lt, w.what) : 0);   // the kinds of the parts the site still needs, in order
-  const loadOf = w => { const rest = remaining(w); return rest.slice(0, rest[0] === 'stone' ? STONE_MAX : CARRY_MAX); };   // the next load: up to three pieces (two stones)
-  const heldKinds = () => [...W.carried.map(kindOf), ...W.stones.map(() => 'stone')];
-  const homeCarry = w => {   // what is in his arms already is the start of the next load: nothing else (no log, no torch)
-    if (W.log) return false;
+  const loadOf = w => { const rest = remaining(w); return rest.slice(0, rest[0] === 'stone' ? STONE_MAX : rest[0] === 'log' ? 1 : CARRY_MAX); };   // the next load: up to three pieces (two stones, 0.33: one log, carried alone)
+  const heldKinds = () => [...W.carried.map(kindOf), ...W.stones.map(() => 'stone'), ...(W.log ? ['log'] : [])];
+  const homeCarry = w => {   // what is in his arms already is the start of the next load: nothing else (no torch; a log only for the hut's next part)
     const load = loadOf(w).slice(); for (const k of heldKinds()) { const i = load.indexOf(k); if (i < 0) return false; load.splice(i, 1); }
     return true;
   };
@@ -1253,6 +1260,7 @@ export function createMind(world, game, opts = {}) {
     return yield* errand(function* () {
       const kinds = [...new Set(load)];
       for (const kind of kinds) {
+        if (kind === 'log') { if (!(yield* fetchHutLog())) { stats.hut.noLog++; ev('home-no-material', { kind }); break; } continue; }   // 0.33: a log of the hut, from a log pile or lying about
         const goal = load.filter(k => k === kind).length, pk = kind, held = () => kind === 'stone' ? W.stones.length : W.carried.filter(l => kindOf(l) === pk).length;
         if (held() >= goal) continue;
         yield* collect(PIECE_SRC[kind], {
@@ -1271,7 +1279,7 @@ export function createMind(world, game, opts = {}) {
   }
   function* buildPieces(w) {   // presses the build action for each piece in his arms, from beside the site: 'buildHere' (the new site, started where he stands), 'buildIn' (a half-built lean-to), 'upgrade'; kneels until each is done (or he is called away)
     let lt = w.lt; const kind = w.what === 'leanto' ? 'buildIn' : 'upgrade';
-    think(kind === 'upgrade' ? 'upgradeIntent' : 'buildIntent');   // 0.30.20: the reason, before he walks to the spot
+    if (w.what !== 'hut') think(kind === 'upgrade' ? 'upgradeIntent' : 'buildIntent');   // 0.30.20: the reason, before he walks to the spot (0.33: the hut has its own, said when its errand starts)
     if (!lt) {
       const site = w.site, st = standFor(site);   // the lean-to opens the way the site was validated (a quarter turn from the line to the fire): he stands where its middle comes to lie SITE_AT behind him, facing that way
       headingWanted = site.heading; inp.yaw = site.heading; game.yaw(site.heading);
@@ -1288,7 +1296,7 @@ export function createMind(world, game, opts = {}) {
       const mine = o => o.leanto === lt && (kind === 'upgrade' ? o.what === w.what : true);
       const before = built(lt, w.what);
       if (!pressKind([kind], mine)) {
-        if (!(yield* goStand(kind, lt)) || !pressKind([kind], mine)) { stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join() }); cool('home', 300); return false; }
+        if (!(yield* goStand(kind, lt)) || !pressKind([kind], mine)) { stats.home.refused++; ev('home-not-offered', { kind, arc: game.action().options.map(o => o.kind).join() }); cool('home', 300); if (w.what === 'hut' && !hutBegun(lt) && ++stats.hut.refused >= HUT_REFUSALS) { hutNever.add(lt.id); stats.hut.never++; ev('hut-never', { why: 'refused' }); } return false; }
       }
       stats.home.builds++;
       yield* waitActs(40); yield* waitIdle();
@@ -1300,14 +1308,25 @@ export function createMind(world, game, opts = {}) {
   function* homeGoal(what, w) {   // one unit of the project: a load of the next parts, fetched, then built in; at an idle moment, repeated while there is material (the idle goal asks again)
     if (cur) cur.limit = HOME_LIMIT;
     const n0 = homeCount(), load = loadOf(w); stats.home.units++;
+    const hut0 = w.what === 'hut' ? built(w.lt, 'hut') : 0;
     ev('home', { what, load: load.join() });
     let ok = true;
     try {
+      if (w.what === 'hut') {   // 0.33: the first part says why, then the footprint is cleared of his own piles; the log of the first part is not carried meanwhile
+        stats.hut.units++;
+        if (!hutBegun(w.lt)) { if (stats.hut.startDay < 0) { think('hutIntent'); stats.hut.startDay = clock.day; stats.hut.startTime = +clock.time.toFixed(3); ev('hut-start', { logs: logTotal() }); } if (!(yield* clearFootprint(w.lt))) { cool('home', 300); return false; } }   // (said once, when the errand starts)
+      }
       if (w.lt) yield* leaveDoorway(w.lt);   // (a need that cut the last unit short left him in the doorway)
       if (heldKinds().length < load.length) { stats.home.trips++; yield* fetchParts(load); }
       if (!heldKinds().includes(remaining(w)[0])) { stats.home.noMaterial++; cool('home', 600); return false; }   // the piece the site needs first is not to be had: later (the lack sends him exploring); a part load is built in as far as it goes
       ok = yield* buildPieces(w);
-    } finally { headingWanted = null; }
+    } finally {
+      headingWanted = null;
+      if (w.what === 'hut' && built(w.lt, 'hut') > hut0) {   // 0.33: a piece of the hut counts as a piece of the home built today (the axe waits for another day); counted also when a need cut the unit short
+        builtDay = clock.day; stats.hut.parts += built(w.lt, 'hut') - hut0;
+        if (hutDone(w.lt) && stats.hut.doneDay < 0) { stats.hut.doneDay = clock.day; stats.hut.doneTime = +clock.time.toFixed(3); hutCache = null; ev('hut-done', { days: clock.day - stats.hut.startDay }); }
+      }
+    }
     if (homeCount() > n0) { builtDay = clock.day; ev('home-built', { what }); }
     return ok;
   }
@@ -1532,6 +1551,94 @@ export function createMind(world, game, opts = {}) {
     return yield* fellTree(plan.tree);
   }
 
+  // ---------- the hut (0.33 "Hut") ----------
+  // The last step of the home project (`homeNext` 'hut'): the finished lean-to is rebuilt into a hut on its spot, piece by piece (game/leanto PARTS.hut: 4 logs, 8 logs, 8 branches, 12 fronds), through the player's own 'upgrade' action. It starts (`hutPlan`)
+  // once the home is complete, the clearing is open (every tree that touches the footprint and that he can reach is felled: the axe's work, first; the rest of the 10 m clearing is no condition: on a forest island it takes the axe months) and HUT_LOGS logs are in the log piles or lying about (the twelve of the first twelve parts; the axe went on felling until there were twelve);
+  // from then on he keeps at it unit after unit in the home's window, like the home itself: a log a unit (alone on the shoulder, from the nearest log pile or a log lying about: `fetchHutLog`), then loads of three branches and three fronds. The axe comes after the hut's day
+  // (a piece built counts as a piece built today), and when the logs have gone into the hut the axe's rule (fewer than AXE_LOGS stored) fills a log pile again: timber for later. Before the first part the footprint must be clear (game `hutFits`): his own piles in it are carried out
+  // (`clearFootprint`: fuel to the stock, logs to a log pile, fronds and stones to a spot outside), a fire place or a burnt place is waited out (a burnt place fades in two days); a trunk, a boulder or ground that does not fit, or the game refusing the first part, means no hut there (`hutNever`).
+  const hutNever = new Set();   // the lean-tos whose hut he has given up (by id)
+  let hutCache = null;          // { at, plan }: a plan of hutPlan is kept HUT_PLAN_SECS
+  const logsAvail = () => logsStored() + logsLying() + (W.log ? 1 : 0);
+  function clearingTrees(h) {   // the standing trees whose trunk touches the hut's footprint (the walls grown by a wall's clearance) that he still means to fell: on known ground and not given up for a while (asked again after AXE_RETRY_DAYS). The axe takes the trees nearest the lean-to first, so these are its first.
+    return treesWithin({ x: h.lt.x, z: h.lt.z }, -1, HUT_TREE_R).filter(t => inside(t.x, t.z) && !isBad('tree', t) && inHutBox(h.lt, t.x, t.z, -(HUT_R + t.r)));
+  }
+  function hutBlockers(lt) {   // what keeps the footprint from fitting, apart from the ground: his piles in it, fire and burnt places, trunks and boulders (the very test of game `hutFits`)
+    const inBox = (x, z, r) => inHutBox(lt, x, z, -(HUT_R + r)), out = { piles: [], fires: 0, natural: 0 };
+    for (const o of naturalNear(lt.x, lt.z)) if (inBox(o.x, o.z, o.r)) out.natural++;
+    for (const o of campView.near(lt.x, lt.z, 4.5)) {
+      if (o.g.kind === 'leanto' || !inBox(o.x, o.z, o.r)) continue;
+      if (o.g.kind === 'pile') { const q = W.piles.find(q => Math.abs(q.x - o.g.x) < 0.01 && Math.abs(q.z - o.g.z) < 0.01); if (q && !out.piles.includes(q)) out.piles.push(q); } else out.fires++;
+    }
+    return out;
+  }
+  function hutPlan(h) {   // { go, why, piles }: does the hut have its turn (pure but for the cache and the counters)
+    const lt = h.lt;
+    if (hutCache && hutCache.id === lt.id && now - hutCache.at < HUT_PLAN_SECS) return hutCache.plan;
+    const set = (go, why, extra) => { const plan = { go, why, ...extra }; hutCache = { id: lt.id, at: now, plan }; if (!go && why !== 'none' && why !== 'done') stats.hut.waits[why] = (stats.hut.waits[why] || 0) + 1; return plan; };
+    if (!hutReady(lt) || hutDone(lt)) return set(false, hutDone(lt) ? 'done' : 'none');
+    if (hutBegun(lt)) return set(true, 'begun');   // begun: built on, whatever the footprint says now
+    if (hutNever.has(lt.id)) return set(false, 'never');
+    if (clearingTrees(h).length) return set(false, 'trees');
+    if (logsAvail() < HUT_LOGS) return set(false, 'logs');
+    if (game.hutFits(lt)) return set(true, 'fits');
+    const b = hutBlockers(lt);
+    if (b.natural) { hutNever.add(lt.id); stats.hut.never++; ev('hut-never', { why: 'natural' }); return set(false, 'never'); }
+    if (b.fires) return set(false, 'fire');
+    if (b.piles.length) return set(true, 'clear', { piles: b.piles });
+    hutNever.add(lt.id); stats.hut.never++; ev('hut-never', { why: 'ground' }); return set(false, 'never');
+  }
+  function* fetchHutLog() {   // a log on his shoulder: the nearest of the log piles and the logs lying about (known ground, at most HOME_MAX_COST of walking); false when there is none or it could not be had
+    if (W.log) return true;
+    if (W.load()) return false;
+    const c = [], h = homeSpot();
+    for (const q of W.piles) if (q.kind === 'log' && q.logs.length && inside(q.x, q.z) && !isBad('logpile', q)) { const k = path.cost(p, q); if (k <= HOME_MAX_COST) c.push({ pile: q, k }); }
+    for (const l of LOGS.near(h.x, h.z, AXE_RANGE)) if (inside(l.x, l.z) && !isBad('log', l)) { const k = path.cost(p, l); if (k <= HOME_MAX_COST) c.push({ log: l, k }); }
+    c.sort((a, b) => a.k - b.k);
+    for (const o of c.slice(0, 3)) {
+      if (o.pile) {
+        if (!(yield* goStand('take', o.pile))) { markBad('logpile', o.pile, 600); continue; }
+        if (pressKind(['pickup'], t => !!t.thing && t.thing.kind === 'pile' && t.thing.pile === o.pile)) yield* waitIdle();
+      } else if (yield* fetchLog(o.log)) { /* shouldered */ } else markBad('log', o.log, 600);
+      if (W.log) { stats.hut.logsFetched++; return true; }
+    }
+    return false;
+  }
+  function hutSpot(lt) {   // a spot behind the hut (on its back half, away from the door and the ring) to lay a pile of fuel, fronds or stones on: clear of every camp solid and of the keep-free region, on his ground; null when none
+    const cands = [];
+    for (const r of HUT_PILE_RINGS) for (let i = 0; i < 16; i++) {
+      const a = i * Math.PI / 8, x = lt.x + Math.sin(a) * r, z = lt.z + Math.cos(a) * r, q = openNear(x, z, 0.4);
+      if (!q || (q.x - lt.x) * Math.sin(lt.heading) + (q.z - lt.z) * Math.cos(lt.heading) > 0 || inHutBox(lt, q.x, q.z, -(HUT_R + PILE_R + 1.6)) || keepFree(lt).touches(q.x, q.z, PILE_R + 0.8) || !gapFree(campView, q.x, q.z, PILE_R + BODY) || W.piles.some(o => Math.hypot(o.x - q.x, o.z - q.z) < 2.2)) continue;
+      cands.push({ ...q, k: dist(p, q) });
+    }
+    return cands.sort((a, b) => a.k - b.k)[0] || null;
+  }
+  function* clearFootprint(lt) {   // before the first part: his piles in the footprint are carried out one load at a time; true when the footprint fits (or nothing movable is left to wait for), false when it still does not and he gives it up for today
+    for (let n = 0; n < HUT_CLEAR_TRIPS; n++) {
+      if (game.hutFits(lt)) return true;
+      const b = hutBlockers(lt), todo = b.piles.filter(o => !isBad('pile', o)); if (b.natural || !todo.length) break;
+      const q = todo.sort((a, c) => dist(a, p) - dist(c, p))[0];
+      ev('hut-clear', { kind: q.kind, n: q.logs.length, at: [+q.x.toFixed(1), +q.z.toFixed(1)] });
+      const moved = yield* errand(function* () {
+        if (W.load()) yield* handoff('hut');
+        if (W.load() || !(yield* goStand('take', q))) return false;
+        if (pressKind(['pickup'], t => !!t.thing && t.thing.kind === 'pile' && t.thing.pile === q)) yield* waitIdle();
+        if (!W.load()) return false;
+        const ck = carriedKind();
+        if (ck === 'log') { if (!(yield* deliverLog())) return false; }
+        else if (ck === 'frond' || ck === 'stone' || ((ck === 'drift' || ck === 'branch') && !wetCarried())) {   // fronds, stones and dry fuel: to a spot behind the hut (`hutSpot`), a pile of its own there (the fuel is fetched from it like any pile when the stock runs low; the ring's stock is not touched); wet wood goes to the tideline, below
+          const s = hutSpot(lt);
+          if (s && (yield* walk(s.x, s.z, { stop: 0.35 }))) for (let k = 0; k < 3 && W.load(); k++) { if (!pressKind(['lay'])) break; yield* waitIdle(); }   // (lay only: by day he never feeds flames)
+          if (W.load()) yield* handoff('hut');
+        } else yield* handoff('hut');   // wet wood to the tideline (as ever)
+        return !W.load();
+      });
+      if (!moved) { markBad('pile', q, 300); stats.hut.clearFails++; }
+      else stats.hut.cleared++;
+    }
+    return game.hutFits(lt);
+  }
+
   // ---------- the tideline (0.30.13 "Tideline") ----------
   // Wet wood in the strip between the tides never dries there (the sea covers it again and again), and a pile in the strip is taken by the sea at high water. On a beach he knows (a stroll's shore leg, the far end of an exploring trip) he
   // takes up to three such pieces with an arm free and carries them a few metres higher, to a spot just above the high-water line (`tideSpot`), and lays them there: a small pile at the beach edge. It dries where it lies (game/wood), the
@@ -1698,7 +1805,7 @@ export function createMind(world, game, opts = {}) {
     const fs = fireSpot(), spots = [];
     for (const r of [2.4, 3.4, 4.4]) for (let i = 0; i < 8; i++) {
       const a = i * Math.PI / 4 + r, q = openNear(fs.x + Math.sin(a) * r, fs.z + Math.cos(a) * r, 0.4);
-      if (q && !W.piles.some(o => Math.hypot(o.x - q.x, o.z - q.z) < 1.8) && !game.fire.fires.some(f => dist(f, q) < 2.2)) spots.push(q);
+      if (q && !W.piles.some(o => Math.hypot(o.x - q.x, o.z - q.z) < 1.8) && !game.fire.fires.some(f => dist(f, q) < 2.2) && !game.leantos.list.some(l => keepFree(l).touches(q.x, q.z, PILE_R + PILE_FRONT + 0.2))) spots.push(q);   // (0.33: not where the game would refuse the pile: the region a hut keeps free is wide)
     }
     spots.sort((a, b) => dist(a, p) - dist(b, p));
     for (const q of spots.slice(0, 3)) {
@@ -2250,6 +2357,7 @@ export function createMind(world, game, opts = {}) {
   mind.exploreAim = (day, time, where = 'coast', avail = (EXPLORE_BACK - time) * DAY_SECONDS) => { const home = fireSpot(homeSpot()); exo.x = home.x; exo.z = home.z; exo.reach = exploreReach(day); return exploreTarget(home, exploreReach(day), where, avail); };   // 0.30.16: the spot a trip would aim for on that day at that time of day (tests; no side effects but the trip's own bookkeeping of exo)
   mind.state = () => ({ journeyDue, journeyTried, exploredDay, journeys: stats.journey.started });   // 0.31.1: plain, for saving (the journey in progress is not saved)
   mind.journeyAim = (day, time, where = 'coast', avail = (JOURNEY_ARRIVE - time) * DAY_SECONDS) => { const home = fireSpot(homeSpot()); return journeyTarget(home, where, avail); };   // 0.30.19: the spot a journey would aim for (tests; the rings it looks at are the PRNG's)
+  mind.hutPlan = () => { const h = homeSpot(); hutCache = null; return h.kind === 'leanto' ? { ...hutPlan(h), piles: undefined } : null; }; mind.hutNever = hutNever; mind.hutBlockers = () => { const h = homeSpot(); return h.kind === 'leanto' ? hutBlockers(h.lt) : null; }; mind.clearingTrees = () => { const h = homeSpot(); return h.kind === 'leanto' ? clearingTrees(h) : []; }; mind.logsAvail = logsAvail;   // 0.33: for the tests
   mind.axePlan = axePlan; mind.logDest = () => { const h = homeSpot(); return h.kind === 'leanto' ? logDest(h) : null; }; mind.axeSpot = axeSpot; mind.axeSnap = axeSnap;   // 0.31: for the tests
   mind.siteReason = siteReason; mind.homePlan = () => { const h = homeSpot(), sn = { ...homeSnap(), time: HOME_FROM, day: Math.max(clock.day, HOME_DAY), cool: {} }, step = homeNext(sn), work = step ? homeWork(step, h) : null; return { step, work, load: work ? loadOf(work) : null, site: proj.site, snap: sn }; };
   return mind;

@@ -153,7 +153,7 @@ export async function createIslandView(world, container, progress, start, opts =
     cam.follow(player, dt, t.L > 4.25);
     water.setSea(sea);
     const total = game ? game.clock.total : 0;
-    if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); findsView.update(); berryView.update(); bananaView.update(); leantoView.update(); refreshTrees(); fellingView.update(dt); timberView.update(); }
+    if (woodView) { woodView.update(dt, total); cocoView.update(); branchView.update(); findsView.update(); berryView.update(); bananaView.update(); leantoView.update(player, dt); refreshTrees(); fellingView.update(dt); timberView.update(); }
     hero.update(player, t.depth, game ? loadOf(game.wood, total) : NO_LOAD, game ? game.wood.log : null);
     steps.step(player, info.distance, t.L < 0.4 && t.y > sea - 0.05 && t.y < 1.3 && !t.inRiver, info.total);
     steps.wash(sea);

@@ -36,6 +36,8 @@ import { leantoPoint } from './obstacles.js';
 export const FINE_SPAN = 7, FINE_LINK = 3, RING_STEP = 0.55, RING_GAP = 0.06;
 const BUCKET = 3, MIN = 0.05;
 // the node places of a lean-to in its local frame (f, r)
+// 0.33 "Hut": a lean-to that has begun a hut (its group has `hut`) also gets the four outer corners of the hut's offset outline (0.55 m off its walls)
+const HUT_NODES = [['h1', -2.2, 2.05], ['h2', -2.2, -2.05], ['h3', 1.4, 2.05], ['h4', 1.4, -2.05]];
 const LEANTO_NODES = [['sleep', 0, 0], ['gate', 0.65, 0], ['front', 1.6, 0], ['c1', -1.16, 1.28], ['c2', -1.16, -1.28], ['c3', 1.01, 1.28], ['c4', 1.01, -1.28]];
 
 export function createFine(world, grid) {
@@ -62,7 +64,7 @@ export function createFine(world, grid) {
 
   function candidates(g) {
     const pts = [];
-    if (g.kind === 'leanto') for (const [kind, f, r] of LEANTO_NODES) pts.push({ kind, ...leantoPoint(g, f, r) });
+    if (g.kind === 'leanto') for (const [kind, f, r] of g.hut ? [...LEANTO_NODES, ...HUT_NODES] : LEANTO_NODES) pts.push({ kind, ...leantoPoint(g, f, r) });
     else {
       const n = Math.ceil(2 * Math.PI * g.r / RING_STEP), R = (g.r + RING_GAP) / Math.cos(Math.PI / n);
       for (let i = 0; i < n; i++) { const a = 2 * Math.PI * i / n; pts.push({ kind: 'ring', x: g.x + Math.sin(a) * R, z: g.z + Math.cos(a) * R }); }
@@ -72,7 +74,7 @@ export function createFine(world, grid) {
       return { uid, id: N * N + uid, x: p.x, z: p.z, g: g.id, kind: p.kind, idx: i, stand: canStand(world, p.x, p.z, 0), alive: false, cl: null, nl: null, sm: new Map() };
     });
   }
-  const hasCircles = (camp, id) => camp.circles.some(o => o.g && o.g.id === id);   // does a group have solids (a lean-to site has none before its fifth part)
+  const hasCircles = (camp, id) => camp.circles.reduce((n, o) => n + (o.g && o.g.id === id ? 1 : 0), 0);   // how many solids a group has (a lean-to site has none before its fifth part; a hut gains them part by part, 0.33)
   const covered = (n, camp) => { for (const o of camp.nearNow(n.x, n.z, 0.01)) if (Math.hypot(n.x - o.x, n.z - o.z) < o.r - 0.001) return true; return false; };
 
   function sync(camp) {
@@ -85,7 +87,7 @@ export function createFine(world, grid) {
     for (const [id, g] of groups) if (!cands.has(id)) {
       const list = candidates(g); cands.set(id, { g, list, solid: hasCircles(camp, id) }); spots.push({ x: g.x, z: g.z, e: extent(g) });
       for (const n of list) added.add(n);
-    } else if (g.kind === 'leanto') {   // 0.32 "Piece by piece": a lean-to site has no circles until its fifth part; when they appear (or go) the links of the nodes round it are stale
+    } else if (g.kind === 'leanto') {   // 0.32 "Piece by piece": a lean-to site has no circles until its fifth part; when they appear (or go; 0.33: or their number changes as a hut rises) the links of the nodes round it are stale
       const c = cands.get(id), now = hasCircles(camp, id);
       if (c.solid !== now) { c.solid = now; spots.push({ x: g.x, z: g.z, e: extent(g) }); }
     }

@@ -37,6 +37,7 @@ export const PHRASES = {
   roastIntent: ['Something warm to eat.', 'This should be cooked first.', 'I will roast it.', 'It will taste better warm.'],
   buildIntent: ['I need a little shelter.', 'I should build a shelter.', 'A roof would be good.', 'I want somewhere to sleep.'],
   upgradeIntent: ['This could be a little cosier.', 'The shelter could be better.', 'I can make this more comfortable.', 'A few more touches here.'],
+  hutIntent: ['Time for a proper roof.', 'A real hut, at last.', 'This shelter can become a hut.', 'I want walls and a proper roof.'],
   torchIntent: ['I need a little light.', 'It is dark. I need a light.', 'I will take a light with me.', 'I should not walk in the dark.'],
   journeyIntent: ['I want to see what lies further off.', 'I would like to go further.', 'Perhaps I can find something far away.', 'I want to see more of the island.'],
   campIntent: ["I'll sleep out here tonight.", 'This will do for the night.', 'I should rest here tonight.', 'Night is coming. I will camp here.'],

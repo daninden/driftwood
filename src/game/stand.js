@@ -14,7 +14,7 @@
  *   - Arrival: only when `offered` is true at his real position (the follower's stop and the action being offered are two different things).
  *
  * Kinds (obj): 'take' (a pile: the arc's pickup names it), 'add' (a pile: wood laid down joins it and lay is what is offered), 'light' (a pile: the light action for it, not shadowed by build),
- * 'feed' (a fire: feeding goes on it), 'buildIn' (a half-built lean-to: 0.32, a piece he holds is built into it), 'upgrade' (a finished lean-to), 'fell' (0.31 "Axe": a standing tree `{ id, x, z, r }` of game/felled, offered while the axe is in his hand within FELL_REACH of its trunk's edge), 'nearPile' and 'nearFire' (only beside the pile or fire,
+ * 'feed' (a fire: feeding goes on it), 'buildIn' (a half-built lean-to: 0.32, a piece he holds is built into it), 'upgrade' (a finished lean-to; 0.33: also its hut, whose parts are built from within HUT_REACH), 'fell' (0.31 "Axe": a standing tree `{ id, x, z, r }` of game/felled, offered while the axe is in his hand within FELL_REACH of its trunk's edge), 'nearPile' and 'nearFire' (only beside the pile or fire,
  * for a click: wood.find / fire.find within BESIDE name it). No reach and no radius is changed: the standing points live inside the reaches of game/game.
  *
  * createStand(game, world, { BESIDE }) -> stand
@@ -28,12 +28,12 @@
  *
  * Pure; no DOM, no Three.js.
  *
- * Depends on: game/movement, game/wood, game/obstacles, game/leanto, game/axe
+ * 0.33 "Hut": the standing points of an 'upgrade' of a lean-to that can have a hut are never inside the hut's walls or within a body of them. Depends on: game/movement, game/wood, game/obstacles, game/leanto, game/axe
  */
 import { canStand, obstaclesNear, BODY } from './movement.js';
 import { pileVisibleRadius, pileSolidRadius, PILE_JOIN } from './wood.js';
-import { FIRE_R } from './obstacles.js';
-import { UP_REACH, REACH as LEANTO_REACH } from './leanto.js';
+import { FIRE_R, HUT_R } from './obstacles.js';
+import { HUT_REACH, REACH as LEANTO_REACH, hutReady, hutDone, inHutBox } from './leanto.js';
 import { FELL_REACH } from './axe.js';
 
 export const TOL = 0.12, CLEAR = 0.06;
@@ -69,7 +69,7 @@ export function createStand(game, world, { BESIDE = 1.2 } = {}) {
       case 'feed': case 'nearFire': return { x: obj.x, z: obj.z, rim: FIRE_R, reach: 0.5 + BESIDE };
       case 'take': case 'light': case 'nearPile': return { x: obj.x, z: obj.z, rim: pileSolidRadius(obj) + BODY, reach: pileVisibleRadius(obj) + BESIDE };
       case 'add': return { x: obj.x, z: obj.z, rim: pileSolidRadius(obj) + BODY, reach: PILE_JOIN };
-      case 'upgrade': return { x: obj.x, z: obj.z, rim: 0, reach: UP_REACH };
+      case 'upgrade': return { x: obj.x, z: obj.z, rim: 0, reach: HUT_REACH };   // (0.33: the hut is built from a little further out; what `offered` says decides, the reach only bounds the search)
       case 'fell': return { x: obj.x, z: obj.z, rim: obj.r + BODY, reach: obj.r + FELL_REACH };
       case 'buildIn': return { x: obj.x, z: obj.z, rim: 0, reach: LEANTO_REACH };
     }
@@ -100,6 +100,7 @@ export function createStand(game, world, { BESIDE = 1.2 } = {}) {
       for (let i = 0; i < n; i++) {
         const a = i * 2 * Math.PI / n, x = g.x + Math.sin(a) * r, z = g.z + Math.cos(a) * r;
         stats.candidates++;
+        if (kind === 'upgrade' && hutReady(obj) && !hutDone(obj) && inHutBox(obj, x, z, -(HUT_R + BODY + 0.1))) continue;   // 0.33: never inside the hut's walls (or within a body of them): a part that rises there would wall him in (the lean-to's own side walls leave a pocket between them and the hut's)
         if (usable(kind, obj, x, z, allow)) { out.push({ x, z, a }); stats.kept++; }
       }
     }

@@ -32,6 +32,7 @@ const dayOf = total => Math.floor(total + 1e-9);
 // Dave alone on a finished home for `days` days; the tick callback sees every step. Ends at the given time of the last day.
 function live(g, days, { onTick = null, until = 0.7, stream = 0, onIntent = undefined } = {}) {
   const m = createMind(w, g, { stream, onIntent }); m.engage();
+  for (const l of g.leantos.list) m.hutNever.add(l.id);   // 0.33: the axe's work is looked at on its own; the hut that takes its logs is tests/hutMind.test.js
   const end = g.clock.day + days, p = g.player, rep = { maxThirst: 0, maxHunger: 0, errors: [], collapses: 0, handLog: 0 };
   const sl = g.sleep, so = sl.start.bind(sl);
   sl.start = (...a) => { const was = sl.asleep; so(...a); if (!was && sl.asleep && !m.chose()) rep.collapses++; };
