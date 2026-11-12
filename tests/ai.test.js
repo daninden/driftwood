@@ -5,12 +5,13 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createMind, chooseGoal, VERY_AT, VERY_HUNGER_AT } from '../src/game/mind.js';
-import { goalMenu, pastimeMenu, eventMenu, rulesChooser, choiceId, validChoice } from '../src/game/intent.js';
-import { FIXED, hhmm, snapshotOf, stateText, recentText, optionsOf, buildMessages, parseAnswer } from '../src/ai/prompt.js';
+import { WAIT, goalMenu, makeMenu, option, pastimeMenu, eventMenu, rulesChooser, choiceId, validChoice } from '../src/game/intent.js';
+import { FIXED, hhmm, snapshotOf, stateText, recentText, optionsOf, buildMessages, parseAnswer, describeOption, GOAL_TEXT, GOAL_LABEL } from '../src/ai/prompt.js';
 import { createClient, pacificDay } from '../src/ai/client.js';
 import { createAiChooser } from '../src/ai/chooser.js';
-import { AI_PER_MIN, AI_PER_DAY, AI_FRESH, AI_ASK_EVERY, AI_MODELS, AI_URL, KEY_NAME, ON_NAME, COUNT_NAME } from '../src/ai/config.js';
-import { isAiKey, entryLine, statusLine, modelLines, pendingLine, requestText } from '../src/render/aiPanel.js';
+import { AI_PER_MIN, AI_PER_DAY, AI_WAIT, AI_MODELS, AI_URL, KEY_NAME, ON_NAME, COUNT_NAME } from '../src/ai/config.js';
+import { THIRST_GO, HUNGER_GO } from '../src/game/mind.js';
+import { isAiKey, whyText, blockParts, tallyLine, statusLine, modelLines, pendingLine, requestText } from '../src/render/aiPanel.js';
 import { isTyping, createActing, PASSIVE_CODES } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 
@@ -19,6 +20,7 @@ const calm = (o = {}) => ({ asleep: false, time: 0.4, thirst: 0.1, hunger: 0.1, 
   fireLit: false, fireFuel: 0, stock: 99, spare: 0, canLight: false, cool: {}, ...o });
 const limits = { thirst: VERY_AT, hunger: VERY_HUNGER_AT };
 const hungryMenu = () => goalMenu(calm({ thirst: 0.5, hunger: 0.8 }), chooseGoal, limits);   // drink, eat, stores, idle
+const quietMenu = () => goalMenu(calm({ nuts: 0 }), chooseGoal, limits);   // stores, idle: the rules pick stores, no need
 const emergencyMenu = () => goalMenu(calm({ thirst: 1.05, hunger: 0.8 }), chooseGoal, limits);   // drink forced
 const rigged = (...vals) => { let i = 0; return () => vals[i++ % vals.length]; };
 const ctxOf = () => ({ rand: rigged(0.5), ex: rigged(0.5), fish: rigged(0.5) });
@@ -58,7 +60,7 @@ describe('prompt', () => {
     const game = { clock: { day: 4, time: 0.3 }, thirst: { days: 0.2 }, hunger: { days: 1 }, sleep: { awake: 0.5 }, rain: 0.4, wood: { carried: [{}, { branch: true }, { frond: true }], stones: [1] }, fibre: { carried: 2 }, shells: { nuts: 3, empty: () => 1, full: () => 0 },
       crabs: { carried: [] }, fish: { carried: [1] }, berries: { carried: [] }, bananas: { carried: [] }, spear: { has: () => true }, player: { axe: false }, fire: { torch: null }, leantos: { list: [{ progress: 1, up: { walls: 1 }, hut: 0 }] } };
     const s = snapshotOf(game, { goal: 'drink' });
-    expect(s).toMatchObject({ day: 4, raining: true, thirst: 0.2, hunger: 1, doing: 'the goal drink' });
+    expect(s).toMatchObject({ day: 4, raining: true, thirst: 0.2, hunger: 1, doing: GOAL_TEXT.drink });
     expect(s.carries).toMatchObject({ driftwood: 1, branches: 1, fronds: 1, stones: 1, fibre: 2, nuts: 3, spear: true }); expect(s.home).toMatchObject({ leanto: 100, walls: 100, bed: 0 });
     expect(stateText(s)).toContain('raining');
     const bare = snapshotOf({}, {}); expect(bare.home).toBeNull(); expect(stateText(bare)).toContain('no shelter yet');
@@ -198,78 +200,88 @@ describe('client', () => {
 });
 
 describe('chooser', () => {
-  const clockOf = () => ({ day: 3, time: 0.6 });
+  const idleReply = async () => ({ text: '{"choice":"idle","reason":"Free time suits me."}', ms: 800, model: 'gemini-x' });
   const setup = (o = {}) => {
-    const t = { s: 1000 }, asks = [];
-    let reply = o.reply || (async () => ({ text: '{"choice":"eat","reason":"Hungry."}', ms: 800 }));
-    const rulesCalls = [];
+    const t = { s: 1000 }, asks = [], rulesCalls = [];
+    let reply = o.reply || idleReply;
     const rules = (point, menu, ctx) => { rulesCalls.push(point); return rulesChooser(point, menu, ctx); };
     const state = { on: true, can: true };
-    const ai = createAiChooser({ rulesChooser: rules, ask: m => { asks.push(m); return reply(m); }, now: () => t.s, canSend: () => state.can, enabled: () => state.on, clock: clockOf });
-    const mind = { menu: () => o.menu ? o.menu() : hungryMenu(), recent: [{ t: 1.5, day: 1, kind: 'goal', what: 'drink', outcome: 'done' }], goal: 'stores' };
-    return { ai, t, asks, mind, rulesCalls, state, setReply: f => { reply = f; } };
+    const ai = createAiChooser({ rulesChooser: rules, ask: m => { asks.push(m); return reply(m); }, now: () => t.s, canSend: () => state.can, enabled: () => state.on, clock: () => ({ day: 3, time: 0.6 }) });
+    const mind = { recent: [{ t: 1.5, day: 1, kind: 'goal', what: 'stores', outcome: 'done' }], goal: 'stores' };
+    ai.attach(mind, { clock: { day: 3, time: 0.6 }, thirst: { days: 0.5 }, hunger: { days: 0.8 } });
+    return { ai, t, asks, rulesCalls, state, setReply: f => { reply = f; } };
   };
-  const game = { clock: { day: 3, time: 0.6 }, thirst: { days: 0.5 }, hunger: { days: 0.8 } };
+  const go = (ai, menu = quietMenu()) => ai.chooser('goal', menu, ctxOf());
 
-  it('always calls the rules first, and answers non-goal points with the rules\' answer unchanged', () => {
-    const { ai, rulesCalls } = setup();
+  it('always calls the rules first, and answers non-goal points with the rules\' answer unchanged, never WAIT', () => {
+    const { ai, rulesCalls, asks } = setup();
     const pm = pastimeMenu('before', { gaze: true });
     expect(ai.chooser('pastime', pm, ctxOf())).toBe('gaze'); expect(ai.chooser('event', eventMenu('stuck', 'drink'), ctxOf())).toBe('continue');
-    expect(rulesCalls).toEqual(['pastime', 'event']); expect(ai.entries.length).toBe(0);
+    expect(rulesCalls).toEqual(['pastime', 'event']); expect(ai.entries.length).toBe(0); expect(asks.length).toBe(0);
     expect(ai.chooser.selfChecked).toBe(true);
   });
-  it('off: the rules\' pick, logged with why "off"', () => {
-    const { ai, rulesCalls, state } = setup(); state.on = false;
-    expect(ai.chooser('goal', hungryMenu(), ctxOf())).toBe('drink'); expect(rulesCalls).toEqual(['goal']);
-    expect(ai.entries[0]).toMatchObject({ used: 'rules', why: 'off', rules: 'drink', ai: null, day: 3, time: '14:24', menu: ['drink', 'eat', 'stores', 'idle'] });
+  it('off, a menu of one option, a forced option, a need and a spent budget: the rules at once, no request, no wait', () => {
+    const off = setup(); off.state.on = false; expect(go(off.ai)).toBe('stores'); expect(off.asks.length).toBe(0); expect(off.ai.entries.length).toBe(0); expect(off.ai.tally()).toEqual({ ai: 0, rules: 0, differ: 0 });
+    const one = setup(); expect(go(one.ai, goalMenu(calm(), chooseGoal, limits))).toBe('idle'); expect(one.asks.length).toBe(0); expect(one.ai.entries.length).toBe(0);
+    const f = setup(); expect(go(f.ai, emergencyMenu())).toBe('drink'); expect(f.ai.entries[0]).toMatchObject({ used: 'rules', why: 'forced' }); expect(f.asks.length).toBe(0);
+    const n = setup(); expect(go(n.ai, hungryMenu())).toBe('drink'); expect(n.ai.entries[0]).toMatchObject({ used: 'rules', why: 'need', rules: 'drink' }); expect(n.asks.length).toBe(0); expect(n.ai.waiting()).toBe(false);
+    const b = setup(); b.state.can = false; expect(go(b.ai)).toBe('stores'); expect(b.ai.entries[0]).toMatchObject({ used: 'rules', why: 'budget' }); expect(b.asks.length).toBe(0);
   });
-  it('no answer yet, then a fresh valid answer is used once and consumed', async () => {
-    const { ai, mind, t, asks } = setup();
-    expect(ai.chooser('goal', hungryMenu(), ctxOf())).toBe('drink'); expect(ai.entries[0]).toMatchObject({ used: 'rules', why: 'no answer yet' });
-    ai.tick(mind, game); expect(asks.length).toBe(1); expect(ai.inFlight()).toBe(true);
-    await flush(); expect(ai.inFlight()).toBe(false); expect(ai.pending()).toMatchObject({ id: 'eat', reason: 'Hungry.', ms: 800 });
-    expect(ai.pending().messages[0].role).toBe('system'); expect(ai.pending().raw).toContain('eat');
-    t.s += 10;
-    expect(ai.chooser('goal', hungryMenu(), ctxOf())).toBe('eat');
-    expect(ai.entries[0]).toMatchObject({ used: 'ai', why: null, ai: 'eat', rules: 'drink', reason: 'Hungry.', ms: 800, age: 10 }); expect(ai.entries[0].messages.length).toBe(2);
-    expect(ai.pending()).toBeNull();
-    expect(ai.chooser('goal', hungryMenu(), ctxOf())).toBe('drink'); expect(ai.entries[0]).toMatchObject({ used: 'rules', why: 'no answer yet' });
+  it('asks at the decision, waits (WAIT) until the answer lands, then uses it; the entry carries the what texts, the wait and the model', async () => {
+    const { ai, t, asks } = setup();
+    expect(go(ai)).toBe(WAIT); expect(asks.length).toBe(1); expect(ai.waiting()).toBe(true); expect(ai.inFlight()).toBe(true); expect(ai.entries.length).toBe(0);
+    t.s += 0.4; expect(go(ai)).toBe(WAIT); expect(asks.length).toBe(1);   // the same decision: not asked again
+    expect(asks[0][1].content).toContain('- stores:'); expect(asks[0][0].role).toBe('system');
+    await flush(); t.s += 0.2;
+    expect(go(ai)).toBe('idle'); expect(ai.waiting()).toBe(false);
+    expect(ai.entries[0]).toMatchObject({ used: 'ai', why: null, ai: 'idle', rules: 'stores', reason: 'Free time suits me.', ms: 600, model: 'gemini-x', day: 3, time: '14:24', menu: ['stores', 'idle'] });
+    expect(ai.entries[0].options).toEqual(quietMenu().options.map(o => ({ id: o.id, what: GOAL_LABEL[o.id] }))); expect(ai.entries[0].messages.length).toBe(2);
+    expect(ai.tally()).toEqual({ ai: 1, rules: 0, differ: 1 });
+    expect(go(ai)).toBe(WAIT); expect(asks.length).toBe(2);   // the next decision asks anew
   });
-  it('the log says which model answered', async () => {
-    const { ai, mind } = setup({ reply: async () => ({ text: '{"choice":"eat","reason":"x"}', ms: 5, model: 'gemini-x' }) });
-    ai.tick(mind, game); await flush(); expect(ai.pending().model).toBe('gemini-x');
-    ai.chooser('goal', hungryMenu(), ctxOf()); expect(ai.entries[0]).toMatchObject({ used: 'ai', model: 'gemini-x' });
+  it('no answer within AI_WAIT seconds: the rules decide; the late answer is ignored', async () => {
+    let resolve; const { ai, t, asks, setReply } = setup({ reply: () => new Promise(r => { resolve = r; }) });
+    expect(go(ai)).toBe(WAIT); for (let i = 0; i < 5; i++) { t.s += 0.5; expect(go(ai)).toBe(WAIT); } t.s += AI_WAIT - 2.5 - 0.1; expect(go(ai)).toBe(WAIT); t.s += 0.2;
+    expect(go(ai)).toBe('stores'); expect(ai.entries[0]).toMatchObject({ used: 'rules', why: 'no answer', ai: null, ms: Math.round(AI_WAIT * 1000 + 100) }); expect(ai.waiting()).toBe(false);
+    t.s += 0.1; expect(go(ai)).toBe('stores'); expect(ai.entries[0].why).toBe('busy'); expect(asks.length).toBe(1);   // the earlier request still runs
+    resolve({ text: '{"choice":"idle","reason":"late"}', ms: 5 }); await flush(); expect(ai.inFlight()).toBe(false);
+    t.s += 0.1; expect(go(ai)).toBe(WAIT); expect(asks.length).toBe(2); expect(ai.entries[0].why).toBe('busy');   // a new decision asks anew: the late answer was not kept
+    expect(whyText({ why: 'no answer' })).toBe(`no answer in ${AI_WAIT} s`);
   });
-  it('a stale answer, one not on the menu and a forced option all hand over to the rules, and say why', async () => {
-    const s = setup(); s.ai.tick(s.mind, game); await flush();
-    s.t.s += AI_FRESH + 1; expect(s.ai.chooser('goal', hungryMenu(), ctxOf())).toBe('drink'); expect(s.ai.entries[0]).toMatchObject({ used: 'rules', why: 'answer stale', ai: 'eat' });
-    const n = setup(); n.ai.tick(n.mind, game); await flush();
-    expect(n.ai.chooser('goal', goalMenu(calm(), chooseGoal, limits), ctxOf())).toBe('idle'); expect(n.ai.entries[0]).toMatchObject({ used: 'rules', why: 'not on menu', ai: 'eat' });
-    const f = setup(); f.ai.tick(f.mind, game); await flush();
-    expect(f.ai.chooser('goal', emergencyMenu(), ctxOf())).toBe('drink'); expect(f.ai.entries[0]).toMatchObject({ used: 'rules', why: 'forced' }); expect(f.ai.pending()).not.toBeNull();
+  it('an error or an unusable answer: the rules decide, with the reason, and a note is logged', async () => {
+    const e = setup({ reply: async () => { throw new Error('HTTP 500'); } }); go(e.ai); await flush();
+    expect(e.ai.entries[0].note).toContain('HTTP 500'); expect(go(e.ai)).toBe('stores'); expect(e.ai.entries[0]).toMatchObject({ used: 'rules', why: 'error: HTTP 500' });
+    const g = setup({ reply: async () => ({ text: 'I would rest.', ms: 5 }) }); go(g.ai); await flush();
+    expect(g.ai.entries[0].note).toContain('could not be used'); expect(go(g.ai)).toBe('stores'); expect(g.ai.entries[0]).toMatchObject({ used: 'rules', why: 'error: no JSON object' });
+    const w = setup({ reply: async () => ({ text: '{"choice":"swim"}', ms: 5 }) }); go(w.ai); await flush(); expect(go(w.ai)).toBe('stores'); expect(w.ai.entries[0].why).toMatch(/^error/);
   });
-  it('asks ahead only when due: not for fewer than two options or a forced one, not off, not over budget, not twice while one is running, and about to go stale', async () => {
-    const one = setup({ menu: () => goalMenu(calm(), chooseGoal, limits) }); one.ai.tick(one.mind, game); expect(one.asks.length).toBe(0);
-    const forced = setup({ menu: emergencyMenu }); forced.ai.tick(forced.mind, game); expect(forced.asks.length).toBe(0);
-    const off = setup(); off.state.on = false; off.ai.tick(off.mind, game); expect(off.asks.length).toBe(0);
-    const bud = setup(); bud.state.can = false; bud.ai.tick(bud.mind, game); expect(bud.asks.length).toBe(0);
-    expect(bud.ai.chooser('goal', hungryMenu(), ctxOf())).toBe('drink'); expect(bud.ai.entries[0].why).toBe('budget');
-    const s = setup(); s.ai.tick(s.mind, game); s.ai.tick(s.mind, game); expect(s.asks.length).toBe(1);
-    await flush(); s.t.s += AI_ASK_EVERY + 1; s.ai.tick(s.mind, game); expect(s.asks.length).toBe(1);   // a fresh pending answer is kept
-    s.t.s += AI_FRESH - AI_ASK_EVERY; s.ai.tick(s.mind, game); expect(s.asks.length).toBe(2);   // about to go stale: asked again
+  it('an answer that is not on the menu any more goes to the rules', async () => {
+    const { ai } = setup({ reply: async () => ({ text: '{"choice":"stores","reason":"x"}', ms: 5 }) });
+    expect(go(ai)).toBe(WAIT); await flush();
+    const later = makeMenu('goal', [option({ id: 'fire', goal: 'fire', what: 'fire', why: 'evening-fire' }), option({ id: 'idle', goal: 'idle', what: 'idle', why: 'nothing-urgent' })]);
+    expect(go(ai, later)).toBe('fire'); expect(ai.entries[0]).toMatchObject({ used: 'rules', why: 'not on menu', ai: 'stores', rules: 'fire' });
+    expect(whyText(ai.entries[0])).toContain('not possible now');
   });
-  it('an error or an answer that cannot be used is logged, nothing is pending, and the rules say why', async () => {
-    const e = setup({ reply: async () => { throw new Error('HTTP 500'); } }); e.ai.tick(e.mind, game); await flush();
-    expect(e.ai.pending()).toBeNull(); expect(e.ai.entries[0].note).toContain('HTTP 500');
-    expect(e.ai.chooser('goal', hungryMenu(), ctxOf())).toBe('drink'); expect(e.ai.entries[0]).toMatchObject({ used: 'rules', why: 'error: HTTP 500' });
-    const g = setup({ reply: async () => ({ text: 'I would eat.', ms: 5 }) }); g.ai.tick(g.mind, game); await flush();
-    expect(g.ai.pending()).toBeNull(); expect(g.ai.entries[0].note).toContain('not usable');
-    const w = setup({ reply: async () => ({ text: '{"choice":"swim"}', ms: 5 }) }); w.ai.tick(w.mind, game); await flush(); expect(w.ai.pending()).toBeNull();
+  it('a decision abandoned while waiting starts afresh', async () => {
+    const { ai, t, asks } = setup({ reply: () => new Promise(() => {}) });
+    expect(go(ai)).toBe(WAIT); t.s += 10; expect(go(ai)).toBe('stores'); expect(ai.entries[0].why).toBe('busy');   // (its request still runs)
+    const s2 = setup(); expect(go(s2.ai)).toBe(WAIT); s2.t.s += 10; await flush(); expect(go(s2.ai)).toBe(WAIT); expect(s2.asks.length).toBe(2);
+  });
+  it('option texts are plain words, for the prompt and the log; "Now" says what he is doing', () => {
+    expect(describeOption(hungryMenu().options[0]).what).toBe(GOAL_TEXT.drink); expect(describeOption({ id: 'home', goal: 'idle', what: 'work on his home', why: 'home-next' })).toEqual({ what: 'work on his home', label: 'work on his home', why: 'a part of the home is next' });
+    const o = optionsOf(hungryMenu()); expect(o.map(x => x.what)).toEqual(hungryMenu().options.map(x => GOAL_TEXT[x.id])); expect(o.find(x => x.id === 'idle').why).toBe('nothing is pressing');
+    const m = buildMessages({ state: {}, recent: [], options: o })[1].content; expect(m).toContain('- drink: go to fresh water'); expect(m).toContain('(why: he is thirsty)');
+    expect(snapshotOf({}, { goal: 'idle', recent: [{ kind: 'pastime', what: 'work on his home', outcome: null }] }).doing).toBe('free time, work on his home');
+    expect(snapshotOf({}, { goal: 'drink', recent: [] }).doing).toBe(GOAL_TEXT.drink);
+  });
+  it('the fixed prompt tells the real thresholds of the rules, from the same constants', () => {
+    expect(FIXED).toContain(`drink by himself at ${THIRST_GO}`); expect(FIXED).toContain(`eat by himself at ${HUNGER_GO}`); expect(FIXED).toContain(`very thirsty at ${VERY_AT}`); expect(FIXED).toContain('at 2 it is an emergency');
+    expect(FIXED).toContain('20:52'); expect(FIXED).toContain('04:04'); expect(FIXED).toContain('whatever you choose'); expect(FIXED).toContain('choose a need earlier');
   });
   it('keeps the newest 100 entries, newest first, and counts changes in version', () => {
     const { ai } = setup(); const v = ai.version;
-    for (let i = 0; i < 130; i++) ai.chooser('goal', hungryMenu(), ctxOf());
-    expect(ai.entries.length).toBe(100); expect(ai.entries[0].n).toBe(130); expect(ai.version).toBeGreaterThan(v);
+    for (let i = 0; i < 130; i++) go(ai, hungryMenu());
+    expect(ai.entries.length).toBe(100); expect(ai.entries[0].n).toBe(130); expect(ai.entries[99].n).toBe(31); expect(ai.version).toBeGreaterThan(v);
   });
 });
 
@@ -287,17 +299,27 @@ describe('typing and the panel', () => {
     expect(isAiKey({ code: 'KeyI', target: { tagName: 'INPUT' } })).toBe(false); expect(isAiKey({ code: 'KeyO' })).toBe(false);
     expect(createActing().event({ type: 'keydown', code: 'KeyI' })).toBe(false);
   });
-  it('lines for the log, the status and the pending answer', () => {
-    expect(entryLine({ day: 3, time: '14:24', used: 'ai', ai: 'eat', rules: 'drink', ms: 1234, model: 'gemini-x' })).toBe('d3 14:24  chose eat  (AI)  rules: drink  1.2s gemini-x');
-    expect(entryLine({ day: 3, time: '14:24', used: 'rules', why: 'no answer yet', ai: null, rules: 'drink', ms: null })).toBe('d3 14:24  chose drink  (rules: no answer yet)  rules: drink');
-    expect(entryLine({ note: 'request failed: x' })).toBe('-- request failed: x');
+  it('plain text for a decision block, the reasons, the tally, the status, the models and the pending answer', () => {
+    const options = [{ id: 'drink', what: 'drink' }, { id: 'wood', what: 'fetch wood for the fire' }, { id: 'stores', what: 'fill the store' }];
+    const ai = { day: 3, time: '14:20', used: 'ai', ai: 'wood', rules: 'drink', reason: 'The fire is low.', ms: 1234, model: 'gemini-x', options, menu: ['drink', 'wood', 'stores'] };
+    expect(blockParts(ai)).toEqual({ source: 'ai', head: 'Day 3, 14:20 — AI chose: fetch wood for the fire', tag: 'different from the rules', reason: '"The fire is low."',
+      rulesLine: 'The rules would have chosen: drink', optionsLine: 'Options were: drink, fetch wood for the fire, fill the store', meta: 'gemini-x · answered in 1.2 s', why: '' });
+    expect(blockParts({ ...ai, rules: 'wood' }).tag).toBe('');
+    expect(blockParts({ day: 3, time: '14:35', used: 'rules', why: 'no answer', ai: null, rules: 'stores', options })).toMatchObject({ source: 'rules', head: 'Day 3, 14:35 — Rules chose: fill the store', tag: '', why: `Why not the AI: no answer in ${AI_WAIT} s`, rulesLine: '', optionsLine: '' });
+    expect(blockParts({ used: 'rules', rules: 'x', why: 'forced' }).head).toBe('Day ?, --:-- — Rules chose: x');
+    expect(whyText({ why: 'off' })).toBe('the AI is off'); expect(whyText({ why: 'busy' })).toBe('the earlier request is still running'); expect(whyText({ why: 'budget' })).toBe('the budget is spent');
+    expect(whyText({ why: 'forced' })).toBe('an emergency: the rules decide'); expect(whyText({ why: 'error: HTTP 500' })).toBe('the request failed: HTTP 500');
+    expect(whyText({ why: 'not on menu', ai: 'wood', options })).toBe("the AI's choice is not possible now (it chose: fetch wood for the fire)");
+    expect(tallyLine({ ai: 5, rules: 3, differ: 2 })).toBe('Since the page was loaded: 5 by the AI, 3 by the rules, 2 different from the rules');
     const s = { on: true, hasKey: true, inFlight: true, pausedUntil: 10000, lastError: 'HTTP 500', models: [{ model: 'a', today: 5, perDay: 900, lastMinute: 2, perMin: 12, pausedUntil: 10000, dead: false, lastError: 'HTTP 429' }, { model: 'b', today: 0, perDay: 900, lastMinute: 0, perMin: 12, pausedUntil: 0, dead: true, lastError: null }] };
-    expect(statusLine(s, 0)).toBe('on · asking... · all models paused, next in 10 s · error: HTTP 500');
-    expect(statusLine({ ...s, on: false, inFlight: false, pausedUntil: 0, lastError: null }, 0)).toBe('off');
-    expect(modelLines(s, 0)).toEqual(['a  5/900 today  2/12 min · paused 10 s · error: HTTP 429', 'b  0/900 today  0/12 min · not found']);
-    expect(pendingLine(null, 0)).toBe('pending answer: none'); expect(pendingLine({ id: 'eat', reason: 'Hungry.', at: 10 }, 25)).toBe('pending answer: eat  (15 s old)  "Hungry."');
+    expect(statusLine(s, 0)).toBe('The AI is on · asking... · all models are paused, the next is back in 10 s · last error: HTTP 500');
+    expect(statusLine({ ...s, on: false, inFlight: false, pausedUntil: 0, lastError: null }, 0)).toBe('The AI is off');
+    const ml = modelLines(s, 0);
+    expect(ml[0]).toMatch(/^a: 5 of 900 today, 2 of 12 this minute · paused until \d\d:\d\d · last error: HTTP 429$/); expect(ml[1]).toBe('b: 0 of 900 today, 0 of 12 this minute · not available (model not found)');
+    expect(pendingLine(true, true)).toBe('Dave is waiting for the AI...'); expect(pendingLine(false, true)).toBe('An earlier request is still running'); expect(pendingLine(false, false)).toBe('Not asking now');
     expect(requestText([{ role: 'system', content: 'S' }, { role: 'user', content: 'U' }], '{"choice":"eat"}')).toBe('[system]\nS\n\n[user]\nU\n\n[answer]\n{"choice":"eat"}');
   });
+
 });
 
 const sig = r => JSON.stringify({ ticks: r.ticks, events: r.events, maxThirst: r.maxThirst, maxHunger: r.maxHunger, eaten: r.eaten, sleeps: r.sleeps, errors: r.errors, homeDay: r.homeDay, drinks: r.drinks, fires: r.fires });
@@ -308,7 +330,7 @@ describe('lives with the AI chooser (fake ask, no network)', () => {
 
   const makeAi = (pick, calls = []) => {
     const t = { s: 0 };
-    const ai = createAiChooser({ rulesChooser, now: () => t.s, ask: async messages => { calls.push(messages); const ids = [...messages[1].content.matchAll(/^- (\w+):/gm)].map(m => m[1]); return { text: JSON.stringify({ choice: pick(ids), reason: 'Fake.' }), ms: 1 }; } });
+    const ai = createAiChooser({ rulesChooser, now: () => t.s, ask: async messages => { calls.push(messages); const ids = [...messages[1].content.matchAll(/^- (\w+):/gm)].map(m => m[1]); return { text: JSON.stringify({ choice: pick(ids), reason: 'Fake.' }), ms: 5 }; } });
     return { ai, t, calls };
   };
   async function life(chooserOf, days) {
@@ -316,45 +338,57 @@ describe('lives with the AI chooser (fake ask, no network)', () => {
     walkFirstDay(w, game, spawn, {}); game.known.visit(spawn.x, spawn.z);
     const { ai, t, calls } = chooserOf;
     const mind = createMind(w, game, { chooser: ai ? ai.chooser : undefined });
+    if (ai) ai.attach(mind, game);
     mind.engage();
-    const end = game.clock.total + days; let n = 0;
+    const end = game.clock.total + days; let n = 0, waits = 0, still = 0;
     while (game.clock.total < end) {
+      const x = game.player.x, z = game.player.z;
       mind.step(0.1); game.update(mind.input, 0.1); t.s += 0.1;
-      if (ai) { ai.tick(mind, game); if (++n % 20 === 0) await flush(); }
+      if (mind.waiting) { waits++; if (Math.hypot(game.player.x - x, game.player.z - z) < 1e-6) still++; }
+      if (ai && ++n % 3 === 0) await flush();
     }
-    return { game, mind, ai, calls };
+    return { game, mind, ai, calls, waits, still };
   }
 
-  it('runs on with the AI always answering the first menu id, uses its answers and never errors', async () => {
-    const r = await life(makeAi(ids => ids[0]), 1);
-    expect(r.mind.stats.errors || 0).toBe(0); expect(r.calls.length).toBeGreaterThan(3);
+  it('runs on with the AI asked at each decision and always answering the last menu id: Dave waits, uses its answers and never errors', async () => {
+    const r = await life(makeAi(ids => ids[ids.length - 1]), 1);
+    expect(r.mind.stats.errors || 0).toBe(0); expect(r.calls.length).toBeGreaterThan(0);
     expect(r.calls[0][1].content).toContain('Day '); expect(r.calls[0][1].content).toContain('The situation now');
     const used = r.ai.entries.filter(e => e.used === 'ai');
     expect(used.length).toBeGreaterThan(0); for (const e of used) expect(e.menu).toContain(e.ai);
     expect(r.ai.entries.filter(e => e.point && e.point !== 'goal').length).toBe(0);
-    expect(r.mind.stats.goals.idle).toBeGreaterThan(0);
-  }, 120000);
-
-  it('survives an AI that always wants idle (it cannot refuse a need) and one that answers nonsense', async () => {
-    const r = await life(makeAi(ids => ids[ids.length - 1]), 1);
-    expect(r.mind.stats.errors || 0).toBe(0); expect(r.game.thirst.days).toBeLessThan(1.6);
-    for (const e of r.ai.entries.filter(x => x.used === 'ai')) expect(e.menu).toContain(e.ai);
-    const g = await life(makeAi(() => 'dance'), 0.4);
-    expect(g.mind.stats.errors || 0).toBe(0); expect(g.ai.entries.filter(e => e.point).every(e => e.used === 'rules')).toBe(true);
+    expect(r.waits).toBeGreaterThan(0); expect(r.still).toBe(r.waits);   // he stood where he was while waiting
+    expect(r.game.thirst.days).toBeLessThan(1.6);   // the needs are the rules' (a need is never asked)
   }, 180000);
 
-  it('with no answer ever arriving (synchronous run) the lives are exactly the rules\' lives', () => {
-    const a = runMind(w, spawn, { days: 0.4, know: true });
-    const { ai } = makeAi(ids => ids[0]);
-    const b = runMind(w, spawn, { days: 0.4, know: true, chooser: ai.chooser, onTick: (game, mind) => ai.tick(mind, game) });
-    expect(sig(b)).toBe(sig(a));
-    expect(ai.entries.length).toBeGreaterThan(0); expect(ai.entries.every(e => e.used === 'rules')).toBe(true);
+  it('survives an AI that answers nonsense and one that never answers (he waits AI_WAIT seconds at each decision, then the rules decide)', async () => {
+    const g = await life(makeAi(() => 'dance'), 0.4);
+    expect(g.mind.stats.errors || 0).toBe(0); expect(g.ai.entries.filter(e => e.point).every(e => e.used === 'rules')).toBe(true);
+    const t = { s: 0 }, ai = createAiChooser({ rulesChooser, now: () => t.s, ask: () => new Promise(() => {}) });
+    const n = await life({ ai, t, calls: [] }, 0.4);
+    expect(n.mind.stats.errors || 0).toBe(0); expect(n.ai.entries.some(e => e.why === 'no answer')).toBe(true); expect(n.ai.entries.every(e => e.used === 'rules')).toBe(true); expect(n.waits).toBeGreaterThan(0);
+    for (const e of n.ai.entries.filter(x => x.why === 'no answer')) expect(e.ms).toBeGreaterThanOrEqual(AI_WAIT * 1000);
+  }, 180000);
+
+  it('a chooser that says WAIT for some steps: the mind keeps running, no goal starts until it answers, and WAIT at another point is the rules\'', () => {
+    const game = createGame(w, spawn, {}); walkFirstDay(w, game, spawn, {}); game.known.visit(spawn.x, spawn.z);
+    let left = 25, calls = 0, pastimeWaits = 0;
+    const chooser = (point, menu, ctx) => {
+      if (point === 'goal') { calls++; if (left-- > 0) return WAIT; return rulesChooser(point, menu, ctx); }
+      pastimeWaits++; return WAIT;   // not allowed: counts as invalid, the rules answer
+    };
+    const mind = createMind(w, game, { chooser }); mind.engage();
+    let waiting = 0, firstGoal = -1;
+    for (let i = 0; i < 6000 && firstGoal < 0; i++) { mind.step(0.1); game.update(mind.input, 0.1); if (mind.waiting) waiting++; if (mind.goal && firstGoal < 0) firstGoal = i; }
+    expect(waiting).toBe(25); expect(calls).toBeGreaterThanOrEqual(26); expect(firstGoal).toBeGreaterThan(24); expect(mind.waiting).toBe(false);
+    for (let i = 0; i < 6000; i++) { mind.step(0.1); game.update(mind.input, 0.1); }
+    expect(mind.stats.errors || 0).toBe(0); expect(pastimeWaits).toBeGreaterThanOrEqual(0);
   }, 120000);
 
   it('the AI chooser switched off gives exactly the default chooser\'s life (the rules\' streams are drawn once)', () => {
     const a = runMind(w, spawn, { days: 0.4, know: true });
     const ai = createAiChooser({ rulesChooser, ask: async () => { throw new Error('never'); }, enabled: () => false });
-    const b = runMind(w, spawn, { days: 0.4, know: true, chooser: ai.chooser, onTick: (game, mind) => ai.tick(mind, game) });
+    const b = runMind(w, spawn, { days: 0.4, know: true, chooser: ai.chooser });
     expect(sig(b)).toBe(sig(a));
   }, 120000);
 });

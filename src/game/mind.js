@@ -60,6 +60,7 @@
  *   goals chooseGoal allows, in its order, found by asking it again with each goal taken out; an emergency drink or meal is `forced`), 'pastime' (inside idle: two menus, before the wood in his arms goes to camp: gaze, ember, strays; then journey, home, spear, axe, tide, explore, fish, stroll, linger; an option that cannot go through gives DECLINED and the chooser is asked about the options after it) and
  *   'event' (stuck, nopath, no-stand, a goal failed or dropped: the only option is 'continue', which the rules take; no effect). The rules draw from the same streams in the same order as the old if-chain (the facts of each option are read lazily, in that order). The hard rules stay outside the chooser: preemption (`errandPreempts`), the crit test and the handoff. An answer that is not valid is replaced by the rules' (unless the chooser says `selfChecked`: it did that itself; 0.36).
  *   mind.recent: the last 20 { t, day, kind: 'goal' | 'pastime' | event kind, what, outcome } (the decisions with their outcome when they end); mind.lastDecision { point, menu: [ids], chosen }; mind.menu() the goal menu now.
+ * 0.36.1 "Clear log": at the goal point a chooser may answer WAIT (game/intent): no goal starts, `mind.waiting` is true, he stands as he is (no input, no idle seconds counted) and the menu is built anew and the chooser asked again on the next step (the language model of src/ai is asked at the decision and has a few seconds to answer). At the other points WAIT counts as invalid and the rules answer.
  * 0.33.4 "One hearth": `fireAt` ignores a fire in the no-fire zone round a finished ring (game/leanto `noFire`, 8 m): an old fire beside the ring, from before the ring was built, is not fed (the game offers no 'feed' there), not lit again and not counted as his fire, so `feedFire`, `lightFire`, `gather` and the evening plans only know the fire in the ring and it burns out; the site choice is unchanged. The stray zone and the aside pile keep the 3.5 m of 0.31.1 (`STRAY_ZONE`).
  * 0.35.1 "Bearings": the options of the menus carry `at`, `cost` (seconds at full pace) and `est` ('line': a straight line / WALK_SPEED; 'path': the cost fishing and the tide round compute anyway; null), worked out only when read (lazy, `GOAL_EST` and the estimates beside the pastimes: no random number, no path planned, no markBad; the rules never read them). Exploring and the journey have none: 'chosen on the way'.
  * 0.33.3 "Routes": `layAt` with an exact drop (the stray into the ring) tries another approach when the standing point cannot be reached, lies within a metre of another pile of fuel that would take the lay, or he stops more than 0.35 m short of it (found by a scene in which the pile laid beside the ring joined the stray and no fire was lit all evening).
@@ -170,7 +171,7 @@ import { DAWN as SLEEP_DAWN, isNight } from './sleep.js';
 import { seaLevel } from './tide.js';
 import { EAT_AT } from './shells.js';
 import { fishableAt, CARRY_FISH, FISH_DEPTH } from './fish.js';
-import { goalMenu, pastimeMenu, eventMenu, makeMenu, validChoice, choiceId, rulesChooser } from './intent.js';
+import { goalMenu, pastimeMenu, eventMenu, makeMenu, validChoice, choiceId, rulesChooser, WAIT } from './intent.js';
 
 export const THIRST_GO = 0.35, THIRST_TOPUP = 0.2, THIRST_SIP = 0.15, NEAR_WATER = 40;   // 0.29 "Daily bread": a drink every 8 hours or so (thirsty is 12), three or four times a day with the shells and the evening's
 export const HUNGER_GO = 0.4, TIRED_GO = 1;   // a meal at hunger 0.4 (a coconut takes 0.5 off); a nap by day only when he has been awake a whole day
@@ -392,7 +393,7 @@ export function createMind(world, game, opts = {}) {
   const inside = (x, z) => known.hasAround(x, z, MARGIN, DIAG);   // the nine points: (x, z), MARGIN along the axes, DIAG on the diagonals (0.30.5 "Quicker": one lookup where they share a cell)
   const path = createPath(world, { allow: inside, allowVersion: () => known.count, obstacles: game.movement.obstacles }), pathFree = createPath(world, { obstacles: game.movement.obstacles });   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
   const stats = { axe: { made: 0, madeDay: -1, trips: 0, felled: 0, inner: 0, outer: 0, palms: 0, giants: 0, logs: 0, laid: 0, skipped: 0, stuck: 0, fails: 0, felledDays: [], list: [] }, tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, hut: { units: 0, parts: 0, startDay: -1, startTime: null, doneDay: -1, doneTime: null, logsFetched: 0, noLog: 0, cleared: 0, clearFails: 0, never: 0, refused: 0, waits: {} }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, spearsMade: 0, spearStuck: 0, fishTrips: 0, fishTries: 0, fishTripTriesMax: 0, fishCaught: 0, fishEaten: 0, journey: { started: 0, completed: 0, nights: 0, fires: 0, cold: 0, noTarget: 0, back: { thirst: 0, hunger: 0, rain: 0, nopath: 0, late: 0 }, stranded: 0, wood: 0, husked: 0, milk: 0, milkTrips: 0, filled: 0, list: [] }, events: [] };
-  const mind = { input: null, active: false, recent: [], lastDecision: null, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring && !journeyLeg; }, get journeying() { return !!journey; }, get journeyLeg() { return journeyLeg; }, get journey() { return journey; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
+  const mind = { input: null, active: false, waiting: false, recent: [], lastDecision: null, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring && !journeyLeg; }, get journeying() { return !!journey; }, get journeyLeg() { return journeyLeg; }, get journey() { return journey; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let journey = null, journeyLeg = false, journeyDue = JOURNEY_DAY, journeyTried = -9;   // 0.30.19: the journey in hand (it outlasts goals and sleep), the first day of the next one, the day a start was last tried
   const hb = opts.saved && typeof opts.saved === 'object' ? opts.saved : null, wholeDay = v => Number.isInteger(v) && v >= -9 && v < 1e6;   // 0.31.1: what a reload remembers of his habits (`mind.state`); a bad or missing field keeps its start value
   if (hb) { if (wholeDay(hb.journeyDue)) journeyDue = hb.journeyDue; if (wholeDay(hb.journeyTried)) journeyTried = hb.journeyTried; if (Number.isInteger(hb.journeys) && hb.journeys >= 0 && hb.journeys < 1e4) stats.journey.started = hb.journeys; }
@@ -413,6 +414,7 @@ export function createMind(world, game, opts = {}) {
   const note = (kind, what, outcome = null) => { const r = { t: +clock.total.toFixed(4), day: clock.day, kind, what, outcome }; mind.recent.push(r); if (mind.recent.length > RECENT_MAX) mind.recent.shift(); return r; };
   function decide(menu) {   // the chooser picks (an answer that is not a valid choice is replaced by the rules'), and the decision is kept for the tests
     let c = chooser(menu.point, menu, ctx);
+    if (c === WAIT) { if (menu.point === 'goal') return WAIT; c = rulesChooser(menu.point, menu, ctx); }   // 0.36.1: only the goal point may wait (the language model is being asked); elsewhere WAIT is not a choice and the rules answer
     if (chooser !== rulesChooser && !chooser.selfChecked && !validChoice(menu, c)) c = rulesChooser(menu.point, menu, ctx);   // 0.36: a chooser with `selfChecked` (ai/chooser) already falls back to the rules itself, and asking them again would draw their streams twice
     if (menu.point !== 'event') mind.lastDecision = { point: menu.point, menu: menu.options.map(o => o.id), chosen: choiceId(c) };
     return c;
@@ -2445,7 +2447,7 @@ export function createMind(world, game, opts = {}) {
   }
   function release() {
     if (!mind.active) return;
-    endGoal(); journey = null; journeyLeg = false; headingWanted = null; mind.active = false; mind.resting = false; pressed = null; choice = null; sleepKey = false; inp.up = inp.down = inp.left = inp.right = false; idleInput(); inp.sit = false; inp.pace = 1;
+    endGoal(); journey = null; journeyLeg = false; headingWanted = null; mind.active = false; mind.resting = false; mind.waiting = false; pressed = null; choice = null; sleepKey = false; inp.up = inp.down = inp.left = inp.right = false; idleInput(); inp.sit = false; inp.pace = 1;
   }
 
   function step(dt) {
@@ -2470,10 +2472,13 @@ export function createMind(world, game, opts = {}) {
     }
     if (!cur) {
       const crit = game.thirst.days >= 1 || game.hunger.days >= 2 || (game.sleep.canLie(clock.time) && (clock.time >= BED_FROM || clock.time < DAWN));   // 0.29.2: at night, once he may lie down, he does not stand about first (a cold night is two sleeps and the second has little time)
-      if (now < restUntil && !crit) { mind.resting = true; restSit(); if (!p.moving) stats.idleSecs += dt; return; }
+      if (now < restUntil && !crit) { mind.waiting = false; mind.resting = true; restSit(); if (!p.moving) stats.idleSecs += dt; return; }
       mind.resting = false;
       const menu = goalMenu(senses(), chooseGoal, { thirst: VERY_AT, hunger: VERY_HUNGER_AT }, GOAL_EST);   // the goals he could take now, in the order of the rules; the chooser picks (0.35)
-      const name = menu.options.length ? choiceId(decide(menu)) : 'none';
+      const decided = menu.options.length ? decide(menu) : 'none';
+      if (decided === WAIT) { mind.waiting = true; idleInput(); return; }   // 0.36.1: the chooser is not ready (the language model is asked): he stands as he is, no goal, no idle seconds counted, and the menu is built anew on the next step
+      mind.waiting = false;
+      const name = choiceId(decided);
       if (name === 'idle' && now < restUntil) { mind.resting = true; restSit(); if (!p.moving) stats.idleSecs += dt; return; }   // nothing he can do about a need: no spinning
       if (name === 'none') return;
       startGoal(name);

@@ -93,12 +93,21 @@
   #ai input.ai-key { flex: 1 1 120px; min-width: 90px; }
   #ai input[type=password] { font: inherit; color: inherit; background: rgba(255,255,255,.7); border: 1px solid currentColor; border-radius: 3px; padding: 1px 4px; }
   #ai button { font: inherit; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 3px; padding: 1px 6px; cursor: pointer; }
-  #ai .ai-dim, #ai .ai-reason.dim { opacity: .6; } #ai .ai-dim { word-break: break-all; margin-bottom: 4px; }
+  #ai .ai-dim { opacity: .6; } #ai .ai-dim { word-break: break-all; margin-bottom: 4px; }
   #ai .ai-models-status { white-space: pre-wrap; word-break: break-word; margin: 2px 0; opacity: .85; }
   #ai .ai-status, #ai .ai-pending, #ai .ai-models { margin: 2px 0; word-break: break-word; }
-  #ai .ai-log { margin-top: 6px; border-top: 1px solid rgba(46,36,24,.3); padding-top: 4px; }
-  #ai .ai-entry { padding: 2px 0; cursor: pointer; } #ai .ai-entry.note { opacity: .65; cursor: default; }
-  #ai .ai-line { white-space: pre-wrap; word-break: break-word; } #ai .ai-reason { padding-left: 14px; font-style: italic; opacity: .85; }
+  #ai .ai-tally { margin: 6px 0 0; font-weight: bold; }
+  #ai .ai-log { margin-top: 4px; border-top: 1px solid rgba(46,36,24,.3); padding-top: 4px; }
+  #ai .ai-off { margin: 4px 0; font-weight: bold; }
+  #ai .ai-entry { padding: 3px 0 3px 8px; margin: 0 0 5px; cursor: pointer; border-left: 4px solid transparent; }
+  #ai .ai-entry.ai { border-left-color: #2f7a52; background: rgba(47,122,82,.10); }
+  #ai .ai-entry.rules { border-left-color: rgba(46,36,24,.3); color: rgba(46,36,24,.72); }
+  #ai .ai-entry.note { cursor: default; border-left-color: #b4452f; color: #9a3322; font-size: 10px; padding-top: 1px; padding-bottom: 1px; }
+  #ai .ai-line { white-space: pre-wrap; word-break: break-word; }
+  #ai .ai-entry.ai .ai-line b { color: #1f5a3a; }
+  #ai .ai-tag { display: inline-block; padding: 0 5px; border-radius: 3px; background: #c96a1d; color: #fff; font-size: 10px; white-space: nowrap; }
+  #ai .ai-reason { font-style: italic; margin: 1px 0; word-break: break-word; }
+  #ai .ai-sub { word-break: break-word; } #ai .ai-sub.dim { opacity: .6; }
   #ai pre.ai-full { margin: 3px 0 4px; padding: 4px 6px; max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word; background: rgba(46,36,24,.08); border-radius: 3px; font: inherit; cursor: text; }
   #dev[hidden] { display: none; }
   body.ready #dev { visibility: visible; }

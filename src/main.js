@@ -67,7 +67,7 @@
  * step/draw hooks use the player's input only.
  *
  * The AI panel #ai (render/aiPanel, 0.36 "Mind", developer only), toggled with I: an optional language-model chooser for Dave's top-level goal (src/ai). Off by default; with it off the rules choose exactly as before.
- * The client (ai/client) and the chooser (ai/chooser) are made here, the chooser is handed to createMind and `ai.tick` runs every frame the habit drives. The player's own key is kept in localStorage under its own name, never in the save.
+ * The client (ai/client) and the chooser (ai/chooser) are made here, the chooser is handed to createMind and `ai.attach(mind, game)` gives it the state to describe. At a goal decision the chooser asks the model and Dave waits up to AI_WAIT seconds (0.36.1). The player's own key is kept in localStorage under its own name, never in the save.
  *
  * Voice (render/voice): only reasons speak (0.30.20): the mind's intents, and what the player
  * lacks (game.lackAt, once per still period of about 1.5 s); never actions. One short fixed thought above Dave. L opens the
@@ -218,9 +218,10 @@ async function boot() {
   const input = createInput(view.canvas, view.pickGround);
   input.yaw = view.yaw;
   const aiClient = createClient({ fetch: (...a) => window.fetch(...a), storage: store0 });   // 0.36: the optional language-model chooser; off until the player switches it on and enters a key
-  const ai = createAiChooser({ rulesChooser, ask: m => aiClient.send(m), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), clock: () => game.clock });
+  const ai = createAiChooser({ rulesChooser, ask: m => aiClient.send(m), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }) });
   const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai });
   const mind = createMind(world, game, { chooser: ai.chooser, saved: saved && saved.habit, onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);
+  ai.attach(mind, game);   // 0.36.1: the chooser reads the state and the short-term memory of a request from them
   let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
   const tnow = () => performance.now() / 1000 + hurried;   // 0.28 "Habit"
   // 0.30.20: actions never speak, only reasons do (the mind's intents above, and what the player lacks below)
@@ -306,7 +307,6 @@ async function boot() {
       info = game.update(use, h); walked += info.distance;
     }
     info.distance = walked;   // the footprints get the whole way walked this frame
-    if (driving) ai.tick(mind, game);   // 0.36: asks the language model ahead when it is on, has a key and the budget allows (never otherwise)
     aiPanel.update();
     show(info);
     {   // 0.30.20: after about 1.5 s of standing still where something is almost possible, Dave says what is missing, once per still period
