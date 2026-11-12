@@ -56,6 +56,10 @@
  *   and the logs lying about within HOME_MAX_COST of walking), then loads of three branches and three fronds (as for the lean-to); needs and errands break in as ever (a log on his shoulder goes to a log pile: `handoff`), a piece of the hut built counts as a piece of the home built today (`builtDay`: the axe waits for another morning, and after the hut has used its twelve the
  *   axe's own rule, fewer than AXE_LOGS stored, fills a log pile again: timber for later). Before the first part the footprint must be clear (game `hutFits`): his own piles in it are carried out, a load at a time (`clearFootprint`: logs to a log pile, dry fuel, fronds and stones to a spot behind the hut, wet wood to the tideline), a fire place or burnt place is
  *   waited out (it fades in two days), a trunk, a boulder or ground that does not fit (or HUT_REFUSALS refusals by the game) means no hut there for good (`hutNever`; the home stays a lean-to). The reason `hutIntent` is said once, when the errand starts. `mind.stats.hut`, events `hut-start`, `hut-clear`, `hut-done`, `hut-never`, hooks `mind.hutPlan`, `mind.hutNever`, `mind.clearingTrees`, `mind.hutBlockers`, `mind.logsAvail`.
+ * 0.35 "Intentions": every decision is a MENU of the options he has now (game/intent: id, goal, what, at, cost, why, forced), a CHOOSER that picks one (`opts.chooser`, default `rulesChooser`: the rules below, so nothing changes) and the unchanged execution. Three decision points: 'goal' (no goal running: the menu is the
+ *   goals chooseGoal allows, in its order, found by asking it again with each goal taken out; an emergency drink or meal is `forced`), 'pastime' (inside idle: two menus, before the wood in his arms goes to camp: gaze, ember, strays; then journey, home, spear, axe, tide, explore, fish, stroll, linger; an option that cannot go through gives DECLINED and the chooser is asked about the options after it) and
+ *   'event' (stuck, nopath, no-stand, a goal failed or dropped: the only option is 'continue', which the rules take; no effect). The rules draw from the same streams in the same order as the old if-chain (the facts of each option are read lazily, in that order). The hard rules stay outside the chooser: preemption (`errandPreempts`), the crit test and the handoff. An answer that is not valid is replaced by the rules'.
+ *   mind.recent: the last 20 { t, day, kind: 'goal' | 'pastime' | event kind, what, outcome } (the decisions with their outcome when they end); mind.lastDecision { point, menu: [ids], chosen }; mind.menu() the goal menu now.
  * 0.33.4 "One hearth": `fireAt` ignores a fire in the no-fire zone round a finished ring (game/leanto `noFire`, 8 m): an old fire beside the ring, from before the ring was built, is not fed (the game offers no 'feed' there), not lit again and not counted as his fire, so `feedFire`, `lightFire`, `gather` and the evening plans only know the fire in the ring and it burns out; the site choice is unchanged. The stray zone and the aside pile keep the 3.5 m of 0.31.1 (`STRAY_ZONE`).
  * 0.33.3 "Routes": `layAt` with an exact drop (the stray into the ring) tries another approach when the standing point cannot be reached, lies within a metre of another pile of fuel that would take the lay, or he stops more than 0.35 m short of it (found by a scene in which the pile laid beside the ring joined the stray and no fire was lit all evening).
  * 0.33.1 "Hearth": `centreStrays` asks `game.canPileAt` for the ring's middle before it takes a stray, stops for the day after a trip that left no fuel pile in the ring (stats.strayFails, strayRefused), and when the ring holds STRAY_ENOUGH (6) pieces; the walk counts a stall that ended as arrived as no stall (game/route).
@@ -146,7 +150,7 @@
  * 0.30.10 "Walls": he is never boxed in by his own camp. Every pile he lays (through the game's lay, `wood.drop`), the pile places of the upgrades (`homeNeed`, a gap from every pile and fire place instead of the 1.5 m from other piles), the tideline spot (`tideSpot`) and the leftovers of a build keep CAMP_GAP of walking room from the other solids (game/obstacles `gapFree`), so no ring of solids can close round him. (0.32: the building piles, their pair and the pile places of the upgrades are gone.)
  *
  * 0.32 "Piece by piece": the shelter is built from pieces he holds (game/leanto, game/game kinds 'buildHere', 'buildIn', 'upgrade'), not from piles; the home project above (HOME_FROM to HOME_TO, a load of up to three pieces at a time, built in piece by piece) replaces the pile pair, the upgrade piles, `wetForSite`, the one-piece-a-day limit and the adopting of a player's pair of piles.
- * Depends on: game/felled (treeId, treeInfo, trunkRadius ...), game/axe and game/logs (through game), game/path, game/route, game/stand (through game.stand), game/weather (through game.weather: the forecast and the rain of a journey), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (PARTS, built, nextKind, standFor, UPGRADES, ringCentre, keepFree, hutReady, hutDone, hutBegun, inHutBox), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
+ * Depends on: game/intent (the menus and the choosers), game/felled (treeId, treeInfo, trunkRadius ...), game/axe and game/logs (through game), game/path, game/route, game/stand (through game.stand), game/weather (through game.weather: the forecast and the rain of a journey), game/movement, game/clock (DAY_SECONDS), game/wildlife, game/crabs and game/spear (through game), game/fish (fishableAt, CARRY_FISH), game/water, game/wood (dryness, inStripY), game/fire (TORCH_DRY, BURN, DOUSE_DEPTH), game/leanto (PARTS, built, nextKind, standFor, UPGRADES, ringCentre, keepFree, hutReady, hutDone, hutBegun, inHutBox), game/shells, game/sleep (isNight), game/known (through game.known), world/constants, core/noise
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -165,6 +169,7 @@ import { DAWN as SLEEP_DAWN, isNight } from './sleep.js';
 import { seaLevel } from './tide.js';
 import { EAT_AT } from './shells.js';
 import { fishableAt, CARRY_FISH, FISH_DEPTH } from './fish.js';
+import { goalMenu, pastimeMenu, eventMenu, makeMenu, validChoice, choiceId, rulesChooser } from './intent.js';
 
 export const THIRST_GO = 0.35, THIRST_TOPUP = 0.2, THIRST_SIP = 0.15, NEAR_WATER = 40;   // 0.29 "Daily bread": a drink every 8 hours or so (thirsty is 12), three or four times a day with the shells and the evening's
 export const HUNGER_GO = 0.4, TIRED_GO = 1;   // a meal at hunger 0.4 (a coconut takes 0.5 off); a nap by day only when he has been awake a whole day
@@ -377,6 +382,7 @@ export function exactPileDrop(from, to) {
 
 export function createMind(world, game, opts = {}) {
   const onIntent = typeof opts.onIntent === 'function' ? opts.onIntent : null;
+  const chooser = typeof opts.chooser === 'function' ? opts.chooser : rulesChooser;   // 0.35 "Intentions": who picks from the menu (default: the present rules)
   const p = game.player, clock = game.clock, W = game.wood, known = game.known;
   const rng = mulberry32(hashInt(world.seed + 28, opts.stream || 0, 1)), rngEx = mulberry32(hashInt(world.seed + 29, opts.stream || 0, 2)), rngTide = mulberry32(hashInt(world.seed + 30, opts.stream || 0, 3)), rngFish = mulberry32(hashInt(world.seed + 31, opts.stream || 0, 4));   // exploring (0.29.4) draws from a stream of its own, so that the days without a trip stay as they were
   const rngJourney = mulberry32(hashInt(world.seed + 32, opts.stream || 0, 5));   // 0.30.19: the target's rings and the days to the next journey draw from a stream of their own
@@ -385,7 +391,7 @@ export function createMind(world, game, opts = {}) {
   const inside = (x, z) => known.hasAround(x, z, MARGIN, DIAG);   // the nine points: (x, z), MARGIN along the axes, DIAG on the diagonals (0.30.5 "Quicker": one lookup where they share a cell)
   const path = createPath(world, { allow: inside, allowVersion: () => known.count, obstacles: game.movement.obstacles }), pathFree = createPath(world, { obstacles: game.movement.obstacles });   // pathFree: only for a search for water or food (the one time he goes into unknown ground)
   const stats = { axe: { made: 0, madeDay: -1, trips: 0, felled: 0, inner: 0, outer: 0, palms: 0, giants: 0, logs: 0, laid: 0, skipped: 0, stuck: 0, fails: 0, felledDays: [], list: [] }, tide: { rounds: 0, picked: 0, laid: 0, trips: 0, noSpot: 0, burned: 0, wetBurned: 0 }, torch: { taken: 0 }, timber: { plans: 0, replans: 0, loads: [0, 0, 0, 0], wetLoads: [0, 0, 0, 0], handoffs: 0, handoffPieces: 0, fallbacks: 0, far: 0, skipped: 0, owed: 0, retrieved: 0 }, goals: {}, stuck: 0, nopath: 0, idleSecs: 0, lightRefused: 0, gazes: 0, sitSecs: 0, sits: {}, searches: 0, strolls: 0, strollKinds: {}, home: { units: 0, trips: 0, builds: 0, refused: 0, noMaterial: 0 }, hut: { units: 0, parts: 0, startDay: -1, startTime: null, doneDay: -1, doneTime: null, logsFetched: 0, noLog: 0, cleared: 0, clearFails: 0, never: 0, refused: 0, waits: {} }, explores: 0, exploreSecs: 0, crabTrips: 0, crabDigs: 0, crabTripDigsMax: 0, crabsCaught: 0, spearsMade: 0, spearStuck: 0, fishTrips: 0, fishTries: 0, fishTripTriesMax: 0, fishCaught: 0, fishEaten: 0, journey: { started: 0, completed: 0, nights: 0, fires: 0, cold: 0, noTarget: 0, back: { thirst: 0, hunger: 0, rain: 0, nopath: 0, late: 0 }, stranded: 0, wood: 0, husked: 0, milk: 0, milkTrips: 0, filled: 0, list: [] }, events: [] };
-  const mind = { input: null, active: false, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring && !journeyLeg; }, get journeying() { return !!journey; }, get journeyLeg() { return journeyLeg; }, get journey() { return journey; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
+  const mind = { input: null, active: false, recent: [], lastDecision: null, get searching() { return inp.learns === true && !exploring; }, get exploring() { return exploring && !journeyLeg; }, get journeying() { return !!journey; }, get journeyLeg() { return journeyLeg; }, get journey() { return journey; }, goal: null, resting: false, stats, step, engage, release, home: homeSpot, get walking() { return !!inp.target; } };
   let journey = null, journeyLeg = false, journeyDue = JOURNEY_DAY, journeyTried = -9;   // 0.30.19: the journey in hand (it outlasts goals and sleep), the first day of the next one, the day a start was last tried
   const hb = opts.saved && typeof opts.saved === 'object' ? opts.saved : null, wholeDay = v => Number.isInteger(v) && v >= -9 && v < 1e6;   // 0.31.1: what a reload remembers of his habits (`mind.state`); a bad or missing field keeps its start value
   if (hb) { if (wholeDay(hb.journeyDue)) journeyDue = hb.journeyDue; if (wholeDay(hb.journeyTried)) journeyTried = hb.journeyTried; if (Number.isInteger(hb.journeys) && hb.journeys >= 0 && hb.journeys < 1e4) stats.journey.started = hb.journeys; }
@@ -400,6 +406,17 @@ export function createMind(world, game, opts = {}) {
   };
   const ev = (type, data) => { if (stats.events.length < (type.startsWith('home') || type.startsWith('axe') || type.startsWith('tide') || type.startsWith('journey') ? 900 : 400)) stats.events.push({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); };
   const idleInput = () => { inp.target = null; inp.run = false; };
+  // ---------- 0.35 "Intentions": a decision is a menu, a chooser and the execution ----------
+  const ctx = { rand: () => rng(), ex: () => rngEx(), fish: () => rngFish() };   // the streams the rules draw from (the same functions as `rand`, `rngEx`, `rngFish`)
+  const RECENT_MAX = 20;
+  const note = (kind, what, outcome = null) => { const r = { t: +clock.total.toFixed(4), day: clock.day, kind, what, outcome }; mind.recent.push(r); if (mind.recent.length > RECENT_MAX) mind.recent.shift(); return r; };
+  function decide(menu) {   // the chooser picks (an answer that is not a valid choice is replaced by the rules'), and the decision is kept for the tests
+    let c = chooser(menu.point, menu, ctx);
+    if (chooser !== rulesChooser && !validChoice(menu, c)) c = rulesChooser(menu.point, menu, ctx);
+    if (menu.point !== 'event') mind.lastDecision = { point: menu.point, menu: menu.options.map(o => o.id), chosen: choiceId(c) };
+    return c;
+  }
+  const event = (kind, what) => { note(kind, what, 'seen'); decide(eventMenu(kind, cur ? cur.name : null)); };   // something went wrong: remembered, and the chooser is asked; the rules say 'continue', which changes nothing
   const busy = () => game.sleep.asleep || p.lie > 0 || !!p.work || p.stoop > 0 || (p.sitting > 0 && !inp.sit);   // (0.29.2: getting up is not done until he stands)
   const cool = (name, secs = COOL[name] || 60) => { coolUntil[name] = now + secs; };
   const isCool = name => (coolUntil[name] || 0) > now;
@@ -560,12 +577,12 @@ export function createMind(world, game, opts = {}) {
       if (!tap && d <= stop) { idleInput(); return true; }
       if (!route) {
         route = createRoute(fd, p, { x, z }, { stop, tap, near: tap ? 1.3 : 0 });   // tap: a stall within 1.3 m of the thing ends the walk (it lies against a trunk: close enough)
-        if (route.state === 'unreachable') { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); idleInput(); return false; }
+        if (route.state === 'unreachable') { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); event('nopath', cur && cur.name); idleInput(); return false; }
       }
       const u = route.update(p, now - last, busy()); last = now;
-      if (u.stalled) { stats.stuck++; ev('stuck', { goal: cur && cur.name, to: [+x.toFixed(1), +z.toFixed(1)], dist: +d.toFixed(1), n: route.stalls }); }
+      if (u.stalled) { stats.stuck++; ev('stuck', { goal: cur && cur.name, to: [+x.toFixed(1), +z.toFixed(1)], dist: +d.toFixed(1), n: route.stalls }); event('stuck', cur && cur.name); }
       if (u.state === 'arrived') { idleInput(); return true; }
-      if (u.state === 'unreachable') { if (route.reason === 'nopath') { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); } idleInput(); return false; }
+      if (u.state === 'unreachable') { if (route.reason === 'nopath') { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); event('nopath', cur && cur.name); } idleInput(); return false; }
       if (u.final) {
         if (tap) { if (!finalSet) { inp.target = { x, z, tap: true, routed: true }; finalSet = true; } else if (!inp.target) return true; }
         else inp.target = { x, z, routed: true };
@@ -586,7 +603,7 @@ export function createMind(world, game, opts = {}) {
       if (kind === 'take' || kind === 'add' || kind === 'light' ? !W.piles.includes(obj) : kind === 'feed' ? !game.fire.fires.includes(obj) : false) return false;
       if (stand.usable(kind, obj, p.x, p.z, o.free ? null : inside)) { idleInput(); return true; }
       const s = stand.plan(kind, obj, o.free ? pathFree : path, p, { allow: o.free ? null : inside });
-      if (!s) { stats.noStand = (stats.noStand || 0) + 1; if (stats.noStand <= 30) ev('no-stand', { kind }); return false; }
+      if (!s) { stats.noStand = (stats.noStand || 0) + 1; if (stats.noStand <= 30) ev('no-stand', { kind }); event('no-stand', kind); return false; }
       if (!(yield* walk(s.x, s.z, { stop: STOP, hurry: o.hurry, settle: STAND_SETTLE }))) return false;   // 0.30.7: a step of a coarse tick is longer than the 0.12 m window, so he can swing across the point for ever (seed 1337 fresh, ring fire, a crab to roast): after STAND_SETTLE s within 0.3 m the arrival test (`offered` at his real place) decides
       if (stand.offered(kind, obj, p.x, p.z)) return true;
     }
@@ -2231,58 +2248,99 @@ export function createMind(world, game, opts = {}) {
   // uses a dry piece already under his arm if he passes his own home fire.
   // He never fetches wood or maintains flames by day, so it cannot become a
   // permanent daytime fire goal or interrupt an errand.
+  const emberPossible = () => { const f = fireAt(fireSpot(homeSpot())); return !!f && f.fuel <= 0 && W.load() > 0 && dist(p, f) <= 1.2; };   // 0.35: the test of feedPassingEmber, apart from the press
   function feedPassingEmber() {
-    const f = fireAt(fireSpot(homeSpot()));
-    if (!(!!f && f.fuel <= 0 && W.load() > 0 && dist(p, f) <= 1.2)) return false;
+    if (!emberPossible()) return false;
     const w0 = W.carried.slice(), k = pressKind(['feed']);
     if (k) burnedLogs(w0.filter(l => !W.carried.includes(l)));   // (the piece goes on at the next step: counted when it left his arm, usually there)
     return !!k;
   }
+  // 0.35 "Intentions": the idle goal's pastimes are a menu (game/intent `pastimeMenu`, two stages), the chooser picks one and the generators below run it. An option that cannot go through (a trip with nothing to do,
+  // an errand that fails at the start) yields DECLINED: the options before it and it are passed over, and the chooser is asked about the rest, as the old chain went on to the next. The facts of each option are read lazily, in the order the chain read them.
+  const DECLINED = Symbol('declined'), CONTINUE = Symbol('continue');
+  function* pastimes(stage, facts, runs) {
+    const menu = pastimeMenu(stage, facts); let from = 0;
+    for (;;) {
+      const sub = makeMenu('pastime', menu.options.slice(from)), choice = decide(sub), id = choiceId(choice), at = sub.options.findIndex(o => o.id === id);
+      if (at < 0) return stage === 'before' ? CONTINUE : true;   // (no valid answer: the last option of a stage cannot be passed over, so this does not happen)
+      const rec = cur && !cur.pastime ? (cur.pastime = note('pastime', id, 'running')) : note('pastime', id, 'running');
+      const r = yield* runs[id](choice);
+      if (r !== DECLINED) { rec.outcome = 'done'; if (cur && cur.pastime === rec) cur.pastime = null; return r; }
+      rec.outcome = 'declined'; if (cur && cur.pastime === rec) cur.pastime = null;
+      from += at + 1;
+    }
+  }
   function* idleGoal() {
     if (journey) return yield* journeyGoal();   // 0.30.19: a journey is on: nothing else is an idle pastime
     const h = homeSpot(), t = clock.time;
-    if (t >= GAZE_FROM && t < GAZE_TO && gazedDay !== clock.day) { gazedDay = clock.day; yield* handoff('gaze'); return yield* gaze(); }
-    const step = homeNext(homeSnap()), work = step ? homeWork(step, h) : null;   // 0.29.3: the next piece of his home
-    if (feedPassingEmber()) { yield; return true; }
-    if (!isCool('stray') && strays().length && !W.load() && clock.time >= DAY_FROM && clock.time < EVENING && game.thirst.days < EXPLORE_THIRST && game.hunger.days < EXPLORE_HUNGER) { cool('stray', 90); if (yield* centreStrays()) return true; }   // 0.31.1: a stray pile near the ring joins the stock at a calm moment
+    let step, work, prepared = false;
+    const prepare = () => { if (!prepared) { prepared = true; step = homeNext(homeSnap()); work = step ? homeWork(step, h) : null; } };   // 0.29.3: the next piece of his home (after the sunset gaze was passed over, before the ember)
+    const out = yield* pastimes('before', {
+      gaze: () => t >= GAZE_FROM && t < GAZE_TO && gazedDay !== clock.day,
+      ember: () => { prepare(); return emberPossible(); },
+      strays: () => !isCool('stray') && strays().length && !W.load() && clock.time >= DAY_FROM && clock.time < EVENING && game.thirst.days < EXPLORE_THIRST && game.hunger.days < EXPLORE_HUNGER,   // 0.31.1: a stray pile near the ring joins the stock at a calm moment
+    }, {
+      gaze: function* () { gazedDay = clock.day; yield* handoff('gaze'); return yield* gaze(); },
+      ember: function* () { if (feedPassingEmber()) { yield; return true; } return DECLINED; },
+      strays: function* () { cool('stray', 90); if (yield* centreStrays()) return true; return DECLINED; },
+      onward: function* () { return CONTINUE; },
+    });
+    if (out !== CONTINUE) return out;
+    prepare();
     if (W.load() && !(work && homeCarry(work))) yield* handoff('idle');   // 0.30.4: wood left in his arms goes to camp, to the pile it belongs to, before anything else; 0.32: what the next load of the home needs he keeps
     const s = senses();
-    if (clock.day >= journeyDue && clock.day !== journeyTried && clock.time >= JOURNEY_FROM && clock.time < JOURNEY_TO && !isCool('journey')) {   // 0.30.19: now and then a journey (calm at home, in the morning, the weather fair)
-      const sn = homeSnap();
-      if (journeyOk({ day: clock.day, time: clock.time, due: journeyDue, lean: sn.lean, raining: game.weather.raining(clock.total), rainSoon: journeyRain(game.weather, clock.total), thirst: s.thirst, hunger: s.hunger, cool: s.cool }) && (yield* journeyBegin())) return yield* journeyGoal();
-    }
-    if (work && !crabTripOk(s)) return yield* homeGoal(step, work);
-    if (spearMakeOk({ ...s, day: clock.day, lean: homeSnap().lean })) { if (scan('branch', h.x, h.z, SPEAR_RANGE).length && scan('stone', h.x, h.z, SPEAR_RANGE).length) return yield* makeSpearTrip(); cool('spear', 120); }   // 0.30.17: he has no spear and a branch and a stone are at hand
-    if (axeNext({ ...axeSnap(), thirst: s.thirst, hunger: s.hunger }) && !crabTripOk(s)) { const r = yield* axeGoal(); if (r !== null) return r; }   // 0.31 "Axe": once the home is complete, the axe and one tree a morning
-    if (clock.day !== tideDay && clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crabTripOk(s)) { if (yield* tideRound()) return true; }   // 0.30.13: the daily round to the strip
-    if (clock.day > exploredDay && clock.time >= EXPLORE_EARLY && clock.time < EXPLORE_TO) {   // 0.29.4: now and then he goes exploring
+    const memo = f => { let done = false, v; return () => (done ? v : (done = true, v = f())); };
+    const crab = () => crabTripOk(s);
+    const explore = memo(() => {   // 0.29.4: now and then he goes exploring
       // 0.30.16: before EXPLORE_FROM only when calm: the home project has nothing to do today (its next piece, as at HOME_FROM, is none: built today, finished, cooling, no camp; the axe's work of 0.31 does not count: it shares the morning with exploring by chance, as the spear and fishing do) and no crab trip is possible or due
       const calm = clock.time < EXPLORE_FROM ? !homeNext({ ...homeSnap(), time: HOME_FROM }) && !crabTripOk(s) && !crabDue({ ...s, total: clock.total }) : undefined;
-      const missing = exploreMissing(h), chance = exploreChance({ time: clock.time, day: clock.day, thirst: s.thirst, hunger: s.hunger, last: exploredDay, missing: missing.length, cool: s.cool, crab: crabTripOk(s), calm });
-      if (chance > 0 && rngEx() < chance) return yield* exploreTrip(missing);
-    }
-    {   // 0.30.17: fishing as an afternoon pastime, once a day, its own stream; home before dark
-      const chance = fishChance({ ...s, day: clock.day, last: fishedDay, crab: crabTripOk(s) });
-      if (chance > 0 && rngFish() < chance) {
+      const missing = exploreMissing(h);
+      return { missing, chance: exploreChance({ time: clock.time, day: clock.day, thirst: s.thirst, hunger: s.hunger, last: exploredDay, missing: missing.length, cool: s.cool, crab: crabTripOk(s), calm }) };
+    });
+    const fishCh = memo(() => fishChance({ ...s, day: clock.day, last: fishedDay, crab: crabTripOk(s) }));   // 0.30.17: fishing as an afternoon pastime, once a day, its own stream; home before dark
+    let cands = null;
+    const strollOf = r => { cands = strollCands(h); return strollKind({ shore: cands.shore.length > 0, river: cands.river.length > 0, palms: cands.palms.length > 0, forest: cands.forest.length > 0, crabs: cands.crabs.length > 0 && crabTripOk(s) }, lastStroll, r()); };
+    return yield* pastimes('day', {
+      journey: () => clock.day >= journeyDue && clock.day !== journeyTried && clock.time >= JOURNEY_FROM && clock.time < JOURNEY_TO && !isCool('journey') &&   // 0.30.19: now and then a journey (calm at home, in the morning, the weather fair)
+        journeyOk({ day: clock.day, time: clock.time, due: journeyDue, lean: homeSnap().lean, raining: game.weather.raining(clock.total), rainSoon: journeyRain(game.weather, clock.total), thirst: s.thirst, hunger: s.hunger, cool: s.cool }),
+      home: () => !!work && !crab(),
+      spear: () => spearMakeOk({ ...s, day: clock.day, lean: homeSnap().lean }),   // 0.30.17: he has no spear and a branch and a stone are at hand
+      axe: () => axeNext({ ...axeSnap(), thirst: s.thirst, hunger: s.hunger }) && !crab(),   // 0.31 "Axe": once the home is complete, the axe and one tree a morning
+      tide: () => clock.day !== tideDay && clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crab(),   // 0.30.13: the daily round to the strip
+      explore: { ok: () => clock.day > exploredDay && clock.time >= EXPLORE_EARLY && clock.time < EXPLORE_TO && explore().chance > 0, chance: () => explore().chance },
+      fish: { ok: () => fishCh() > 0, chance: fishCh },
+      stroll: { ok: () => s.time >= STROLL_FROM && s.time < STROLL_TO, chance: () => STROLL_CHANCE, kind: strollOf },
+    }, {
+      journey: function* () { if (yield* journeyBegin()) return yield* journeyGoal(); return DECLINED; },
+      home: function* () { return yield* homeGoal(step, work); },
+      spear: function* () { if (scan('branch', h.x, h.z, SPEAR_RANGE).length && scan('stone', h.x, h.z, SPEAR_RANGE).length) return yield* makeSpearTrip(); cool('spear', 120); return DECLINED; },
+      axe: function* () { const r = yield* axeGoal(); return r !== null ? r : DECLINED; },
+      tide: function* () { if (yield* tideRound()) return true; return DECLINED; },
+      explore: function* () { return yield* exploreTrip(explore().missing); },
+      fish: function* () {
         fishedDay = clock.day;
         const o = bestFishSpot(STROLL_MAX_COST);
         if (o && !exploreLate(clock.time, o.cost * 2 + 40)) return yield* fishTrip(o, true);
-      }
-    }
-    if (strollNow(s, rand())) {
-      const cands = strollCands(h), kind = strollKind({ shore: cands.shore.length > 0, river: cands.river.length > 0, palms: cands.palms.length > 0, forest: cands.forest.length > 0, crabs: cands.crabs.length > 0 && crabTripOk(s) }, lastStroll, rand());
-      if (kind) { lastStroll = kind; stats.strolls = (stats.strolls || 0) + 1; stats.strollKinds[kind] = (stats.strollKinds[kind] || 0) + 1; return yield* stroll(kind, cands); }
-    }
-    const bf = t >= EVENING && t < BED_FROM ? nearFlame(IDLE_NEAR + SIT_FIRE) : null;   // 0.29.2: an evening with the fire burning: he spends it sitting by it
-    if (bf && dist(p, bf) > SIT_FIRE) { const a = Math.atan2(p.x - bf.x, p.z - bf.z), q = standNear(bf.x + Math.sin(a) * SIT_AT_FIRE, bf.z + Math.cos(a) * SIT_AT_FIRE, 1); if (q) yield* walk(q.x, q.z, { stop: 0.5 }); }
-    const sp = h.kind === 'leanto' ? fireSpot(h) : { x: h.x, z: h.z };   // else: back to within IDLE_NEAR of home and stands a while
-    if (dist(p, sp) > IDLE_NEAR) { const q = standNear(sp.x, sp.z, 3); if (q) yield* walk(q.x, q.z, { stop: 3 }); }
-    const until = now + LINGER_MIN + (LINGER_MAX - LINGER_MIN) * rand();
-    while (now < until) {
-      if (sitKind({ time: clock.time, long: false, fireNear: !!nearFlame(SIT_FIRE), gazing: false }) === 'fire') setSit(lookAt(), 'fire'); else inp.sit = false;
-      yield;
-    }
-    return true;
+        return DECLINED;
+      },
+      stroll: function* (choice) {
+        const kind = choice.kind || strollOf(() => 0.5);   // (a chooser that does not draw gives no kind: the middle of the range)
+        if (!kind) return DECLINED;
+        lastStroll = kind; stats.strolls = (stats.strolls || 0) + 1; stats.strollKinds[kind] = (stats.strollKinds[kind] || 0) + 1; return yield* stroll(kind, cands);
+      },
+      linger: function* () {
+        const bf = t >= EVENING && t < BED_FROM ? nearFlame(IDLE_NEAR + SIT_FIRE) : null;   // 0.29.2: an evening with the fire burning: he spends it sitting by it
+        if (bf && dist(p, bf) > SIT_FIRE) { const a = Math.atan2(p.x - bf.x, p.z - bf.z), q = standNear(bf.x + Math.sin(a) * SIT_AT_FIRE, bf.z + Math.cos(a) * SIT_AT_FIRE, 1); if (q) yield* walk(q.x, q.z, { stop: 0.5 }); }
+        const sp = h.kind === 'leanto' ? fireSpot(h) : { x: h.x, z: h.z };   // else: back to within IDLE_NEAR of home and stands a while
+        if (dist(p, sp) > IDLE_NEAR) { const q = standNear(sp.x, sp.z, 3); if (q) yield* walk(q.x, q.z, { stop: 3 }); }
+        const until = now + LINGER_MIN + (LINGER_MAX - LINGER_MIN) * rand();
+        while (now < until) {
+          if (sitKind({ time: clock.time, long: false, fireNear: !!nearFlame(SIT_FIRE), gazing: false }) === 'fire') setSit(lookAt(), 'fire'); else inp.sit = false;
+          yield;
+        }
+        return true;
+      },
+    });
   }
 
   function* stuffGoal(kind) {
@@ -2324,7 +2382,7 @@ export function createMind(world, game, opts = {}) {
   }
   function startGoal(name) {
     if (name !== 'idle') inp.sit = false;   // 0.29.2: any task but idling needs him on his feet
-    cur = { name, t0: now, it: GOALS[name](), rank: RANK[name], thoughts: new Set() }; mind.goal = name; stats.goals[name] = (stats.goals[name] || 0) + 1; ev('goal', { goal: name, thirst: +game.thirst.days.toFixed(2), hunger: +game.hunger.days.toFixed(2) });
+    cur = { name, t0: now, it: GOALS[name](), rank: RANK[name], thoughts: new Set(), rec: note('goal', name, 'running'), pastime: null }; mind.goal = name; stats.goals[name] = (stats.goals[name] || 0) + 1; ev('goal', { goal: name, thirst: +game.thirst.days.toFixed(2), hunger: +game.hunger.days.toFixed(2) });
     const intent = { drink: 'drinkIntent', eat: 'foodIntent', sleep: 'sleepIntent' }[name];
     if (intent) think(intent);
     // a torch left in his hand is stuck in the ground first (it cannot be carried with wood)
@@ -2332,6 +2390,7 @@ export function createMind(world, game, opts = {}) {
   }
   function endGoal(why, failed) {
     if (cur && why) { ev('goal-dropped', { goal: cur.name, why }); }
+    if (cur) { const out = why ? 'dropped: ' + why : why === undefined ? 'stopped' : failed ? 'failed' : 'done'; cur.rec.outcome = out; if (cur.pastime && cur.pastime.outcome === 'running') cur.pastime.outcome = out; if (why || failed) event(why ? 'dropped' : 'failed', cur.name); }
     if (cur && (failed || why === 'timeout') && cur.name !== 'idle') cool(cur.name, journey && (cur.name === 'drink' || cur.name === 'eat') ? JOURNEY_COOL : undefined);   // 0.30.19: on a journey a drink or a meal that cannot be had (no water he can reach, no food) is not tried again at once: each try costs the walk its rest
     try { if (cur) cur.it.return(); } catch (e) { /* the generator is gone anyway */ }
     cur = null; mind.goal = null; idleInput(); chose = false; fullPace = false;
@@ -2370,7 +2429,8 @@ export function createMind(world, game, opts = {}) {
       const crit = game.thirst.days >= 1 || game.hunger.days >= 2 || (game.sleep.canLie(clock.time) && (clock.time >= BED_FROM || clock.time < DAWN));   // 0.29.2: at night, once he may lie down, he does not stand about first (a cold night is two sleeps and the second has little time)
       if (now < restUntil && !crit) { mind.resting = true; restSit(); if (!p.moving) stats.idleSecs += dt; return; }
       mind.resting = false;
-      const name = chooseGoal(senses());
+      const menu = goalMenu(senses(), chooseGoal, { thirst: VERY_AT, hunger: VERY_HUNGER_AT });   // the goals he could take now, in the order of the rules; the chooser picks (0.35)
+      const name = menu.options.length ? choiceId(decide(menu)) : 'none';
       if (name === 'idle' && now < restUntil) { mind.resting = true; restSit(); if (!p.moving) stats.idleSecs += dt; return; }   // nothing he can do about a need: no spinning
       if (name === 'none') return;
       startGoal(name);
@@ -2388,6 +2448,7 @@ export function createMind(world, game, opts = {}) {
       }
     }
   }
+  mind.menu = () => goalMenu(senses(), chooseGoal, { thirst: VERY_AT, hunger: VERY_HUNGER_AT });   // 0.35: the goal menu now (for the tests)
   mind.chose = () => chose;
   mind.lastKind = () => lastKind;
   mind.path = path; mind.strollCands = strollCands; mind.leantoSites = leantoSites; mind.tideSpot = tideSpot; mind.materialFind = (kind, range) => nearestBy(kind, range); mind.timberPlan = (src, n, o) => selectStops(src, n, o).sort((a, b) => b.cost - a.cost);
