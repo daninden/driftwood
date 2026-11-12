@@ -2,7 +2,7 @@
 // (game rule, game/leanto `noFire`, game/game `lightable`), and Dave keeps his stock in the ring's middle so that every evening fire is lit there
 // (game/mind: the aside pile stands clear of the zone, strays are carried in, a safety net before lighting).
 // Covers: the zone in the lean-to module, the arc offering 'light' in the ring, nowhere beside it and everywhere else, and a 25-day life of Dave
-// with a finished home on seed 1337 (the mind recreated on day 20): every fire he lights off a journey is in the ring and never two fires within 4 m.
+// with a finished home on seed 1337 (the mind recreated on day 20): every fire he lights off a journey is in the ring and never two fires within 4 m.  0.33.1: and a fire burns in the ring on at least 15 of the 25 days.
 // Depends on: world/world, world/spots, game/game, game/leanto, game/mind, game/fire, tests/helpers/mindCamp.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
@@ -67,15 +67,17 @@ describe('Dave lights his evening fires in the ring (seed 1337, a finished home,
     const note = how => (x, z, ...a) => { const f = g.fire[how + '0'](x, z, ...a); if (f) fires.push({ day: g.clock.day, d: Math.hypot(rc.x - x, rc.z - z), journey: m.journeying }); return f; };
     g.fire.attempt0 = g.fire.attempt.bind(g.fire); g.fire.kindle0 = g.fire.kindle.bind(g.fire);
     g.fire.attempt = note('attempt'); g.fire.kindle = note('kindle');
-    const t0 = g.clock.total; let reset = false, twoClose = 0;
+    const t0 = g.clock.total; let reset = false, twoClose = 0; const litDays = new Set();
     while (g.clock.total < t0 + 25) {
       if (!reset && g.clock.day >= 20) { reset = true; m = createMind(w, g); m.engage(); }
       const lit = g.fire.fires.filter(f => f.fuel > 0.005);
       for (let i = 0; i < lit.length; i++) for (let j = i + 1; j < lit.length; j++) if (Math.hypot(lit[i].x - lit[j].x, lit[i].z - lit[j].z) < 4) twoClose++;
+      if (lit.some(f => Math.hypot(f.x - rc.x, f.z - rc.z) <= RING_R + 0.3)) litDays.add(g.clock.day);
       m.step(0.1); g.update(m.input, 0.1);
     }
     const home = fires.filter(f => !f.journey);
-    expect(home.length).toBeGreaterThanOrEqual(5);
+    expect(home.length).toBeGreaterThanOrEqual(3);   // 0.33.1 "Hearth": the stock stands in the ring and the fire is kept (fewer fresh lightings: 4 here, 10 before); what counts is the days with a fire in the ring
+    expect(litDays.size).toBeGreaterThanOrEqual(15);
     expect(home.filter(f => f.d > RING_R + 0.3).map(f => `d${f.day}:${f.d.toFixed(1)}`)).toEqual([]);
     expect(twoClose).toBe(0);
   }, 400000);

@@ -56,6 +56,7 @@
  *   and the logs lying about within HOME_MAX_COST of walking), then loads of three branches and three fronds (as for the lean-to); needs and errands break in as ever (a log on his shoulder goes to a log pile: `handoff`), a piece of the hut built counts as a piece of the home built today (`builtDay`: the axe waits for another morning, and after the hut has used its twelve the
  *   axe's own rule, fewer than AXE_LOGS stored, fills a log pile again: timber for later). Before the first part the footprint must be clear (game `hutFits`): his own piles in it are carried out, a load at a time (`clearFootprint`: logs to a log pile, dry fuel, fronds and stones to a spot behind the hut, wet wood to the tideline), a fire place or burnt place is
  *   waited out (it fades in two days), a trunk, a boulder or ground that does not fit (or HUT_REFUSALS refusals by the game) means no hut there for good (`hutNever`; the home stays a lean-to). The reason `hutIntent` is said once, when the errand starts. `mind.stats.hut`, events `hut-start`, `hut-clear`, `hut-done`, `hut-never`, hooks `mind.hutPlan`, `mind.hutNever`, `mind.clearingTrees`, `mind.hutBlockers`, `mind.logsAvail`.
+ * 0.33.1 "Hearth": `centreStrays` asks `game.canPileAt` for the ring's middle before it takes a stray, stops for the day after a trip that left no fuel pile in the ring (stats.strayFails, strayRefused), and when the ring holds STRAY_ENOUGH (6) pieces; the walk counts a stall that ended as arrived as no stall (game/route).
  * 0.31.1 "Milk", the fire and the stone ring: with a finished ring only the stock pile in the ring can be lit (game/leanto `noFire`, game/game `lightable`); `ringMid`, `strays`, `centreStrays` carry a stray fuel pile within RING_NOFIRE of the ring's middle into the ring (idle goal at a calm moment, and before `lightFire`), and the aside pile beside a burning fire at the ring stands ASIDE_RING (RING_NOFIRE + 0.7) from it.
  * 0.30.21: journey beds and the sleep fallback are never on a climbing route (the sleep key is refused there): `journeyBed` takes a spot beside the fire on ordinary ground, and the refusal fallback of `sleepGoal` (`ringSpot`) prefers ordinary ring spots, keeping the old one if none qualifies.
  * 0.29.4 "Wander": EXPLORING, a pastime of the idle goal. Now and then (`exploreChance`, pure: by day, EXPLORE_FROM 0.2 to EXPLORE_TO 0.52, thirst and hunger well below the point where he goes for them, no crab trip to make; at most one trip a day, one in
@@ -902,17 +903,20 @@ export function createMind(world, game, opts = {}) {
   }
   // 0.31.1 "Milk": the stone ring's middle (null without a finished ring), the strays near it (piles of fuel more than a ring's radius from the middle but within the zone where no fire can be lit, game/leanto `noFire`),
   // and how a stray is carried into the ring: taken up, laid at the ring's middle (the pile that stands there, else a first pile by `exactPileDrop`). Only with no fire there (a fire is fed, not laid beside).
-  const ASIDE_RING = RING_NOFIRE + 0.7;
+  const ASIDE_RING = RING_NOFIRE + 0.7, STRAY_ENOUGH = 6;
   const ringMid = () => { const h = homeSpot(); return h.kind === 'leanto' && h.lt && game.leantos.has(h.lt, 'ring') ? ringCentre(h.lt) : null; };
   const isFuel = q => q.kind === 'driftwood' || q.kind === 'branch';
   const strays = () => { const rc = ringMid(); return rc ? W.piles.filter(q => isFuel(q) && dist(q, rc) > RING_R - 0.1 && dist(q, rc) <= RING_NOFIRE + 0.3) : []; };
+  let strayFailDay = -1;   // 0.33.1 "Hearth": the day a trip left no fuel pile in the ring: no more stray trips that day (never more than one failed trip an evening)
   function* centreStrays() {   // true when he moved wood
-    const rc = ringMid(); if (!rc || fireAt(rc)) return false;
+    const rc = ringMid(); if (!rc || fireAt(rc) || strayFailDay === clock.day) return false;
+    const inRingNow = () => W.piles.some(q => isFuel(q) && dist(q, rc) <= RING_R - 0.1);
     let moved = false;
     for (let trip = 0; trip < 8; trip++) {
       const inRing = W.piles.filter(q => isFuel(q) && dist(q, rc) <= RING_R - 0.1).sort((a, b) => b.logs.length - a.logs.length)[0];
       const src = strays().filter(q => !isBad('stray', q)).sort((a, b) => fuelOfPile(b) - fuelOfPile(a))[0];
-      if (!src) break;
+      if (!src || (inRing && inRing.logs.length >= STRAY_ENOUGH)) break;   // 0.33.1: with six pieces in the ring the evening's fire is there; the rest of a stray stays where it lies
+      if (!inRing && !game.canPileAt(rc.x, rc.z, pileSolidRadius({ kind: src.kind, logs: src.logs.slice(-CARRY_MAX) }))) { strayFailDay = clock.day; stats.strayRefused = (stats.strayRefused || 0) + 1; ev('stray-refused', {}); break; }   // asked before taking: the game would not lay a pile at the ring's middle
       if (W.load()) yield* handoff('stray');
       const take = function* (pile) { const mine = o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === pile; if (!(yield* goStand('take', pile)) || !pressKind(['pickup'], mine)) return false; yield* waitIdle(); return W.load() > 0; };
       if (inRing && inRing.kind !== src.kind) {   // the ring holds the other kind: a bigger stray takes its place, the small pile in the ring is carried clear of the zone; a smaller one stays where it lies
@@ -928,6 +932,7 @@ export function createMind(world, game, opts = {}) {
       const d = room ? { x: inRing.x, z: inRing.z, pile: inRing, room: PILE_FULL - inRing.logs.length } : { x: rc.x, z: rc.z, exact: true, stock: true, pile: null, room: PILE_FULL };
       if (!(yield* toDest(d))) break;
       yield* layAt(d); moved = true; stats.strayTrips = (stats.strayTrips || 0) + 1; ev('stray-merged', { n: src.logs.length });
+      if (!inRingNow()) { strayFailDay = clock.day; stats.strayFails = (stats.strayFails || 0) + 1; ev('stray-failed', {}); break; }   // the wood did not stay in the ring: not again today
     }
     return moved;
   }

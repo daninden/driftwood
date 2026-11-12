@@ -2,6 +2,33 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.33.1 "Hearth" — 2026-11-12
+
+Found by measuring (diagnosis agreed with the user): with a finished home Dave spent 45 minutes to 2 hours of game time a day carrying wood to and fro by the stone ring, and lit fewer evening fires than he could. **The ring's middle is always a place for the fire's wood now, and he asks before he carries a stray pile there.**
+
+**Cause 1 (costly): the stray ping-pong.** `centreStrays` (game/mind) took three logs from a stray pile near the ring and walked the exact drop to the ring's middle; the game refused a pile there (the lean-to's keep-free apron ends 0.7 m short of the middle, `RING_AT` 2.2, and a pile with the body's clearance needs 0.85: refused by 0.15 m even in an empty camp; plus `CAMP_GAP` against a burnt place or a frond or branch pile near the ring); the fallback laid the three logs back on the same stray, and it repeated up to 8 times per call, every evening: 664 to 1815 stray trips in a 60-day life, and evenings without a fire (a pile outside the ring cannot be lit). **Cause 2 (a counter): arrival stalls.** About 95 % of the `stuck` events were walks that stopped 0.10 to 0.15 m short (`stop` 0.08 or 0.12), stalled for 0.7 s and ended as `arrived` in `route` (d <= ARRIVED 0.15), but `update` still said `stalled: true` and the mind counted `stats.stuck`.
+
+**The fix.**
+
+- **The ring rule (`game/game` `blockedAt`, new `game.canPileAt(x, z, rs)`):** a fuel pile (rs at most a driftwood pile's) whose middle lies in a finished stone ring (`leantos.ring`) is not refused for `CAMP_GAP`; the lean-to's or hut's keep-free region is tested against the pile's own circle (no body clearance on top), which frees the exact middle and keeps the door and the area in front of it free; otherwise only a solid that really overlaps refuses it (a circle that holds the pile's middle), a fire place or burnt place there is the same place (`sameFirePlace`), a lying spear or axe only counts when the pile would stand on it. A wide frond or stone pile follows the old rules. (A first version without the keep-free test put a branch pile 0.9 m in front of the hut's door: 74 `nopath` in the seed 7 life; found by the measurement, fixed, and the test `tests/hearth.test.js` keeps the exact middle free with a hut.)
+- **The mind guard (`game/mind` `centreStrays`):** asks `game.canPileAt` for the ring's middle before it takes a stray (refused: no trip, `stats.strayRefused`); a trip that leaves no fuel pile in the ring ends the stray trips for that day (`stats.strayFails`, never more than one failed trip an evening); and with `STRAY_ENOUGH` (6) pieces in the ring (enough for the evening's fire) the rest of a stray stays where it lies.
+- **The counter (`game/route`):** `update` says `stalled: false` when the stall ended the walk as `arrived`; `stats.stuck` counts real stalls only.
+
+**Measured (against 407de72, 0.33.0, the same scripted lives; strayTrips, stuck, nopath, days with a fire lit in the ring, fires off the ring, hut start and done).**
+
+| life | strayTrips | stuck | nopath | home fire days | fires off the ring | hut start / done |
+|---|---|---|---|---|---|---|
+| 1337, 60 days, finished home on day 2 | 664 -> 6 | 272 -> 7 | 0 -> 0 | 26 -> 59 | 0 -> 0 | 25 / 28 -> 19 / 20 |
+| 2024, same | 1029 -> 4 | 222 -> 7 | 2 -> 0 | 34 -> 56 | 0 -> 0 | 20 / 24 -> 21 / 25 |
+| 7, same | 1815 -> 4 | 146 -> 0 | 0 -> 3 | 6 -> 59 | 0 -> 0 | 20 / 30 -> 20 / 29 |
+| 1337 walked, stream 1, 30 days | 173 -> 0 | 206 -> 5 | 0 -> 0 | 5 -> 10 | 0 -> 0 | none / none -> day 26 / none |
+
+The 24 ten-day lives (3 islands, walked and fresh, streams 0 to 3): stuck 94 -> 31 in all (at most 8 in one life), nopath 3 -> 3, max thirst 0.78 -> 0.78, max hunger 0.86 -> 0.86, 0 collapses before and after, evening fires 203 -> 205, stray trips 62 -> 0. The `mindLife` bounds are upper bounds on `stuck` and stay as they are (lower numbers fit them). `tests/fireRing.test.js` counted fresh lightings (at least 5 in 25 days); now the fire is kept going and is lit less often (4), so it counts the days with a fire in the ring (at least 15 of 25 days, a floor well under what the 60-day lives show).
+
+**Not fixed (open small stalls):** a trunk on a journey route near (-14.0, 36.4) on seed 1337, steep-ground strolls on 2024, and the `no-stand: feed` days 7 to 12.
+
+**Tests.** `tests/hearth.test.js` (new): `canPileAt` at the ring's middle in an empty camp, with a hut, refused beside a real solid and without a ring, free with a burnt place in the ring and a frond pile 1.2 m away; one scripted evening (finished home, a 12-pile 1.5 m from the ring's middle, a one-frond pile, a burnt place in the ring, time 0.62): at most 2 stray trips, a fuel pile in the ring, a fire lit in it. `tests/walk.test.js`: a stall within ARRIVED ends as `arrived` and not stalled. `tests/fireRing.test.js`: see above. Full `npm test`: green, 84 files, 1438 tests, 234 s. `npm run smoke`: ok, 773 s.
+
 ## 0.33.0 "Hut" — 2026-11-11
 
 Agreed in outline with the user on 2026-11-11 (the lean-to's front view needs no change: a matter of perspective; **no dry corner for firewood** in the hut; the home may grow into several small buildings later, a store being a separate annex). **A finished home (lean-to with walls, bed and ring) is rebuilt into a hut of logs, branches and fronds on the same spot, piece by piece, for the player and for Dave: 4 logs, 8 logs, 8 branches, 12 fronds. Dave builds it as the last step of his home once the trees that touch its footprint are felled and twelve logs lie ready.** Everything is in `docs/design.md` under *Hut*; the code is described in `docs/architecture.md`, *The hut*.

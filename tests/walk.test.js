@@ -159,6 +159,12 @@ describe('the follower (game/route)', () => {
     expect(route.state).toBe('unreachable'); expect(route.reason).toBe('stuck'); expect(stalls).toBe(4); expect(t).toBeLessThan(4);
     expect(route.closed.size).toBeGreaterThan(0);
   });
+  it('ends a stall within ARRIVED of the goal as arrived and not stalled (0.33.1)', () => {
+    const path = createPath(world), p = { x: 4.9, z: 0 }, route = createRoute(path, p, { x: 5, z: 0 }, { stop: 0.05 });
+    let stalled = false, t = 0;
+    while (route.state === 'going' && t < 5) { if (route.update(p, 0.1, false).stalled) stalled = true; t += 0.1; }
+    expect(route.state).toBe('arrived'); expect(stalled).toBe(false); expect(route.stalls).toBeGreaterThan(0);
+  });
   it('does not count the time he is busy, replans when the camp closes the way ahead, and costs nothing when a pile appears behind him', () => {
     const s = state(), obstacles = solidObstacles(s.wood, s.fire, s.leantos), path = createPath(world, { obstacles }), p = { x: 0, z: 0 };
     const route = createRoute(path, p, { x: 20, z: 0 }, { stop: 0.2 }); const first = route.pts;

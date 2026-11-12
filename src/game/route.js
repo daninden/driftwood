@@ -17,7 +17,7 @@
  *   finder    a game/path finder; goal { x, z }
  *   stop      (1) the distance to the goal at which a walk without tap is over; tap: the walk ends by the game consuming a tapped target, never by distance; near (0): with tap, a stall within this distance of the goal also ends it as arrived (without tap, a stall within ARRIVED, 0.15 m, does: movement takes less than 0.12 m for arrived)
  *   route.state       'going' | 'arrived' | 'unreachable';   route.reason  for 'unreachable': 'nopath' (no way at all, at the start or after a camp change) or 'stuck'
- *   route.update(player, dt, busy) -> { target: { x, z } | null, final (target is the goal itself), state, remaining (metres of route left), stalled (a stall was just handled) }
+ *   route.update(player, dt, busy) -> { target: { x, z } | null, final (target is the goal itself), state, remaining (metres of route left), stalled (a stall was just handled that did not end the walk as arrived; 0.33.1) }
  *   route.pts, route.index, route.replans, route.stalls, route.closed   for the tests and the mind's statistics
  *
  * Pure; no DOM, no Three.js.
@@ -82,7 +82,7 @@ export function createRoute(finder, from, goal, { stop = 1, tap = false, near = 
     else if (t - prog.t >= STALL_SECS) {
       if (dist(p, prog) < STALL_MOVE) {
         stalled = true; blocked(p, d); prog = { x: p.x, z: p.z, t };
-        if (r.state !== 'going') return done(stalled);
+        if (r.state !== 'going') return done(stalled && r.state !== 'arrived');   // 0.33.1: a stall that ended the walk as arrived (within ARRIVED or tap's near) is the walk's end, not a stuck one
       } else prog = { x: p.x, z: p.z, t };
     }
     // a big displacement: plan again (not a stall)

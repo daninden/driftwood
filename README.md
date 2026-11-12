@@ -116,7 +116,7 @@ With these you can make a finished lean-to better, each once, also piece by piec
 
 - **Side walls** (six fronds, three on a side): fronds hang down along both sides. Wood and fires stay dry a little further from the lean-to (2.5 and 3 metres), and a cold sleep under it lasts seven hours instead of six, so you wake almost fully rested.
 - **A bed** (four branches, then four fronds): a low bed of branches, two rails with their legs and two slats, and fronds on it, under the roof. You rest a quarter faster when you sleep there.
-- **A ring of stones** (eight stones): a ring in front of the open side. Once it stands, a fire can only be lit in the ring itself, not right beside it (the flame icon is not offered for a pile within three and a half metres of its middle, outside the ring). A fire inside it burns one and a half times as long, and the rain neither makes it burn faster nor puts it out. When Dave builds his own fire there, he puts it in the middle of the ring.
+- **A ring of stones** (eight stones): a ring in front of the open side. Once it stands, a fire can only be lit in the ring itself, not right beside it (the flame icon is not offered for a pile within three and a half metres of its middle, outside the ring). The middle of the ring is always free for the fire's wood: a pile laid there is never turned away because the lean-to or the hut is close. A fire inside it burns one and a half times as long, and the rain neither makes it burn faster nor puts it out. When Dave builds his own fire there, he puts it in the middle of the ring.
 
 ### The hut
 
