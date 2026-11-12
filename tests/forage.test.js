@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { nutsOfTile } from '../src/game/fibre.js';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
-import { createGame, REACH } from '../src/game/game.js';
+import { createGame, REACH, PICK_TIME } from '../src/game/game.js';
 import { createForage, plantsOfTile, BERRIES, BANANAS, BERRY_FOOD, BANANA_FOOD, BERRY_SHARE } from '../src/game/forage.js';
 import { EAT_AT, NUT_MAX } from '../src/game/shells.js';
 import { terrainAt } from '../src/game/movement.js';
@@ -38,7 +38,7 @@ const makeInput = (o = {}) => {
   return i;
 };
 const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
-const press = (g, s = 0.8) => { const i = makeInput({ action: 'tap' }); run(g, i, s); return i; };
+const press = (g, s = PICK_TIME + 0.1) => { const i = makeInput({ action: 'tap' }); run(g, i, s); return i; };
 const at = (x, z) => ({ x, z, y: w.H(x, z) });
 const kind = g => { const a = g.action(); return a.tap && a.tap.kind; };
 const besideBush = o => createGame(w, at(B0.x - B0.r - 0.2, B0.z), { sleep: { awake: 0.1 }, ...o });

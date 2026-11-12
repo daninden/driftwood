@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
-import { createGame, STOOP, AIM } from '../src/game/game.js';
+import { createGame, PICK_TIME, AIM } from '../src/game/game.js';
 import { createWood, distToLog, CARRY_MAX, CARRY_SLOW, CARRY_STRIDE } from '../src/game/wood.js';
 import { WALK_SPEED, terrainAt } from '../src/game/movement.js';
 
@@ -46,9 +46,9 @@ describe('picking up and carrying', () => {
     expect(g.wood.onBeach(log)).toBe(false);
     expect(g.player.stoop).toBeGreaterThan(0);
     const at = { x: g.player.x, z: g.player.z };
-    input.up = true; run(g, input, STOOP * 0.8);   // stands still while bending
+    input.up = true; run(g, input, PICK_TIME * 0.8);   // stands still while bending (0.34: PICK_TIME, 2 s, was STOOP 0.55 s)
     expect(g.player.x).toBe(at.x); expect(g.player.z).toBe(at.z);
-    run(g, input, 0.5);
+    run(g, input, PICK_TIME * 0.2 + 0.5);
     expect(Math.hypot(g.player.x - at.x, g.player.z - at.z)).toBeGreaterThan(0.3);
   });
   it('needs a click close to the piece to walk up to it, a tap a little less close', () => {

@@ -23,6 +23,7 @@
 // smoke-30 wood out at low water on the wet strip, smoke-31 the same spot at high water (0.18).
 // smoke-37 beside the berry bush nearest the start, ripe berries on it and the berries icon on the button; after a press (not hungry) the handful in the row and the bush bare (0.26 "Inland", also in the quick run).
 // smoke-36 the row with a nut, an empty and a full half shell beside the fibre tuft (0.25, also in the quick run), smoke-36b the same with the pointer on the nut (0.27.2).
+// smoke-45 the drawings above the castaway (0.34 "Gestures"): right after eating the carried berries, the berries and the half coconut side by side above his head (also in the quick run).
 // smoke-34 the dig icon beside a hole a crab fled into, smoke-35 the crab in the row and the roast icon beside a fire (0.22, both also in the quick run).
 // smoke-25 crabs on the wet sand at low water, smoke-26 a flock of seabirds landed on the beach (also in the quick run).
 // smoke-27 a night fire with two torches in the ground, all lighting the sand (also in the quick run).
@@ -286,6 +287,19 @@ console.log('berries after the press', JSON.stringify(berryAfter));
 if (berryAfter.carried !== 1 || berryAfter.picked !== 1 || berryAfter.hunger > 0.3) errors.push('the berry press did not carry one handful: ' + JSON.stringify(berryAfter));
 if (berryAfter.row < 1) errors.push('the row shows no berries');
 await shot('smoke-38.png', { quick: true, look: true, settle: 400 });
+// Gestures (0.34): eating the carried handful shows its drawing and the half coconut side by side above his head, and they are gone about 1.5 s later.
+await setSize(full ? BIG : SMALL);
+const gest = await page.evaluate(() => { const { game, step } = window.__driftwood, p = game.player; game.hunger.days = 0.4; step(0.1); window.__driftwood.draw();   // the drawings so far are old news
+  const ok = game.use('berries', window.__driftwood.input); step(0.3); window.__driftwood.draw();
+  const box = document.querySelector('.gesture');
+  return { ok, kinds: [...document.querySelectorAll('.gesture svg')].map(e => e.dataset.kind), stoop: p.stoop, box: !!box };
+});
+console.log('gestures', JSON.stringify(gest));
+if (!gest.ok || gest.kinds.join() !== 'berries,half') errors.push('eating the berries did not show the berries and the half coconut above him: ' + JSON.stringify(gest));
+await page.waitForTimeout(320);   // the drawings fade in over a quarter of a second of real time (and are held for a second: shot draws once more, then takes the picture)
+await shot('smoke-45.png', { quick: true, look: true });
+const gone = await page.evaluate(async () => { await new Promise(r => setTimeout(r, 1800)); window.__driftwood.draw(); return document.querySelectorAll('.gesture svg').length; });
+if (gone !== 0) errors.push('the drawings above him stayed: ' + gone);
 await page.evaluate(() => { const { world, game, step } = window.__driftwood, p = game.player, k = window.__berry; game.berries.carried.length = 0; game.berries.picked.clear(); game.berries.version++; game.hunger.days = 1.67; p.x = k.back.x; p.z = k.back.z; p.y = world.H(p.x, p.z); step(0.2); });
 
 // Fire: lay a pile of four dry pieces (the first beach wood) on the dry sand

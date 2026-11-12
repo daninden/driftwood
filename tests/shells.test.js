@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { nutsOfTile } from '../src/game/fibre.js';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
-import { createGame, HUSK_TIME, NUT_DRINK } from '../src/game/game.js';
+import { createGame, HUSK_TIME, NUT_DRINK, PICK_TIME } from '../src/game/game.js';
 import { createShells, SHELL_MAX, NUT_MAX, SIP_DRINK, FILL_TIME, SIP_TIME, DRINK_AT, SIP_AT, EAT_AT, EAT_TIME } from '../src/game/shells.js';
 import { NUT_FOOD } from '../src/game/hunger.js';
 import { TORCH_DAYS } from '../src/game/fire.js';
@@ -65,7 +65,7 @@ describe('game/shells', () => {
     expect(createShells(null).state()).toEqual({ full: [], nuts: 0 });
   });
   it('has the thresholds of the design', () => {
-    expect([DRINK_AT, SIP_AT, EAT_AT, SIP_DRINK, FILL_TIME, SIP_TIME]).toEqual([0.05, 0.15, 1 / 3, 1 / 3, 2, 1.5]);   // 0.29: a full shell takes a third of a day off the thirst; a meal is coming up at a third of a day of hunger
+    expect([DRINK_AT, SIP_AT, EAT_AT, SIP_DRINK, FILL_TIME, SIP_TIME]).toEqual([0.05, 0.15, 1 / 3, 1 / 3, 3, 2.5]);   // 0.34 "Gestures": filling 2 -> 3 s, drinking a shell 1.5 -> 2.5 s;   // 0.29: a full shell takes a third of a day off the thirst; a meal is coming up at a third of a day of hunger
   });
 });
 
@@ -118,7 +118,7 @@ describe('at the water: drink first, else fill', () => {
   it('lays wood down first, then fills', () => {
     const g = atBank({ wood: { carried: logs.slice(40, 42).map(l => l.id), piles: [] }, shells: { full: [false], nuts: 0 } });
     expect(kind(g)).toBe('fill');
-    press(g, 1); expect(g.wood.carried.length).toBe(0); expect(g.player.work && g.player.work.kind).toBe('fill');
+    press(g, PICK_TIME + 0.5); expect(g.wood.carried.length).toBe(0); expect(g.player.work && g.player.work.kind).toBe('fill');   // the wood is laid down first (PICK_TIME since 0.34)
     run(g, makeInput(), FILL_TIME + 0.3); expect(g.shells.list).toEqual([true]);
   });
   it('sticks a torch in the ground first, then fills', () => {
@@ -288,7 +288,7 @@ describe('using a drawing of the row (0.27.2 "Row": game.use)', () => {
     const t0 = g.berries.carried[0], t1 = g.berries.carried[1];
     expect(g.use('berries')).toBe(true); expect(g.berries.carried).toEqual([t1]); expect(g.hunger.days).toBe(0);
     expect(g.use('banana')).toBe(false);   // still stooping from the first
-    run(g, makeInput(), 1);
+    run(g, makeInput(), PICK_TIME + 0.1);   // 0.34: the bend takes PICK_TIME
     expect(g.use('banana')).toBe(true); expect(g.bananas.carried.length).toBe(0); expect(t0).toBeLessThan(t1);
   });
   it('refuses what is not carried and unknown kinds', () => {

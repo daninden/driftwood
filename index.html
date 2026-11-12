@@ -74,6 +74,10 @@
   @media (pointer: coarse) { #carry svg.use { box-sizing: content-box; padding: 8px 5px; margin: -8px -5px; } }
   #carry svg.no { animation: carry-shake 0.35s ease; }
   @keyframes carry-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-3px); } 45% { transform: translateX(3px); } 70% { transform: translateX(-2px); } }
+  .gesture { position: fixed; left: 0; top: 0; display: flex; align-items: flex-end; gap: 3px; margin-top: -6px; pointer-events: none; user-select: none; opacity: 0; will-change: transform, opacity; }   /* 0.34 Gestures: the marks' drawings above the castaway (render/gestureMark) */
+  .gesture svg { height: 30px; width: auto; opacity: 0; fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; filter: var(--halo); overflow: visible; }
+  .gesture.many svg { height: 22px; }
+  .gesture svg .fill { fill: var(--ink); fill-opacity: 0.8; stroke: none; }
   #dev { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); color: var(--ink); opacity: 0.75; padding: 2px 7px; border-radius: 9px; background: var(--ink-back); font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.02em; white-space: nowrap; pointer-events: none; user-select: none; visibility: hidden; }
   #who { position: fixed; top: calc(14px + env(safe-area-inset-top)); left: calc(18px + env(safe-area-inset-left)); color: var(--ink); opacity: 0.55; font: 15px/1.2 Georgia, 'Times New Roman', serif; letter-spacing: 0.04em; text-shadow: 0 0 4px var(--ink-glow), 0 0 9px var(--ink-glow); white-space: nowrap; pointer-events: none; user-select: none; visibility: hidden; transition: opacity 0.5s ease; }
   body.ready #who { visibility: visible; }

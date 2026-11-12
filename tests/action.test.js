@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { nutsOfTile } from '../src/game/fibre.js';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
-import { createGame, wantsToMove, HUSK_TIME, DRINK_TIME, REACH, BESIDE, STOOP, OPTIONS } from '../src/game/game.js';
+import { createGame, wantsToMove, HUSK_TIME, DRINK_TIME, REACH, BESIDE, STOOP, PICK_TIME, OPTIONS } from '../src/game/game.js';
 import { FIRE_MIN, FUEL_MAX, BURN, EMBERS, TORCH_DAYS, TORCH_COST, DRILL_TIME, createFire } from '../src/game/fire.js';
 import { CARRY_MAX, PILE_MAX, pileVisibleRadius } from '../src/game/wood.js';
 import { createInput } from '../src/game/input.js';
@@ -157,7 +157,7 @@ describe('what a short press does', () => {
   it('lays wood down and then drinks; sticks a torch in the ground and then drinks', () => {
     const wood = createGame(w, at(BANK.x - 0.5, BANK.z), { wood: { carried: ids(40, 2), piles: [] }, thirst: { days: 1 } });
     expect(wood.action().tap.kind).toBe('drink');
-    press(wood, 'tap', 1); expect(wood.wood.carried.length).toBe(0); expect(wood.player.work && wood.player.work.kind).toBe('drink');
+    press(wood, 'tap', PICK_TIME + 0.5); expect(wood.wood.carried.length).toBe(0); expect(wood.player.work && wood.player.work.kind).toBe('drink');
     const torch = createGame(w, at(BANK.x - 0.5, BANK.z), { fire: { torch: { left: TORCH_DAYS } }, thirst: { days: 1 } });
     press(torch, 'tap', 1); expect(torch.fire.torches.length).toBe(1); expect(torch.player.work && torch.player.work.kind).toBe('drink');
   });

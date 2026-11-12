@@ -42,9 +42,9 @@
  */
 export const SHELL_MAX = 2, NUT_MAX = 2;
 export const SIP_DRINK = 1 / 3;    // days of thirst a full shell takes away (8 hours: two thirds of the way to thirsty)
-export const FILL_TIME = 2;        // seconds of kneeling to fill a shell
-export const EAT_TIME = 2;         // seconds of kneeling to eat a carried (already husked) nut
-export const SIP_TIME = 1.5;       // seconds to drink a shell
+export const FILL_TIME = 3;        // seconds of kneeling to fill a shell (0.34 "Gestures": was 2)
+export const EAT_TIME = 3;         // seconds of kneeling to eat a carried (already husked) nut (0.34 "Gestures": was 2)
+export const SIP_TIME = 2.5;       // seconds to drink a shell (0.34 "Gestures": was 1.5)
 export const DRINK_AT = 0.05;      // at the water: drink when thirst is above this, else fill a shell
 export const SIP_AT = 0.15;        // away from the water: drink a full shell when thirst is above this
 export const EAT_AT = 1 / 3;       // eat a husked coconut (on the spot or carried) when hunger is above this, else carry it

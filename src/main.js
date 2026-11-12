@@ -34,6 +34,7 @@
  * The moon mark #rest (render/restMark) shows how rested the castaway is;
  * next to it the drop #thirst (render/thirstMark, in #needs) shows how thirsty
  * he is and the half coconut #hunger (render/hungerMark) how hungry, and the row #carry (render/carryMark) what he carries loose (its nut, full shell, berries, banana and crab drawings can be clicked to use them, game.use, 0.27.2).
+ * Each time one of those marks changes, its drawing is shown for a moment above the castaway (render/gestureMark, 0.34 "Gestures"; fed after the frame is drawn, with the camera).
  * All ink marks take their colour from `--ink` on <html>, which render/ink
  * turns pale at night (from sky.day).
  *
@@ -111,6 +112,7 @@ import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
 import { createHungerMark } from './render/hungerMark.js';
 import { createCarryMark, carryState } from './render/carryMark.js';
+import { createGestureMark, gestureState } from './render/gestureMark.js';
 import { createThumbStick, touchOnly } from './render/thumbStick.js';
 import { createActionButton } from './render/actionButton.js';
 import { createDevPanel, DEV_PANEL_VISIBLE } from './render/devPanel.js';
@@ -169,6 +171,7 @@ async function boot() {
   const half = createHungerMark(document.getElementById('hunger'));
   const carry = createCarryMark(document.getElementById('carry'), kind => game.use(kind, input));   // a click on a drawing uses it (0.27.2)
   const voice = createVoice(container, document.getElementById('voice-log'));
+  const gesture = createGestureMark(container), gestureSt = {};   // 0.34 Gestures: the marks' drawings above his head
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
   const speed = parseSpeed(location.search);   // 0.30.11 ?speed=N: game time N times as fast (tests only, never saved)
   dev.setSpeed(speed);
@@ -242,8 +245,10 @@ async function boot() {
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove']) window.addEventListener(type, woken, { capture: true, passive: true });
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };
+  const showGesture = () => gesture.update(gestureState(game, gestureSt), game.player.work, game.sleep.asleep || game.player.lie > 0, performance.now() / 1000, game.player, view.camera);   // 0.34: after the frame is drawn, with its camera
   const draw = () => { view.settle(game.player); view.setWindTime(20);   // the wind at the same moment in every shot
-    for (let i = 0; i < 4; i++) view.render(game.player, show(game.update(input, 0)), 0.5); };
+    for (let i = 0; i < 4; i++) view.render(game.player, show(game.update(input, 0)), 0.5);
+    showGesture(); };
   view.render(game.player, show(game.update(input, 0)), 0);
   loading.done();
   if (asking) {   // the island waits quietly for the answer; until then nothing is saved (a save without a name would count as an answer)
@@ -300,6 +305,7 @@ async function boot() {
     }
     hurried += (speed - 1) * dt;
     view.render(game.player, info, dt); voice.update(dt, game.player, view.camera, performance.now() / 1000);
+    showGesture();
     if (sound.active) hear(info, dt);
     autosave(dt);
     frames++;

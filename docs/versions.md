@@ -2,6 +2,60 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.34.0 "Gestures" — 2026-11-12
+
+Agreed with the user: it was often unclear what the castaway is doing: most actions are a short stoop or a kneel, and at the usual, somewhat zoomed-out camera only the marks at the bottom-left change, which the eye does not follow. Agreed: (1) **every time a mark at the bottom changes, the same icon is shown for a moment above the castaway**, in the ink of the marks, a constant size on screen whatever the zoom, fading in when the action starts and out shortly after it ends; (2) **every such action takes a little longer** (a few seconds, so the icon and the pose can be seen; what it gives is unchanged); (3) **no sounds** for it. Actions with a lasting visible result (building, the fire, felling, fishing, rest) get no icon unless a bottom mark changes with them; nothing else was added (no text, no labels).
+
+**What it is.**
+
+- **The drawings (`render/gestureMark`, new):** a `.gesture` box (`index.html`: `--ink`, glow `--halo`, 30 px tall, 22 px when several) in the island container, moved every drawn frame to the point 1.9 m above his feet projected with the camera (the way `render/voice` places its line), so it is a constant size on screen whatever the zoom and follows him as the camera moves. The drawings are the very same SVG strings as the marks (the carry row's `DRAWINGS`, `DROP_PATH`, `SHELL_PATH` and `RIM_PATH`), no new art. A DOM overlay was chosen over a sprite: constant size and the marks' glow come free, and it is light (the DOM is touched only when the set of drawings or an opacity step changes).
+- **Which (pure, tested):** a carried count that differs (wood, branches, fronds, stones, fibre, crabs, fish, berries, banana bunch, nuts, empty and full shells, added or used up) shows its drawing; thirst falling (he drank) shows the drop; hunger falling (he ate) shows the half coconut; the rest moon never (it only changes asleep). At most three at once, side by side, the needs kept first.
+- **When:** fades in over 0.25 s, is held 1 s after the last change (or the end of the work), fades out over 0.45 s: gone 1.45 s after. During the kneeling works whose result is sure the drawing is there from the start of the work (eating a nut or husking: the nut; drinking a shell: the full shell; drinking at the water: the drop; filling: the empty shell; roasting: the crab or the fish; making a spear: the branch; an axe: the branch and the fibre), and then the marks that change at the end show too. Digging and fishing may fail, so only the change shows (the crab, the fish). Building, upgrading, the drill and felling show only the piece used up. Nothing while he sleeps or lies down, and nothing remembered from the sleep (the wood he lays down as he falls asleep is not shown afterwards); nothing on the first frame of a loaded game.
+- **No sound.** Nothing in `game` or `world` knows about it; `main` feeds it from `game` after `view.render` (and in `__driftwood.draw()` for the smoke tests).
+
+**Durations (`game/game`, `game/shells`).** A bend to pick up, lay down, feed a fire, pick or eat berries and bananas, and the lay before a drink, is `PICK_TIME`; a torch, the axe, the spear and kindling change no mark and keep `STOOP`.
+
+| action | before | now |
+|---|---|---|
+| pick up a piece, from the ground or a pile (`PICK_TIME`) | 0.55 s | 1.5 s |
+| lay down, drop a pile, lay wood before a drink or a fill (`PICK_TIME`) | 0.55 s | 1.5 s |
+| lay a piece on the fire (`PICK_TIME`) | 0.55 s | 1.5 s |
+| pick berries or bananas, eat a carried handful or bunch (`PICK_TIME`) | 0.55 s | 1.5 s |
+| drink a full shell (`SIP_TIME`) | 1.5 s | 2.5 s |
+| eat a carried nut (`EAT_TIME`) | 2 s | 3 s |
+| fill a shell (`FILL_TIME`) | 2 s | 3 s |
+| husk a coconut (`HUSK_TIME`), drink at the water (`DRINK_TIME`), dig a crab (`DIG_TIME`), roast (`ROAST_TIME`), a piece of building (`PIECE_TIME`), make a spear or an axe (`MAKE_TIME`), fish (`FISH_TIME`) | 4, 4, 5, 8, 4, 10, 3 s | unchanged |
+| torch taken or planted, the axe or spear taken or laid, kindling (`STOOP`) | 0.55 s | unchanged |
+
+What an action gives (hunger, thirst, rest, what is carried) is unchanged. `player.work` also has `food` while roasting (for the drawing).
+
+**Measured (HEAD b9907cb, 0.33.4, to this release; the scripted lives of `tests/helpers/mindSim.js` and `mindCamp.js`).** `PICK_TIME` was measured at 2 s first and 1.5 s second; 1.5 s is the one kept.
+
+| life | stuck | nopath | noStand | collapses | max thirst | max hunger | evening fires | hut start / done (day) | journeys started / done |
+|---|---|---|---|---|---|---|---|---|---|
+| 1337, 60 d, home, s0 | 8 -> 4 | 0 -> 0 | 21 -> 12 | 0 | 0.70 -> 0.70 | 0.75 -> 0.78 | 52 -> 56 | 19/23 -> 21/22 | 10/10 -> 8/8 |
+| 2024, 60 d, home, s0 | 14 -> 7 | 0 -> 0 | 0 -> 0 | 0 | 0.70 -> 0.69 | 0.74 -> 0.76 | 53 -> 53 | 20/25 -> 20/24 | 10/10 -> 9/9 |
+| 7, 60 d, home, s0 | 6 -> 13 | 5 -> 3 | 0 -> 0 | 0 | 0.72 -> 0.70 | 0.88 -> 0.79 | 52 -> 52 | 26/34 -> 23/37 | 8/8 -> 7/7 |
+| 24 ten-day lives (sum; walked and fresh, seeds 1337, 2024, 7, streams 0 to 3) | 5 -> 5 | 0 -> 1 | 14 -> 9 | 0 | 0.70 -> 0.72 | 0.82 -> 0.79 | 211 -> 200 | none | 23/17 -> 25/15 |
+
+Progress in the 24 ten-day lives: lean-to finished by day 10 in 20 -> 19 lives, mean day 3.90 -> 4.37; walls 19 -> 16; ring 15 -> 15; the whole home (bed) 15 -> 12 lives, mean day 7.60 -> 7.25 (of those that got there); the share of the waking time standing idle 0.347 -> 0.344; nights of 5 hours or more 216 -> 210; meals a day 2.40 -> 2.38; no simulation error. At 2 s (not kept) the same 24 lives had `stuck` 5 -> 16, lean-to by day 10 in 19 lives at mean day 5.11, home complete in 9, and the 60-day seed 1337 life `noStand` 174 with 30 evening fires (a stall loop at a pile, the open ring-pile stall of 0.33.3, set off by the changed timing); at 1.5 s it did not recur.
+
+Said honestly: **Dave's progress is a little slower**: the lean-to is finished about half a day later on average and the whole home by day 10 in 12 lives instead of 15 (every picked piece now costs 0.95 s more, a load of three about 3 s, and a day's window for the home is short). No collapse, no bound crossed (max thirst 0.72 against 1.125, max hunger 0.79 against 1.5), `stuck` in the ten-day lives equal (5), the 60-day lives better in two, worse in seed 7 (6 -> 13: arrival stalls of the kind listed in `docs/handover.md`, which vary with any timing change). Hut start and finish moved by days either way (seed 7 finished on day 37 instead of 34, seed 1337 day 22 instead of 23). The lean-to of one stream of 1337 fresh and 7 fresh/walked is a day or more later, others earlier: the lives are chaotic in their timing.
+
+**Choices the user did not decide.**
+
+- **Where it sits:** 1.9 m above his feet, bottom edge 6 px above that point, 30 px tall for one drawing and 22 px when two or three show, the stroke of the marks (2 px) and their glow. The voice line (at 1.25 m) can overlap it for a moment; it was left.
+- **The timing:** in 0.25 s, held 1 s, out in 0.45 s (1.45 s after the last change, inside the 1.2 to 1.5 s asked).
+- **Which works get a drawing from their start:** only those that always succeed (see above); not dig, not fish, not building.
+- **The durations** in the table: `PICK_TIME` 1.5 s (the low end of the 1.5 to 3 s asked, chosen because 2 s cost Dave too much progress, see above), drinking a shell 2.5 s, eating a carried nut and filling a shell 3 s; the long works as they were.
+- **At most three drawings;** the needs are kept first when more would change (making an axe: the branch and the fibre).
+- **A changed count shows whether it went up or down**, also what the game changes by itself (a berry cluster or a crab that spoils in his arms shows its drawing); nothing was added to stop that.
+- **A torch, the axe and the spear** (none is in the row) keep the short bend.
+
+**Tests.** `tests/gesture.test.js` (new, 17 tests: which marks changed give which drawings, the drop and the half coconut, the cap of three with the needs first, a drawing for every key with the marks' own paths, the drawings from the start of the sure works and none for building, digging and fishing, the opacity curve and its total of 1.2 to 1.5 s, held through a work and gone after, a repeated key only refreshes, side by side, nothing asleep or on the first frame, the state read from the game, the durations list, `PICK_TIME` standing still with the piece in his arm at once, and that `src/core`, `src/world` and `src/game` use no DOM or WebGL and `core` and `game` no Three.js). Tests whose timings moved (the rule each guards is unchanged): `tests/action.test.js` ("lays wood down and then drinks", the lay now takes `PICK_TIME`, the press runs `PICK_TIME + 0.5` s), `tests/shells.test.js` (the thresholds list 2 -> 3 and 1.5 -> 2.5 s; "lays wood down first, then fills" runs `PICK_TIME + 0.5`; "eats the oldest berries and a banana bunch" waits `PICK_TIME + 0.1` for the bend to end), `tests/forage.test.js` (its `press` helper runs `PICK_TIME + 0.1` s so the second press follows a finished bend: "berries first, then the bunch", "two handfuls are eaten one press each"), `tests/wood.test.js` ("stands still while bending" for `PICK_TIME`, then walks), the version assertion in `tests/devPanel.test.js`. `scripts/smoke.js` has a new shot, `smoke-45.png`: right after eating the carried berries, the berries and the half coconut side by side above his head, checked in the DOM and gone 1.8 s later. `tests/helpers/lifeSeeds.js` (seed 1337 walked: the `burned` bound, rescued pieces burned later, is dropped: 3, 0, 0, 0 over the four streams is met on 1 of 4, below the policy's 2 of 4, as the fish bounds were in 0.30.19; before 3, 0, 2, 2; the safety checks on the tideline and wet wood are unchanged and held; a quantity bound loosened on purpose, as the policy says).
+
+**Results.** Full `npm test`: green, 88 files, 1476 tests, 264 s (the first run had the one `burned` bound failing, fixed as above). Quick `npm run smoke` green (`smoke-45.png` checked). `npm run smoke:full`: green (1017 s, all shots, no errors); looked at `smoke-45.png` (1280x800: the berries and the half coconut side by side above the stooping castaway, small and in the ink of the marks, the same two drawings at the bottom left changed) and `smoke-38.png` (the berries drawing half faded above him after a pick-up), and the DOM check that the two drawings are there and gone 1.8 s later passed.
+
 ## 0.33.4 "One hearth" — 2026-11-12
 
 Agreed with the user (the simplest fix): **beside a finished stone ring the fire is the one in the ring.** A second fire beside the ring arose when a fire already burned there before the ring was built: Dave chooses his site 5, 6.2 or 7.5 m from his fire (`SITE_RINGS`) and the ring stands `RING_AT` 2.2 m to the side of the lean-to, so the ring's middle lies sqrt(r^2 + 2.2^2) = 5.46, 6.58 or 7.82 m from the old fire; the 0.31.1 zone (`leantos.noFire`, 1 to 3.5 m) only stopped new fires, and the old one was fed on.

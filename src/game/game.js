@@ -18,16 +18,16 @@
  *   a pending tap are not saved.
  *   wantsToMove(input) -> true while keys, the thumb stick or a target ask to walk;
  *   it stops kneeling work and drops a queued action (a resting stick is null)
- *   REACH (0.55), BESIDE (1.2), OPTIONS (3), AIM, HUSK_TIME, NUT_DRINK, DRINK_TIME, STOOP: reaches, times and what a nut gives
+ *   REACH (0.55), BESIDE (1.2), OPTIONS (3), AIM, HUSK_TIME, NUT_DRINK, DRINK_TIME, STOOP, PICK_TIME: reaches, times and what a nut gives
  *   game.player                 { x, y, z, heading, moving, speed, phase, stoop, sitting, lie, tired, work }
  *     sitting: 0..1 sitting on the ground (0.29.2 "Amble"), eased by render/hero; goes up over SIT_TIME while input.sit holds and down again when it stops. Not saved
  *     stoop: 1..0 while bending down to pick up or lay down wood (counts
- *     down over STOOP seconds); the castaway stands still meanwhile
+ *     down over PICK_TIME seconds (0.34 "Gestures": 1.5 s for whatever changes a mark at the bottom: picking up, laying down, feeding a fire, berries and bananas, the wood laid down before a drink) or STOOP (0.55 s: a torch, the axe, the spear, kindling); the castaway stands still meanwhile
  *     lie: 0..1 lying down to sleep (game/sleep); tired: 0..1;
      thirsty: 0..1 how thirsty (game/thirst level)
  *     hungry: 0..1 how hungry (game/hunger level)
  *     running: true while he runs this frame; winded: true while he is out of breath (game/breath; for the footsteps and the panting)
- *     work: null, or { kind: 'husk' | 'drill', f: 0..1 } (0.25: 'fill' FILL_TIME and 'sip' SIP_TIME too) while kneeling to
+ *     work: null, or { kind: 'husk' | 'drill', f: 0..1, food?: 'crab' | 'fish' while roasting (0.34) } (0.25: 'fill' FILL_TIME and 'sip' SIP_TIME too) while kneeling to
  *     husk a coconut (HUSK_TIME) or to drill fire (game/fire DRILL_TIME); 0.22: 'dig' (DIG_TIME) and 'roast' (ROAST_TIME) too
  *     torch: true while he carries a burning torch (game/fire); spear: true while the spear is in his hand (0.30.17; work kinds 'make' MAKE_TIME and 'fish' FISH_TIME too)
  *   game.clock                  { time, day, total } (game/clock)
@@ -213,7 +213,8 @@ import { createPath } from './path.js';
 import { createRoute } from './route.js';
 import { createStand } from './stand.js';
 
-export const STOOP = 0.55;         // seconds to bend down and up again
+export const STOOP = 0.55;         // seconds to bend down and up again for what changes no mark (a torch, the axe, the spear, kindling)
+export const PICK_TIME = 1.5;        // 0.34 "Gestures": seconds to bend down and up again for what changes a mark at the bottom: picking up, laying down, feeding the fire, picking or eating berries and bananas
 export const SIT_TIME = 0.5;       // 0.29.2 "Amble": seconds to sit down or get up (a get-up that makes way for a walk takes SIT_TIME / 2)
 export const SIT_SLOPE = 0.45;     // the ground he sits on is no steeper than this (the walking limit is 0.85)
 export const REACH = 0.55;         // a piece of wood, a coconut or a torch in the ground within this distance of the feet can be reached
@@ -249,7 +250,8 @@ export function createGame(world, spawn, opts = {}) {
   const stand = game.stand = createStand(game, world, { BESIDE });   // 0.30.3 "Routes": standing points (game/stand), asked by the click on a pile or fire and by the walk to the spot of a light, a build or an upgrade
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
-  const stoop = () => { player.stoop = 1; };
+  let stoopDur = STOOP;   // 0.34: how long the bend in progress takes (player.stoop counts 1..0 over it)
+  const stoop = (dur = STOOP) => { player.stoop = 1; stoopDur = dur; };
   wood.tideUpdate(game.sea, clock.total);
   const hereAt = (px, pz) => terrainAt(world, px, pz, game.sea);
   const here = () => hereAt(player.x, player.z);
@@ -527,7 +529,7 @@ export function createGame(world, spawn, opts = {}) {
     else if (kind === 'water') { if (!shells.full()) return false; work = { kind: 'sip', t: 0, dur: SIP_TIME, thing: null }; }
     else if (kind === 'berries' || kind === 'banana') {
       if (!(kind === 'berries' ? berries : bananas).eat()) return false;
-      hunger.eat(kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); stoop();
+      hunger.eat(kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); stoop(PICK_TIME);
     } else if (kind === 'crab' || kind === 'fish') {   // 0.30.17: a fish is roasted like a crab
       const f = (kind === 'crab' ? crabs : fish).carried.length ? fire.find(player.x, player.z, BESIDE, 'fire') : null;
       if (!f || !(fire.strength(f.fire) > 0)) return false;
@@ -540,13 +542,13 @@ export function createGame(world, spawn, opts = {}) {
   function press(a, input) {   // a short press of the action button
     input.clearTarget();
     if (a.thing && a.kind !== 'drink' && a.kind !== 'fill') face(a.thing);
-    if (a.kind === 'pickup') { if (wood.take(a.thing, clock.total)) { stoop(); notifyAction('pickup'); } }
+    if (a.kind === 'pickup') { if (wood.take(a.thing, clock.total)) { stoop(PICK_TIME); notifyAction('pickup'); } }
     else if (a.kind === 'husk') { work = { kind: 'husk', t: 0, dur: a.thing ? HUSK_TIME : EAT_TIME, thing: a.thing ? a.thing.coco : null }; notifyAction(a.thing ? 'husk' : 'eatNut'); }   // no thing: a carried nut (already husked: EAT_TIME)
     else if (a.kind === 'berries' || a.kind === 'bananas') {
       const f = a.kind === 'berries' ? berries : bananas;
-      if ((a.eat || !f.full()) && f.pick(a.thing.plant, clock.total)) { if (a.eat) hunger.eat(a.kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); else f.stow(clock.total); stoop(); notifyAction(a.kind); }
+      if ((a.eat || !f.full()) && f.pick(a.thing.plant, clock.total)) { if (a.eat) hunger.eat(a.kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); else f.stow(clock.total); stoop(PICK_TIME); notifyAction(a.kind); }
     } else if (a.kind === 'eatBerries' || a.kind === 'eatBanana') {
-      if ((a.kind === 'eatBerries' ? berries : bananas).eat()) { hunger.eat(a.kind === 'eatBerries' ? BERRY_FOOD : BANANA_FOOD); stoop(); notifyAction(a.kind); }
+      if ((a.kind === 'eatBerries' ? berries : bananas).eat()) { hunger.eat(a.kind === 'eatBerries' ? BERRY_FOOD : BANANA_FOOD); stoop(PICK_TIME); notifyAction(a.kind); }
     }
     else if (a.kind === 'sip') { work = { kind: 'sip', t: 0, dur: SIP_TIME, thing: null }; notifyAction('sip'); }
     else if (a.kind === 'dig') { work = { kind: 'dig', t: 0, dur: DIG_TIME, thing: a.thing.id }; notifyAction('dig'); }
@@ -564,12 +566,12 @@ export function createGame(world, spawn, opts = {}) {
     else if (a.kind === 'laySpear') { if (!wet(here()) && spear.lay(player.x, player.z)) { stoop(); notifyAction('laySpear'); } }
     else if (a.kind === 'feed') {   // only a piece dry enough to burn goes on; wet wood stays in his arm
       const l = wood.giveOne(fuel);
-      if (l) { fire.feed(a.fire, dryness(l, clock.total), l.branch ? BRANCH_BURN : 1); stoop(); notifyAction('feed'); }
+      if (l) { fire.feed(a.fire, dryness(l, clock.total), l.branch ? BRANCH_BURN : 1); stoop(PICK_TIME); notifyAction('feed'); }
     } else if (a.kind === 'torch') { if (a.fire ? fire.takeTorch(a.fire) : fire.pickTorch(a.torch)) { stoop(); notifyAction('torch'); } }
     else if (a.kind === 'drink' || a.kind === 'fill') {
-      if (wood.load() || fire.torch) { if (fire.torch ? plantBeside() : lay(player.heading + Math.PI)) { stoop(); queued = a.kind; } }   // hands first, then drink or fill
+      if (wood.load() || fire.torch) { const torch = !!fire.torch; if (torch ? plantBeside() : lay(player.heading + Math.PI)) { stoop(torch ? STOOP : PICK_TIME); queued = a.kind; } }   // hands first, then drink or fill
       else drink(a.thing, a.kind);
-    } else if (a.kind === 'lay') { if (lay(player.heading)) { stoop(); notifyAction('lay'); } }
+    } else if (a.kind === 'lay') { if (lay(player.heading)) { stoop(PICK_TIME); notifyAction('lay'); } }
     else if (a.kind === 'plant') { if (plantTorch()) { stoop(); notifyAction('plant'); } }
   }
 
@@ -710,7 +712,7 @@ export function createGame(world, spawn, opts = {}) {
       if (tg && tg.tap && !tg.seen) look(tg);
       const a = input.target && input.target.act;
       if (player.stoop > 0) {
-        player.stoop = Math.max(0, player.stoop - dt / STOOP);
+        player.stoop = Math.max(0, player.stoop - dt / stoopDur);
         res = stepPlayer(world, player, null, dt);
       } else if (queued) {   // hands are free now: kneel and drink
         const q = queued; queued = null;
@@ -734,7 +736,7 @@ export function createGame(world, spawn, opts = {}) {
     }
     if (res.moved) known.visit(player.x, player.z, input.learns === false ? 0 : undefined);   // what he walks past he knows (only when he moved: a frame of standing, or a reload, teaches nothing; the mind learns no new ground)
     breath.update(dt, ran, res.moved, strain); player.running = ran; player.winded = breath.winded;
-    player.work = work ? { kind: work.kind, f: Math.min(1, work.t / work.dur) } : null;
+    player.work = work ? { kind: work.kind, f: Math.min(1, work.t / work.dur), ...(work.food ? { food: work.food } : {}) } : null;   // food: 'crab' | 'fish' while roasting (0.34, for the gesture icon)
     if (fire.torch && here().depth > DOUSE_DEPTH) fire.douse();   // wading too deep puts the torch out
     player.torch = !!fire.torch; player.spear = spear.hand; player.axe = axe.hand;
 
