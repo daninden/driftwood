@@ -244,6 +244,7 @@ Dave does this on his own, too, but only once his shelter is quite finished (the
 - **Q / E**, right mouse drag or two fingers: turn the view; right mouse drag up and down: tilt; mouse wheel, **+ / -** or pinch: zoom (the view is remembered per island)
 - **M**, or a click or tap on the small speaker above the moon: turn sound on or off
 - **G** (desktop only): cycle the picture quality from automatic to fixed levels 0 through 4, then back to automatic; the developer panel says whether it is `auto` or `fixed`
+- **I** (developer AI panel, optional): shows or hides a small panel to let a language model choose Dave's next big errand (drink, eat, sleep, fire, stores or free time). It is off until you switch it on and enter your own Google AI Studio key; the key stays in this browser only. If no model answers in time (or all have spent their free requests), or something is urgent, Dave decides as usual. Only the state of the game is sent (no name, no key); on Google's free tier prompts may be used by Google to improve its products. The panel logs every decision and the model's reason
 - **Enter** (or the arrow): confirm your name at the start of an island
 - **Shift + `**: start over (forget this island's save and begin again; the name is asked again)
 - **`** (backtick): show or hide the developer panel (version, name, frame rate, work time per frame, quality level `q0` to `q4`, automatic or fixed); while it is shown you can zoom out further, to 25

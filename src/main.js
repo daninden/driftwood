@@ -66,6 +66,9 @@
  * The developer panel shows both the selected mode and `habit`; headless
  * step/draw hooks use the player's input only.
  *
+ * The AI panel #ai (render/aiPanel, 0.36 "Mind", developer only), toggled with I: an optional language-model chooser for Dave's top-level goal (src/ai). Off by default; with it off the rules choose exactly as before.
+ * The client (ai/client) and the chooser (ai/chooser) are made here, the chooser is handed to createMind and `ai.tick` runs every frame the habit drives. The player's own key is kept in localStorage under its own name, never in the save.
+ *
  * Voice (render/voice): only reasons speak (0.30.20): the mind's intents, and what the player
  * lacks (game.lackAt, once per still period of about 1.5 s); never actions. One short fixed thought above Dave. L opens the
  * in-memory session log with island HH:mm timestamps (no dates); its own
@@ -91,7 +94,7 @@
  * While loading, the bar in #loader (index.html) shows how far it is
  * (core/loading); it fades out with the class `ready` on <body>.
  *
- * window.__driftwood exposes { world, game, view, input, mind, takeover, hands, ready, quality, sound, soundSwitch } for the smoke
+ * window.__driftwood exposes { world, game, view, input, mind, takeover, hands, ready, quality, sound, soundSwitch, ai, aiClient, aiPanel } for the smoke
  * test (and `frames`, a read-only count of drawn frames, for checking the pacing), plus three hooks so it does not have to play in real time (a
  * headless browser without a GPU draws only a few frames per second):
  *   pause(on)              stop or restart drawing in the frame loop
@@ -108,6 +111,10 @@ import { createGame, wantsToMove } from './game/game.js';
 import { createInput, createTakeover, createActing, QUIET } from './game/input.js';
 import { createHands, loadHands, saveHands, isHandsKey } from './game/hands.js';
 import { createMind } from './game/mind.js';
+import { rulesChooser } from './game/intent.js';
+import { createClient } from './ai/client.js';
+import { createAiChooser } from './ai/chooser.js';
+import { createAiPanel, isAiPanelEvent } from './render/aiPanel.js';
 import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
 import { createHungerMark } from './render/hungerMark.js';
@@ -210,14 +217,17 @@ async function boot() {
   view.setGame(game);
   const input = createInput(view.canvas, view.pickGround);
   input.yaw = view.yaw;
-  const mind = createMind(world, game, { saved: saved && saved.habit, onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);
+  const aiClient = createClient({ fetch: (...a) => window.fetch(...a), storage: store0 });   // 0.36: the optional language-model chooser; off until the player switches it on and enters a key
+  const ai = createAiChooser({ rulesChooser, ask: m => aiClient.send(m), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), clock: () => game.clock });
+  const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai });
+  const mind = createMind(world, game, { chooser: ai.chooser, saved: saved && saved.habit, onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);
   let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
   const tnow = () => performance.now() / 1000 + hurried;   // 0.28 "Habit"
   // 0.30.20: actions never speak, only reasons do (the mind's intents above, and what the player lacks below)
   let still = 0, stillSaid = false, lastX = game.player.x, lastZ = game.player.z;   // seconds the player has stood still; whether this still period was asked about
   const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
   const poke = e => {
-    if (isVoiceLogEvent(e)) return;
+    if (isVoiceLogEvent(e) || isAiPanelEvent(e)) return;
     if (!acting.event(e)) return;
     hands.playerAction(); saveHands(hands.mode); dev.setHands(hands.mode);
     takeover.poke(tnow()); mind.release(); dev.setHabit(false);
@@ -241,7 +251,7 @@ async function boot() {
   const cap = touch ? FRAME_CAP_TOUCH : 0;   // 0: no cap
   const quiet = createIdleTracker(undefined, last);
   let anchor = -Infinity;   // where the frame schedule stands (render/framePacer)
-  const woken = e => { if (isVoiceLogEvent(e)) return; const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
+  const woken = e => { if (isVoiceLogEvent(e) || isAiPanelEvent(e)) return; const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove']) window.addEventListener(type, woken, { capture: true, passive: true });
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };
@@ -271,7 +281,7 @@ async function boot() {
     hands.cycle(); saveHands(hands.mode); dev.setHands(hands.mode);
   });
   if (hands.mode === 'computer') { mind.engage(); dev.setHabit(true); }   // Computer has no quiet wait, even on the ready frame
-  window.__driftwood = { world, game, view, input, mind, takeover, hands, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
+  window.__driftwood = { world, game, view, input, mind, takeover, hands, ai, aiClient, aiPanel, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     requestAnimationFrame(frame);
     if (paused) { last = now; return; }
@@ -296,6 +306,8 @@ async function boot() {
       info = game.update(use, h); walked += info.distance;
     }
     info.distance = walked;   // the footprints get the whole way walked this frame
+    if (driving) ai.tick(mind, game);   // 0.36: asks the language model ahead when it is on, has a key and the budget allows (never otherwise)
+    aiPanel.update();
     show(info);
     {   // 0.30.20: after about 1.5 s of standing still where something is almost possible, Dave says what is missing, once per still period
       const p = game.player, moved = Math.hypot(p.x - lastX, p.z - lastZ) > 0.01 || wantsToMove(input) || input.pressing() || game.sleep.asleep || p.work;

@@ -58,7 +58,7 @@ export const devLabel = (version, name, fps, ms = null, idle = false, zoom = 0, 
   return `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (speed > 1 ? ` \u00b7 \u00d7${Math.round(speed * 100) / 100}` : '') + (zoom > 10.5 ? ` \u00b7 zoom ${Math.round(zoom)}` : '') + (quality === null || quality === undefined ? '' : ` \u00b7 q${typeof quality === 'object' ? quality.level : quality} ${typeof quality === 'object' && !quality.adapt ? 'fixed' : 'auto'}`) + (hands ? ` \u00b7 ${hands}` : '') + (idle ? ' \u00b7 idle' : '') + (habit ? ' \u00b7 habit' : '');
 };
 
-export const isToggleKey = e => e.code === 'Backquote' && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
+export const isToggleKey = e => e.code === 'Backquote' && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '')) && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
 
 export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
   const meter = createFpsMeter();

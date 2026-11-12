@@ -86,6 +86,20 @@
    #voice-log { position:fixed; z-index:3; left:calc(18px + env(safe-area-inset-left)); top:calc(46px + env(safe-area-inset-top)); width:min(330px,calc(100vw - 36px)); max-height:min(42vh,320px); overflow-y:auto; box-sizing:border-box; padding:11px 14px; color:var(--ink); background:var(--ink-back); border:1px solid rgba(46,36,24,.35); border-radius:3px; font:italic 15px/1.45 Georgia,'Times New Roman',serif; letter-spacing:.02em; text-shadow:0 0 4px var(--ink-glow); touch-action:pan-y; user-select:text; -webkit-user-select:text; }
    #voice-log[hidden] { display:none; } #voice-log .title { margin:0 0 6px; font:12px/1 Georgia,'Times New Roman',serif; letter-spacing:.08em; opacity:.7; } #voice-log div:not(.title) { padding:2px 0; }
   body.ready #wake { visibility: visible; }
+  #ai { position: fixed; z-index: 3; top: calc(34px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); width: min(440px, calc(100vw - 20px)); max-height: min(72vh, 600px); overflow-y: auto; box-sizing: border-box; padding: 8px 10px; color: #2e2418; background: rgba(250,244,228,.94); border: 1px solid rgba(46,36,24,.45); border-radius: 4px; font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; touch-action: pan-y; user-select: text; -webkit-user-select: text; }
+  #ai[hidden] { display: none; }
+  #ai .ai-title { font-weight: bold; letter-spacing: .05em; margin-bottom: 5px; }
+  #ai .ai-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
+  #ai input.ai-key { flex: 1 1 120px; min-width: 90px; }
+  #ai input[type=password] { font: inherit; color: inherit; background: rgba(255,255,255,.7); border: 1px solid currentColor; border-radius: 3px; padding: 1px 4px; }
+  #ai button { font: inherit; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 3px; padding: 1px 6px; cursor: pointer; }
+  #ai .ai-dim, #ai .ai-reason.dim { opacity: .6; } #ai .ai-dim { word-break: break-all; margin-bottom: 4px; }
+  #ai .ai-models-status { white-space: pre-wrap; word-break: break-word; margin: 2px 0; opacity: .85; }
+  #ai .ai-status, #ai .ai-pending, #ai .ai-models { margin: 2px 0; word-break: break-word; }
+  #ai .ai-log { margin-top: 6px; border-top: 1px solid rgba(46,36,24,.3); padding-top: 4px; }
+  #ai .ai-entry { padding: 2px 0; cursor: pointer; } #ai .ai-entry.note { opacity: .65; cursor: default; }
+  #ai .ai-line { white-space: pre-wrap; word-break: break-word; } #ai .ai-reason { padding-left: 14px; font-style: italic; opacity: .85; }
+  #ai pre.ai-full { margin: 3px 0 4px; padding: 4px 6px; max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word; background: rgba(46,36,24,.08); border-radius: 3px; font: inherit; cursor: text; }
   #dev[hidden] { display: none; }
   body.ready #dev { visibility: visible; }
 </style>
@@ -99,6 +113,7 @@
 <div id="arc" role="group" aria-label="Other things to do"></div>
 <div id="row" aria-hidden="true"><div id="needs"><svg id="thirst" viewBox="0 0 16 24"><clipPath id="thirst-clip"><rect x="0" y="0" width="16" height="24"/></clipPath><path class="lit" clip-path="url(#thirst-clip)" d="M8 1C10 5 14 10 14 15.5A6 6 0 0 1 2 15.5C2 10 6 5 8 1Z"/><path class="rim" d="M8 1C10 5 14 10 14 15.5A6 6 0 0 1 2 15.5C2 10 6 5 8 1Z"/></svg><svg id="hunger" viewBox="0 0 24 24"><clipPath id="hunger-clip"><rect x="0" y="8" width="24" height="14"/></clipPath><path class="lit" clip-path="url(#hunger-clip)" d="M2 8C2 16.5 6.5 22 12 22C17.5 22 22 16.5 22 8Z"/><path class="rim" d="M2 8C2 16.5 6.5 22 12 22C17.5 22 22 16.5 22 8"/><path class="rim" d="M2 8A10 3 0 1 1 22 8A10 3 0 1 1 2 8Z"/></svg></div><div id="carry"></div></div>
 <div id="dev" aria-hidden="true"></div>
+<div id="ai" hidden aria-label="AI panel"></div>
 <div id="who" aria-hidden="true"></div>
 <div id="wake" aria-hidden="true"></div>
 <div id="voice-log" hidden aria-label="Words"><div class="title">WORDS</div></div>

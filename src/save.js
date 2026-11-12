@@ -195,7 +195,7 @@ export const withoutNew = search => {
   return rest.length ? '?' + rest.join('&') : '';
 };
 
-export const isResetKey = e => e.code === 'Backquote' && !!e.shiftKey && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey;
+export const isResetKey = e => e.code === 'Backquote' && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '')) && !!e.shiftKey && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey;
 
 export function createSaveStore(seed, getStorage = () => window.localStorage) {
   const key = saveKey(seed);

@@ -2,6 +2,26 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.36.0 "Mind" — 2026-11-12
+
+Agreed with the user: an optional language-model chooser for Dave's **top-level goal** only (the point `goal`: drink, eat, sleep, fire, stores, idle). Pastimes and events stay on the rules (later releases). Everything is in a new developer **AI panel** (key **I**), not in the dev panel. Off by default: with it off, the rules' answer is returned unchanged.
+
+**What it is.**
+
+- **`src/ai/` (new):** `config` (constants), `prompt` (pure: the fixed system text, the state, `mind.recent`, the options with `cost`; `parseAnswer`), `client` (the one connection with budget, 429 pause and timeout; `fetch`, storage and clock handed in), `chooser` (`createAiChooser`: synchronous chooser, ask-ahead `tick`, the decision log). `render/aiPanel`: on/off, key field (password), clear key, list models, status, pending answer, running log (newest first, last 100, memory only) with the AI's reason and, on a click, the full request and raw answer.
+- **Asked ahead, never waited for.** While a goal runs, the menu he would have if it ended now is sent; the parsed answer waits as the pending answer. When the goal ends it is used once if fresh and on the menu; else the rules decide and the log says why. A forced option (an emergency) is always the rules'. The rules' chooser is always called first, so their random streams are drawn as without the AI.
+- **Key.** Only under `driftwood.ai.key` in localStorage; never in the save, never logged, never in a status or error text. Only game state is sent (no name, no key).
+- **Keyboard.** Typing in the key field reaches no game key (`isTyping` in `game/input`, also for the dev-panel and reset keys); **I** is passive (does not take Dave back from his habit); the panel's pointer events do not walk Dave.
+- **`game/mind`:** one line: a chooser flagged `selfChecked` is not validated a second time (that would draw the rules' streams twice).
+
+**Models.** A list in order of preference, `AI_MODELS` = `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-2.5-flash-lite` (the user's choice). Each model has its own counters (a per-minute window, a per-day count in localStorage per model name) and its own pause. A request goes to the first model that is not paused or dead and within its budget; a 429 pauses that model (Retry-After, else 60 s), a 404 "model not found" for the rest of the session, and the same request is retried once on the next available model. Only when every model is spent or paused do the rules decide (log reason `budget`). The panel has one status line per model and every log entry says which model answered.
+
+**Choices made that the user did not decide:** the address and the model list are constants in `ai/config`; budget per model `AI_PER_MIN` 12 and `AI_PER_DAY` 900 (**the user gave 1000 requests a day for gemini-2.5-flash-lite on their key; the other two models are assumed to allow the same**; the numbers stay below it; the day resets at Pacific midnight, as Google's does); `AI_FRESH` 90 s, `AI_ASK_EVERY` 20 s, timeout 15 s, temperature 0.7; ask once per goal (again only when the pending answer is about to go stale), not for fewer than two options; key **I**; the panel is light and opaque for reading; the AI sees `mind.recent` (20 entries) and a state snapshot without the fire and the weather forecast; a failed or unusable request shows as a dim line in the log.
+
+**Notice for players of the free tier:** prompts sent on Google's free tier may be used by Google to improve its products.
+
+**Tests:** `tests/ai.test.js` (34 tests: prompt, parser, client with fake fetch and storage incl. the rotation, the 429 fall-over, the 404 and the spent budget, chooser, typing guard, panel lines, lives with a fake ask; no network). The scripted lives use the default chooser and are unchanged; a life with the AI chooser off, or with no answer arriving, equals the default life.
+
 ## 0.35.1 "Bearings" — 2026-11-12
 
 Agreed with the user (the second step towards the AI mind of 0.36): the options of the menus of 0.35.0 now say **where** they take him (`at`, `{ x, z }`), **what the walk costs** (`cost`, seconds at full pace, `WALK_SPEED`) and **how that was found** (`est`: `'line'` a straight line / his walking speed, `'path'` a path cost the rules already compute, `null` no estimate). Nothing is player-facing (`README.md` unchanged) and, by design, nothing changes in his behaviour.

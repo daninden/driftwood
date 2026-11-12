@@ -41,6 +41,8 @@
  *   direction on the island, relative to the view like the walking keys; null
  *   inside the dead zone; run past the run rim
  *
+ * isTyping(e) -> bool    (0.36) the key event comes from an input, a textarea or a select: it is for the field, so the game keys, the habit's takeover and the page's own handlers ignore it
+ *
  * QUIET (30): seconds without any input of the player before his habit takes over (0.28 "Habit", game/mind)
  * createTakeover(after?) -> takeover   pure: the timer that hands the game to game/mind and back. main calls poke(t) for every input that acts on the castaway (a key, a
  *   click, a tap, the stick, the action button, an icon, a drawing of the row; also a held key or a walk target he is still following), NOT for the camera (0.29.1: turn,
@@ -121,8 +123,11 @@ export function createTakeover(after = QUIET, start = 0) {
   };
 }
 
+/** 0.36: a key event typed into a field (the AI panel's key field, the name prompt) is for the field, never for the game. */
+export const isTyping = e => !!(e && e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '')));
+
 export const CAMERA_CODES = new Set(['KeyQ', 'KeyE', ...Object.keys(ZOOM_KEYS)]);
-export const PASSIVE_CODES = new Set([...CAMERA_CODES, 'Backquote', 'KeyG', 'KeyH', 'KeyL']);   // view, developer and Hands controls leave the habit alone
+export const PASSIVE_CODES = new Set([...CAMERA_CODES, 'Backquote', 'KeyG', 'KeyH', 'KeyL', 'KeyI']);   // view, developer and Hands controls leave the habit alone
 const ACTING_CODES = new Set([...Object.keys(KEYS), 'ShiftLeft', 'ShiftRight', 'Space', 'KeyZ', 'KeyF', ...Object.keys(CHOICE_KEYS)]);
 
 /**
@@ -136,7 +141,7 @@ export function createActing() {
   return {
     event(e) {
       const type = e.type, touch = e.pointerType === 'touch';
-      if (type === 'keydown' || type === 'keyup') return ACTING_CODES.has(e.code) && !PASSIVE_CODES.has(e.code);
+      if (type === 'keydown' || type === 'keyup') return ACTING_CODES.has(e.code) && !PASSIVE_CODES.has(e.code) && !isTyping(e);
       if (type === 'visibilitychange' || type === 'focus') return false;
       if (!touch) {
         if (type === 'pointerdown' || type === 'pointerup') return e.button === 0;
@@ -196,6 +201,7 @@ export function createInput(element, pickGround, now = () => performance.now()) 
     clearTarget() { input.target = null; }, takeZoom, takeTurn, takeSleep, takeWake, takeLight, takeAction, takeChoice, pressing, dispose };
 
   const onKey = down => e => {
+    if (down && isTyping(e)) return;   // 0.36: typing in a field (the AI panel's key) is no walking, no zoom, no space bar
     const k = KEYS[e.code];
     if (down && !e.repeat && k) woke = true;
     if (down && !e.repeat && e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey) sleepKey = true;
