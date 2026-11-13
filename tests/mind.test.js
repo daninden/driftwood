@@ -5,7 +5,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_EARLY, crabDue, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, SURROUND, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, AI_FROM, AI_WORK_TO, AI_TRIP_TO, habitOk, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_EARLY, crabDue, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, SURROUND, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, PASSIVE_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { campGame } from './helpers/mindCamp.js';
@@ -389,11 +389,11 @@ describe('abandoned material piles (0.29.8 "Errand")', () => {
 });
 
 describe('his home: when and what (homeNext, pure)', () => {
-  it('starts on the third day (two nights lived) and only with a camp, by day in the morning', () => {
+  it('starts on the third day (two nights lived) and only with a camp, by day (the menu hours: dawn to AI_WORK_TO; the rules habit window is HOME_FROM to HOME_TO, tests/oneMenu.test.js)', () => {
     expect(HOME_DAY).toBe(2);
     expect(homeNext(snap({ day: 0 }))).toBeNull(); expect(homeNext(snap({ day: 1 }))).toBeNull(); expect(homeNext(snap({ day: 2 }))).toBe('leanto'); expect(homeNext(snap({ day: 7 }))).toBe('leanto');
     expect(homeNext(snap({ fire: false }))).toBeNull();   // no camp (no fire of his, nowhere he sleeps): nothing to build beside
-    expect(homeNext(snap({ time: HOME_FROM - 0.01 }))).toBeNull(); expect(homeNext(snap({ time: HOME_FROM }))).toBe('leanto'); expect(homeNext(snap({ time: HOME_TO - 0.01 }))).toBe('leanto'); expect(homeNext(snap({ time: HOME_TO }))).toBeNull();
+    expect(homeNext(snap({ time: AI_FROM - 0.01 }))).toBeNull(); expect(homeNext(snap({ time: AI_FROM }))).toBe('leanto'); expect(homeNext(snap({ time: HOME_TO }))).toBe('leanto'); expect(homeNext(snap({ time: AI_WORK_TO - 0.01 }))).toBe('leanto'); expect(homeNext(snap({ time: AI_WORK_TO }))).toBeNull();   // 0.36.6: the menu's hours; the habit window of the rules is in tests/oneMenu.test.js
     expect(HOME_TO).toBeLessThan(CRAB_TO);   // 0.29.4: the morning reaches into the crab window (a crab trip, when one is possible, comes first: idleGoal), the evening belongs to the fire
   });
   it('0.32: keeps building (no limit of a piece a day), leaves a failed unit alone for a while, and builds on a half-built lean-to', () => {
@@ -655,16 +655,15 @@ describe('his home: the project (0.29.3, piece by piece since 0.32)', () => {
 // ---------- exploring (0.29.4 "Wander") ----------
 const ex = (o = {}) => ({ time: 0.3, day: 4, thirst: 0.1, hunger: 0.1, last: 3, missing: 0, cool: {}, crab: false, ...o });
 describe('exploring: when he goes out (exploreChance, pure)', () => {
-  it('only by day (EXPLORE_FROM to EXPLORE_TO), never at night or in the evening', () => {
+  it('only by day (the menu: AI_FROM to AI_TRIP_TO; the rules habit window EXPLORE_FROM to EXPLORE_TO is in tests/oneMenu.test.js), never at night or in the evening', () => {
     expect([EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK]).toEqual([0.2, 0.52, 0.6]);
-    for (const t of [0, 0.1, EXPLORE_FROM - 0.01, EXPLORE_TO, 0.7, 0.9]) expect(exploreChance(ex({ time: t, missing: 2, last: -9 }))).toBe(0);
-    for (const t of [EXPLORE_FROM, 0.3, EXPLORE_TO - 0.01]) expect(exploreChance(ex({ time: t, last: -9 }))).toBeGreaterThan(0);
+    for (const t of [0, 0.1, AI_FROM - 0.01, AI_TRIP_TO, 0.7, 0.9]) expect(exploreChance(ex({ time: t, missing: 2, last: -9 }))).toBe(0);
+    for (const t of [AI_FROM, EXPLORE_FROM, 0.3, EXPLORE_TO, AI_TRIP_TO - 0.01]) expect(exploreChance(ex({ time: t, last: -9 }))).toBeGreaterThan(0);
   });
-  it('only when nothing presses: not thirsty, not hungry, no crab trip to make, no recent failure', () => {
+  it('only when nothing presses: not thirsty, not hungry, no recent failure (a crab trip first is a habit of the rules, tests/oneMenu.test.js)', () => {
     expect(exploreChance(ex({ last: -9 }))).toBeGreaterThan(0);
     expect(exploreChance(ex({ last: -9, thirst: EXPLORE_THIRST }))).toBe(0);
     expect(exploreChance(ex({ last: -9, hunger: EXPLORE_HUNGER }))).toBe(0);
-    expect(exploreChance(ex({ last: -9, crab: true }))).toBe(0);
     expect(exploreChance(ex({ last: -9, cool: { explore: true } }))).toBe(0);
   });
   it('now and then when nothing is missing, much more often (and daily) when something is', () => {
@@ -674,16 +673,18 @@ describe('exploring: when he goes out (exploreChance, pure)', () => {
     expect(exploreChance(ex({ last: 4, missing: 3 }))).toBe(0);   // but once a day at most
     expect(EXPLORE_MISSING_CHANCE).toBeGreaterThan(2 * EXPLORE_CHANCE);
   });
-  it('0.30.16: a trip may start in the morning (from EXPLORE_EARLY) only when calm: nothing at home is urgent', () => {
-    expect(EXPLORE_EARLY).toBeCloseTo(0.18, 5); expect(EXPLORE_EARLY).toBeLessThan(EXPLORE_FROM);
+  it('0.36.6: the menu has no `calm` and no crab: a trip is possible from dawn whatever is at home; "only when calm" is the rules habit (habitOk)', () => {
+    expect(EXPLORE_EARLY).toBeCloseTo(0.18, 5); expect(EXPLORE_EARLY).toBeLessThan(EXPLORE_FROM); expect(AI_FROM).toBe(EXPLORE_EARLY);
     const t = (EXPLORE_EARLY + EXPLORE_FROM) / 2;
-    expect(exploreChance(ex({ time: t, last: -9 }))).toBe(0);                                  // not calm: the old window
-    expect(exploreChance(ex({ time: t, last: -9, calm: false }))).toBe(0);
-    expect(exploreChance(ex({ time: t, last: -9, calm: true }))).toBe(EXPLORE_CHANCE);       // calm: the morning is open, the chance per idle moment is the same
-    expect(exploreChance(ex({ time: t, last: 4, missing: 1, calm: true }))).toBe(0);          // still once a day at most
-    expect(exploreChance(ex({ time: t, last: -9, calm: true, thirst: EXPLORE_THIRST }))).toBe(0);   // the other start conditions stay
-    expect(exploreChance(ex({ time: EXPLORE_EARLY - 0.001, last: -9, calm: true }))).toBe(0);
-    expect(exploreChance(ex({ time: EXPLORE_FROM, last: -9 }))).toBe(EXPLORE_CHANCE);          // after EXPLORE_FROM nothing changed
+    expect(exploreChance(ex({ time: t, last: -9 }))).toBe(EXPLORE_CHANCE);                    // possible, calm or not
+    expect(exploreChance(ex({ time: t, last: 4, missing: 1 }))).toBe(0);                       // still once a day at most
+    expect(exploreChance(ex({ time: t, last: -9, thirst: EXPLORE_THIRST }))).toBe(0);          // the other start conditions stay
+    expect(exploreChance(ex({ time: EXPLORE_EARLY - 0.001, last: -9 }))).toBe(0);
+    expect(habitOk('explore', { time: t })).toBe(false);                                       // the rules: not calm, the old window
+    expect(habitOk('explore', { time: t, calm: false })).toBe(false);
+    expect(habitOk('explore', { time: t, calm: true })).toBe(true);                            // the rules: calm, the morning is open
+    expect(habitOk('explore', { time: EXPLORE_EARLY - 0.001, calm: true })).toBe(false);
+    expect(habitOk('explore', { time: EXPLORE_FROM })).toBe(true);
   });
   it('0.30.16: a crab trip is due later today when the tide will be low in the crab window and he could go', () => {
     const base = { time: 0.6, total: 3.6, sea: 0, crabs: 0, flames: false, canLight: true, fibre: 3, pileDry: true, cool: {} };

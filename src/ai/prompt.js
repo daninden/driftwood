@@ -16,6 +16,9 @@
  *   hhmm(time) -> 'HH:MM'              a time of day 0..1 as the island's clock
  *   snapshotOf(game, mind) -> state    a plain description of the situation: { day, time, raining, daylight (hours to dusk, 0 at night), fromHome (metres from his camp), thirst, hunger, awake, carries, home, journey, doing } (doing in words, e.g. 'free time, work on his home')
  *   stateText(state) -> string         the state as lines of text
+ *   0.36.6: the situation also tells, when the game knows it (a missing part is left out, never guessed): `camp` (mind.camp: the fire, 'none' / 'out' / 'embers' / 'low' / 'well', and the store of his own piles: dry and wet driftwood, branches, fronds, stones, logs), `tide` (tideNow: high, half or low water now, rising or falling, when it turns),
+ *   `lastNight` (mind.lastNight: hours slept, cold, collapse), `strip` (mind.stripWood: wet driftwood on the tide strip he knows). The weather forecast is NOT told: he cannot know it. Water at the camp is not told either: the game keeps shells only in his arms (`Carrying` has them).
+ *   tideNow(total) -> { level, name: 'high' | 'half' | 'low', falling, turn (the time of day of the next turn) }   pure, from game/tide
  *   recentText(recent) -> string       the short-term memory, one decision or event a line (0.36.4: without the bookkeeping lines 'goal: idle -> done' and 'pastime: onward -> done'; plan steps that were skipped come with their reason)
  *   optionsOf(menu) -> [{ id, what, why, cost, forced }]   the options as plain data, `what` and `why` in plain words (describeOption) (reading `cost` triggers the lazy estimate of game/intent, which has no side effects)
  *   PLAN_GOALS, PLAN_PASTIMES, PLAN_STEPS   the ids a plan may hold (0.36.3 "Plans"); STEP_WHEN the hours of each in words; hoursOpen(id, time); stepLabel(id), stepText(id)
@@ -30,11 +33,12 @@
 
 import { THIRSTY_AT, VERY_AT, COLLAPSE_AT } from '../game/thirst.js';
 import { HUNGRY_AT, STARVING_AT } from '../game/hunger.js';
-import { THIRST_GO, HUNGER_GO, TIRED_GO, VERY_HUNGER_AT, BED_THIRST, BED_HUNGER, SUPPER_FROM, LIGHT_FROM, BED_FROM, DAWN, EVENING, DAY_FROM, GAZE_FROM, GAZE_TO, FISH_FROM, FISH_TO, TIDE_ROUND_FROM, TIDE_ROUND_TO, EXPLORE_EARLY, EXPLORE_TO, JOURNEY_FROM, JOURNEY_TO, JOURNEY_DAY, AI_FROM, AI_WORK_TO, AI_TRIP_TO, EXPLORE_WHERE, STROLL_KINDS, JOURNEY_GAP_MIN, JOURNEY_GAP_MAX, HOME_FROM, HOME_TO, HOME_DAY, AXE_TO, STROLL_FROM, STROLL_TO, SPEAR_DAY } from '../game/mind.js';
+import { CRAB_TIDE, THIRST_GO, HUNGER_GO, TIRED_GO, VERY_HUNGER_AT, BED_THIRST, BED_HUNGER, SUPPER_FROM, LIGHT_FROM, BED_FROM, DAWN, EVENING, DAY_FROM, GAZE_FROM, GAZE_TO, FISH_FROM, FISH_TO, TIDE_ROUND_FROM, TIDE_ROUND_TO, EXPLORE_EARLY, EXPLORE_TO, JOURNEY_FROM, JOURNEY_TO, JOURNEY_DAY, AI_FROM, AI_WORK_TO, AI_TRIP_TO, EXPLORE_WHERE, STROLL_KINDS, JOURNEY_GAP_MIN, JOURNEY_GAP_MAX, HOME_FROM, HOME_TO, HOME_DAY, AXE_TO, STROLL_FROM, STROLL_TO, SPEAR_DAY } from '../game/mind.js';
 import { REVIVE_AT, THIRST_SLOW } from '../game/thirst.js';
 import { HUNGER_SLOW } from '../game/hunger.js';
 import { TIRED_AT, AWAKE_MAX, DUSK, TIRED_SLOW, SLEEP_DAYS, COLD_SLEEP, SHELTER_SLEEP, WALLS_SLEEP } from '../game/sleep.js';
 import { PASTIMES } from '../game/intent.js';
+import { PERIOD, FIRST_HIGH, seaLevel } from '../game/tide.js';
 import { AI_PLAN_MIN, AI_PLAN_MAX, AI_AWAKE_MARGIN } from './config.js';
 
 const pad = n => String(n).padStart(2, '0');
@@ -97,7 +101,7 @@ export const PASTIME_TEXT = {
   explore: 'explore: walk to the edge of what he knows and look about, home before dark (an hour or more)',
   fish: 'go fishing with his spear (about an hour)',
   stroll: 'take a stroll over ground he knows: the shore, a river, the palms, the forest or the crabs (about half an hour; crabs is the crab trip: at low water he digs crabs for food and roasts them at the fire)',
-  linger: 'stand about at home, by the fire in the evening, and rest a little (ten minutes or so)',
+  linger: 'stand about at home and rest a little (ten minutes or so)',
 };
 export const GOAL_LABEL = { drink: 'drink', eat: 'find something to eat', sleep: 'go to bed', fire: 'see to the fire', stores: 'gather supplies', idle: 'free time' };   // the short words for the panel
 export const WHY_TEXT = {
@@ -218,10 +222,34 @@ export function snapshotOf(game, mind) {
   return {
     day: clock.day == null ? 0 : clock.day, time: clock.time == null ? 0 : clock.time, raining: n(() => g.rain, 0) > 0.05, daylight, fromHome,
     thirst: n(() => g.thirst.days), hunger: n(() => g.hunger.days), awake: n(() => g.sleep.awake), carries, home, journey: !!m.journeying, doing,
+    camp: n(() => m.camp(), null), tide: n(() => tideNow(clock.total), null), lastNight: n(() => m.lastNight(), null), strip: n(() => m.stripWood(), null),   // 0.36.6: only what the game knows
   };
 }
 
+/** 0.36.6: the tide now and when it turns (pure, from game/tide: high water every PERIOD, FIRST_HIGH the first). */
+export function tideNow(total) {
+  const ph = (((total - FIRST_HIGH) / PERIOD) % 1 + 1) % 1, falling = ph < 0.5, level = seaLevel(total);
+  return { level, name: level <= CRAB_TIDE ? 'low' : level > -0.1 ? 'high' : 'half', falling, turn: (total + ((falling ? 0.5 : 1) - ph) * PERIOD) % 1 };
+}
 const d1 = v => (Math.round((+v || 0) * 10) / 10).toFixed(1);
+
+/** 0.36.6: the lines about the camp, the tide, last night and the tide strip: each only when the state has it. */
+function situationLines(s) {
+  const out = [], c = s.camp;
+  if (c) {
+    const FIRE = { none: 'none yet', out: 'out (a burnt place)', embers: 'only embers glowing', low: 'burning low', well: 'burning well' };
+    out.push(`Fire: ${FIRE[c.fire] || c.fire}.`);
+    const st = c.store || {}, bits = [];
+    for (const [k, label] of [['dry', 'dry wood'], ['wet', 'wet'], ['branches', 'branches'], ['fronds', 'fronds'], ['stones', 'stones'], ['logs', 'logs']]) if (st[k] > 0) bits.push(`${st[k]} ${label}`);
+    out.push(`Camp store: ${bits.length ? bits.join(', ') : 'nothing'}.`);
+  }
+  const t = s.tide;
+  if (t) out.push(`Tide: ${t.name === 'low' ? 'low' : t.name === 'high' ? 'high' : 'half tide'}, ${t.falling ? 'falling, low water' : 'rising, high water'} about ${hhmm(t.turn)}${t.name === 'low' ? ' (low water is the crab time: a stroll to the crabs)' : ''}.`);
+  const n = s.lastNight;
+  if (n) out.push(`Last night: ${n.collapse ? 'a collapse, he did not lie down himself' : n.cold ? `a cold sleep, no fire close by (${d1(n.hours)} hours)` : n.hours >= 7 ? `a full night (${d1(n.hours)} hours)` : `cut short (${d1(n.hours)} hours)`}.`);
+  if (s.strip != null) out.push(`Tide strip: ${s.strip > 0 ? 'some wet driftwood to rescue' : 'no wet driftwood known there'}.`);
+  return out;
+}
 
 export function stateText(s) {
   const c = s.carries || {}, has = [];
@@ -234,6 +262,7 @@ export function stateText(s) {
     `Thirst: ${d1(s.thirst)} days${s.thirst >= THIRST_GO ? ` (he can drink now, at any hour; slower from ${THIRSTY_AT})` : ''}. Hunger: ${d1(s.hunger)} days${s.hunger >= HUNGER_GO ? ` (he can eat now, at any hour; slower from ${HUNGRY_AT})` : ''}. Awake for ${d1(s.awake)} days.`,
     `Carrying: ${has.length ? has.join(', ') : 'nothing'}.`,
     `Home: ${home}.`,
+    ...situationLines(s),
     `Now: ${s.doing || 'unknown'}${s.journey ? ' (a journey is on)' : ''}${s.fromHome != null ? `, ${Math.round(s.fromHome)} m from his camp` : ''}.`,
   ].join('\n');
 }

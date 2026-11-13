@@ -60,7 +60,7 @@
  *   goals chooseGoal allows, in its order, found by asking it again with each goal taken out; an emergency drink or meal is `forced`), 'pastime' (inside idle: two menus, before the wood in his arms goes to camp: gaze, ember, strays; then journey, home, spear, axe, tide, explore, fish, stroll, linger; an option that cannot go through gives DECLINED and the chooser is asked about the options after it) and
  *   'event' (stuck, nopath, no-stand, a goal failed or dropped: the only option is 'continue', which the rules take; no effect). The rules draw from the same streams in the same order as the old if-chain (the facts of each option are read lazily, in that order). The hard rules stay outside the chooser: preemption (`errandPreempts`), the crit test and the handoff. An answer that is not valid is replaced by the rules' (unless the chooser says `selfChecked`: it did that itself; 0.36).
  *   mind.recent: the last 20 { t, day, kind: 'goal' | 'pastime' | event kind, what, outcome } (the decisions with their outcome when they end); mind.lastDecision { point, menu: [ids], chosen }; mind.menu() the goal menu now.
- * 0.36.5 "Reach": while the chooser says it is the AI (`chooser.wide()`, `wideOn()`) the pastimes keep the AI's hours instead of the rules' windows (the pure functions homeNext, axeNext, exploreChance, fishChance, spearMakeOk take `s.wide`; AI_FROM, AI_WORK_TO, AI_TRIP_TO, AI_BACK), the spear and the axe fetch a branch and a stone from up to SUPPLY_FAR (`suppliesNear`, `fetchPlan`, `supplyOk`), `exploreLate` takes the turn-back time, and with the AI the crab trip no longer holds home, axe, tide round, exploring and fishing back (it stays the stroll kind 'crabs'); `mind.blockers()` gives a plain reason for every pastime that the menu refuses (cooling failed tries, a crab trip first, day gates, needs, rain; one test over a simulated AI life), `mind.destinations()` says where a stroll and exploring may go (a choice may carry `kind` for the stroll or `where` for exploring: EXPLORE_WHERE). With the rules chooser nothing changes.
+ * 0.36.6 "One menu": what is POSSIBLE is one set of real conditions, the same for every chooser (the rules' `rulesChooser`, the AI of src/ai): the pastimes' hours are the menu's own (AI_FROM to AI_WORK_TO for home, spear, axe and strays, to AI_TRIP_TO for the tide round, exploring and fishing; the pure functions homeNext, axeNext, exploreChance, fishChance, spearMakeOk), a trip is home by AI_BACK, the day-number gates, the once-a-day limits, the cooldowns and the needs stay, the spear and the axe fetch a branch and a stone from up to SUPPLY_FAR when none lie near (`suppliesNear`, `fetchPlan`, `supplyOk`), and the crab trip does not hold anything back (it is the stroll kind 'crabs'). The rules' HABITS are not conditions but the rules chooser's preference, given with the option facts (`habit`, `back`, game/intent): `habitOk` / HABIT_HOURS (the old hour windows of strays, home, spear (and only with materials near), axe, tide round, exploring (from EXPLORE_EARLY when calm, else EXPLORE_FROM) and fishing), the crab trip first at low water (HABIT_CRAB_FIRST: home, axe, tide, explore and fish pass it over) and a trip home by EXPLORE_BACK (a choice may carry `back`; the default is AI_BACK, `tripBack`). Exploring for a lack, from the stores goal, keeps the habit hours and EXPLORE_BACK. `mind.blockers()` gives a plain reason for every pastime that the menu refuses (cooling failed tries, day gates, needs, rain, no materials; one test over a simulated life, for either chooser), `mind.destinations()` says where a stroll and exploring may go (a choice may carry `kind` for the stroll or `where` for exploring: EXPLORE_WHERE). 0.36.5 "Reach" had given the AI these hours and the fetching and kept the rules' windows apart (`wideOn()`); that fork is gone.
  * 0.36.4 "Hindsight": `mind.blockers()` -> { id: plain reason } why a pastime cannot be taken now (spear: no branch and stone near, fish: no spear, tide, strays, gaze, explore, journey, home, axe: done today and the like; hours not looked at). Read only, draws nothing; ai/chooser puts it into the plan request.
  * 0.36.3 "Plans": a chooser may also have `allowPreempt(current, want) -> bool`: the rule that a higher-ranked want stops the goal running (`errandPreempts`) then needs its yes too (the AI's loose and free leashes let a pastime run on while a need is not at the brink; with no such function, as with the default chooser, nothing changes).
  * 0.36.3 "Plans": a chooser may answer WAIT at the PASTIME point too (inside idle): `pastimes` then yields (he stands as he is, `mind.waiting` is true, no idle seconds are counted) and puts the same menu again on the next step, until the chooser answers.
@@ -148,6 +148,7 @@
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
  *   mind.tideSpot()  the spot just above the high-water line where wet wood would be laid from where he stands now, { x, z, cost } or null (for the tests)
  *   mind.strollCands(centre?, range?)  { shore, river, palms, forest, crabs: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
+ *   mind.camp() -> { fire: 'none' | 'out' | 'embers' | 'low' | 'well', store: { dry, wet, branches, fronds, stones, logs }, journey }, mind.lastNight() -> { hours, cold, collapse, faint, day } | null, mind.stripWood() -> n   (0.36.6, read only, for the plan request of src/ai: the fire and the store at his camp, how the last night's sleep went, the wet driftwood he knows on the tide strip)
  *   mind.homePlan()   { step (homeNext without the time window), work ({ what, lt } a half-built lean-to or an upgrade of a finished one, { what: 'leanto', lt: null, site } a new lean-to, or null), load (the kinds of the next load, in order, or null), site (the chosen site), snap } for the tests
  *   mind.leantoSites(fire)  the places for the lean-to round a fire, best first: [{ x, z, heading, score, r, water, geo }]; mind.siteReason(c, fire) -> null | 'ground' | 'footprint' | 'keep' | 'solid' | 'approach' | 'room' | 'route' (0.30.7: why a lean-to { x, z, heading } does not fit there); mind.stats.home { units, trips, builds (pieces pressed), refused, noMaterial }
  *   mind.materialFind(kind, range?)  nearest eligible loose material or abandoned pile by path cost (test helper); mind.timberPlan(src, n, opts?)  the set `selectStops` would fetch now, farthest first (test helper)
@@ -219,7 +220,7 @@ export const SET_SPAN = 45, HANDOFF_SECS = 150, HANDOFF_MAX_COST = 150;   // 0.3
 // 0.30.17 "Spear": making the one spear (a branch and a stone at hand), fishing for food (flames burning) and as an afternoon pastime, the spear kept at the camp
 export const SPEAR_DAY = 6, SPEAR_RANGE = 60, SPEAR_LIMIT = 300, FISH_FROM = 0.42, FISH_TO = 0.6, FISH_FOOD_TO = 0.8, FISH_IDLE_CHANCE = 0.5, FISH_THIRST = 0.3, FISH_HUNGER = 0.35, FISH_RANGE = 80, FISH_TRIES = 8, FISH_WANT = 1, FISH_LIMIT = 420, FISH_EXTRA = 20;   // FISH_EXTRA: seconds a fish costs on top of the walk when it is weighed against a nut (the tries and the roast)
 export const EXPLORE_WHERE = ['coast', 'forest'];   // 0.36.5: the aims an exploring trip can take (`exploreWhere`)
-export const AI_FROM = EXPLORE_EARLY, AI_WORK_TO = 0.8, AI_TRIP_TO = 0.66, AI_BACK = 0.8, SUPPLY_FAR = 180, SPEAR_FETCH_LIMIT = 720, AXE_FETCH_LIMIT = 900;   // 0.36.5 "Reach": the hours the AI has (it chooses, so the rules' windows are gone; `wide` in the pure functions): a pastime may start from just after dawn, work at home (home, spear, axe, strays) until AI_WORK_TO (19:12, as the stroll), a trip (exploring, the tide round, fishing) until AI_TRIP_TO (15:50), and a trip is home by AI_BACK; SUPPLY_FAR: how far from home he looks for a branch and a stone for the spear and the axe when none lies near (known ground)
+export const AI_FROM = EXPLORE_EARLY, AI_WORK_TO = 0.8, AI_TRIP_TO = 0.66, AI_BACK = 0.8, SUPPLY_FAR = 180, SPEAR_FETCH_LIMIT = 720, AXE_FETCH_LIMIT = 900;   // 0.36.5 "Reach": the hours of the menu (the real conditions of the menu, 0.36.6): a pastime may start from just after dawn, work at home (home, spear, axe, strays) until AI_WORK_TO (19:12, as the stroll), a trip (exploring, the tide round, fishing) until AI_TRIP_TO (15:50), and a trip is home by AI_BACK; SUPPLY_FAR: how far from home he looks for a branch and a stone for the spear and the axe when none lies near (known ground)
 export const RANK = { drink: 0, eat: 1, sleep: 2, fire: 3, stores: 4, idle: 5 };
 const LIMIT = { drink: 160, eat: 220, sleep: 420, fire: 240, stores: 240, idle: 90 };   // seconds a goal may take before it is dropped
 const COOL = { crabs: 240, drink: 20, eat: 30, sleep: 20, light: 100, gather: 30, husk: 40, fire: 10, stores: 10, home: 300, axe: 300, explore: 600, fish: 240, spear: 300, journey: 600 };   // seconds a failed goal is left alone (0.28.2: about a third of before; a failed light waits 3 times as long when only one tuft of fibre is left)
@@ -264,9 +265,17 @@ function crabTripWhy(s, food) {
 /** 0.29.3 "Homestead": the next piece of his home (pure). s: { day, time, fire (he has a camp: a fire of his, lit or burnt out, or the place he sleeps), lean ('none': no lean-to at all, 'half': one is half built on ground he knows, 'done': his home is a
  *  finished lean-to, 'other': one exists he cannot use), up ({walls, ring, bed}: progress 0..1 of the finished lean-to's upgrades), cool }. By day (HOME_FROM to HOME_TO), from day HOME_DAY, as often as he finds material (0.32: the limit of one piece finished a day is gone; he keeps
  *  building while the project is not cooling). Returns 'leanto' (build it, or build on), else the first unfinished upgrade in HOME_ORDER (walls, ring, bed), else null. */
-const aiHours = (t, to) => t >= AI_FROM && t < to;   // 0.36.5: the AI's hours (a pure function gets `s.wide` true while the AI chooses)
+const aiHours = (t, to) => t >= AI_FROM && t < to;   // 0.36.6: the hours of the menu, the real conditions (daylight; home before dark), the same whoever chooses
+/** 0.36.6 "One menu": the rules' HABITS, as opposed to the real conditions of the menu: the hour window a pastime has for the rules, and the pastimes the crab trip at low water holds back. Pure. s: { time, crab (a crab trip is possible now), calm (exploring before EXPLORE_FROM) }. */
+export const HABIT_HOURS = { strays: [DAY_FROM, EVENING], home: [HOME_FROM, HOME_TO], spear: [DAY_FROM, EVENING], axe: [HOME_FROM, AXE_TO], tide: [TIDE_ROUND_FROM, TIDE_ROUND_TO], explore: [EXPLORE_FROM, EXPLORE_TO], fish: [FISH_FROM, FISH_TO] };
+export const HABIT_CRAB_FIRST = ['home', 'axe', 'tide', 'explore', 'fish'];
+export function habitOk(id, s) {
+  const w = HABIT_HOURS[id]; if (!w) return true;
+  const from = id === 'explore' && s.calm ? EXPLORE_EARLY : w[0];
+  return s.time >= from && s.time < w[1] && !(s.crab && HABIT_CRAB_FIRST.includes(id));
+}
 export function homeNext(s) {
-  if ((s.cool && s.cool.home) || !(s.wide ? aiHours(s.time, AI_WORK_TO) : s.time >= HOME_FROM && s.time < HOME_TO) || s.day < HOME_DAY) return null;
+  if ((s.cool && s.cool.home) || !aiHours(s.time, AI_WORK_TO) || s.day < HOME_DAY) return null;
   if (s.lean === 'half') return 'leanto';
   if (s.lean === 'none') return s.fire ? 'leanto' : null;
   if (s.lean !== 'done') return null;
@@ -276,14 +285,14 @@ export function homeNext(s) {
 /** 0.31 "Axe": does the axe project have its turn now (pure)? His home is complete (s.done: lean-to, walls, ring and bed), the day is from HOME_DAY, it is the home's morning window (HOME_FROM to HOME_TO), no piece of the home was finished today and no unit of the axe's work was done today (one tree, one log, or the axe itself a day),
  *  nothing presses (thirst under AXE_THIRST, hunger under AXE_HUNGER) and it is not cooling. s: { day, time, done, builtDay, axeDay, thirst, hunger, cool }. */
 export function axeNext(s) {
-  if (!s.done || (s.cool && s.cool.axe) || !(s.wide ? aiHours(s.time, AI_WORK_TO) : s.time >= HOME_FROM && s.time < AXE_TO) || s.day < HOME_DAY || s.builtDay === s.day || s.axeDay === s.day) return false;
+  if (!s.done || (s.cool && s.cool.axe) || !aiHours(s.time, AI_WORK_TO) || s.day < HOME_DAY || s.builtDay === s.day || s.axeDay === s.day) return false;
   return !(s.thirst >= AXE_THIRST || s.hunger >= AXE_HUNGER);
 }
 
 /** 0.29.4 "Wander": the chance, at an idle moment, that he sets out exploring now (pure). s: { time, day, thirst, hunger, last (the day of the last trip), missing (how many of wood, branches, nuts are short at home), cool, crab (a crab trip is possible now) }.
  *  Never when a need is coming up (thirst, hunger), a crab trip is on, or outside EXPLORE_FROM to EXPLORE_TO (0.30.16: from EXPLORE_EARLY when s.calm: nothing at home is urgent); at most one trip a day, one in EXPLORE_GAP days when nothing is missing, every day when something is. */
 export function exploreChance(s) {
-  if (!(s.wide ? aiHours(s.time, AI_TRIP_TO) : s.time >= (s.calm ? EXPLORE_EARLY : EXPLORE_FROM) && s.time < EXPLORE_TO) || (s.cool && s.cool.explore) || s.crab) return 0;
+  if (!aiHours(s.time, AI_TRIP_TO) || (s.cool && s.cool.explore)) return 0;
   if (s.thirst >= EXPLORE_THIRST || s.hunger >= EXPLORE_HUNGER) return 0;
   if (s.day - s.last < (s.missing > 0 ? 1 : EXPLORE_GAP)) return 0;
   return s.missing > 0 ? EXPLORE_MISSING_CHANCE : EXPLORE_CHANCE;
@@ -315,15 +324,15 @@ export function journeyBrake(s) { return s.thirst >= VERY_AT || s.hunger >= VERY
  *  (a fish spoils in a day; the evening fire is lit on about nine evenings in ten, so no fire is asked for now).
  *  s: { time, day, last (the day of the last fishing), spear, crabs, fish, thirst, hunger, crab (a crab trip is possible now), cool } */
 export function fishChance(s) {
-  if (!s.spear || (s.crabs || 0) + (s.fish || 0) >= FISH_WANT || (s.cool && s.cool.fish) || s.day === s.last || s.crab) return 0;
-  if (!(s.wide ? aiHours(s.time, AI_TRIP_TO) : s.time >= FISH_FROM && s.time < FISH_TO) || s.thirst >= FISH_THIRST || s.hunger >= FISH_HUNGER) return 0;
+  if (!s.spear || (s.crabs || 0) + (s.fish || 0) >= FISH_WANT || (s.cool && s.cool.fish) || s.day === s.last) return 0;
+  if (!aiHours(s.time, AI_TRIP_TO) || s.thirst >= FISH_THIRST || s.hunger >= FISH_HUNGER) return 0;
   return FISH_IDLE_CHANCE;
 }
 /** 0.30.17: may he go fishing for food now (pure)? A spear exists, room for a fish, flames to roast it at, by day (DAY_FROM to FISH_FOOD_TO). */
 export function fishFoodOk(s) { return !!s.spear && (s.fish || 0) < CARRY_FISH && !!s.flames && s.time >= DAY_FROM && s.time < FISH_FOOD_TO && !(s.cool && s.cool.fish); }
 /** 0.30.17: does he go and make the spear now (pure)? He has none at all, it is day (DAY_FROM to EVENING), nothing urgent, and the home comes first: his lean-to stands (s.lean 'done'), or it is day SPEAR_DAY.
  *  (Measured: made on day 0 or 1 it takes one of the few branches near the camp that the lean-to needs and the lean-to came a day or three later in 6 of 24 lives; made after the lean-to, or from day 6, the lean-tos came as before.) */
-export function spearMakeOk(s) { return !s.spear && (s.wide ? aiHours(s.time, AI_WORK_TO) : s.time >= DAY_FROM && s.time < EVENING) && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !(s.cool && s.cool.spear) && (s.lean === 'done' || s.day >= SPEAR_DAY); }
+export function spearMakeOk(s) { return !s.spear && aiHours(s.time, AI_WORK_TO) && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !(s.cool && s.cool.spear) && (s.lean === 'done' || s.day >= SPEAR_DAY); }
 
 export function exploreWhere(missing, trips) {
   if (missing && missing.length) return missing.includes('wood') || missing.includes('nuts') ? (missing.includes('branches') && trips % 2 ? 'forest' : 'coast') : 'forest';
@@ -405,6 +414,7 @@ export function createMind(world, game, opts = {}) {
   let journey = null, journeyLeg = false, journeyDue = JOURNEY_DAY, journeyTried = -9;   // 0.30.19: the journey in hand (it outlasts goals and sleep), the first day of the next one, the day a start was last tried
   const hb = opts.saved && typeof opts.saved === 'object' ? opts.saved : null, wholeDay = v => Number.isInteger(v) && v >= -9 && v < 1e6;   // 0.31.1: what a reload remembers of his habits (`mind.state`); a bad or missing field keeps its start value
   if (hb) { if (wholeDay(hb.journeyDue)) journeyDue = hb.journeyDue; if (wholeDay(hb.journeyTried)) journeyTried = hb.journeyTried; if (Number.isInteger(hb.journeys) && hb.journeys >= 0 && hb.journeys < 1e4) stats.journey.started = hb.journeys; }
+  let nightRec = null, lastNight = null;   // 0.36.6: the sleep that is on, and the last night's sleep once it ended: { hours, cold (no fire close by and no shelter), collapse (he did not lie down himself), faint (thirst), day }
   let fishedDay = -9, exploring = false, exploredDay = hb && wholeDay(hb.exploredDay) ? hb.exploredDay : -9, fullPace = false, now = 0, cur = null, restUntil = 0, restLong = false, anchor = { x: p.x, z: p.z }, slept = null, gazedDay = -1, chose = false, lastKind = null;
   let pressed = null, choice = null, sleepKey = false, sinceCheck = 0, builtDay = -1, headingWanted = null, errands = 0;   // headingWanted: the way a lean-to being started should face (a player turns the view)
   const proj = { site: null };   // 0.29.3: the lean-to's site, chosen once and kept
@@ -418,10 +428,9 @@ export function createMind(world, game, opts = {}) {
   const idleInput = () => { inp.target = null; inp.run = false; };
   // ---------- 0.35 "Intentions": a decision is a menu, a chooser and the execution ----------
   const ctx = { rand: () => rng(), ex: () => rngEx(), fish: () => rngFish() };   // the streams the rules draw from (the same functions as `rand`, `rngEx`, `rngFish`)
-  // 0.36.5 "Reach": while the AI chooses (the chooser says so, `wide()`) the pastimes keep the AI's hours (AI_FROM, AI_WORK_TO, AI_TRIP_TO, the pure functions' `wide`) and a trip is home by AI_BACK instead of EXPLORE_BACK; the spear and the axe fetch their materials from farther off (SUPPLY_FAR). With the rules in charge `wideOn()` is false and nothing here changes.
-  const wideOn = () => !!(chooser.wide && chooser.wide());
-  const widen = o => (wideOn() ? { ...o, wide: true } : o);
-  const backNow = () => (wideOn() ? AI_BACK : EXPLORE_BACK);
+  // 0.36.6 "One menu": what is possible is the same whoever chooses: the hours AI_FROM, AI_WORK_TO, AI_TRIP_TO (daylight and home before dark: the real conditions), a trip home by AI_BACK, the spear and the axe fetching their materials from up to SUPPLY_FAR. The rules' habits (HABIT_HOURS, the crab trip first, a trip home by EXPLORE_BACK) are the rules chooser's preference (`habit`, `back` of the option facts, game/intent).
+  let tripBack = AI_BACK;   // 0.36.6: the time of day a trip must be home by: AI_BACK (dark) unless the choice says otherwise (the rules choose EXPLORE_BACK: the `back` of the option's rule)
+  const backNow = () => tripBack;
   const lateNow = (secs, speed = 1) => exploreLate(clock.time, secs, speed, backNow());
   const RECENT_MAX = 20;
   const note = (kind, what, outcome = null) => { const r = { t: +clock.total.toFixed(4), day: clock.day, kind, what, outcome }; mind.recent.push(r); if (mind.recent.length > RECENT_MAX) mind.recent.shift(); return r; };
@@ -475,7 +484,7 @@ export function createMind(world, game, opts = {}) {
     const b = scan('branch', h.x, h.z, SUPPLY_FAR)[0], st = b ? scan('stone', b.x, b.z, SUPPLY_FAR)[0] : null;
     return b && st ? { b, st, cost: (dist(p, b) + dist(b, st) + dist(st, h)) / WALK_SPEED } : null;
   }
-  const supplyOk = h => suppliesNear(h) || (wideOn() && (f => !!f && !lateNow(f.cost * 1.5 + 60, PACE))(fetchPlan(h)));
+  const supplyOk = h => suppliesNear(h) || (f => !!f && !lateNow(f.cost * 1.5 + 60, PACE))(fetchPlan(h));
   const pieceReach = (x, z) => reachablePiece(world, x, z);   // 0.33.2 "Mend": a loose piece he can get his hands on (see reachablePiece)
   const costTo = c => c.pile || pieceReach(c.x, c.z) ? path.cost(p, c) : Infinity;   // (a pile is taken from a standing point of game/stand, never from its own spot)
   const nearestBy = (kind, r = 45, k = 4) => {   // nearest loose and pile candidates, each weighed by actual walking cost
@@ -915,10 +924,11 @@ export function createMind(world, game, opts = {}) {
   }
   function* makeSpearTrip() {   // a loose branch under his arm, to a loose stone, kneel: the spear is made; it goes to the camp
     return yield* errand(function* () {
-    if (cur) cur.limit = wideOn() ? SPEAR_FETCH_LIMIT : SPEAR_LIMIT;
+    const near = suppliesNear(homeSpot());   // 0.36.6: with a branch and a stone near home he looks from where he stands (as always); else he fetches them from home out to SUPPLY_FAR
+    if (cur) cur.limit = near ? SPEAR_LIMIT : SPEAR_FETCH_LIMIT;
     think('spearIntent');   // 0.30.20: the reason, once, before he sets off
     const cost = list => { for (const c of list.slice(0, 3)) { const k = path.cost(p, c); if (k < Infinity) return { ...c, cost: k }; } return null; };
-    const wide = wideOn(), at = wide ? homeSpot() : p, range = wide ? SUPPLY_FAR : SPEAR_RANGE;   // 0.36.5: with the AI he looks from home and as far as SUPPLY_FAR
+    const at = near ? p : homeSpot(), range = near ? SPEAR_RANGE : SUPPLY_FAR;
     const b = cost(scan('branch', at.x, at.z, range)), st = b ? cost(scan('stone', b.x, b.z, range)) : null;
     if (!b || !st) { cool('spear'); return false; }
     ev('spear-trip', { branch: [+b.x.toFixed(1), +b.z.toFixed(1)], stone: [+st.x.toFixed(1), +st.z.toFixed(1)] });
@@ -1570,13 +1580,14 @@ export function createMind(world, game, opts = {}) {
 
   function* makeAxeTrip() {   // a tuft of fibre (husked if need be), a loose branch under his arm, to a loose stone, kneel: the axe is made and laid down beside the log piles
     return yield* errand(function* () {
-    if (cur) cur.limit = wideOn() ? AXE_FETCH_LIMIT : AXE_LIMIT;
+    if (cur) cur.limit = AXE_LIMIT;
     const h = homeSpot(), tuft = () => game.fibre.carried;
     for (let n = 0; n < 2 && tuft() < AXE_FIBRE; n++) { if (!nearestBy('coco', 60)) { cool('axe', 300); lack.nuts = clock.day; return false; } if (!(yield* huskGoal())) { cool('axe', 300); return false; } }
     if (tuft() < 1) { cool('axe', 300); return false; }
     const cost = list => { for (const c of list.slice(0, 3)) { const k = path.cost(p, c); if (k < Infinity) return { ...c, cost: k }; } return null; };
-    const range = wideOn() ? SUPPLY_FAR : AXE_RANGE;   // 0.36.5
-    const b = cost(scan('branch', h.x, h.z, range)), st = b ? cost(scan('stone', b.x, b.z, range)) : null;
+    const find = range => { const b = cost(scan('branch', h.x, h.z, range)); return { b, st: b ? cost(scan('stone', b.x, b.z, range)) : null }; };   // 0.36.6: near the camp first (AXE_RANGE), else fetched from up to SUPPLY_FAR
+    let { b, st } = find(AXE_RANGE);
+    if (!b || !st) { ({ b, st } = find(SUPPLY_FAR)); if (cur && b && st) cur.limit = AXE_FETCH_LIMIT; }
     if (!b || !st) { cool('axe', 300); lack[b ? 'wood' : 'branches'] = clock.day; return false; }
     think('axeIntent');
     stats.axe.trips++; ev('axe-trip', { what: 'make', branch: [+b.x.toFixed(1), +b.z.toFixed(1)], stone: [+st.x.toFixed(1), +st.z.toFixed(1)] });
@@ -2051,7 +2062,9 @@ export function createMind(world, game, opts = {}) {
   // 0.29.4: what he went for by day and could not find on ground he knows (wood, a nut to husk) sends him exploring at once, when a trip is allowed (exploreChance > 0), without waiting for an idle moment (which the stores and the fire may never leave him)
   function* exploreForLack() {
     const missing = exploreMissing(homeSpot());
-    if (missing.length && exploreChance({ time: clock.time, day: clock.day, thirst: game.thirst.days, hunger: game.hunger.days, last: exploredDay, missing: missing.length, cool: { explore: isCool('explore') }, crab: crabTripOk(senses()) }) > 0) yield* exploreTrip(missing);
+    if (missing.length && habitOk('explore', { time: clock.time, crab: crabTripOk(senses()) }) && exploreChance({ time: clock.time, day: clock.day, thirst: game.thirst.days, hunger: game.hunger.days, last: exploredDay, missing: missing.length, cool: { explore: isCool('explore') } }) > 0) {   // (0.36.6: from the stores goal, not a menu: the rules' habit hours and the evening's chores' return time)
+      tripBack = EXPLORE_BACK; try { yield* exploreTrip(missing); } finally { tripBack = AI_BACK; }
+    }
   }
 
   // ---------- the journey (0.30.19 "Journey") ----------
@@ -2335,7 +2348,8 @@ export function createMind(world, game, opts = {}) {
       const id = choiceId(choice), at = sub.options.findIndex(o => o.id === id);
       if (at < 0) return stage === 'before' ? CONTINUE : true;   // (no valid answer: the last option of a stage cannot be passed over, so this does not happen)
       const rec = cur && !cur.pastime ? (cur.pastime = note('pastime', id, 'running')) : note('pastime', id, 'running');
-      const r = yield* runs[id](choice);
+      tripBack = choice && choice.back ? choice.back : AI_BACK;   // 0.36.6: a trip is home by the time the choice names (the rules: the evening's chores), else before dark
+      let r; try { r = yield* runs[id](choice); } finally { tripBack = AI_BACK; }
       if (r !== DECLINED) { rec.outcome = 'done'; if (cur && cur.pastime === rec) cur.pastime = null; return r; }
       rec.outcome = 'declined'; if (cur && cur.pastime === rec) cur.pastime = null;
       from += at + 1;
@@ -2345,11 +2359,11 @@ export function createMind(world, game, opts = {}) {
     if (journey) return yield* journeyGoal();   // 0.30.19: a journey is on: nothing else is an idle pastime
     const h = homeSpot(), t = clock.time;
     let step, work, prepared = false;
-    const prepare = () => { if (!prepared) { prepared = true; step = homeNext(widen(homeSnap())); work = step ? homeWork(step, h) : null; } };   // 0.29.3: the next piece of his home (after the sunset gaze was passed over, before the ember)
+    const prepare = () => { if (!prepared) { prepared = true; step = homeNext(homeSnap()); work = step ? homeWork(step, h) : null; } };   // 0.29.3: the next piece of his home (after the sunset gaze was passed over, before the ember)
     const out = yield* pastimes('before', {
       gaze: { ok: () => t >= GAZE_FROM && t < GAZE_TO && gazedDay !== clock.day, estimate: () => lineTo(gazeSpot()) },
       ember: { ok: () => { prepare(); return emberPossible(); }, estimate: () => lineTo(fireSpot()) },
-      strays: { estimate: () => lineTo(nearestOf(strays())), ok: () => !isCool('stray') && strays().length && !W.load() && (wideOn() ? aiHours(clock.time, AI_WORK_TO) : clock.time >= DAY_FROM && clock.time < EVENING) && game.thirst.days < EXPLORE_THIRST && game.hunger.days < EXPLORE_HUNGER },   // 0.31.1: a stray pile near the ring joins the stock at a calm moment
+      strays: { estimate: () => lineTo(nearestOf(strays())), ok: () => !isCool('stray') && strays().length && !W.load() && aiHours(clock.time, AI_WORK_TO) && game.thirst.days < EXPLORE_THIRST && game.hunger.days < EXPLORE_HUNGER, habit: () => habitOk('strays', { time: clock.time }) },   // 0.31.1: a stray pile near the ring joins the stock at a calm moment
     }, {
       gaze: function* () { gazedDay = clock.day; yield* handoff('gaze'); return yield* gaze(); },
       ember: function* () { if (feedPassingEmber()) { yield; return true; } return DECLINED; },
@@ -2361,31 +2375,32 @@ export function createMind(world, game, opts = {}) {
     if (W.load() && !(work && homeCarry(work))) yield* handoff('idle');   // 0.30.4: wood left in his arms goes to camp, to the pile it belongs to, before anything else; 0.32: what the next load of the home needs he keeps
     const s = senses();
     const memo = f => { let done = false, v; return () => (done ? v : (done = true, v = f())); };
-    const crab = () => !wideOn() && crabTripOk(s);   // 0.36.5: with the AI the crab trip does not hold the other pastimes back (it stays the stroll kind 'crabs')
+    const crab = memo(() => crabTripOk(s));   // 0.36.6: the crab trip first is a habit of the rules (`habit`), not a condition: the menu has no crab precedence (the trip stays the stroll kind 'crabs')
+    const habit = (id, calm) => () => habitOk(id, { time: clock.time, crab: crab(), calm: calm && calm() });
     const explore = memo(() => {   // 0.29.4: now and then he goes exploring
       // 0.30.16: before EXPLORE_FROM only when calm: the home project has nothing to do today (its next piece, as at HOME_FROM, is none: built today, finished, cooling, no camp; the axe's work of 0.31 does not count: it shares the morning with exploring by chance, as the spear and fishing do) and no crab trip is possible or due
-      const calm = clock.time < EXPLORE_FROM ? !homeNext({ ...homeSnap(), time: HOME_FROM }) && !crabTripOk(s) && !crabDue({ ...s, total: clock.total }) : undefined;
       const missing = exploreMissing(h);
-      return { missing, chance: exploreChance(widen({ time: clock.time, day: clock.day, thirst: s.thirst, hunger: s.hunger, last: exploredDay, missing: missing.length, cool: s.cool, crab: crab(), calm })) };
+      return { missing, chance: exploreChance({ time: clock.time, day: clock.day, thirst: s.thirst, hunger: s.hunger, last: exploredDay, missing: missing.length, cool: s.cool }) };
     });
-    const supplies = memo(() => supplyOk(h));   // 0.36.5: the spear's and the axe's materials (only asked while the AI chooses)
-    const fishCh = memo(() => fishChance(widen({ ...s, day: clock.day, last: fishedDay, crab: crab() })));   // 0.30.17: fishing as an afternoon pastime, once a day, its own stream; home before dark
+    const exploreCalm = memo(() => clock.time < EXPLORE_FROM ? !homeNext({ ...homeSnap(), time: HOME_FROM }) && !crabTripOk(s) && !crabDue({ ...s, total: clock.total }) : undefined);   // the rules' habit: before EXPLORE_FROM only when calm (see the comment above)
+    const supplies = memo(() => supplyOk(h));   // 0.36.6: the spear's and the axe's materials: near home, or a trip to fetch them
+    const fishCh = memo(() => fishChance({ ...s, day: clock.day, last: fishedDay }));   // 0.30.17: fishing as an afternoon pastime, once a day, its own stream; home before dark
     let cands = null;
     const strollOf = r => { cands = strollCands(h); return strollKind({ shore: cands.shore.length > 0, river: cands.river.length > 0, palms: cands.palms.length > 0, forest: cands.forest.length > 0, crabs: cands.crabs.length > 0 && crabTripOk(s) }, lastStroll, r()); };
     return yield* pastimes('day', {
       journey: { estimate: () => ON_THE_WAY, ok: () => clock.day >= journeyDue && clock.day !== journeyTried && clock.time >= JOURNEY_FROM && clock.time < JOURNEY_TO && !isCool('journey') &&   // 0.30.19: now and then a journey (calm at home, in the morning, the weather fair)
         journeyOk({ day: clock.day, time: clock.time, due: journeyDue, lean: homeSnap().lean, raining: game.weather.raining(clock.total), rainSoon: journeyRain(game.weather, clock.total), thirst: s.thirst, hunger: s.hunger, cool: s.cool }) },
-      home: { ok: () => !!work && !crab(), estimate: () => { const w = work && (work.lt || work.site); return lineTo(w); } },
-      spear: { ok: () => spearMakeOk(widen({ ...s, day: clock.day, lean: homeSnap().lean })) && (!wideOn() || supplies()), estimate: () => lineTo(scan('branch', h.x, h.z, SPEAR_RANGE)[0] || scan('stone', h.x, h.z, SPEAR_RANGE)[0]) },   // 0.30.17: he has no spear and a branch and a stone are at hand
-      axe: { ok: () => axeNext(widen({ ...axeSnap(), thirst: s.thirst, hunger: s.hunger })) && !crab() && (!wideOn() || A.has() || supplies()), estimate: estAxe },   // 0.31 "Axe": once the home is complete, the axe and one tree a morning
-      tide: { estimate: estTide, ok: () => clock.day !== tideDay && (wideOn() ? aiHours(clock.time, AI_TRIP_TO) : clock.time >= TIDE_ROUND_FROM && clock.time < TIDE_ROUND_TO) && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER && !crab() },   // 0.30.13: the daily round to the strip
-      explore: { estimate: () => ON_THE_WAY, ok: () => clock.day > exploredDay && (wideOn() || (clock.time >= EXPLORE_EARLY && clock.time < EXPLORE_TO)) && explore().chance > 0, chance: () => explore().chance },
-      fish: { ok: () => fishCh() > 0, chance: fishCh, estimate: estFish },
+      home: { ok: () => !!work, habit: habit('home'), estimate: () => { const w = work && (work.lt || work.site); return lineTo(w); } },
+      spear: { ok: () => spearMakeOk({ ...s, day: clock.day, lean: homeSnap().lean }) && supplies(), habit: () => habitOk('spear', { time: clock.time }) && suppliesNear(h), estimate: () => lineTo(scan('branch', h.x, h.z, SPEAR_RANGE)[0] || scan('stone', h.x, h.z, SPEAR_RANGE)[0]) },   // 0.30.17: he has no spear and a branch and a stone are at hand
+      axe: { ok: () => axeNext({ ...axeSnap(), thirst: s.thirst, hunger: s.hunger }) && (A.has() || supplies()), habit: habit('axe'), estimate: estAxe },   // 0.31 "Axe": once the home is complete, the axe and one tree a morning
+      tide: { estimate: estTide, ok: () => clock.day !== tideDay && aiHours(clock.time, AI_TRIP_TO) && now - tideNone > 300 && s.thirst < EXPLORE_THIRST && s.hunger < EXPLORE_HUNGER, habit: habit('tide'), back: EXPLORE_BACK },   // 0.30.13: the daily round to the strip
+      explore: { estimate: () => ON_THE_WAY, ok: () => clock.day > exploredDay && explore().chance > 0, habit: habit('explore', exploreCalm), back: EXPLORE_BACK, chance: () => explore().chance },
+      fish: { ok: () => fishCh() > 0, habit: habit('fish'), back: EXPLORE_BACK, chance: fishCh, estimate: estFish },
       stroll: { ok: () => s.time >= STROLL_FROM && s.time < STROLL_TO, chance: () => STROLL_CHANCE, kind: strollOf, estimate: estStroll },
     }, {
       journey: function* () { if (yield* journeyBegin()) return yield* journeyGoal(); return DECLINED; },
       home: function* () { return yield* homeGoal(step, work); },
-      spear: function* () { if (suppliesNear(h) || (wideOn() && supplies())) return yield* makeSpearTrip(); cool('spear', 120); return DECLINED; },
+      spear: function* () { if (supplies()) return yield* makeSpearTrip(); cool('spear', 120); return DECLINED; },
       axe: function* () { const r = yield* axeGoal(); return r !== null ? r : DECLINED; },
       tide: function* () { if (yield* tideRound()) return true; return DECLINED; },
       explore: function* (choice) { return yield* exploreTrip(explore().missing, choice && EXPLORE_WHERE.includes(choice.where) ? choice.where : null); },   // 0.36.5: the AI may name where (coast or forest)
@@ -2486,10 +2501,12 @@ export function createMind(world, game, opts = {}) {
     if (headingWanted !== null) inp.yaw = headingWanted;   // a lean-to being started opens the way its site was validated (main sets the view's yaw each frame, before this)
     if (p.sitting > 0.5) stats.sitSecs += dt;
     if (game.sleep.asleep || p.lie > 0) {   // never wakes him, never acts in his sleep
+      if (game.sleep.asleep) { if (!nightRec) nightRec = { t0: clock.total, cold: false, nap: !!game.sleep.nap, chosen: chose, faint: !!game.thirst.faint() }; if (!game.fire.warm(p.x, p.z) && !game.leantos.shelter(p.x, p.z)) nightRec.cold = true; }   // 0.36.6: how the sleep goes, for `mind.lastNight`
       if (cur) endGoal(); idleInput(); inp.sit = false; pressed = null; choice = null; sleepKey = false;
       if (game.sleep.asleep && p.lie >= 1) slept = { x: p.x, z: p.z };
       return;
     }
+    if (nightRec) { if (!nightRec.nap) lastNight = { hours: +((clock.total - nightRec.t0) * 24).toFixed(1), cold: nightRec.cold, collapse: !nightRec.chosen, faint: nightRec.faint, day: clock.day }; nightRec = null; }   // (a nap is not "last night")
     if (busy()) return;   // kneeling or bending: the game finishes it
     if (tag && !W.load() && now >= tag.until) tag = null;
     sinceCheck += dt;
@@ -2527,6 +2544,21 @@ export function createMind(world, game, opts = {}) {
   }
   mind.menu = () => goalMenu(senses(), chooseGoal, { thirst: VERY_AT, hunger: VERY_HUNGER_AT }, GOAL_EST);   // 0.35: the goal menu now (for the tests)
   mind.chose = () => chose;
+  mind.lastNight = () => (lastNight ? { ...lastNight } : null);   // 0.36.6: read only, for the plan request (null: no night slept since the mind took over)
+  // 0.36.6: plain facts about his camp for the plan request, read only (no random number, nothing changes): the fire ('none' no fire place yet, 'out' a burnt place or a dead fire, 'embers', 'low', 'well') and the store at the camp (pieces in his own piles: dry and wet driftwood, branches, fronds, stones, and the logs in the log piles)
+  mind.camp = () => {
+    const h = homeSpot(), fs = fireSpot(h), f = fireAt(fs);
+    const fire = !f ? (game.fire.burnt.some(b => dist(b, fs) < 3.5) ? 'out' : 'none') : game.fire.strength(f) <= 0 ? 'embers' : f.fuel / FUEL_MAX < FEED_BELOW ? 'low' : 'well';
+    const store = { dry: 0, wet: 0, branches: 0, fronds: 0, stones: 0, logs: logTotal() };
+    for (const q of W.piles) if (ownPile(q)) {
+      if (q.kind === 'driftwood') for (const l of q.logs) { if (dryness(l, clock.total) >= DRY_AT) store.dry++; else store.wet++; }
+      else if (q.kind === 'branch') store.branches += q.logs.length;
+      else if (q.kind === 'frond') store.fronds += q.logs.length;
+      else if (q.kind === 'stone') store.stones += q.logs.length;
+    }
+    return { fire, store, journey: !!journey };
+  };
+  mind.stripWood = () => scan('strip', p.x, p.z, TIDE_ROUND_RANGE).length;   // 0.36.6: wet driftwood on the tide strip he knows within the round's range (what the tide round looks for)
   mind.lastKind = () => lastKind;
   mind.path = path; mind.strollCands = strollCands; mind.leantoSites = leantoSites; mind.tideSpot = tideSpot; mind.materialFind = (kind, range) => nearestBy(kind, range); mind.timberPlan = (src, n, o) => selectStops(src, n, o).sort((a, b) => b.cost - a.cost);
   mind.exploreAim = (day, time, where = 'coast', avail = (EXPLORE_BACK - time) * DAY_SECONDS) => { const home = fireSpot(homeSpot()); exo.x = home.x; exo.z = home.z; exo.reach = exploreReach(day); return exploreTarget(home, exploreReach(day), where, avail); };   // 0.30.16: the spot a trip would aim for on that day at that time of day (tests; no side effects but the trip's own bookkeeping of exo)
@@ -2550,23 +2582,21 @@ export function createMind(world, game, opts = {}) {
   };
   // 0.36.4 "Hindsight": why a pastime cannot be taken right now, in plain words (read only, no random numbers, nothing changes; the hours are not looked at: the asker knows those). { id: reason } for the pastimes that are not possible for a reason of his state or the island; used by ai/chooser for the plan request.
   mind.blockers = () => {   // 0.36.5: one plain reason for every pastime that is not possible for a reason of his state or the island, matching the menu's own facts (whenever a pastime is within its hours and not offered there is an entry); the hours are not looked at
-    const out = {}, s = senses(), h = homeSpot(), t = clock.time, d = clock.day, hs = homeSnap(), crab = !wideOn() && crabTripOk(s);
-    const noSupply = () => (fetchPlan(h) ? 'the branch and stone he knows lie too far to be home before dark' : 'no branch and stone known to fetch');   // (0.36.5: with the AI chooser he fetches from farther off)
+    const out = {}, s = senses(), h = homeSpot(), t = clock.time, d = clock.day, hs = homeSnap();
+    const noSupply = () => (fetchPlan(h) ? 'the branch and stone he knows lie too far to be home before dark' : 'no branch and stone known to fetch');   // (0.36.5: he fetches from farther off)
     const hungry = s.thirst >= EXPLORE_THIRST || s.hunger >= EXPLORE_HUNGER;
-    const CRAB_FIRST = 'a crab trip comes first (low water: a stroll to the crabs does it)';   // (rules only: with the AI `crab` is false)   // the tide's crabs have the afternoon: home, axe, tide, exploring and fishing wait for the crab trip, which is the stroll kind 'crabs'
     const waits = (name, why) => { const left = (coolUntil[name] || 0) - now; if (left <= 0) return null; const hrs = left / DAY_SECONDS * 24; return `${why}; he tries again in about ${hrs < 1.5 ? 'an hour' : Math.round(hrs) + ' hours'}`; };   // a failed try is left alone for a while (`cool`)
     if (s.spear) out.spear = 'he already has a spear';
-    else if (!spearMakeOk(widen({ ...s, day: d, lean: hs.lean }))) out.spear = hungry ? 'he is too thirsty or hungry' : hs.lean !== 'done' && d < SPEAR_DAY ? 'the home comes first' : waits('spear', 'he could not make it a moment ago') || 'not now';
-    else if (!supplyOk(h)) out.spear = wideOn() ? noSupply() : 'no branch and stone near';
+    else if (!spearMakeOk({ ...s, day: d, lean: hs.lean })) out.spear = hungry ? 'he is too thirsty or hungry' : hs.lean !== 'done' && d < SPEAR_DAY ? 'the home comes first' : waits('spear', 'he could not make it a moment ago') || 'not now';
+    else if (!supplyOk(h)) out.spear = noSupply();
     if (!s.spear) out.fish = 'he has no spear';
     else if (d === fishedDay) out.fish = 'already done today';
     else if (s.crabs + s.fish >= FISH_WANT) out.fish = 'he already has food to roast';
-    else if (fishChance(widen({ ...s, day: d, last: fishedDay, crab, cool: {} })) > 0 && isCool('fish')) out.fish = waits('fish', 'it went wrong a moment ago') || 'not now';
-    else if (fishChance(widen({ ...s, day: d, last: fishedDay, crab })) <= 0 && (wideOn() ? aiHours(t, AI_TRIP_TO) : t >= FISH_FROM && t < FISH_TO)) out.fish = s.thirst >= FISH_THIRST || s.hunger >= FISH_HUNGER ? 'he is too thirsty or hungry' : CRAB_FIRST;
+    else if (fishChance({ ...s, day: d, last: fishedDay, cool: {} }) > 0 && isCool('fish')) out.fish = waits('fish', 'it went wrong a moment ago') || 'not now';
+    else if (fishChance({ ...s, day: d, last: fishedDay }) <= 0 && aiHours(t, AI_TRIP_TO)) out.fish = 'he is too thirsty or hungry';
     if (d === tideDay) out.tide = 'already done today';
     else if (now - tideNone <= 300) out.tide = 'the strip had no wet wood a moment ago';
     else if (hungry) out.tide = 'he is too thirsty or hungry';
-    else if (crab) out.tide = CRAB_FIRST;
     if (!strays().length) out.strays = 'no stray pile near the ring';
     else if (W.load()) out.strays = 'his arms are full';
     else if (isCool('stray')) out.strays = waits('stray', 'he went to the strays a moment ago');
@@ -2575,7 +2605,6 @@ export function createMind(world, game, opts = {}) {
     if (exploredDay >= d) out.explore = 'already done today';
     else if (hungry) out.explore = 'he is too thirsty or hungry';
     else if (isCool('explore')) out.explore = waits('explore', 'he set out or looked for somewhere new a moment ago and found nothing');
-    else if (crab) out.explore = CRAB_FIRST;
     else if (d - exploredDay < (exploreMissing(h).length > 0 ? 1 : EXPLORE_GAP)) out.explore = 'not every day: the last trip was only a day or so ago';
     if (!(d >= journeyDue)) out.journey = 'not due yet';
     else if (d === journeyTried) out.journey = 'already tried today';
@@ -2589,15 +2618,13 @@ export function createMind(world, game, opts = {}) {
     else if (hs.lean === 'none' && !hs.fire) out.home = 'he has no camp yet (a fire place or a bed) to build beside';
     else if (hs.cool.home) out.home = waits('home', 'he could not find the material or a site for the next part a moment ago');
     else if (!homeNext({ ...hs, time: HOME_FROM, day: Math.max(d, HOME_DAY), cool: {} })) out.home = 'no part of the home is next';
-    else if (crab) out.home = CRAB_FIRST;
     if (!homeDone(h)) out.axe = 'the home is not complete yet';
     else if (axeNone === d) out.axe = 'there was nothing for the axe to do today';
     else if (builtDay === d || axeDay === d) out.axe = 'one piece of work a day, done';
     else if (d < HOME_DAY) out.axe = `the axe's work begins on day ${HOME_DAY}`;
     else if (isCool('axe')) out.axe = waits('axe', 'it did not work out a moment ago');
     else if (s.thirst >= AXE_THIRST || s.hunger >= AXE_HUNGER) out.axe = 'he is too thirsty or hungry';
-    else if (crab) out.axe = CRAB_FIRST;
-    else if (wideOn() && !A.has() && !supplyOk(h)) out.axe = noSupply();
+    else if (!A.has() && !supplyOk(h)) out.axe = noSupply();
     return out;
   };
   return mind;

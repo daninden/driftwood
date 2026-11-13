@@ -51,7 +51,7 @@
  * (render/soundMark) above the moon does the same; the choice is kept in localStorage (audio/pref). The fade-out
  * when the tab is hidden is in audio/sound.
  *
- * The dev panel #dev (render/devPanel, src/version; 0.36.4: events from inside it are ignored by the takeover and the idle tracker, isDevPanelEvent, like those of the AI panel and the Voice log) shows version, name, fps,
+ * The dev panel #dev (render/devPanel, src/version; 0.36.4: events from inside it are ignored by the takeover and the idle tracker, isDevPanelEvent, like those of the AI panel) shows version, name, fps,
  * the work time per frame and `idle` top right; the backtick key toggles it.
  * It is fed the real time between drawn frames and the ms update + render took.
  * While it is visible the furthest zoom is 25 (core/view zoomMax), else 10; the
@@ -129,7 +129,7 @@ import { createNamePrompt } from './render/namePrompt.js';
 import { createDayLine, createWakeLine, WAKE_TIME } from './render/nameLines.js';
 import { createInk } from './render/ink.js';
 import { createSoundMark } from './render/soundMark.js';
-import { createVoice, isVoiceKey, isVoiceLogEvent } from './render/voice.js';
+import { createVoice } from './render/voice.js';
 import { createSound } from './audio/sound.js';
 import { createMixer } from './audio/mix.js';
 import { createSoundSwitch, isSoundKey } from './audio/pref.js';
@@ -179,7 +179,7 @@ async function boot() {
   const drop = createThirstMark(document.getElementById('thirst'));
   const half = createHungerMark(document.getElementById('hunger'));
   const carry = createCarryMark(document.getElementById('carry'), kind => game.use(kind, input));   // a click on a drawing uses it (0.27.2)
-  const voice = createVoice(container, document.getElementById('voice-log'));
+  const voice = createVoice(container);
   const gesture = createGestureMark(container), gestureSt = {};   // 0.34 Gestures: the marks' drawings above his head
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
   const speed = parseSpeed(location.search);   // 0.30.11 ?speed=N: game time N times as fast (tests only, never saved)
@@ -230,15 +230,12 @@ async function boot() {
   let still = 0, stillSaid = false, lastX = game.player.x, lastZ = game.player.z;   // seconds the player has stood still; whether this still period was asked about
   const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
   const poke = e => {
-    if (isVoiceLogEvent(e) || isAiPanelEvent(e) || isDevPanelEvent(e)) return;
+    if (isAiPanelEvent(e) || isDevPanelEvent(e)) return;
     if (!acting.event(e)) return;
     hands.playerAction(); saveHands(hands.mode); dev.setHands(hands.mode);
     takeover.poke(tnow()); mind.release(); dev.setHabit(false);
   };   // a walk or action takes the castaway back
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'keydown', 'keyup', 'visibilitychange', 'focus']) window.addEventListener(type, poke, { capture: true, passive: true });
-  const voiceLog = document.getElementById('voice-log');
-  if (voiceLog) for (const type of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) voiceLog.addEventListener(type, e => e.stopPropagation(), { capture: true });
-  window.addEventListener('keydown', e => { if (isVoiceKey(e)) voice.toggle(); }, true);
 
   createThumbStick(document.getElementById('stick'), input);
   button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
@@ -254,7 +251,7 @@ async function boot() {
   const cap = touch ? FRAME_CAP_TOUCH : 0;   // 0: no cap
   const quiet = createIdleTracker(undefined, last);
   let anchor = -Infinity;   // where the frame schedule stands (render/framePacer)
-  const woken = e => { if (isVoiceLogEvent(e) || isAiPanelEvent(e) || isDevPanelEvent(e)) return; const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
+  const woken = e => { if (isAiPanelEvent(e) || isDevPanelEvent(e)) return; const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove']) window.addEventListener(type, woken, { capture: true, passive: true });
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };

@@ -2,7 +2,10 @@
  * render/aiPanel — the AI panel (0.36 "Mind", log made clear in 0.36.1 "Clear log"): a developer panel, separate from the dev panel, to switch the language-model chooser on, enter the player's own key and FOLLOW what it does. Toggled with the I key.
  * DOM only: it reads the client's status (ai/client) and the chooser's log and tally (ai/chooser) and shows them; it decides nothing.
  *
- * Content, top to bottom: on/off, the key field (a password field: the key is saved to localStorage by the client when the field changes and the field is emptied; it is never shown again) and "clear key", "list models"
+ * 0.36.6 "One menu": the top of the panel is COMPACT. Collapsed (the default) it is one line: the on/off checkbox, "AI on · loose · 3.5-flash-lite 6/480 · not asking" (`summaryLine`), any problem in red in the same line (an error, a model paused or not available, all budgets spent, no key, Dave waiting) and a small "⚙" button that expands the settings (the key field, clear key, list models, the leash buttons with their note, the address, the status line, one line per model, the pending line, the tally). The choice is kept per browser in localStorage (wrapped in try/catch; no game save).
+ *   Under it the log by plan: in the per-step view (the default) there is NO separate plan box any more: the newest plan group in the log is the current plan (a clear border, a "current plan" tag; while a new plan is being asked a grey line says so); in "show every decision" the plan box above the log stays.
+ *
+ * Content of the expanded settings and the log, top to bottom: on/off, the key field (a password field: the key is saved to localStorage by the client when the field changes and the field is emptied; it is never shown again) and "clear key", "list models"
  * (the model names the key can use; the model itself is fixed in ai/config), the models in order of preference and the address as text, a status line, one plain line per model ("gemini-x: 12 of 900 today, 1 of 12 this minute", "paused until 14:05",
  * "not available (model not found)", "last error: ..."), whether Dave is waiting for an answer now ("Dave is waiting for the AI...", "Not asking now"), a tally (since the page was loaded: N by the AI, M by the rules, K different from the rules)
  * 0.36.3 "Plans": under the models a row of three buttons for the LEASH (strict, loose, free: ai/chooser MODES; kept by the client), the current plan with a marker at the current step and the reason it was asked, and "overruled" (orange tag, the plain reason) on every block where the rules overruled the AI.
@@ -31,6 +34,7 @@
  *   statusLine(status, nowMs) -> string       on or off, asking, all-paused, the last error
  *   modelLines(status, nowMs) -> [string]     one plain line per model
  *   pendingLine(waiting, inFlight) -> string
+ *   summaryLine(status, { mode, waiting, inFlight }, nowMs) -> { text, problem }, shortModel(name)   (0.36.6, pure) the one line of the collapsed panel after the checkbox, and the problem text shown in red in it
  *   requestText(messages, raw) -> string   the full exchange of an entry, for the expanded view
  *   createAiPanel(el, { client, ai, now? }) -> { toggle(), visible(), update() }   el: the #ai element (index.html); update() is called every frame and touches the DOM only when something changed; listens for I on window
  *
@@ -133,6 +137,35 @@ export function modelLines(s, nowMs = Date.now()) {
   });
 }
 
+/** 0.36.6: the model's name without the family prefix ("gemini-3.5-flash-lite" -> "3.5-flash-lite"). */
+export const shortModel = m => String(m || '').replace(/^gemini-/, '');
+
+/**
+ * 0.36.6: the ONE line of the collapsed panel (pure), after the on/off checkbox: { text, problem }.
+ *   "AI on · loose · 3.5-flash-lite 6/480 · not asking"  (the leash, the first model that is available now with its count today of the day's budget, and the pending state: "not asking", "asking…" or "Dave is waiting")
+ *   problem: short plain text that the panel shows in red in the same line ('' when all is well): an error, a model paused or not available, all budgets spent, no key, or Dave waiting for an answer.
+ *   s: the client's status, o: { mode, waiting, inFlight }.
+ */
+export function summaryLine(s, o = {}, nowMs = Date.now()) {
+  if (!s.on) return { text: 'AI off', problem: '' };
+  const models = s.models || [], paused = m => !!m.pausedUntil && m.pausedUntil > nowMs;
+  const free = models.find(m => !m.dead && !paused(m) && m.today < m.perDay);
+  const pending = o.waiting ? 'Dave is waiting' : o.inFlight ? 'asking…' : 'not asking';
+  const parts = ['AI on'];
+  if (o.mode) parts.push(o.mode);
+  parts.push(free ? `${shortModel(free.model)} ${free.today}/${free.perDay}` : 'no model free');
+  parts.push(pending);
+  const bad = [];
+  if (!s.hasKey) bad.push('no key');
+  const alive = models.filter(m => !m.dead);
+  if (models.length && !alive.length) bad.push('no model available');
+  else if (!free && alive.length) bad.push(alive.every(m => m.today >= m.perDay) ? 'all budgets spent' : 'all models paused');
+  else for (const m of models) { if (m.dead) bad.push(`${shortModel(m.model)} not available`); else if (paused(m)) bad.push(`${shortModel(m.model)} paused until ${clock(m.pausedUntil)}`); }
+  if (s.lastError) bad.push('error: ' + String(s.lastError).slice(0, 48));
+  if (o.waiting) bad.push('waiting for an answer');
+  return { text: parts.join(' · '), problem: bad.join(' · ') };
+}
+
 export function pendingLine(waiting, inFlight = false) {
   if (waiting) return 'Dave is waiting for the AI...';
   return inFlight ? 'An earlier request is still running' : 'Not asking now';
@@ -197,20 +230,30 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   const st = client.status();
 
   el.textContent = '';
+  const OPEN_KEY = 'driftwood.aiPanelOpen';
+  const loadOpen = () => { try { return localStorage.getItem(OPEN_KEY) === '1'; } catch (e) { return false; } };
+  const saveOpen = v => { try { localStorage.setItem(OPEN_KEY, v ? '1' : '0'); } catch (e) { /* no storage: it is only a convenience */ } };
+  let expanded = loadOpen(), lastSummary = '';
   const title = mk('div', 'ai-title', `AI · ${st.models.map(m => m.model).join(' > ')}`);
+  const top = mk('div', 'ai-top'), sum = mk('span', 'ai-sum'), sumText = mk('span', null), sumBad = mk('span', 'ai-bad'), gear = mk('button', 'ai-gear', '⚙'); gear.type = 'button'; gear.setAttribute('aria-label', 'AI settings'); gear.title = 'settings';
+  const settings = mk('div', 'ai-settings');
   const row = mk('div', 'ai-row');
-  const onLabel = mk('label'); const on = mk('input'); on.type = 'checkbox'; on.checked = client.on(); onLabel.append(on, ' on');
+  const onLabel = mk('label'); const on = mk('input'); on.type = 'checkbox'; on.checked = client.on(); onLabel.append(on);
+  sum.append(sumText, ' ', sumBad); top.append(onLabel, sum, gear);
   const key = mk('input', 'ai-key'); key.type = 'password'; key.autocomplete = 'off'; key.spellcheck = false; key.setAttribute('aria-label', 'API key');
   const clear = mk('button', null, 'clear key'); clear.type = 'button';
   const list = mk('button', null, 'list models'); list.type = 'button';
-  row.append(onLabel, key, clear, list);
+  row.append(key, clear, list);
   const addr = mk('div', 'ai-dim', st.url);
   const modeRow = mk('div', 'ai-modes'), modeNote = mk('div', 'ai-dim'), planBox = mk('div', 'ai-plan');
   const modeBtn = {}; for (const m of AI_MODES) { const b = mk('button', null, m); b.type = 'button'; b.dataset.mode = m; modeBtn[m] = b; modeRow.append(b); }
   const viewBtn = mk('button', 'ai-view'); viewBtn.type = 'button';
   const status = mk('div', 'ai-status'), tally = mk('div', 'ai-tally'), perModel = mk('div', 'ai-models-status'), pend = mk('div', 'ai-pending'), models = mk('div', 'ai-models'), log = mk('div', 'ai-log');
   models.hidden = true;
-  el.append(title, row, modeRow, modeNote, addr, status, perModel, pend, planBox, models, tally, viewBtn, log);
+  settings.append(title, row, modeRow, modeNote, addr, status, perModel, pend, models, tally);
+  el.append(top, settings, planBox, viewBtn, log);
+  const showOpen = () => { settings.hidden = !expanded; gear.className = expanded ? 'ai-gear on' : 'ai-gear'; gear.setAttribute('aria-expanded', String(expanded)); };
+  showOpen(); gear.addEventListener('click', () => { expanded = !expanded; saveOpen(expanded); showOpen(); });
   const showView = () => { viewBtn.textContent = byPlan ? 'show every decision' : 'show the plan steps'; };
   showView(); viewBtn.addEventListener('click', () => { byPlan = !byPlan; showView(); seen = -1; update(); });
   const showMode = () => { const m = client.mode(); for (const k of AI_MODES) modeBtn[k].className = k === m ? 'on' : ''; modeNote.textContent = modeLine(m); };
@@ -237,7 +280,7 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   function renderLog() {
     log.textContent = ''; planBox.textContent = '';
     const pl = ai.plan(), asking = ai.asking();
-    if (client.on() && client.hasKey()) {
+    if (!byPlan && client.on() && client.hasKey()) {   // 0.36.6: the plan box only in the per-decision view; the per-step view has the newest plan group as the current plan
       planBox.append(mk('div', 'ai-plan-head', asking ? `Asking for a new plan (${asking})...` : planHead(pl)));
       for (const l of planLines(pl)) planBox.append(mk('div', `ai-step ${l.state}`, `${l.marker} ${l.text}`));
       if (pl && pl.reason) planBox.append(mk('div', 'ai-sub dim', `"${pl.reason}"`));
@@ -245,6 +288,8 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
     tally.textContent = client.on() && client.hasKey() ? tallyLine(ai.tally()) : '';
     if (!(client.on() && client.hasKey())) log.append(mk('div', 'ai-off', 'The AI is off.'));
     if (byPlan && client.on() && client.hasKey()) {
+      if (asking) log.append(mk('div', 'ai-entry note asking', `Asking for a new plan (${asking})...`));
+      let current = true;   // the newest plan group is the current plan
       for (const it of groupByPlan(ai.entries, ai.plans())) {
         if (it.kind === 'note') { log.append(mk('div', 'ai-entry note', it.text)); continue; }
         if (it.kind === 'rules') {
@@ -253,8 +298,8 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
           if (it.n != null && open.has(String(it.n))) g.append(mk('pre', 'ai-full', requestText(it.entry.messages, it.entry.raw)));
           log.append(g); continue;
         }
-        const g = mk('div', 'ai-plangroup'), h = mk('div', 'ai-entry plannote'); if (it.n != null) h.dataset.n = String(it.n);
-        h.append(mk('b', null, it.head)); if (it.reason) h.append(mk('div', 'ai-sub dim', it.reason));
+        const g = mk('div', current ? 'ai-plangroup current' : 'ai-plangroup'), h = mk('div', 'ai-entry plannote'); if (it.n != null) h.dataset.n = String(it.n);
+        h.append(mk('b', null, it.head)); if (current) h.append(' ', mk('span', 'ai-current', 'current plan')); current = false; if (it.reason) h.append(mk('div', 'ai-sub dim', it.reason));
         g.append(h);
         const ask = it.n != null ? ai.entries.find(e => e.n === it.n) : null;
         if (ask && open.has(String(it.n))) h.append(mk('pre', 'ai-full', requestText(ask.messages, ask.raw)));
@@ -292,6 +337,8 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   function update() {
     if (!shown) return;
     const cs = client.status(), s = statusLine(cs, now()), ml = modelLines(cs, now());
+    const sm = summaryLine(cs, { mode: client.mode(), waiting: ai.waiting(), inFlight: ai.inFlight() }, now()), key2 = sm.text + '|' + sm.problem;
+    if (key2 !== lastSummary) { lastSummary = key2; sumText.textContent = sm.text; sumBad.textContent = sm.problem; sum.classList.toggle('bad', !!sm.problem); }
     if (s !== lastStatus) { lastStatus = s; status.textContent = s; }
     const mt = ml.join('\n'); if (mt !== lastModels) { lastModels = mt; perModel.textContent = mt; }
     const p = pendingLine(ai.waiting(), ai.inFlight());

@@ -1,12 +1,12 @@
-// 0.36.5 "Reach": the hours the AI has (the pastimes' fixed windows are gone while the AI chooses, daylight and the real conditions stay), the spear and the axe fetching their own materials while the AI chooses,
-// the destinations of a stroll and of exploring, and the plan request that says all this. With the rules in charge nothing changes (the life tests and the golden fixtures guard that; here a few of the pure functions are checked both ways).
+// 0.36.5 "Reach", 0.36.6 "One menu": the hours of the menu (daylight and the real conditions: the same for every chooser; the rules' old windows are the rules chooser's habit, tests/oneMenu.test.js), the spear and the axe fetching their own materials,
+// the destinations of a stroll and of exploring, and the plan request that says all this.
 // Depends on: game/mind, game/intent, game/game, ai/prompt, ai/chooser, tests/helpers/mindCamp.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
-import { createMind, spearMakeOk, homeNext, axeNext, exploreChance, fishChance, exploreLate, EXPLORE_BACK, AI_BACK, AI_FROM, AI_WORK_TO, AI_TRIP_TO, SPEAR_RANGE, SPEAR_DAY, HOME_DAY, EXPLORE_WHERE } from '../src/game/mind.js';
-import { isValid, rulesChooser } from '../src/game/intent.js';
+import { createMind, spearMakeOk, homeNext, axeNext, exploreChance, fishChance, exploreLate, habitOk, EXPLORE_BACK, AI_BACK, AI_FROM, AI_WORK_TO, AI_TRIP_TO, SPEAR_RANGE, SPEAR_DAY, HOME_DAY, EXPLORE_WHERE } from '../src/game/mind.js';
+import { isValid, rulesChooser, firstChooser } from '../src/game/intent.js';
 import { stonesOfTile } from '../src/game/stones.js';
 import { branchesOfTile } from '../src/game/branches.js';
 import { createPath } from '../src/game/path.js';
@@ -19,23 +19,23 @@ let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
 
 const calm = { thirst: 0, hunger: 0, cool: {}, spear: false };
-describe('the AI\'s hours (pure)', () => {
-  it('the rules\' windows are as they were; with `wide` the pastimes run by day', () => {
-    // 16:48 (0.7): past every window of the rules
-    expect(spearMakeOk({ ...calm, time: 0.7, day: 7 })).toBe(false); expect(spearMakeOk({ ...calm, time: 0.7, day: 7, wide: true })).toBe(true);
-    expect(spearMakeOk({ ...calm, time: 0.82, day: 7, wide: true })).toBe(false);   // after AI_WORK_TO
+describe('the menu\'s hours (pure, 0.36.6: the same for every chooser)', () => {
+  it('the pastimes run by day, from dawn to AI_WORK_TO or AI_TRIP_TO, whoever chooses', () => {
+    // 16:48 (0.7): past every habit window of the rules, inside the menu's hours
+    expect(spearMakeOk({ ...calm, time: 0.7, day: 7 })).toBe(true);
+    expect(spearMakeOk({ ...calm, time: 0.82, day: 7 })).toBe(false);   // after AI_WORK_TO
     const home = { day: HOME_DAY, time: 0.7, lean: 'done', up: { walls: 0 }, cool: {} };
-    expect(homeNext(home)).toBe(null); expect(homeNext({ ...home, wide: true })).toBe('walls');
-    expect(homeNext({ ...home, wide: true, day: 0 })).toBe(null);   // the day-number gate stays
+    expect(homeNext(home)).toBe('walls');
+    expect(homeNext({ ...home, day: 0 })).toBe(null);   // the day-number gate stays
     const axe = { day: HOME_DAY, time: 0.5, done: true, builtDay: -1, axeDay: -1, thirst: 0, hunger: 0, cool: {} };
-    expect(axeNext(axe)).toBe(false); expect(axeNext({ ...axe, wide: true })).toBe(true); expect(axeNext({ ...axe, wide: true, axeDay: HOME_DAY })).toBe(false);   // one piece of work a day stays
-    const ex = { time: 0.6, day: 7, thirst: 0, hunger: 0, last: 1, missing: 0, cool: {}, crab: false };
-    expect(exploreChance(ex)).toBe(0); expect(exploreChance({ ...ex, wide: true })).toBeGreaterThan(0);
-    expect(exploreChance({ ...ex, wide: true, last: 6 })).toBe(0);   // not every day
-    expect(exploreChance({ ...ex, wide: true, time: 0.7 })).toBe(0);   // a trip is not started after AI_TRIP_TO
-    expect(exploreChance({ ...ex, wide: true, thirst: 0.3 })).toBe(0);   // the real conditions stay
-    const fi = { time: 0.3, day: 7, last: 6, spear: true, crabs: 0, fish: 0, thirst: 0, hunger: 0, cool: {}, crab: false };
-    expect(fishChance(fi)).toBe(0); expect(fishChance({ ...fi, wide: true })).toBeGreaterThan(0); expect(fishChance({ ...fi, wide: true, spear: false })).toBe(0); expect(fishChance({ ...fi, wide: true, day: 6 })).toBe(0);
+    expect(axeNext(axe)).toBe(true); expect(axeNext({ ...axe, axeDay: HOME_DAY })).toBe(false);   // one piece of work a day stays
+    const ex = { time: 0.6, day: 7, thirst: 0, hunger: 0, last: 1, missing: 0, cool: {} };
+    expect(exploreChance(ex)).toBeGreaterThan(0);
+    expect(exploreChance({ ...ex, last: 6 })).toBe(0);   // not every day
+    expect(exploreChance({ ...ex, time: 0.7 })).toBe(0);   // a trip is not started after AI_TRIP_TO
+    expect(exploreChance({ ...ex, thirst: 0.3 })).toBe(0);   // the real conditions stay
+    const fi = { time: 0.3, day: 7, last: 6, spear: true, crabs: 0, fish: 0, thirst: 0, hunger: 0, cool: {} };
+    expect(fishChance(fi)).toBeGreaterThan(0); expect(fishChance({ ...fi, spear: false })).toBe(0); expect(fishChance({ ...fi, day: 6 })).toBe(0);
     expect(AI_FROM).toBeLessThan(0.2); expect(AI_TRIP_TO).toBeLessThan(AI_BACK); expect(AI_WORK_TO).toBeLessThanOrEqual(AI_BACK);
   });
   it('a trip is late against AI_BACK instead of EXPLORE_BACK', () => {
@@ -45,10 +45,9 @@ describe('the AI\'s hours (pure)', () => {
   });
 });
 
-// a mind that asks a spy chooser at every pastime menu; `wide` says whether it plays for the AI
-const spy = (wide, g) => {
+// a mind that asks a spy chooser at every pastime menu (it records what was valid, then answers as the rules)
+const spy = g => {
   const seen = [], f = (point, menu, ctx) => { if (point === 'pastime') seen.push({ t: g.clock.day + g.clock.time, opts: menu.options.map(o => [o.id, isValid(o)]) }); return rulesChooser(point, menu, ctx); };
-  if (wide) f.wide = () => true;
   return { f, seen };
 };
 const tickMind = (g, m, secs, until = null) => { for (let t = 0; t < secs; t += 0.1) { m.step(0.1); g.update(m.input, 0.1); if (until && until()) break; } };
@@ -68,34 +67,36 @@ describe('the spear fetches its materials while the AI chooses', () => {
     knowRoute(g, branches[0]); knowRoute(g, stones[0]);
     return g;
   };
-  it('with the rules the spear stays blocked ("no branch and stone near"); with the AI it is possible and he makes it', () => {
-    const mr = createMind(w, scene()); mr.engage(); expect(mr.blockers().spear).toBe('no branch and stone near');   // the rules: blocked as before
-    const g = scene(), s = spy(true, g), m = createMind(w, g, { chooser: Object.assign((p, me, c) => s.f(p, me, c), { wide: () => true }) });
+  it('the spear is possible for both choosers (fetched from home), blockers say nothing, and he makes it when the chooser takes it', () => {
+    const mr = createMind(w, scene()); mr.engage(); expect(mr.blockers().spear).toBeUndefined();   // 0.36.6: the rules see the same menu
+    const g = scene(), s = spy(g), m = createMind(w, g, { chooser: (p, me, c) => { if (p === 'pastime') { const o = me.options.find(x => x.id === 'spear'); if (o && isValid(o)) return 'spear'; } return s.f(p, me, c); } });
     m.engage();
     expect(m.blockers().spear).toBeUndefined();
     tickMind(g, m, 6000, () => m.stats.spearsMade > 0 && !g.spear.hand && !!g.spear.at);
     expect(m.stats.spearsMade).toBe(1); expect(g.spear.at && Math.hypot(g.spear.at.x - m.home().x, g.spear.at.z - m.home().z)).toBeLessThan(8);   // made, and laid at the camp
     expect(m.stats.errors || 0).toBe(0);
   });
-  it('with the rules in charge the same island makes no spear', () => {
+  it('with the rules chooser the same island makes no spear: the rules prefer a spear only when its materials lie near (a habit; the menu offers it)', () => {
     const g = scene(), m = createMind(w, g); m.engage();
     tickMind(g, m, 3000);
     expect(m.stats.spearsMade).toBe(0);
   });
-  it('is blocked for a plain reason when no branch and stone are known at all, with the AI too', () => {
+  it('is blocked for a plain reason when no branch and stone are known at all, for either chooser', () => {
     const g = scene(); g.stones.groundStones = () => [];
-    const m = createMind(w, g, { chooser: Object.assign((p, me, c) => rulesChooser(p, me, c), { wide: () => true }) }); m.engage();
+    const m = createMind(w, g, { chooser: (p, me, c) => rulesChooser(p, me, c) }); m.engage();
     expect(m.blockers().spear).toBe('no branch and stone known to fetch');
+    const m2 = createMind(w, g); m2.engage(); expect(m2.blockers().spear).toBe('no branch and stone known to fetch');
   });
-  it('offers the spear after the rules\' hours while the AI chooses, and not with the rules', () => {
+  it('offers the spear after the rules\' hours to every chooser; the rules do not take it then (habit)', () => {
     const near = () => { const g = campGame(w, spawn, { day: SPEAR_DAY, time: 0.68, stocked: true }); const s = w.tiles.flatMap(t => stonesOfTile(w, t)).filter(x => d0(x) < SPEAR_RANGE).sort((a, b) => d0(a) - d0(b))[0], b = w.tiles.flatMap(t => branchesOfTile(w, t)).filter(x => d0(x) < SPEAR_RANGE)[0]; if (s) knowRoute(g, s); if (b) knowRoute(g, b); return g; };
-    const ga = near(), gb = near(), a = spy(true, ga), b = spy(false, gb);
-    const ma = createMind(w, ga, { chooser: Object.assign((p, me, c) => a.f(p, me, c), { wide: () => true }) }), mb = createMind(w, gb, { chooser: (p, me, c) => b.f(p, me, c) });
-    ma.engage(); mb.engage(); tickMind(ga, ma, 150); tickMind(gb, mb, 150);
+    const ga = near(), gb = near(), a = spy(ga), b = spy(gb);
+    const ma = createMind(w, ga, { chooser: (p, me, c) => { if (p === 'pastime') { const o = me.options.find(x => x.id === 'spear'); if (o && isValid(o)) return 'spear'; } return a.f(p, me, c); } }), mb = createMind(w, gb, { chooser: (p, me, c) => b.f(p, me, c) });
+    ma.engage(); mb.engage(); tickMind(ga, ma, 400, () => ma.stats.spearsMade > 0); tickMind(gb, mb, 400);
     const late = x => x % 1 >= 0.6 && x % 1 < 0.8, valid = sp => sp.seen.filter(m => late(m.t)).some(m => m.opts.some(([id, ok]) => id === 'spear' && ok));
     expect(b.seen.some(m => late(m.t)), 'a pastime menu in the afternoon').toBe(true);
-    expect(valid(b)).toBe(false);
-    expect(valid(a)).toBe(true);
+    expect(valid(b)).toBe(true);   // the rules chooser sees it on its menu ...
+    expect(habitOk('spear', { time: 0.68 })).toBe(false); expect(mb.stats.spearsMade).toBe(0);   // ... and passes it over
+    expect(ma.stats.spearsMade).toBeGreaterThan(0);   // another chooser takes it
   });
 });
 
@@ -136,7 +137,6 @@ describe('destinations', () => {
     const st = ai.plan().steps; expect(st[0].toUsed).toBe('river'); expect(st[1].toIgnored).toBe('palms');
     const c3 = ai.chooser('pastime', m, { rand: () => 0.5, ex: () => 0.5, fish: () => 0.5 });
     expect(c3).toEqual({ id: 'explore', where: 'forest' });
-    expect(ai.chooser.wide()).toBe(true);
   });
 });
 
@@ -221,44 +221,49 @@ describe('the AI panel by plan (groupByPlan)', () => {
   });
 });
 
-describe('blockers agree with the menu while the AI chooses (0.36.5)', () => {
-  // over a simulated life with the AI's hours: every time a pastime is within its hours but not valid on the menu, blockers() says why (no generic fallback)
-  const life = (opts, secs) => {
+describe('blockers agree with the menu, for every chooser (0.36.5, 0.36.6)', () => {
+  // over a simulated life: every time a pastime is within its hours but not valid on the menu, blockers() says why (no generic fallback). One menu: this holds for the rules chooser and for a chooser that takes the first possible option.
+  const rules = (point, menu, ctx) => rulesChooser(point, menu, ctx);
+  const first = (point, menu, ctx) => (point === 'pastime' && menu.options.find(o => isValid(o) && o.id !== 'ember') ? firstChooser(point, menu) : rulesChooser(point, menu, ctx));
+  const life = (opts, secs, choose) => {
     const g = campGame(w, spawn, { stocked: true, ...opts }); let m, checked = 0; const missing = [];
-    const f = Object.assign((point, menu, ctx) => {
+    const f = (point, menu, ctx) => {
       if (point === 'pastime' && m) {
         const b = m.blockers(), t = g.clock.time;
         for (const o of menu.options) if (PLAN_PASTIMES.includes(o.id) && hoursOpen(o.id, t) && !isValid(o)) { checked++; if (!b[o.id]) missing.push(`${o.id}@${t.toFixed(2)} day ${g.clock.day}`); }
       }
-      return rulesChooser(point, menu, ctx);
-    }, { wide: () => true });
+      return choose(point, menu, ctx);
+    };
     m = createMind(w, g, { chooser: f }); m.engage(); tickMind(g, m, secs);
     return { missing, checked, m };
   };
-  it('a new game on day 1 and on day 2: no pastime in hours and not valid goes without a reason', () => {
-    for (const day of [1, 2]) { const r = life({ day, time: 0.25 }, 4500); expect(r.checked, 'some pastime was in hours and not valid').toBeGreaterThan(0); expect(r.missing).toEqual([]); }
-  });
-  it('the reasons are plain: a failed try that is cooling, a day not yet reached, a crab trip first', () => {
-    const g = campGame(w, spawn, { day: 1, time: 0.3, stocked: true }), m = createMind(w, g, { chooser: Object.assign((p, me, c) => rulesChooser(p, me, c), { wide: () => true }) }); m.engage();
-    expect(m.blockers().home).toContain('begins on day 2');
-    const g2 = campGame(w, spawn, { day: 3, time: 0.3, stocked: true }), m2 = createMind(w, g2, { chooser: Object.assign((p, me, c) => rulesChooser(p, me, c), { wide: () => true }) }); m2.engage();
-    expect(m2.blockers().explore === undefined || typeof m2.blockers().explore === 'string').toBe(true);
+  const check = (day, choose) => { const r = life({ day, time: 0.25 }, 3500, choose); expect(r.checked, 'some pastime was in hours and not valid').toBeGreaterThan(0); expect(r.missing).toEqual([]); expect(r.m.stats.errors || 0).toBe(0); };
+  it('day 1, the rules chooser', () => check(1, rules));
+  it('day 2, the rules chooser', () => check(2, rules));
+  it('day 1, a chooser taking the first possible option', () => check(1, first));
+  it('day 2, a chooser taking the first possible option', () => check(2, first));
+  it('the reasons are plain: a day not yet reached, a failed try that is cooling; the same for both', () => {
+    for (const mk of [g => createMind(w, g), g => createMind(w, g, { chooser: rules })]) {
+      const g = campGame(w, spawn, { day: 1, time: 0.3, stocked: true }), m = mk(g); m.engage();
+      expect(m.blockers().home).toContain('begins on day 2');
+      const g2 = campGame(w, spawn, { day: 3, time: 0.3, stocked: true }), m2 = mk(g2); m2.engage();
+      expect(m2.blockers().explore === undefined || typeof m2.blockers().explore === 'string').toBe(true);
+    }
   });
 });
 
-describe('the crab trip does not hold the other pastimes back while the AI chooses (0.36.5)', () => {
-  const run = wide => {
+describe('the crab trip is a habit of the rules, not a condition of the menu (0.36.6)', () => {
+  const run = () => {
     const g = campGame(w, spawn, { day: 2, time: 0.25, stocked: true }); let m; const rows = [];
-    const f = (point, menu, ctx) => { if (point === 'pastime' && m) { const o = menu.options.find(x => x.id === 'home'); if (o) rows.push({ t: g.clock.time, ok: isValid(o), why: m.blockers().home || '' }); } return rulesChooser(point, menu, ctx); };
-    if (wide) f.wide = () => true;
+    const f = (point, menu, ctx) => { if (point === 'pastime' && m) { const o = menu.options.find(x => x.id === 'home'); if (o) rows.push({ t: g.clock.time, ok: isValid(o), habit: o.rule.habit ? o.rule.habit() : true, why: m.blockers().home || '' }); } return rulesChooser(point, menu, ctx); };
     m = createMind(w, g, { chooser: f }); m.engage(); tickMind(g, m, 2500);
     return rows;
   };
-  it('with the rules home waits for the crab trip at low water (unchanged); with the AI it is offered and never blocked by it', () => {
-    const rules = run(false), ai = run(true);
-    expect(rules.some(r => !r.ok && /crab trip comes first/.test(r.why)), 'the rules: home refused for the crabs').toBe(true);
-    expect(ai.some(r => r.t >= 0.4 && r.t < 0.6 && r.ok), 'the AI: home offered in the crab window').toBe(true);
-    expect(ai.some(r => /crab/.test(r.why))).toBe(false);
+  it('home is on the menu in the crab window and never blocked by the crabs; the rules pass it over at low water (habit), the blockers never mention a crab', () => {
+    const rows = run();
+    expect(rows.some(r => r.t >= 0.4 && r.t < 0.56 && r.ok), 'home valid in the crab window').toBe(true);
+    expect(rows.some(r => r.ok && !r.habit && r.t >= 0.38 && r.t < 0.56), 'the rules: home passed over for the crab trip').toBe(true);
+    expect(rows.some(r => /crab/.test(r.why))).toBe(false);
   });
 });
 

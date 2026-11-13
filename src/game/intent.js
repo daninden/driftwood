@@ -37,6 +37,8 @@
  *   choiceId(choice) -> string | null
  *   rulesChooser(point, menu, ctx) -> choice      the present rules
  *   firstChooser(point, menu) -> choice           a fixed fake for tests: the first possible option, a forced one before any other; no random numbers
+ * 0.36.6 "One menu": what is POSSIBLE is one set of real conditions, the same for every chooser. The rules' habits (the hour windows of the pastimes, the crab trip first at low water, home by the evening's chores) are not conditions: a pastime fact may carry `habit` (lazy, true when the rules want it now)
+ *   and `back` (the time of day by which the rules want a trip home); they are hidden with the rule, only `rulesChooser` reads them (an option the habit refuses is passed over with no draw; a trip it takes comes back as { id, back }). The other choosers see the same menu and ignore them.
  * Depends on: nothing.
  */
 
@@ -110,6 +112,7 @@ export function pastimeMenu(stage, facts = {}) {
       ok: f.ok === undefined ? undefined : () => !!val(f.ok),
       chance: f.chance === undefined ? undefined : () => val(f.chance),
       draw: f.draw ?? P.draw, always: f.always ?? (!!P.always && !!(f.draw ?? P.draw)), kind: f.kind,
+      habit: f.habit === undefined ? undefined : () => !!val(f.habit), back: f.back,   // 0.36.6: the rules' preference (hours, the crab trip first): only rulesChooser reads it; back: the time of day the rules want a trip home by
     };
     options.push(option({ id, goal: 'idle', what: P.what, why: f.why ?? P.why, at: f.at ?? null, cost: f.cost ?? null, est: f.est ?? null, estimate: f.estimate }, rule));
   }
@@ -135,6 +138,7 @@ export function rulesChooser(point, menu, ctx = {}) {
   if (point === 'goal' || point === 'event') return os.length ? os[0].id : null;
   for (const o of os) {
     const r = o.rule || {};
+    if (r.habit && !r.habit()) continue;   // 0.36.6: a habit of the rules, not a condition: the option is on the menu (the AI may take it), the rules pass it over (no draw)
     if (r.draw) {
       const draw = ctx[r.draw];
       let hit;
@@ -142,9 +146,9 @@ export function rulesChooser(point, menu, ctx = {}) {
       else hit = isValid(o) && draw() < r.chance();   // (no draw when it is not possible: the exploring and the fishing draw only when there is a chance)
       if (!hit) continue;
       if (r.kind) { const kind = r.kind(ctx.rand); if (!kind) continue; return { id: o.id, kind }; }
-      return o.id;
+      return r.back ? { id: o.id, back: r.back } : o.id;
     }
-    if (isValid(o)) return o.id;
+    if (isValid(o)) return r.back ? { id: o.id, back: r.back } : o.id;
   }
   return null;
 }

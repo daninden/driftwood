@@ -1,5 +1,5 @@
 /**
- * render/voice — situation-led written thoughts and the session log (0.30.1 "Thoughts").
+ * render/voice — situation-led written thoughts above Dave (0.30.1 "Thoughts"). 0.36.6 "One menu": the Words log (the #voice-log panel, key L, `isVoiceKey`, `isVoiceLogEvent`, the history of shown lines) is gone: most of it is in the AI panel now; the fading line above Dave is unchanged.
  *
  * 0.30.20 "Words": only reasons speak, never actions. Every kind (an intent of the mind, or what the player lacks, game/lack) has 3 or 4 lines that rotate per kind
  * (never the same line twice in a row). Fixed phrases use their own counters, never the world or mind PRNG. The DOM
@@ -15,9 +15,9 @@
  * rule (8 s) still applies at the moment it is said, so at most one line can wait through the 5 s wake line;
  * there is no queue.
  *
- * Exports: PHRASES, SAID_MAX, cleanSaid, phraseFor, voiceTime, createThoughts (take, takeStep), isVoiceKey, isVoiceLogEvent, createVoice
+ * Exports: PHRASES, SAID_MAX, cleanSaid, phraseFor, voiceTime, createThoughts (take, takeStep), createVoice
  *   cleanSaid(text) -> string | null   the AI's words made fit for a line: trimmed, single-spaced, null when empty, not text or longer than SAID_MAX
- *   (createVoice -> { history, announce(kind, time?, said?), announceStep(time?, said?, fallbackKind?), hold(until), update(dt, player, camera, now?), toggle, open }; now defaults to a clock of the dts)
+ *   (createVoice(container) -> { announce(kind, time?, said?), announceStep(time?, said?, fallbackKind?), hold(until), update(dt, player, camera, now?) }; now defaults to a clock of the dts)
  * Depends on: three, render/screenRect
  */
 import * as THREE from 'three';
@@ -97,37 +97,16 @@ export function createThoughts() {
   };
 }
 
-/** A plain, unmodified L toggles the session-only log. */
-export function isVoiceKey(e) {
-  return e && e.type === 'keydown' && e.code === 'KeyL' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !(e.target && (e.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)));
-}
-
-/** True when a capture-phase global handler received an event from the log. */
-export function isVoiceLogEvent(e) {
-  const path = e && e.composedPath && e.composedPath();
-  if (Array.isArray(path) && path.some(node => node && node.id === 'voice-log')) return true;
-  const target = e && e.target;
-  return !!(target && (target.id === 'voice-log' || (target.closest && target.closest('#voice-log'))));
-}
-
-export function createVoice(container, logEl) {
+export function createVoice(container) {
   const line = document.createElement('div');
   line.className = 'voice'; line.setAttribute('aria-hidden', 'true'); container.appendChild(line);
-  const point = new THREE.Vector3(), history = [];
+  const point = new THREE.Vector3();
   const thoughts = createThoughts();
   let text = null, age = Infinity, clock = 0, holdUntil = 0, pending = null;
 
-  function append(next, time) {
-    const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 2;
-    const entry = `${voiceTime(time)}  ${next}`;
-    const row = document.createElement('div'); row.textContent = entry;
-    logEl.appendChild(row); history.push(entry);
-    if (atBottom) logEl.scrollTop = logEl.scrollHeight;
-  }
   function announce(kind, time = 0, said) {
     const next = thoughts.take(kind, said);
     if (!next) return null;
-    append(next, time);   // the log is never held back
     if (clock < holdUntil) pending = next; else display(next);
     return next;
   }
@@ -135,7 +114,6 @@ export function createVoice(container, logEl) {
   function announceStep(time = 0, said, fallbackKind = null) {
     const next = thoughts.takeStep(said, fallbackKind);
     if (!next) return null;
-    append(next, time);
     if (clock < holdUntil) pending = next; else display(next);
     return next;
   }
@@ -156,5 +134,5 @@ export function createVoice(container, logEl) {
     const y = Math.max(8, Math.min(rect.height - 8, (1 - point.y) * rect.height / 2));
     line.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px) translate(-50%,-100%)`;
   }
-  return { history, announce, announceStep, hold, update, toggle() { logEl.hidden = !logEl.hidden; if (!logEl.hidden) logEl.scrollTop = logEl.scrollHeight; }, open: () => !logEl.hidden };
+  return { announce, announceStep, hold, update };
 }

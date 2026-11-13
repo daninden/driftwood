@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
-import { createMind, axeNext, HOME_FROM, AXE_TO, AXE_CLEAR_R, AXE_OUT_R, AXE_LOGS, AXE_THIRST, AXE_HUNGER, LOG_RING } from '../src/game/mind.js';
+import { createMind, AI_FROM, AI_WORK_TO, axeNext, HOME_FROM, AXE_TO, AXE_CLEAR_R, AXE_OUT_R, AXE_LOGS, AXE_THIRST, AXE_HUNGER, LOG_RING } from '../src/game/mind.js';
 import { LISTS, treeId, trunkRadius, sizeKind, isGiant } from '../src/game/felled.js';
 import { PILE_MAX } from '../src/game/wood.js';
 import { campGame } from './helpers/mindCamp.js';
@@ -49,8 +49,8 @@ describe('axeNext (pure): the axe project has its turn', () => {
   it('only in the home\'s morning window, on a day with no piece of the home or unit of the axe work done, when the home is complete and nothing presses', () => {
     expect(axeNext(base)).toBe(true);
     expect(axeNext({ ...base, done: false })).toBe(false);                       // the home is not finished: lean-to, walls, ring and bed
-    expect(axeNext({ ...base, time: HOME_FROM - 0.01 })).toBe(false);
-    expect(axeNext({ ...base, time: AXE_TO })).toBe(false);
+    expect(axeNext({ ...base, time: AI_FROM - 0.01 })).toBe(false);   // 0.36.6: the menu's hours (the rules' habit window HOME_FROM to AXE_TO: tests/oneMenu.test.js)
+    expect(axeNext({ ...base, time: AXE_TO })).toBe(true); expect(axeNext({ ...base, time: AI_WORK_TO })).toBe(false);
     expect(axeNext({ ...base, axeDay: 5 })).toBe(false);                         // one unit a day
     expect(axeNext({ ...base, builtDay: 5 })).toBe(false);                       // the last piece of the home was finished today
     expect(axeNext({ ...base, day: 1 })).toBe(false);

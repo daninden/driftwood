@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
-import { createMind, homeNext, HOME_FROM, HOME_TO, HUT_LOGS, HUT_TREE_R } from '../src/game/mind.js';
+import { createMind, AI_FROM, AI_WORK_TO, homeNext, HOME_FROM, HOME_TO, HUT_LOGS, HUT_TREE_R } from '../src/game/mind.js';
 import { LISTS, treeId, trunkRadius, sizeKind } from '../src/game/felled.js';
 import { PILE_MAX } from '../src/game/wood.js';
 import { PARTS, built, hutDone, hutBegun, inHutBox, solid } from '../src/game/leanto.js';
@@ -63,8 +63,8 @@ describe('homeNext (pure): the hut is the last step of the home', () => {
     expect(homeNext({ ...base, hut: false })).toBeNull();
     expect(homeNext({ ...base, up: { walls: 1, ring: 1, bed: 0.5 } })).toBe('bed');          // the upgrades first
     expect(homeNext({ ...base, up: { walls: 0, ring: 1, bed: 1 }, hut: true })).toBe('walls');
-    expect(homeNext({ ...base, time: HOME_FROM - 0.01 })).toBeNull();
-    expect(homeNext({ ...base, time: HOME_TO })).toBeNull();
+    expect(homeNext({ ...base, time: AI_FROM - 0.01 })).toBeNull();   // 0.36.6: the menu's hours
+    expect(homeNext({ ...base, time: HOME_TO })).toBe('hut'); expect(homeNext({ ...base, time: AI_WORK_TO })).toBeNull();
     expect(homeNext({ ...base, cool: { home: true } })).toBeNull();
     expect(homeNext({ ...base, lean: 'half', hut: true })).toBe('leanto');
   });
