@@ -6,7 +6,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createMind, chooseGoal, VERY_AT, VERY_HUNGER_AT } from '../src/game/mind.js';
-import { POINTS, STAGES, option, makeMenu, goalMenu, pastimeMenu, eventMenu, validChoice, choiceId, rulesChooser, firstChooser, isValid } from '../src/game/intent.js';
+import { POINTS, STAGES, PASTIMES, WAIT, option, makeMenu, goalMenu, pastimeMenu, eventMenu, validChoice, choiceId, rulesChooser, firstChooser, isValid } from '../src/game/intent.js';
 import { walkFirstDay } from './helpers/mindSim.js';
 
 const calm = (o = {}) => ({ asleep: false, time: 0.4, thirst: 0.1, hunger: 0.1, awake: 0.3, canLie: false, water: true, waterNear: false, shellsEmpty: 0, shellsFull: 0, nuts: 2, fibre: 2, torch: false,
@@ -64,6 +64,11 @@ describe('options and menus', () => {
     expect(STAGES.before.at(-1)).toBe('onward'); expect(STAGES.day.at(-1)).toBe('linger');
   });
 
+  it('0.36.3: only the ember is a safety pastime (the AI is never asked while it is possible); WAIT is a frozen marker', () => {
+    expect(Object.keys(PASTIMES).filter(id => PASTIMES[id].safety)).toEqual(['ember']);
+    expect(Object.isFrozen(WAIT)).toBe(true); expect(WAIT.wait).toBe(true);
+    expect(rulesChooser('pastime', pastimeMenu('before', { gaze: false, ember: true }), { rand: () => 0.5, ex: () => 0.5, fish: () => 0.5 })).toBe('ember');   // unchanged: the rules still feed the ember
+  });
   it('validChoice: unknown ids, impossible options and null are refused', () => {
     const m = pastimeMenu('day', { home: false, tide: true });
     expect(validChoice(m, 'tide')).toBe(true); expect(validChoice(m, { id: 'tide' })).toBe(true);

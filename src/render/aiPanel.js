@@ -5,7 +5,8 @@
  * Content, top to bottom: on/off, the key field (a password field: the key is saved to localStorage by the client when the field changes and the field is emptied; it is never shown again) and "clear key", "list models"
  * (the model names the key can use; the model itself is fixed in ai/config), the models in order of preference and the address as text, a status line, one plain line per model ("gemini-x: 12 of 900 today, 1 of 12 this minute", "paused until 14:05",
  * "not available (model not found)", "last error: ..."), whether Dave is waiting for an answer now ("Dave is waiting for the AI...", "Not asking now"), a tally (since the page was loaded: N by the AI, M by the rules, K different from the rules)
- * and the log of goal decisions, newest first, one block each, in plain words with the options' `what` texts:
+ * 0.36.3 "Plans": under the models a row of three buttons for the LEASH (strict, loose, free: ai/chooser MODES; kept by the client), the current plan with a marker at the current step and the reason it was asked, and "overruled" (orange tag, the plain reason) on every block where the rules overruled the AI.
+ * and the log of decisions (0.36.3: goal decisions and free-time (pastime) decisions, each block marked with a small chip, "goal" or "free time"), newest first, one block each, in plain words with the options' `what` texts:
  *   AI blocks: a coloured left border, a bold label, `Day 3, 14:20 — AI chose: fetch wood for the fire` with a tag "different from the rules" when the rules would have chosen otherwise, the AI's reason in quotes,
  *   "The rules would have chosen: ...", "Options were: ...", and "model · answered in 1.2 s" (how long Dave waited).
  *   Rules blocks (grey): `Day 3, 14:35 — Rules chose: fill the store` and "Why not the AI: no answer in 3 s" (reasons in plain words; if the AI had an answer that was not used, what it chose).
@@ -17,7 +18,8 @@
  *   isAiKey(e) -> bool            a plain I (no modifier, not repeating, not typed into a field). Pure.
  *   isAiPanelEvent(e) -> bool     the event came from inside the panel (#ai)
  *   whyText(e) -> string          the reason the rules decided, in plain words ('' when the AI chose). Pure.
- *   blockParts(e) -> { source: 'ai'|'rules', head, tag, reason, rulesLine, optionsLine, meta, why }   the texts of one decision block (strings or ''). Pure.
+ *   blockParts(e) -> { source: 'ai'|'rules', kind: 'goal'|'pastime', kindLabel: 'goal'|'free time', head, tag, reason, rulesLine, optionsLine, meta, why }   the texts of one decision block (strings or ''). Pure.
+ *   planLines(plan) -> [{ marker, state, text }], planHead(plan), modeLine(mode)   the plan with a marker at the current step, why it was asked, and what the leash means. Pure.
  *   tallyLine(t) -> string        "Since the page was loaded: 5 by the AI, 3 by the rules, 2 different from the rules"
  *   statusLine(status, nowMs) -> string       on or off, asking, all-paused, the last error
  *   modelLines(status, nowMs) -> [string]     one plain line per model
@@ -28,7 +30,7 @@
  * Depends on: ai/config (AI_WAIT, a constant); main hands it the client of ai/client and the chooser of ai/chooser)
  */
 
-import { AI_WAIT } from '../ai/config.js';
+import { AI_WAIT, AI_MODES } from '../ai/config.js';
 
 export const isAiKey = e => !!e && e.code === 'KeyI' && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
   && !(e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '')));
@@ -51,6 +53,10 @@ export function whyText(e) {
   if (w === 'no answer') return `no answer in ${AI_WAIT} s`;
   if (w === 'busy') return 'the earlier request is still running';
   if (w === 'need') return 'a need: the rules decide';
+  if (w === 'safety') return 'a safety matter (the fire): the rules decide';
+  if (w === 'critical') return 'at the brink: the rules decide';
+  if (w === 'waiting') return 'a new plan was asked a moment ago';
+  if (w === 'plan-hold') return 'the plan\'s next step has to wait for a later moment';
   if (w === 'not on menu') return `the AI's choice is not possible now${e.ai ? ' (it chose: ' + what(e, e.ai) + ')' : ''}`;
   if (w === 'budget') return 'the budget is spent';
   if (w === 'forced') return 'an emergency: the rules decide';
@@ -65,21 +71,38 @@ export function blockParts(e) {
   const head = `${when} — ${isAi ? 'AI' : 'Rules'} chose: ${what(e, chosen)}`;
   const ids = (e.options && e.options.length ? e.options.map(o => o.id) : e.menu) || [];
   const meta = [];
+  if (isAi && e.plan) meta.push(`step ${e.plan.i} of ${e.plan.n} of the plan`);
   if (isAi) {
     if (e.model) meta.push(e.model);
     if (e.ms != null) meta.push(`answered in ${secs(e.ms)}`);
   }
+  const kind = e.point === 'pastime' ? 'pastime' : 'goal';
+  const overruled = !isAi && !!e.override;
   return {
     source: isAi ? 'ai' : 'rules',
+    kind, kindLabel: kind === 'pastime' ? 'free time' : 'goal',
     head,
-    tag: isAi && e.ai !== e.rules ? 'different from the rules' : '',
+    tag: overruled ? 'overruled' : isAi && e.ai !== e.rules ? 'different from the rules' : '',
     reason: isAi && e.reason ? `"${e.reason}"` : '',
-    rulesLine: isAi ? `The rules would have chosen: ${what(e, e.rules)}` : '',
+    rulesLine: isAi ? `The rules would have chosen: ${what(e, e.rules)}` : overruled && e.planned ? `The plan's next step was: ${e.planned}` : '',
     optionsLine: isAi && ids.length ? `Options were: ${ids.map(id => what(e, id)).join(', ')}` : '',
     meta: meta.join(' · '),
-    why: isAi ? '' : `Why not the AI: ${whyText(e)}`,
+    why: isAi ? '' : overruled ? `Overruled: ${e.override}` : `Why not the AI: ${whyText(e)}`,
   };
 }
+
+/** The plan as lines for the panel: a marker at the current step (">" now, "x" done, "-" skipped, " " still to come). Pure. */
+export function planLines(plan) {
+  if (!plan) return [];
+  return plan.steps.map((s, k) => ({ marker: s.state === 'now' ? '>' : s.state === 'done' ? 'x' : s.state === 'skipped' ? '-' : ' ', state: s.state, text: `${k + 1}. ${s.label}${s.reason ? ' — ' + s.reason : ''}` }));
+}
+export const planHead = plan => (plan ? `Plan from day ${plan.day == null ? '?' : plan.day}, ${plan.time || '--:--'} (asked because: ${plan.trigger})${plan.late ? ' · it came late and is used from now on' : ''}` : 'No plan yet.');
+export const MODE_LINE = {
+  strict: 'Strict: the rules keep his needs, the fire and anything critical.',
+  loose: 'Loose: the AI also plans drink, eat and sleep; the rules step in only at the brink of collapse.',
+  free: 'Free: nothing overrules the AI; the game\'s own consequences happen.',
+};
+export const modeLine = m => MODE_LINE[m] || '';
 
 export const tallyLine = t => `Since the page was loaded: ${t.ai} by the AI, ${t.rules} by the rules, ${t.differ} different from the rules`;
 
@@ -127,9 +150,14 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   const list = mk('button', null, 'list models'); list.type = 'button';
   row.append(onLabel, key, clear, list);
   const addr = mk('div', 'ai-dim', st.url);
+  const modeRow = mk('div', 'ai-modes'), modeNote = mk('div', 'ai-dim'), planBox = mk('div', 'ai-plan');
+  const modeBtn = {}; for (const m of AI_MODES) { const b = mk('button', null, m); b.type = 'button'; b.dataset.mode = m; modeBtn[m] = b; modeRow.append(b); }
   const status = mk('div', 'ai-status'), tally = mk('div', 'ai-tally'), perModel = mk('div', 'ai-models-status'), pend = mk('div', 'ai-pending'), models = mk('div', 'ai-models'), log = mk('div', 'ai-log');
   models.hidden = true;
-  el.append(title, row, addr, status, perModel, pend, models, tally, log);
+  el.append(title, row, modeRow, modeNote, addr, status, perModel, pend, planBox, models, tally, log);
+  const showMode = () => { const m = client.mode(); for (const k of AI_MODES) modeBtn[k].className = k === m ? 'on' : ''; modeNote.textContent = modeLine(m); };
+  showMode();
+  modeRow.addEventListener('click', e => { const m = e.target && e.target.dataset && e.target.dataset.mode; if (m) { client.setMode(m); showMode(); } });
 
   const hint = () => { key.placeholder = client.hasKey() ? 'key saved (hidden)' : 'paste your Google AI Studio key'; };
   hint();
@@ -149,15 +177,21 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   window.addEventListener('keydown', e => { if (isAiKey(e)) toggle(); });
 
   function renderLog() {
-    log.textContent = '';
+    log.textContent = ''; planBox.textContent = '';
+    const pl = ai.plan(), asking = ai.asking();
+    if (client.on() && client.hasKey()) {
+      planBox.append(mk('div', 'ai-plan-head', asking ? `Asking for a new plan (${asking})...` : planHead(pl)));
+      for (const l of planLines(pl)) planBox.append(mk('div', `ai-step ${l.state}`, `${l.marker} ${l.text}`));
+      if (pl && pl.reason) planBox.append(mk('div', 'ai-sub dim', `"${pl.reason}"`));
+    }
     tally.textContent = client.on() && client.hasKey() ? tallyLine(ai.tally()) : '';
     if (!(client.on() && client.hasKey())) log.append(mk('div', 'ai-off', 'The AI is off.'));
     for (const e of ai.entries) {
-      if (e.note) { log.append(mk('div', 'ai-entry note', e.note)); continue; }
+      if (e.note) { log.append(mk('div', e.planNote ? 'ai-entry plannote' : 'ai-entry note', e.note)); continue; }
       const p = blockParts(e);
       const item = mk('div', `ai-entry ${p.source}`);
       item.dataset.n = String(e.n);
-      const head = mk('div', 'ai-line'); head.append(mk('b', null, p.head));
+      const head = mk('div', 'ai-line'); head.append(mk('span', `ai-kind ${p.kind}`, p.kindLabel), mk('b', null, p.head));
       if (p.tag) head.append(' ', mk('span', 'ai-tag', p.tag));
       item.append(head);
       for (const [cls, t] of [['ai-reason', p.reason], ['ai-sub', p.rulesLine], ['ai-sub', p.optionsLine], ['ai-sub', p.why], ['ai-sub dim', p.meta]]) if (t) item.append(mk('div', cls, t));

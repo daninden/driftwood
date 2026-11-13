@@ -12,6 +12,7 @@
  *   pacificDay(ms) -> 'YYYY-MM-DD'     the date in America/Los_Angeles
  *   createClient({ fetch, storage, now?, url?, modelsUrl?, models?, timeout?, perMin?, perDay? }) -> client
  *     client.on() / setOn(bool)      whether the AI is switched on (kept in storage)
+ *     client.mode() / setMode(m)     the leash 'strict' | 'loose' | 'free' (kept in storage under MODE_NAME; default AI_MODE_DEFAULT; 0.36.3)
  *     client.hasKey() / setKey(s) / clearKey()
  *     client.canSend() -> bool       the key is set, nothing is in flight and some model is available
  *     client.send(messages) -> Promise<{ text, ms, model }>   rejects with an Error (message scrubbed; .code 'nokey' | 'busy' | 'budget' | 'http' | 'timeout' | 'bad' | 'net')
@@ -20,7 +21,7 @@
  *
  * Depends on: ai/config
  */
-import { AI_URL, AI_MODELS_URL, AI_MODELS, AI_PER_MIN, AI_PER_DAY, AI_TIMEOUT, KEY_NAME, ON_NAME, COUNT_NAME } from './config.js';
+import { AI_URL, AI_MODELS_URL, AI_MODELS, AI_PER_MIN, AI_PER_DAY, AI_TIMEOUT, AI_MODES, AI_MODE_DEFAULT, KEY_NAME, ON_NAME, MODE_NAME, COUNT_NAME } from './config.js';
 
 const FMT = (() => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return null; } })();
 export function pacificDay(ms) {
@@ -125,6 +126,8 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
   return {
     on: () => get(ON_NAME) === '1',
     setOn(v) { set(ON_NAME, v ? '1' : '0'); },
+    mode: () => { const m = get(MODE_NAME); return AI_MODES.includes(m) ? m : AI_MODE_DEFAULT; },   // 0.36.3: the leash, kept in storage (not in the save)
+    setMode(m) { if (AI_MODES.includes(m)) set(MODE_NAME, m); },
     hasKey: () => !!key(),
     setKey(s) { const v = String(s || '').trim(); if (v) { set(KEY_NAME, v); memKey = v; } },
     clearKey() { set(KEY_NAME, null); memKey = null; lastError = null; },

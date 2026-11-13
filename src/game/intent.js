@@ -21,12 +21,12 @@
  *   'goal'     no goal is running: the top-level pick among drink, eat, sleep, fire, stores and idle
  *   'pastime'  inside the idle goal: gaze, ember, strays, journey, home work, spear, axe, tide round, explore, fish, stroll, linger. Two menus (STAGES): `before` (until the wood in his arms goes to camp) and `day`
  *   'event'    something went wrong (stuck, nopath, no-stand, a goal failed or was dropped): the only option is 'continue'
- * A choice is an id, or { id, kind } (the kind of a stroll). A chooser is a function (point, menu, ctx) -> choice | null | WAIT (WAIT only at the goal point).
+ * A choice is an id, or { id, kind } (the kind of a stroll). A chooser is a function (point, menu, ctx) -> choice | null | WAIT (WAIT only at the goal and pastime points, 0.36.3).
  *   ctx = { rand, ex, fish }: the three random streams of the mind (stroll, exploring, fishing); the rules draw from them in the order and under the conditions the mind always did (a fake chooser need not).
  *
  * Exports:
- *   WAIT                                          the answer "not yet" of a chooser at the goal point (0.36.1)
- *   POINTS, STAGES, PASTIMES                      the decision points, the order of the pastimes in each stage and what each is
+ *   WAIT                                          the answer "not yet" of a chooser at the goal point (0.36.1) and at the pastime point (0.36.3)
+ *   POINTS, STAGES, PASTIMES                      the decision points, the order of the pastimes in each stage and what each is (0.36.3: `safety: true` marks a pastime that is a safety matter: the AI is not asked while it is possible; today only 'ember')
  *   option(o, rule?) -> option                    makes an option (fills the shape; `rule` is hidden; o.estimate: the lazy function above, or o.at / o.cost / o.est given as values)
  *   makeMenu(point, options) -> menu
  *   goalMenu(s, choose, limits, estimates?) -> menu   (estimates[goal]: the lazy estimate of that goal's option) the goals he could take now, in the order of `choose` (game/mind chooseGoal): found by asking `choose` again with each goal found taken out. limits: { thirst, hunger } (the emergency levels)
@@ -42,13 +42,13 @@
 
 export const POINTS = ['goal', 'pastime', 'event'];
 
-/** What a chooser may answer at the GOAL point (and only there) when it is not ready yet (0.36.1: the language model is asked at the decision): the mind starts no goal, stands still for this step and asks again on the next one with a menu built anew. At any other point WAIT counts as an invalid choice. */
+/** What a chooser may answer at the GOAL point and (0.36.3) the PASTIME point, and nowhere else, when it is not ready yet (0.36.1: the language model is asked at the decision): the mind starts no goal, stands still for this step and asks again on the next one with a menu built anew. At any other point WAIT counts as an invalid choice. */
 export const WAIT = Object.freeze({ wait: true });
 
 /** The pastimes, in the order of the rules (the order idleGoal has always tried them). draw/always: the random stream the rules draw from for it, and whether they draw even when the option is not possible (the stroll's r always was drawn). */
 export const PASTIMES = {
   gaze:    { what: 'watch the sunset', why: 'sunset' },
-  ember:   { what: 'feed a passing ember', why: 'ember' },
+  ember:   { what: 'feed a passing ember', why: 'ember', safety: true },   // 0.36.3: his fire has gone out and he stands at it with wood in his arms: the rules keep it (the AI is never asked)
   strays:  { what: 'bring a stray pile to the ring', why: 'tidy' },
   onward:  { what: 'go on with the day', why: 'nothing-before', always: true },
   journey: { what: 'go on a journey', why: 'journey-due' },

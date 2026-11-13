@@ -60,6 +60,9 @@
  *   goals chooseGoal allows, in its order, found by asking it again with each goal taken out; an emergency drink or meal is `forced`), 'pastime' (inside idle: two menus, before the wood in his arms goes to camp: gaze, ember, strays; then journey, home, spear, axe, tide, explore, fish, stroll, linger; an option that cannot go through gives DECLINED and the chooser is asked about the options after it) and
  *   'event' (stuck, nopath, no-stand, a goal failed or dropped: the only option is 'continue', which the rules take; no effect). The rules draw from the same streams in the same order as the old if-chain (the facts of each option are read lazily, in that order). The hard rules stay outside the chooser: preemption (`errandPreempts`), the crit test and the handoff. An answer that is not valid is replaced by the rules' (unless the chooser says `selfChecked`: it did that itself; 0.36).
  *   mind.recent: the last 20 { t, day, kind: 'goal' | 'pastime' | event kind, what, outcome } (the decisions with their outcome when they end); mind.lastDecision { point, menu: [ids], chosen }; mind.menu() the goal menu now.
+ * 0.36.3 "Plans": a chooser may also have `allowPreempt(current, want) -> bool`: the rule that a higher-ranked want stops the goal running (`errandPreempts`) then needs its yes too (the AI's loose and free leashes let a pastime run on while a need is not at the brink; with no such function, as with the default chooser, nothing changes).
+ * 0.36.3 "Plans": a chooser may answer WAIT at the PASTIME point too (inside idle): `pastimes` then yields (he stands as he is, `mind.waiting` is true, no idle seconds are counted) and puts the same menu again on the next step, until the chooser answers.
+ *   The facts of the menu are read lazily and kept (memos of the idle goal), so a wait of a few seconds does not redraw anything; the rules' random streams are drawn by the rules chooser, once per decision (ai/chooser keeps its first answer while it waits). The default chooser never waits: nothing changes with it.
  * 0.36.1 "Clear log": at the goal point a chooser may answer WAIT (game/intent): no goal starts, `mind.waiting` is true, he stands as he is (no input, no idle seconds counted) and the menu is built anew and the chooser asked again on the next step (the language model of src/ai is asked at the decision and has a few seconds to answer). At the other points WAIT counts as invalid and the rules answer.
  * 0.33.4 "One hearth": `fireAt` ignores a fire in the no-fire zone round a finished ring (game/leanto `noFire`, 8 m): an old fire beside the ring, from before the ring was built, is not fed (the game offers no 'feed' there), not lit again and not counted as his fire, so `feedFire`, `lightFire`, `gather` and the evening plans only know the fire in the ring and it burns out; the site choice is unchanged. The stray zone and the aside pile keep the 3.5 m of 0.31.1 (`STRAY_ZONE`).
  * 0.35.1 "Bearings": the options of the menus carry `at`, `cost` (seconds at full pace) and `est` ('line': a straight line / WALK_SPEED; 'path': the cost fishing and the tide round compute anyway; null), worked out only when read (lazy, `GOAL_EST` and the estimates beside the pastimes: no random number, no path planned, no markBad; the rules never read them). Exploring and the journey have none: 'chosen on the way'.
@@ -414,7 +417,7 @@ export function createMind(world, game, opts = {}) {
   const note = (kind, what, outcome = null) => { const r = { t: +clock.total.toFixed(4), day: clock.day, kind, what, outcome }; mind.recent.push(r); if (mind.recent.length > RECENT_MAX) mind.recent.shift(); return r; };
   function decide(menu) {   // the chooser picks (an answer that is not a valid choice is replaced by the rules'), and the decision is kept for the tests
     let c = chooser(menu.point, menu, ctx);
-    if (c === WAIT) { if (menu.point === 'goal') return WAIT; c = rulesChooser(menu.point, menu, ctx); }   // 0.36.1: only the goal point may wait (the language model is being asked); elsewhere WAIT is not a choice and the rules answer
+    if (c === WAIT) { if (menu.point === 'goal' || menu.point === 'pastime') return WAIT; c = rulesChooser(menu.point, menu, ctx); }   // 0.36.1: only the goal point may wait (the language model is being asked); 0.36.3: and the pastime point; elsewhere WAIT is not a choice and the rules answer
     if (chooser !== rulesChooser && !chooser.selfChecked && !validChoice(menu, c)) c = rulesChooser(menu.point, menu, ctx);   // 0.36: a chooser with `selfChecked` (ai/chooser) already falls back to the rules itself, and asking them again would draw their streams twice
     if (menu.point !== 'event') mind.lastDecision = { point: menu.point, menu: menu.options.map(o => o.id), chosen: choiceId(c) };
     return c;
@@ -2306,7 +2309,11 @@ export function createMind(world, game, opts = {}) {
   function* pastimes(stage, facts, runs) {
     const menu = pastimeMenu(stage, facts); let from = 0;
     for (;;) {
-      const sub = makeMenu('pastime', menu.options.slice(from)), choice = decide(sub), id = choiceId(choice), at = sub.options.findIndex(o => o.id === id);
+      const sub = makeMenu('pastime', menu.options.slice(from));
+      let choice = decide(sub);
+      while (choice === WAIT) { mind.waiting = true; idleInput(); yield; choice = decide(sub); }   // 0.36.3: the chooser is not ready (the language model is asked): he stands as he is, no idle seconds counted (step), and the same menu is put again on the next step
+      mind.waiting = false;
+      const id = choiceId(choice), at = sub.options.findIndex(o => o.id === id);
       if (at < 0) return stage === 'before' ? CONTINUE : true;   // (no valid answer: the last option of a stage cannot be passed over, so this does not happen)
       const rec = cur && !cur.pastime ? (cur.pastime = note('pastime', id, 'running')) : note('pastime', id, 'running');
       const r = yield* runs[id](choice);
@@ -2438,7 +2445,7 @@ export function createMind(world, game, opts = {}) {
     if (cur) { const out = why ? 'dropped: ' + why : why === undefined ? 'stopped' : failed ? 'failed' : 'done'; cur.rec.outcome = out; if (cur.pastime && cur.pastime.outcome === 'running') cur.pastime.outcome = out; if (why || failed) event(why ? 'dropped' : 'failed', cur.name); }
     if (cur && (failed || why === 'timeout') && cur.name !== 'idle') cool(cur.name, journey && (cur.name === 'drink' || cur.name === 'eat') ? JOURNEY_COOL : undefined);   // 0.30.19: on a journey a drink or a meal that cannot be had (no water he can reach, no food) is not tried again at once: each try costs the walk its rest
     try { if (cur) cur.it.return(); } catch (e) { /* the generator is gone anyway */ }
-    cur = null; mind.goal = null; idleInput(); chose = false; fullPace = false;
+    cur = null; mind.goal = null; mind.waiting = false; idleInput(); chose = false; fullPace = false;
   }
 
   function engage() {
@@ -2467,7 +2474,7 @@ export function createMind(world, game, opts = {}) {
     if (cur && sinceCheck >= CHECK) {   // a higher need breaks into a lower goal, except an errand that must first deliver
       sinceCheck = 0;
       const want = chooseGoal(senses());
-      if (errandPreempts(cur.name, want, errands > 0, game.thirst.days, game.hunger.days)) endGoal('preempted by ' + want);
+      if (errandPreempts(cur.name, want, errands > 0, game.thirst.days, game.hunger.days) && (!chooser.allowPreempt || chooser.allowPreempt(cur.name, want))) endGoal('preempted by ' + want);   // 0.36.3: a chooser may keep a lower goal running (the AI's leash: ai/chooser `allowPreempt`)
       else if (now - cur.t0 > (cur.limit || LIMIT[cur.name])) endGoal('timeout', true);
     }
     if (!cur) {
@@ -2486,7 +2493,7 @@ export function createMind(world, game, opts = {}) {
     }
     inp.pace = cur && (cur.name === 'idle' || exploring) && !fullPace ? PACE : 1;   // 0.29.2 "Amble": strolls and idling at an amble, errands at the normal walking pace
     if (cur) {
-      if (cur.name === 'idle' && !p.moving) stats.idleSecs += dt;
+      if (cur.name === 'idle' && !p.moving && !mind.waiting) stats.idleSecs += dt;   // (0.36.3: waiting for the AI at a pastime is no idle time)
       let r; try { r = cur.it.next(); } catch (e) { ev('error', { goal: cur.name, msg: String(e && e.stack || e).slice(0, 300) }); stats.errors = (stats.errors || 0) + 1; r = { done: true, value: false }; }
       if (r.done) {
         const name = cur.name, failed = r.value === false;
