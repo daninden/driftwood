@@ -12,6 +12,10 @@
  * mark (action button, thumb stick, moon, drop, fibre, tally marks), also get a soft glow
  * behind the letters or strokes in the opposite colour (`--ink-glow`: pale paper by day, dark brown
  * at night), no frame. The loading screen keeps its own dark brown.
+ * 0.36.7 (legibility, variant "D, a little stronger", chosen by the user from rendered proposals): the Voice line, the name line and the waking line get a
+ * denser outline in the glow colour (`--ink-outline` in index.html: a 1 px edge on four sides and glows of 4, 8 and 14 px), and the gesture marks, the
+ * moon, the drop, the hunger mark, the sound mark and the carried row a stronger halo (`--halo-strong`: drop shadows of 1, 1, 3, 6 and 10 px); still no
+ * backdrop or frame. Both are built from `--ink-glow`, so they follow this module's day and night switch; nothing changes here in code.
  *
  * INK_DAY (0x2e2418), INK_NIGHT (0xefe0c2), BACK_ALPHA (0.4), GLOW_ALPHA (0.85)
  * SWITCH (0.9 s)               the short real-time ink transition at dusk/dawn

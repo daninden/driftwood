@@ -26,7 +26,7 @@
  * with a name) the loading screen asks "What is your name?" (render/namePrompt,
  * texts in game/castaway). Loading goes on meanwhile; the island fades in once
  * the answer is in. The name and the day the game started (`startDay`) are
- * saved with the island (src/save, optional fields; since 0.31.1 also the mind's habits, `habit: mind.state()`, handed back to createMind as `saved`). With the test parameters
+ * saved with the island (src/save, optional fields; since 0.31.1 also the mind's habits, `habit: mind.state()`, handed back to createMind as `saved`). Since 0.36.7 "Memory" also `memory: ai.memory()` (the short-term list, his notes and the journal), handed back with `ai.restore(saved.memory)` after `ai.attach`; the frame loop calls `ai.tick()` (the sunset journal line) and saves at once when `ai.memoryVersion` changes. With the test parameters
  * the question is skipped and he is "the castaway". Top left #who always shows
  * `Dave, day 3` (render/nameLines), and each time a sleep ends #wake shows
  * `Dave wakes. Day 3.` for a few seconds. Day 1 is the day the game started.
@@ -224,6 +224,7 @@ async function boot() {
   const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai });
   const mind = createMind(world, game, { chooser: ai.chooser, saved: saved && saved.habit, onIntent: ({ kind, goal }) => { if (!ai.restates(goal, kind)) voice.announce(kind, game.clock.time); } }), takeover = createTakeover(QUIET, performance.now() / 1000);
   ai.attach(mind, game);   // 0.36.1: the chooser reads the state and the short-term memory of a request from them
+  ai.restore(saved && saved.memory);   // 0.36.7 "Memory": the short-term list, his notes and the journal come back with the island (with the AI off they are only kept and saved)
   let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
   const tnow = () => performance.now() / 1000 + hurried;   // 0.28 "Habit"
   // 0.30.20: actions never speak, only reasons do (the mind's intents above, and what the player lacks below)
@@ -241,7 +242,8 @@ async function boot() {
   button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
   let stopSaving = testing || !!asking, sinceSave = 0;
   const moments = createMomentWatcher(game);   // looks for something worth saving twice a second, not every frame
-  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, habit: mind.state(), view: view.pose }); sinceSave = 0; } };
+  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, habit: mind.state(), memory: ai.memory(), view: view.pose }); sinceSave = 0; } };
+  let memSeen = ai.memoryVersion;
   const viewSaver = createViewSaver();
   const autosave = dt => { sinceSave += dt; if (viewSaver.update(view.pose, dt)) save(); if (moments.update(dt) || sinceSave >= SAVE_EVERY) save(); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
@@ -307,6 +309,8 @@ async function boot() {
     }
     info.distance = walked;   // the footprints get the whole way walked this frame
     aiPanel.update();
+    ai.tick();   // 0.36.7: the sunset journal line (one extra request a day, only with the AI on; never waited for)
+    if (ai.memoryVersion !== memSeen) { memSeen = ai.memoryVersion; save(); }   // new notes or a journal line are saved at once
     show(info);
     {   // 0.30.20: after about 1.5 s of standing still where something is almost possible, Dave says what is missing, once per still period
       const p = game.player, moved = Math.hypot(p.x - lastX, p.z - lastZ) > 0.01 || wantsToMove(input) || input.pressing() || game.sleep.asleep || p.work;

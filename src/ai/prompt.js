@@ -8,6 +8,8 @@
  *
  * 0.36.5 "Reach": the hours in STEP_WHEN / hoursOpen are the AI's (game/mind AI_FROM, AI_WORK_TO, AI_TRIP_TO), not the rules' windows; the system text says drink and eat have no hours, what thirst and hunger cost and what to do on waking in the dark, and that a stroll or explore step may carry "to"; `stateText` adds "(he can drink now, at any hour; slower from 0.5)" next to thirst and hunger from THIRST_GO / HUNGER_GO; the request lists the destinations (`possible.destinations`); `parsePlan` steps carry `to` (STEP_TO: stroll: STROLL_KINDS, explore: EXPLORE_WHERE; unknown values dropped).
  *
+ * 0.36.7 "Memory": his own notes and the journal: `parsePlan` reads an optional `notes` (the full new list: lines cut to NOTE_LEN, at most NOTES_MAX, the newest kept; unusable ones ignored: null = no change), `buildPlanMessages` takes `notes` and `journal` (the notes under "Your notes (you keep these yourself ...)", the last JOURNAL_DAYS days of the journal), the answer format and FIXED explain `notes`; the sunset journal line has its own short request (`JOURNAL_SYSTEM`, `buildJournalMessages`, `parseJournal`); the crab conditions are told honestly: `snapshotOf` has `crab` ({ ok } | { ok: false, why } | null, from `mind.blockers()`), the tide line says a stroll to the crabs is possible only when it is (else why not, at low water), the destinations line adds "Crabs: not now: reason" (`possible.blocked.crabs`).
+ *
  * Exports:
  *   FIXED                              the fixed system text
  *   GOAL_TEXT, GOAL_LABEL, WHY_TEXT    plain descriptions of the goal options (long, for the request), their short labels (for the panel) and the `why` codes of the options
@@ -24,7 +26,10 @@
  *   PLAN_GOALS, PLAN_PASTIMES, PLAN_STEPS   the ids a plan may hold (0.36.3 "Plans"); STEP_WHEN the hours of each in words; hoursOpen(id, time); stepLabel(id), stepText(id)
  *   MODE_TEXT                          what each leash (strict, loose, free) means to the AI, with the real numbers
  *   buildPlanMessages({ state, recent, trigger, previous, possible, mode }) -> messages   the request for a plan: why it is asked, the state, the memory, the old plan (a skipped step with its reason), the leash, and every step that can be planned, marked possible now, not possible now with the plain reason (0.36.4: `possible.blocked` { id: reason }, from game/mind `blockers`), or not now (outside its hours)
- *   parsePlan(text) -> { ok, steps: [{ id, reason, to }], reason, dropped, error }   a plan from the answer (lenient; a bare choice is a plan of one step)
+ *   nowText(n) -> string   (0.36.7, pure) what Dave is doing now from `mind.now()`
+ *   notesText(notes), journalLines(journal), clipLine(text, max)   (0.36.7, pure) the notes and the last days of the journal as lines of the request; one line of text cut to `max` characters
+ *   JOURNAL_SYSTEM, buildJournalMessages({ state, recent, journal, notes }) -> messages, parseJournal(text) -> { ok, line } | { ok: false, error }   (0.36.7) the sunset journal request and its answer
+ *   parsePlan(text) -> { ok, steps: [{ id, reason, to }], reason, notes (0.36.7: [text] | null), dropped, error }   a plan from the answer (lenient; a bare choice is a plan of one step)
  *   buildMessages({ state, recent, options, point? }) -> [{ role: 'system', content }, { role: 'user', content }]   (point 'pastime': the question is about the pastimes; default: the goals)
  *   parseAnswer(text, menuIds) -> { ok, id, reason, error }   the first JSON object of the text (code fences stripped), its `choice` must be one of menuIds
  *
@@ -39,7 +44,7 @@ import { HUNGER_SLOW } from '../game/hunger.js';
 import { TIRED_AT, AWAKE_MAX, DUSK, TIRED_SLOW, SLEEP_DAYS, COLD_SLEEP, SHELTER_SLEEP, WALLS_SLEEP } from '../game/sleep.js';
 import { PASTIMES } from '../game/intent.js';
 import { PERIOD, FIRST_HIGH, seaLevel } from '../game/tide.js';
-import { AI_PLAN_MIN, AI_PLAN_MAX, AI_AWAKE_MARGIN } from './config.js';
+import { AI_PLAN_MIN, AI_PLAN_MAX, AI_AWAKE_MARGIN, NOTES_MAX, NOTE_LEN, JOURNAL_LEN, JOURNAL_DAYS } from './config.js';
 
 const pad = n => String(n).padStart(2, '0');
 export function hhmm(time) {
@@ -76,8 +81,11 @@ What happens when things go wrong (this is what the game really does)
 
 Answer format
 Reply with ONLY one JSON object and nothing else, on one line: ${AI_PLAN_MIN} to ${AI_PLAN_MAX} steps, in order, each with a short reason in Dave's own voice, and one short sentence about the plan:
-{"plan": [{"step": "<id>", "reason": "<short>"}, {"step": "stroll", "to": "<optional place>", "reason": "<short>"}], "reason": "<one short sentence>"}
-("to" is optional and only for stroll and explore.)`;
+{"plan": [{"step": "<id>", "reason": "<short>"}, {"step": "stroll", "to": "<optional place>", "reason": "<short>"}], "reason": "<one short sentence>", "notes": ["<short note>", "..."]}
+("to" is optional and only for stroll and explore. "notes" is optional: see Your notes below.)
+
+Your notes
+- You keep short notes for yourself (the request shows them): things worth remembering from day to day, such as where something is good, what failed and why, what he means to do. At most ${NOTES_MAX} lines of at most ${NOTE_LEN} characters each. To change them, return the FULL new list in "notes" (add, rewrite or drop lines); leave "notes" out to keep them as they are. The game never writes them for you.`;
 
 export const GOAL_TEXT = {
   drink: 'go to fresh water, drink and fill his shells',
@@ -132,6 +140,14 @@ const HOURS = { journey: [JOURNEY_FROM, JOURNEY_TO], home: [AI_FROM, AI_WORK_TO]
 /** Is the clock inside the hours of a pastime (true for the goals and for linger: no hours of their own)? */
 export const hoursOpen = (id, time) => { const h = HOURS[id]; return !h || (time >= h[0] && time < h[1]); };
 /** The short label of a step for the panel and the log. */
+/** 0.36.7: what Dave is doing now, in words, from `mind.now()` (pure): "free time — a stroll (shore) — walking, 23 m to go". Used by the AI panel's "Now" line and its copy log. `waiting` seconds are added by the panel. */
+export function nowText(n) {
+  if (!n) return '';
+  if (n.phase === 'player') return 'you have him';
+  const goal = n.goal ? GOAL_LABEL[n.goal] || n.goal : 'between errands', past = n.pastime ? (PASTIMES[n.pastime] && PASTIMES[n.pastime].what) || n.pastime : '';
+  const ph = { standing: 'standing still', walking: `walking, ${n.detail || '0'} m to go`, working: `working${n.detail ? ' (' + n.detail + ')' : ''}`, sitting: 'sitting', resting: 'resting', waiting: 'waiting for a plan', asleep: 'asleep' }[n.phase] || n.phase || '';
+  return [goal, past ? past + (n.kind ? ` (${n.kind})` : '') : '', ph].filter(Boolean).join(' — ') + (n.trouble ? ` — trouble: ${n.trouble}` : '');
+}
 export const stepLabel = id => GOAL_LABEL[id] || (PASTIMES[id] && PASTIMES[id].what) || id;
 export const stepText = id => GOAL_TEXT[id] || PASTIME_TEXT[id] || id;
 
@@ -146,15 +162,28 @@ export const MODE_TEXT = {
 const goalLine = (id, mark) => `- ${id}: ${stepText(id)} (${STEP_WHEN[id]}) ${mark}`;
 
 /** 0.36.5: the places a stroll or an exploring trip may name now (`possible.destinations`: { stroll: [kinds], explore: [aims] } from game/mind `destinations`), as lines of the request; none when not known. */
-const destLines = d => (d && (d.stroll || d.explore) ? [`Where a step may go (optional "to"): stroll to ${(d.stroll || []).length ? d.stroll.join(', ') : '(nowhere he knows now)'}; explore to ${(d.explore || []).join(', ') || '(no choice)'}.`, ''] : []);
+const destLines = (d, blocked) => {
+  if (!(d && (d.stroll || d.explore))) return [];
+  const crab = blocked && blocked.crabs && !(d.stroll || []).includes('crabs') ? ` Crabs: not now: ${blocked.crabs}.` : '';   // 0.36.7: a stroll to the crabs that is not possible says why
+  return [`Where a step may go (optional "to"): stroll to ${(d.stroll || []).length ? d.stroll.join(', ') : '(nowhere he knows now)'}; explore to ${(d.explore || []).join(', ') || '(no choice)'}.${crab}`, ''];
+};
 /** The destinations a step may carry at all (static): the plan parser keeps a "to" only from these; the chooser checks it against what is possible now. */
 export const STEP_TO = { stroll: STROLL_KINDS, explore: EXPLORE_WHERE };
+
+/** 0.36.7: his own notes as lines of the request ('(none yet)' when empty), and the journal of the last JOURNAL_DAYS days (oldest first; none when there is no line). */
+export const notesText = notes => (Array.isArray(notes) && notes.length ? notes.map((n, i) => `${i + 1}. ${n}`).join('\n') : '(none yet)');
+export const journalLines = journal => {
+  const list = (Array.isArray(journal) ? journal : []).filter(j => j && typeof j.line === 'string' && j.line).sort((a, b) => a.day - b.day).slice(-JOURNAL_DAYS);
+  return list.length ? ['Your journal, the last days', ...list.map(j => `day ${j.day}: ${j.line}`), ''] : [];
+};
+/** One note or line made safe: one line of text, whitespace collapsed, cut to `max` characters (an ellipsis is not added). */
+export const clipLine = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max).trim() : '');
 
 /**
  * The request for a plan (0.36.3). `trigger` says why a new plan is asked; `previous` the old plan [{ id, state: 'done'|'skipped'|'next' }] (may be empty); `possible`: { goals: Set|null, pastimes: Set|null } the ids that are possible right now
  * (null: not known, the hours of the clock say); `mode` the leash. The plan list keeps the line format `- id: ...` (one id per line).
  */
-export function buildPlanMessages({ state, recent, trigger, previous, possible, mode }) {
+export function buildPlanMessages({ state, recent, trigger, previous, possible, mode, notes, journal }) {
   const t = (state && state.time) || 0, pos = possible || {};
   const mark = id => {
     const set = PLAN_GOALS.includes(id) ? pos.goals : pos.pastimes, why = !PLAN_GOALS.includes(id) && pos.blocked && pos.blocked[id];
@@ -169,10 +198,12 @@ export function buildPlanMessages({ state, recent, trigger, previous, possible, 
     `Why you are asked for a new plan: ${trigger || 'no plan yet'}.`, '',
     'The situation now', stateText(state || {}), '',
     'What he did lately (oldest first)', recentText(recent), '',
+    `Your notes (you keep these yourself; return the full list in "notes" to change them, leave it out to keep them)`, notesText(notes), '',
+    ...journalLines(journal),
     `Your previous plan: ${prev}`, '',
     MODE_TEXT[mode] || MODE_TEXT.loose, '',
     'The steps you can plan with', lines, '',
-    ...destLines(pos.destinations),
+    ...destLines(pos.destinations, pos.blocked),
     `Make a plan of ${AI_PLAN_MIN} to ${AI_PLAN_MAX} steps for the coming hours.`,
   ].join('\n');
   return [{ role: 'system', content: FIXED }, { role: 'user', content: user }];
@@ -195,7 +226,10 @@ export function parsePlan(text) {
     steps.push({ id, reason: r && typeof r.reason === 'string' ? r.reason.trim().slice(0, 200) : '', to });
   }
   if (!steps.length) return bad('no usable step' + (dropped.length ? ' (' + dropped.slice(0, 3).join(', ') + ')' : ''));
-  return { ok: true, steps, reason: typeof o.reason === 'string' ? o.reason.trim().slice(0, 300) : '', dropped, error: null };
+  // 0.36.7: his notes: the full new list (lines cut to NOTE_LEN, empty ones dropped, the newest NOTES_MAX kept); a list that is not a list of text is ignored (the old notes stay); an empty list clears them; null: no change
+  let notes = null;
+  if (Array.isArray(o.notes)) { const l = o.notes.filter(x => typeof x === 'string').map(x => clipLine(x, NOTE_LEN)).filter(Boolean); if (l.length || !o.notes.length) notes = l.slice(-NOTES_MAX); }
+  return { ok: true, steps, reason: typeof o.reason === 'string' ? o.reason.trim().slice(0, 300) : '', notes, dropped, error: null };
 }
 
 const pct = v => Math.round(Math.max(0, Math.min(1, +v || 0)) * 100);
@@ -222,6 +256,7 @@ export function snapshotOf(game, mind) {
   return {
     day: clock.day == null ? 0 : clock.day, time: clock.time == null ? 0 : clock.time, raining: n(() => g.rain, 0) > 0.05, daylight, fromHome,
     thirst: n(() => g.thirst.days), hunger: n(() => g.hunger.days), awake: n(() => g.sleep.awake), carries, home, journey: !!m.journeying, doing,
+    crab: n(() => { const b = m.blockers(); return b ? (b.crabs ? { ok: false, why: b.crabs } : { ok: true }) : null; }, null),   // 0.36.7: a stroll to the crabs possible now, or why not (only when the mind can say)
     camp: n(() => m.camp(), null), tide: n(() => tideNow(clock.total), null), lastNight: n(() => m.lastNight(), null), strip: n(() => m.stripWood(), null),   // 0.36.6: only what the game knows
   };
 }
@@ -244,7 +279,7 @@ function situationLines(s) {
     out.push(`Camp store: ${bits.length ? bits.join(', ') : 'nothing'}.`);
   }
   const t = s.tide;
-  if (t) out.push(`Tide: ${t.name === 'low' ? 'low' : t.name === 'high' ? 'high' : 'half tide'}, ${t.falling ? 'falling, low water' : 'rising, high water'} about ${hhmm(t.turn)}${t.name === 'low' ? ' (low water is the crab time: a stroll to the crabs)' : ''}.`);
+  if (t) out.push(`Tide: ${t.name === 'low' ? 'low' : t.name === 'high' ? 'high' : 'half tide'}, ${t.falling ? 'falling, low water' : 'rising, high water'} about ${hhmm(t.turn)}${t.name === 'low' && s.crab ? (s.crab.ok ? ' (low water is the crab time: a stroll to the crabs is possible now)' : ` (low water, but no stroll to the crabs now: ${s.crab.why})`) : ''}.`);
   const n = s.lastNight;
   if (n) out.push(`Last night: ${n.collapse ? 'a collapse, he did not lie down himself' : n.cold ? `a cold sleep, no fire close by (${d1(n.hours)} hours)` : n.hours >= 7 ? `a full night (${d1(n.hours)} hours)` : `cut short (${d1(n.hours)} hours)`}.`);
   if (s.strip != null) out.push(`Tide strip: ${s.strip > 0 ? 'some wet driftwood to rescue' : 'no wet driftwood known there'}.`);
@@ -325,4 +360,25 @@ export function parseAnswer(text, menuIds) {
   if (!id) return bad('no choice');
   if (!Array.isArray(menuIds) || !menuIds.includes(id)) return { ok: false, id, reason: typeof o.reason === 'string' ? o.reason.trim() : '', error: 'choice not on the menu' };
   return { ok: true, id, reason: typeof o.reason === 'string' ? o.reason.trim().slice(0, 300) : '', error: null };
+}
+
+/** 0.36.7: the sunset journal line (not a decision: one extra request a day, never waited for). The system text is short; the user part is the day's short-term list and the state. */
+export const JOURNAL_SYSTEM = `You are Dave, a lone castaway on an uninhabited island, calm, practical and a little wry. At sunset you write ONE line in your journal about the day, in your own voice: what happened, how it felt, what you noticed. At most ${JOURNAL_LEN} characters, plain words, no list.
+Reply with ONLY one JSON object on one line: {"line": "<the journal line>"}`;
+export function buildJournalMessages({ state, recent, journal, notes }) {
+  const user = [
+    'The situation now', stateText(state || {}), '',
+    'What happened today (oldest first)', recentText(recent), '',
+    ...journalLines(journal),
+    ...(Array.isArray(notes) && notes.length ? ['Your notes', notesText(notes), ''] : []),
+    'Write today\'s journal line.',
+  ].join('\n');
+  return [{ role: 'system', content: JOURNAL_SYSTEM }, { role: 'user', content: user }];
+}
+/** The journal line from the model's text: { ok, line } (cut to JOURNAL_LEN) or { ok: false, error }. */
+export function parseJournal(text) {
+  if (typeof text !== 'string' || !text.trim()) return { ok: false, error: 'empty answer' };
+  const o = firstObject(text.replace(/```[a-zA-Z]*/g, ' ').replace(/```/g, ' '));
+  const line = o && typeof o.line === 'string' ? clipLine(o.line, JOURNAL_LEN) : '';
+  return line ? { ok: true, line } : { ok: false, error: 'no line' };
 }

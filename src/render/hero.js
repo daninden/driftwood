@@ -32,7 +32,7 @@
  * hands tearing at it in turn; to drink (and, since 0.25, to fill a shell or sip from one) he kneels low over the water and brings his cupped hands to his mouth now and then; to make fire he kneels and twirls his staff
  * upright between his palms as a fire drill, the hands rubbing back and
  * forth; to dig for a crab he kneels the same way, hands forward and scraping, and he kneels the same way at a fire to roast one (0.22). A burning torch (player.torch) he holds up in front of him in his
- * left hand. Since 0.30.17 "Spear" (player.spear) the spear is in his right hand in place of the staff; to fish (player.work 'fish') he stands, leans over the water, peers with the spear forward and down, and thrusts in the last third.
+ * left hand. Since 0.30.17 "Spear" (player.spear) the spear is in his right hand in place of the staff; to fish (player.work 'fish') he stands, leans over the water, peers with the point of the spear forward and down (the hand near the butt), and thrusts the point into the water in the last third.
  *
  * 0.31 "Axe": the stone axe (player.axe, render/axe) is in his right hand in place of the staff, head up when he carries it. To fell a tree (player.work 'fell') he stands and chops: the arm goes up
  * over his head and the axe comes down in front of him, about every CHOP_PERIOD seconds (render/chop `chopPose`, real time from the start of the work, so the sound of audio/sound, which uses the same rhythm, follows
@@ -141,6 +141,7 @@ export function createHero(scene) {
   const wp = new THREE.Vector3(), wt = new THREE.Vector3(), wq = new THREE.Quaternion(), wr = new THREE.Quaternion(), LAID = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0.12, 0));   // for laying the staff down when he sits
   const staffGeo = new THREE.CylinderGeometry(0.018, 0.022, 1.35, 6), staffMat = toon(HERO.staff);
   const staff = part(shR, staffGeo, staffMat, 0.06, -0.3, 0.1);
+  let spearGrip = 0;   // 0..1: how far the hand has slid down the spear's pole while he fishes
   const spear = makeSpear(); spear.scale.setScalar(1 / 0.62); spear.position.set(0.06, -0.3, 0.1); spear.rotation.x = 0.3; spear.visible = false; shR.add(spear);   // 0.30.17: the fishing spear in his right hand, in place of the staff
   const axe = makeAxe(); axe.scale.setScalar(1 / 0.62); axe.position.set(0.06, -0.3, 0.1); axe.rotation.x = 0.3; axe.visible = false; shR.add(axe);   // 0.31: the stone axe in his right hand, in place of the staff
   const drill = joint(0, 0.2, 0.34, body);   // the staff upright as a fire drill, its foot on the hearth in front of his knees
@@ -230,7 +231,8 @@ export function createHero(scene) {
       shL.rotation.x += (((chopping ? chop.arm * 0.85 : carry ? -0.35 : lit ? -1.0 - sw * 0.1 : -sw * 0.8) - bend * 0.5) * (1 - sp.e) + sp.arm - shL.rotation.x) * 0.4;   // the left arm holds the bundle, or the torch up in front
       const strike = fishing ? Math.min(1, Math.max(0, (wk.f - 0.7) / 0.12)) * (wk.f < 0.95 ? 1 : 0.4) : 0;   // peering (spear held ready, forward and down), then the thrust
       shR.rotation.x += ((chopping ? chop.arm : shoulder ? -2.55 : fishing ? -1.1 - 0.6 * strike : sw * 0.5 - 0.15 - bend * 0.6) * (1 - sp.e) + sp.arm - shR.rotation.x) * (fishing ? 0.5 : chopping ? 0.6 : 0.4);
-      spear.rotation.x += ((fishing ? 0.9 : 0.3) - spear.rotation.x) * 0.3;
+      spear.rotation.x += ((fishing ? 3.5 + 1.1 * strike : 0.3) - spear.rotation.x) * 0.3;   // fishing: the POINT forward and down (about 135 degrees from upright when peering, 160 in the thrust, in the world: the arm's -1.1..-1.7 plus this), the butt behind the hand
+      spearGrip += ((fishing ? 1 : 0) - spearGrip) * 0.3; spear.position.set(0.06, -0.3 + 0.4 * spearGrip * Math.cos(spear.rotation.x), 0.1 + 0.4 * spearGrip * Math.sin(spear.rotation.x));   // fishing: the hand slides down the pole to near the butt (0.25 m from it), as for a real thrust
       axe.rotation.x += ((chopping ? Math.PI : 0.3) - axe.rotation.x) * 0.25;   // head up when carried, the head out along his arm when he chops
     }
     drill.rotation.y = clock * 22;   // spinning

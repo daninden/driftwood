@@ -87,7 +87,8 @@ describe('the situation tells the fire, the camp store, the tide, last night and
   it('every line is there when the state has it, in the intended words', () => {
     const t = stateText({ ...base, camp: { fire: 'low', store: { dry: 6, wet: 2, branches: 0, fronds: 0, stones: 0, logs: 0 } }, tide: { name: 'low', falling: false, turn: 0.59 }, lastNight: { hours: 3, cold: true, collapse: false }, strip: 4 });
     expect(t).toContain('Fire: burning low.'); expect(t).toContain('Camp store: 6 dry wood, 2 wet.');
-    expect(t).toContain('Tide: low, rising, high water about 14:09 (low water is the crab time: a stroll to the crabs).'.replace('rising, high water', 'rising, high water'));
+    expect(t).toContain('Tide: low, rising, high water about 14:09.');   // 0.36.7: the crab remark only when the game says a crab trip is possible (or why not)
+    expect(stateText({ ...base, tide: { name: 'low', falling: false, turn: 0.59 }, crab: { ok: true } })).toContain('(low water is the crab time: a stroll to the crabs is possible now)');
     expect(t).toContain('Last night: a cold sleep, no fire close by (3.0 hours).'); expect(t).toContain('Tide strip: some wet driftwood to rescue.');
     expect(stateText({ ...base, camp: { fire: 'none', store: {} } })).toContain('Fire: none yet.'); expect(stateText({ ...base, camp: { fire: 'none', store: {} } })).toContain('Camp store: nothing.');
     expect(stateText({ ...base, camp: { fire: 'out', store: {} } })).toContain('Fire: out (a burnt place).');

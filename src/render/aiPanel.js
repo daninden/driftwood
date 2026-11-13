@@ -19,6 +19,7 @@
  * 0.36.5 "Reach": the default view of the log is BY PLAN (`groupByPlan`): each plan is a header ("New plan, Day 3 07:31 — asked because ...") with its one-sentence reason, then one block per plan step IN PLAN ORDER: the step (with its destination, `to`), the model's reason in quotes, when it was taken and how it stands
  * (done, next, not reached, skipped with the plain reason, or overruled by the rules: an orange tag, the reason and what the rules did instead); the decisions that belong to a step (a short way on to it: free time, onward, linger) fold into one small grey line ("via: free time, go on with the day"). Decisions the rules made with no plan or when the AI
  * could not answer (no answer, waiting, busy, budget, an error, a note about a failed request) are grey blocks between the plans in time order, with the plain why. A toggle ("show every decision" / "show the plan steps") switches to the old view, one block per decision, unchanged. A click on a plan header, a step or a grey block shows the full request and the raw answer where there is one.
+ * 0.36.7 "Memory": under the top line a collapsible "Memory" block (`memoryParts`): his own notes (the model writes them, at most 20 lines) and the journal (one line a day from sunset, newest day first; all are kept in the save); the collapsed state is kept in localStorage like the settings (`driftwood.aiMemoryOpen`, try/catch). It shows what the chooser has (`ai.notes()`, `ai.journal()`), with the AI on or off.
  * Small, monospace, on a light box, scrollable. It is out of the way of the game: a pointer in the panel never walks Dave or takes him back from his habit (isAiPanelEvent; main skips those events), and typing in the
  * key field reaches no game key (game/input isTyping).
  *
@@ -30,6 +31,9 @@
  *   groupByPlan(entries, plans) -> [item]   (0.36.5, pure) the log by plan, newest first: { kind: 'plan', id, head, reason, late, steps: [{ i, label, to, toNote, reason, state, stateText, when, tag, overrides: [{ text, n }], via, n }], n (the entry that asked: for the full request) } | { kind: 'rules', n, head, why, entry } (a grey block) | { kind: 'note', text }
  *   stepWhy(entry) / planWhen(plan)   small texts of the above
  *   planLines(plan) -> [{ marker ('▶' running, '✓' done, '✗' skipped, ' '), state, text }], planHead(plan), modeLine(mode)   the plan with a marker at the current step, why it was asked, and what the leash means. Pure.
+ *   memoryParts(notes, journal) -> { head, notes: [text], journal: [{ day, text }] }   (0.36.7, pure) the Memory block: its head ("Memory: 3 notes, 2 journal lines"), the notes in order, the journal newest day first
+ *   logText({ items, tally, state, model, mode, models, days }) -> string   (0.36.7, pure) the plain-text log of the last 2 game days for the "copy log" button: the version, model and leash, the tally, the situation now with the "not now" reasons, then each plan (why asked, its steps with reason and outcome, via, overruled) and the rules' own decisions with why not the AI, oldest first; never the key, never the full requests
+ *   nowParts(info, plan, entries) -> { text, mismatch, why }   (0.36.7, pure) the "Now" line at the top of the panel (also with the AI off): what Dave is actually doing (mind.now), "waiting for a plan (4 s of 10)", and in quiet ink with the reason when it is not the plan's running step
  *   tallyLine(t) -> string        "Since the page was loaded: 5 by the AI, 3 by the rules, 2 different from the rules"
  *   statusLine(status, nowMs) -> string       on or off, asking, all-paused, the last error
  *   modelLines(status, nowMs) -> [string]     one plain line per model
@@ -42,6 +46,7 @@
  */
 
 import { AI_WAIT, AI_MODES } from '../ai/config.js';
+import { VERSION, NAME } from '../version.js';
 
 export const isAiKey = e => !!e && e.code === 'KeyI' && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
   && !(e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '')));
@@ -104,6 +109,10 @@ export function blockParts(e) {
 
 /** The plan as lines for the panel (0.36.5): "▶" the step that is busy now (the last one taken), "✓" done, "✗" skipped, none for the rest; the first step not yet taken says "(next)" after it. Pure. */
 const MARK = { running: '▶', done: '✓', skipped: '✗' };
+export function memoryParts(notes, journal) {
+  const n = Array.isArray(notes) ? notes.filter(x => typeof x === 'string' && x) : [], j = (Array.isArray(journal) ? journal : []).filter(x => x && typeof x.line === 'string' && x.line).sort((a, b) => b.day - a.day).map(x => ({ day: x.day, text: `Day ${x.day}: ${x.line}` }));
+  return { head: `Memory: ${n.length} note${n.length === 1 ? '' : 's'}, ${j.length} journal line${j.length === 1 ? '' : 's'}`, notes: n, journal: j };
+}
 export function planLines(plan) {
   if (!plan) return [];
   return plan.steps.map((s, k) => ({ marker: MARK[s.state] || ' ', state: s.state, text: `${k + 1}. ${s.label}${s.toUsed || s.to ? ' (' + (s.toUsed || s.to) + ')' : ''}${s.state === 'next' ? ' (next)' : ''}${s.reason ? ' — ' + s.reason : ''}` }));
@@ -195,7 +204,7 @@ export function groupByPlan(entries, plans) {
   for (const p of ps) {
     const note = list.find(e => e.note && e.planNote && e.planId === p.id);
     const item = {
-      kind: 'plan', id: p.id, real: p.real || (note && note.real) || 0, head: `New plan, ${atText({ day: p.day, time: p.time })} — asked because: ${triggerText(p.trigger)}${p.late ? ' (it came late and is used from then on)' : ''}`, reason: p.reason ? `"${p.reason}"` : '', late: !!p.late, n: note ? note.n : null,
+      kind: 'plan', day: p.day, id: p.id, real: p.real || (note && note.real) || 0, head: `New plan, ${atText({ day: p.day, time: p.time })} — asked because: ${triggerText(p.trigger)}${p.late ? ' (it came late and is used from then on)' : ''}`, reason: p.reason ? `"${p.reason}"` : '', late: !!p.late, n: note ? note.n : null,
       steps: p.steps.map((s, i) => ({
         i, label: s.label, to: s.toUsed || s.to || null,
         toNote: s.toUsed ? `to: ${s.toUsed}` : s.to ? `to: ${s.to} (ignored: not possible now, the game picked)` : '',
@@ -218,9 +227,55 @@ export function groupByPlan(entries, plans) {
       step.overrides.push({ text: `Overruled: ${e.override}. The rules chose: ${what(e, e.rules)}`, n: e.n });
       continue;
     }
-    items.push({ kind: 'rules', real: e.real || 0, n: e.n, head: `${atText(e)} — Rules chose: ${what(e, e.rules)}`, why: e.override ? `Overruled: ${e.override}` : `Why not the AI: ${whyText(e)}`, entry: e });
+    items.push({ kind: 'rules', day: e.day, real: e.real || 0, n: e.n, head: `${atText(e)} — Rules chose: ${what(e, e.rules)}`, why: e.override ? `Overruled: ${e.override}` : `Why not the AI: ${whyText(e)}`, entry: e });
   }
   return items.sort((a, b) => (b.real || 0) - (a.real || 0));
+}
+
+/**
+ * 0.36.7: the plain-text log for the "copy log" button (pure). `items` is `groupByPlan(...)` (newest first), `days` how many game days back from the newest (2). Never holds the key or a full request.
+ * o: { items, tally: {ai, rules, differ}, state: { text, blocked } | null, model, mode, models: [names] }
+ */
+export function logText({ items = [], tally = null, state = null, model = null, mode = null, models = [], days = 2, nowLog = [] } = {}) {
+  const dayOf = it => (Number.isFinite(it.day) ? it.day : null), top = Math.max(-Infinity, ...items.map(dayOf).filter(d => d !== null));
+  const keep = items.filter(it => it.kind !== 'note' && (dayOf(it) === null || top === -Infinity || dayOf(it) > top - days));
+  const from = Math.min(Infinity, ...keep.map(it => it.real || 0).filter(Boolean));
+  const notes = items.filter(it => it.kind === 'note' && (it.real || 0) >= from);
+  const out = [`Driftwood ${VERSION} "${NAME}" · AI log, the last ${days} game days`, `Model: ${model || (models[0] || 'none yet')} · leash: ${mode || '?'}`];
+  if (tally) out.push(tallyLine(tally));
+  if (state && state.text) {
+    out.push('', 'The situation now', state.text);
+    const b = Object.entries(state.blocked || {}); if (b.length) out.push('Not now: ' + b.map(([k, v]) => `${k} (${v})`).join('; ') + '.');
+  }
+  if (nowLog.length) { out.push('', 'What he did, by change (Now)'); for (const x of nowLog) out.push(`  Day ${x.day} ${x.time} — ${x.text}`); }
+  out.push('');
+  for (const it of [...keep, ...notes].sort((a, b) => (a.real || 0) - (b.real || 0))) {
+    if (it.kind === 'note') { out.push(`(note) ${it.text}`); continue; }
+    if (it.kind === 'rules') { out.push(`${it.head}. ${it.why}`); continue; }
+    out.push(it.head); if (it.reason) out.push('  ' + it.reason);
+    for (const st of it.steps) {
+      out.push(`  ${st.i + 1}. ${st.label}${st.to ? ' (' + st.to + ')' : ''}: ${[st.stateText, st.when].filter(Boolean).join(', ')}${st.reason ? ' ' + st.reason : ''}${st.note ? ' [' + st.note + ']' : ''}${st.tag ? ' [' + st.tag + ']' : ''}`);
+      for (const o of st.overrides) out.push('     ' + o.text);
+      if (st.via.length) out.push('     via: ' + st.via.join(', '));
+    }
+  }
+  return out.join('\n');
+}
+
+/**
+ * 0.36.7: the "Now" line (pure): { text, mismatch (bool), why }. `info` is `ai.nowInfo()`, `plan` `ai.plan()`, `entries` `ai.entries`. While Dave waits for a plan the text says how long ("waiting for a plan (4 s of 10)"). When what he does is not the plan's running step the line is marked (mismatch) and says why when known: the plan's last skipped step, else the newest decision the rules made.
+ */
+export function nowParts(info, plan = null, entries = []) {
+  if (!info) return { text: '', mismatch: false, why: '' };
+  let text = info.text;
+  if (info.waited != null) text = `waiting for a plan (${Math.min(Math.floor(info.waited), AI_WAIT)} s of ${AI_WAIT})`;
+  const mismatch = info.matches === false; let why = '';
+  if (mismatch) {
+    const sk = plan && plan.steps ? plan.steps.filter(s => s.state === 'skipped' && s.note).pop() : null, r = (entries || []).find(e => !e.note && e.used === 'rules');
+    why = sk ? `the plan's step ${sk.label} ended: ${sk.note}` : r ? `the rules decided: ${whyText(r)}` : `the plan's step is ${info.step ? info.step.label : 'over'}`;
+    text += ` (${why})`;
+  }
+  return { text, mismatch, why };
 }
 
 export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
@@ -233,13 +288,19 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   const OPEN_KEY = 'driftwood.aiPanelOpen';
   const loadOpen = () => { try { return localStorage.getItem(OPEN_KEY) === '1'; } catch (e) { return false; } };
   const saveOpen = v => { try { localStorage.setItem(OPEN_KEY, v ? '1' : '0'); } catch (e) { /* no storage: it is only a convenience */ } };
-  let expanded = loadOpen(), lastSummary = '';
+  const MEM_KEY = 'driftwood.aiMemoryOpen';
+  const loadMem = () => { try { return localStorage.getItem(MEM_KEY) === '1'; } catch (e) { return false; } };
+  const saveMem = v => { try { localStorage.setItem(MEM_KEY, v ? '1' : '0'); } catch (e) { /* no storage: it is only a convenience */ } };
+  let expanded = loadOpen(), memOpen = loadMem(), lastSummary = '', lastMem = -1, lastNow = '';
+  const nowEl = mk('div', 'ai-now');
   const title = mk('div', 'ai-title', `AI · ${st.models.map(m => m.model).join(' > ')}`);
-  const top = mk('div', 'ai-top'), sum = mk('span', 'ai-sum'), sumText = mk('span', null), sumBad = mk('span', 'ai-bad'), gear = mk('button', 'ai-gear', '⚙'); gear.type = 'button'; gear.setAttribute('aria-label', 'AI settings'); gear.title = 'settings';
+  const top = mk('div', 'ai-top'), sum = mk('span', 'ai-sum'), sumText = mk('span', null), sumBad = mk('span', 'ai-bad'), gear = mk('button', 'ai-gear', '⚙'), copy = mk('button', 'ai-copy', 'copy log'); gear.type = 'button'; copy.type = 'button'; copy.title = 'copy the last two game days of the log as text'; gear.setAttribute('aria-label', 'AI settings'); gear.title = 'settings';
   const settings = mk('div', 'ai-settings');
+  const memBox = mk('div', 'ai-memory'), memHead = mk('button', 'ai-mem-head'), memBody = mk('div', 'ai-mem-body'); memHead.type = 'button'; memBox.append(memHead, memBody);
   const row = mk('div', 'ai-row');
   const onLabel = mk('label'); const on = mk('input'); on.type = 'checkbox'; on.checked = client.on(); onLabel.append(on);
-  sum.append(sumText, ' ', sumBad); top.append(onLabel, sum, gear);
+  sum.append(sumText, ' ', sumBad); top.append(onLabel, sum, copy, gear);
+  const copyBox = mk('div', 'ai-copybox'); copyBox.hidden = true;
   const key = mk('input', 'ai-key'); key.type = 'password'; key.autocomplete = 'off'; key.spellcheck = false; key.setAttribute('aria-label', 'API key');
   const clear = mk('button', null, 'clear key'); clear.type = 'button';
   const list = mk('button', null, 'list models'); list.type = 'button';
@@ -251,9 +312,27 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   const status = mk('div', 'ai-status'), tally = mk('div', 'ai-tally'), perModel = mk('div', 'ai-models-status'), pend = mk('div', 'ai-pending'), models = mk('div', 'ai-models'), log = mk('div', 'ai-log');
   models.hidden = true;
   settings.append(title, row, modeRow, modeNote, addr, status, perModel, pend, models, tally);
-  el.append(top, settings, planBox, viewBtn, log);
+  el.append(nowEl, top, copyBox, settings, memBox, planBox, viewBtn, log);
   const showOpen = () => { settings.hidden = !expanded; gear.className = expanded ? 'ai-gear on' : 'ai-gear'; gear.setAttribute('aria-expanded', String(expanded)); };
   showOpen(); gear.addEventListener('click', () => { expanded = !expanded; saveOpen(expanded); showOpen(); });
+  const renderMemory = () => {
+    const m = memoryParts(ai.notes ? ai.notes() : [], ai.journal ? ai.journal() : []);
+    memHead.textContent = `${memOpen ? '▾' : '▸'} ${m.head}`; memHead.setAttribute('aria-expanded', String(memOpen)); memBody.hidden = !memOpen; memBody.textContent = '';
+    if (!memOpen) return;
+    memBody.append(mk('div', 'ai-sub', 'His notes'));
+    if (m.notes.length) m.notes.forEach((x, i) => memBody.append(mk('div', 'ai-note', `${i + 1}. ${x}`))); else memBody.append(mk('div', 'ai-dim', '(none yet)'));
+    memBody.append(mk('div', 'ai-sub', 'Journal'));
+    if (m.journal.length) m.journal.forEach(x => memBody.append(mk('div', 'ai-note', x.text))); else memBody.append(mk('div', 'ai-dim', '(no line yet)'));
+  };
+  memHead.addEventListener('click', () => { memOpen = !memOpen; saveMem(memOpen); renderMemory(); });
+  copy.addEventListener('click', async () => {
+    const s = client.status(), pl = ai.plan(), text = logText({ items: groupByPlan(ai.entries, ai.plans()), tally: ai.tally(), state: ai.stateNow ? ai.stateNow() : null, nowLog: ai.nowLog ? ai.nowLog() : [], model: pl && pl.model, mode: client.mode(), models: s.models.map(m => m.model) });
+    let ok = false; try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { ok = false; }
+    if (ok) { copyBox.hidden = true; copy.textContent = 'copied'; setTimeout(() => { copy.textContent = 'copy log'; }, 1500); return; }
+    copyBox.textContent = '';   // no clipboard: the text in a box, selected, to copy by hand
+    const ta = mk('textarea', 'ai-copytext'); ta.readOnly = true; ta.value = text; ta.rows = 8; const close = mk('button', null, 'close'); close.type = 'button'; close.addEventListener('click', () => { copyBox.hidden = true; });
+    copyBox.append(ta, close); copyBox.hidden = false; ta.focus(); ta.select();
+  });
   const showView = () => { viewBtn.textContent = byPlan ? 'show every decision' : 'show the plan steps'; };
   showView(); viewBtn.addEventListener('click', () => { byPlan = !byPlan; showView(); seen = -1; update(); });
   const showMode = () => { const m = client.mode(); for (const k of AI_MODES) modeBtn[k].className = k === m ? 'on' : ''; modeNote.textContent = modeLine(m); };
@@ -337,6 +416,7 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   function update() {
     if (!shown) return;
     const cs = client.status(), s = statusLine(cs, now()), ml = modelLines(cs, now());
+    { const np = nowParts(ai.nowInfo ? ai.nowInfo() : null, ai.plan(), ai.entries), t = np.text ? 'Now: ' + np.text : ''; if (t !== lastNow) { lastNow = t; nowEl.textContent = t; nowEl.classList.toggle('mismatch', np.mismatch); } }
     const sm = summaryLine(cs, { mode: client.mode(), waiting: ai.waiting(), inFlight: ai.inFlight() }, now()), key2 = sm.text + '|' + sm.problem;
     if (key2 !== lastSummary) { lastSummary = key2; sumText.textContent = sm.text; sumBad.textContent = sm.problem; sum.classList.toggle('bad', !!sm.problem); }
     if (s !== lastStatus) { lastStatus = s; status.textContent = s; }
@@ -344,9 +424,10 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
     const p = pendingLine(ai.waiting(), ai.inFlight());
     if (p !== lastPending) { lastPending = p; pend.textContent = p; }
     const isOn = client.on() && client.hasKey();
+    if (ai.memoryVersion !== lastMem) { lastMem = ai.memoryVersion; renderMemory(); }
     if (ai.version !== seen || isOn !== lastOn) { seen = ai.version; lastOn = isOn; renderLog(); }
   }
-  function toggle() { shown = !shown; el.hidden = !shown; if (shown) { seen = -1; update(); } }
+  function toggle() { shown = !shown; el.hidden = !shown; if (shown) { seen = -1; lastMem = -1; update(); } }
   el.hidden = true;
   return { toggle, visible: () => shown, update };
 }

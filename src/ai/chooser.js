@@ -22,6 +22,10 @@
  *
  * 0.36.5 (point 11): (a) at the GOAL point, before bridging through free time (idle) to a pastime step, the step is checked: its hours (prompt hoursOpen) must be open and `mind.blockers()` must have no entry for it; if not, the step is skipped with the reason, or, when a request is allowed, a new plan is asked ("the next step, watch the sunset, was not possible now (...)"), as at the pastime point; a step that cannot happen is never bridged to (seen live: at night the gaze step was bridged to at every goal decision, drink and eat were never taken, and no pastime point ever came to find it impossible). (b) Waking is a reason for a new plan: `game.sleep.wakes` (counted by game/sleep `wake()`, any sleep: the night, a cold sleep cut short, a nap, a collapse) going up between two decisions asks for a new plan with the trigger "he woke up" (unless one was asked meanwhile: the trigger is used up by the request).
  *
+ * 0.36.7 "Memory": (a) ONE short-term list: game/mind's `recent` (the last 20 events and decisions with their outcomes); a plan step that is skipped or not possible goes into it (`mind.remember`; the old separate list of 8 is gone) and it is what the request calls "What he did lately". (b) His own notes (`notes`, at most NOTES_MAX lines of NOTE_LEN characters) change only when a plan answer carries `notes`. (c) The journal [{ day, line }]: `tick()` (main calls it every frame) asks ONE extra request a day, after sunset (DUSK) when the AI is on, the budget allows and no other request runs; it is not a decision and Dave never waits for it; the answer is stored when it comes back; the day is marked asked before the answer, so a failed request is not repeated that day, also across a reload; with the AI off, no key or no budget there is no line (the rules never write one). While it runs the plan request waits (the client runs one request at a time: the rules decide, why 'busy'). `memory()` / `restore(m)` are the saved form (`recent`, `notes`, `journal`, `asked`; main saves it as `memory` next to `habit`, src/save). (d) The crab fix: a destination the model named that is not possible now (`toBlock`: the game's `destinations()` does not offer it; for the crabs the reason of `blockers().crabs`) makes the step NOT POSSIBLE like any other impossible pastime step (remembered with the reason, a new plan when one can be asked, else skipped); the game never substitutes another place and the step's reason is not spoken (`onStep` comes only for a step that starts as planned).
+ *
+ * 0.36.7 (point 3): when a new plan is wanted (the plan is used up, a new day, an event, a step not possible) but one cannot be asked yet (asked less than AI_REPLAN_GAP ago, a request running, no budget) and there is a current plan, the chooser follows THAT plan as usual (a step that is not possible is skipped with its reason) and keeps the trigger, so the new plan is asked as soon as the gap allows; only when the plan has no usable step left do the rules decide (why 'busy', 'waiting' or 'budget' as before).
+ *
  * THE OVERRIDES: every case where the rules decide and the AI is not asked is one entry of the named list OVERRIDES { id, points, test, reason }, and a MODE (the leash, `mode()`: 'strict' | 'loose' | 'free') says which entries are in force (MODES):
  *   strict   forced, safety, need   (the behaviour of 0.36.1 and 0.36.3's first cut)
  *   loose    forced, critical       (the default)
@@ -43,6 +47,9 @@
  *     clock() -> { day, time } | null  the game time for the log and the plan's morning (default: read from the game handed to attach)       log(entry)   called with each entry       wait   seconds to wait for an answer (default AI_WAIT)
  *     mode() -> 'strict' | 'loose' | 'free'   the leash (default AI_MODE_DEFAULT)
  *   ai.chooser(point, menu, ctx) -> choice | WAIT      for createMind (the event point only notes that something went wrong); ai.chooser.allowPreempt(current, want) -> bool: the mind asks it before a higher want stops the running goal (strict: yes; free: no; loose: only at the brink)
+ *   ai.tick()      (0.36.7) the sunset journal line, see above        ai.memory() / ai.restore(m)   what is saved with the island        ai.notes() / ai.journal()   his notes and the journal (copies)       ai.memoryVersion   counts the changes of the notes, the journal and the restored memory (main saves at once)
+ *   ai.stateNow()  (0.36.7) { text, blocked } the situation now in words and the "not now" reasons, for the panel's copy log (null when not known)
+ *   ai.nowInfo() / ai.nowLog()   (0.36.7) what he is doing now ({ n, text, step, matches, waited }) and the last 30 changes of it with the game time; `tick` records the changes (needs `mind.now`)
  *   ai.attach(mind, game)            hands the mind and the game over (the state, the short-term memory, the blockers and the vitals are read from them)
  *   ai.restates(goal, kind) -> bool   (0.36.5, replaces 0.36.4's stepReason) the fixed intent phrase `kind` of the goal `goal` only restates the plan step that is running (STEP_INTENTS): main does not say it;   STEP_INTENTS   the intent kinds that start each step
  *   ai.entries       the log, newest first (array, kept in place)       ai.version   counts the changes of the log, the plan or the request state
@@ -52,15 +59,15 @@
  *
  * Depends on: ai/config, ai/prompt, game/intent (pure), the constants of game/thirst, game/hunger and game/sleep
  */
-import { AI_WAIT, AI_LOG_MAX, AI_REPLAN_GAP, AI_MODE_DEFAULT, AI_AWAKE_MARGIN } from './config.js';
-import { buildPlanMessages, parsePlan, snapshotOf, hhmm, describeOption, stepLabel, STEP_WHEN, PLAN_GOALS, hoursOpen } from './prompt.js';
+import { AI_WAIT, AI_LOG_MAX, AI_REPLAN_GAP, AI_MODE_DEFAULT, AI_AWAKE_MARGIN, NOTES_MAX, NOTE_LEN, JOURNAL_LEN, JOURNAL_MAX } from './config.js';
+import { buildPlanMessages, parsePlan, snapshotOf, stateText, hhmm, describeOption, stepLabel, STEP_WHEN, STEP_TO, PLAN_GOALS, hoursOpen, buildJournalMessages, parseJournal, clipLine, nowText } from './prompt.js';
 import { WAIT, isValid, makeMenu, PASTIMES, STAGES, choiceId } from '../game/intent.js';
 import { REVIVE_AT } from '../game/thirst.js';
 import { STARVING_AT } from '../game/hunger.js';
-import { AWAKE_MAX, DAWN } from '../game/sleep.js';
+import { AWAKE_MAX, DAWN, DUSK } from '../game/sleep.js';
 
 const NEEDS = new Set(['drink', 'eat', 'sleep']);
-const MEMORY_MAX = 8, PLANS_MAX = 12;
+const RECENT_MAX = 20, PLANS_MAX = 12;   // RECENT_MAX: the short-term list is game/mind's `recent` (its ring of 20); a step the chooser skipped goes into the same list
 const ABANDONED = 1;   // seconds without a call: the decision it was waiting for is gone
 /** For each step of the plan the intent kinds (game/mind `onIntent`) that START it: the AI's own reason for the step is shown instead of their fixed phrase (0.36.4). What he lacks inside the step (fibre, a low fire, wet wood, a torch) keeps its fixed phrases. */
 export const STEP_INTENTS = { drink: ['drinkIntent'], eat: ['foodIntent'], sleep: ['sleepIntent'], stores: ['woodIntent'], fire: ['woodIntent'], home: ['homeWoodIntent', 'buildIntent', 'upgradeIntent', 'hutIntent'], spear: ['spearIntent'], fish: ['fishIntent'], axe: ['axeIntent'], explore: ['explore'], journey: ['journeyIntent'] };
@@ -85,7 +92,7 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
   const plans = [];   // 0.36.5: the plans of this page, newest first (PLANS_MAX), kept with their steps' states for the panel's plan view
   let planSeq = 0;
   let wakes = null, version = 0, call = null, req = null, refs = null, seq = 0, plan = null, stale = null, lastAsk = -Infinity, bridged = null, running = null;   // running (0.36.5): the plan step that was last taken, { goal, id }, while the rules have not decided since
-  const memory = [];   // 0.36.4: plan steps that were skipped or not possible, with the reason (short-term, not saved); they join the request's "What he did lately"
+  let notes = [], journal = [], asked = null, journalCall = false, memVer = 0;   // 0.36.7 "Memory": his own notes (written only by the model), the journal [{ day, line }] and the day the journal line was last asked (a failed request is not repeated that day); saved with the island (`memory()`, `restore()`)
 
   const bump = () => { version++; };
   const push = e => { entries.unshift(e); if (entries.length > AI_LOG_MAX) entries.length = AI_LOG_MAX; bump(); if (log) { try { log(e); } catch (x) { /* a log that throws is its own problem */ } } };
@@ -95,15 +102,19 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
   const vitals = () => { const g = refs && refs.game, n = f => { try { return +f() || 0; } catch (e) { return 0; } }; return { thirst: n(() => g.thirst.days), hunger: n(() => g.hunger.days), awake: n(() => g.sleep.awake) }; };
   const active = () => overrides || overridesFor(mode());
   const okChoice = (menu, id) => { const o = menu.options.find(x => x.id === id); return !!o && isValid(o) && (!active().some(v => v.id === 'forced') || !menu.options.some(x => x.forced && isValid(x)) || !!o.forced); };
-  const rawNow = () => { const g = refs && refs.game, c = g && g.clock; return c && c.day != null ? { t: c.total != null ? +c.total : c.day + (+c.time || 0), day: c.day } : { t: 0, day: 0 }; };
-  const remember = (id, outcome) => { const n = rawNow(); memory.push({ t: n.t, day: n.day, kind: 'plan step', what: id, outcome }); if (memory.length > MEMORY_MAX) memory.shift(); };
-  const recentNow = () => { const r = refs && refs.mind && Array.isArray(refs.mind.recent) ? refs.mind.recent : []; return [...r, ...memory].sort((a, b) => (+a.t || 0) - (+b.t || 0)); };
+  // 0.36.7: ONE short-term list, the last 20 events and decisions with their outcomes: game/mind's `recent`; a plan step that was skipped or not possible is put into it with the reason (`mind.remember`; a mind without it: pushed here)
+  const remember = (id, outcome) => {
+    const m = refs && refs.mind; if (!m) return;
+    if (typeof m.remember === 'function') { m.remember('plan step', id, outcome); return; }
+    if (Array.isArray(m.recent)) { const c = refs.game && refs.game.clock || {}; m.recent.push({ t: c.total != null ? +c.total : (+c.day || 0) + (+c.time || 0), day: c.day || 0, kind: 'plan step', what: id, outcome }); if (m.recent.length > RECENT_MAX) m.recent.shift(); }
+  };
+  const recentNow = () => { const r = refs && refs.mind && Array.isArray(refs.mind.recent) ? refs.mind.recent : []; return [...r].sort((a, b) => (+a.t || 0) - (+b.t || 0)); };
   const blockersNow = () => { try { return (refs && refs.mind && refs.mind.blockers && refs.mind.blockers()) || {}; } catch (e) { return {}; } };
   const nextStep = () => (plan && plan.i < plan.steps.length ? plan.steps[plan.i] : null);
   const noteDone = id => { const st = nextStep(); if (st && st.id === id) { st.state = 'done'; plan.i++; bump(); } };
   // 0.36.5 (point 10): the states as the panel shows them: 'running' the step taken last (busy now, until the next is taken, the plan is replaced or the rules take over), 'done' a step taken earlier, 'next' the first step not yet taken, 'later' the ones after it ('not reached' in an old plan), 'skipped'; the plan's own logic (plan.i, step.state) is unchanged
   const stateOf = (p, s, k) => (s.state === 'done' ? (p === plan && p.running === k ? 'running' : 'done') : s.state === 'next' ? (p !== plan ? 'not reached' : k === p.i ? 'next' : 'later') : s.state);
-  const planSnap = p => ({ id: p.id, real: p.real, steps: p.steps.map((s, k) => ({ id: s.id, label: stepLabel(s.id), to: s.to || null, toUsed: s.toUsed || null, toIgnored: s.toIgnored || null, reason: s.reason, note: s.note || '', at: s.at || null, state: stateOf(p, s, k) })), i: p.i, reason: p.reason, trigger: p.trigger, day: p.day, time: p.time, late: p.late });
+  const planSnap = p => ({ id: p.id, real: p.real, model: p.model || null, steps: p.steps.map((s, k) => ({ id: s.id, label: stepLabel(s.id), to: s.to || null, toUsed: s.toUsed || null, toIgnored: s.toIgnored || null, reason: s.reason, note: s.note || '', at: s.at || null, state: stateOf(p, s, k) })), i: p.i, reason: p.reason, trigger: p.trigger, day: p.day, time: p.time, late: p.late });
   const planInfo = () => (plan ? planSnap(plan) : null);
   const destinationsNow = () => { try { return (refs && refs.mind && refs.mind.destinations && refs.mind.destinations()) || null; } catch (e) { return null; } };
 
@@ -118,6 +129,7 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
   function install(p, r, c) {   // a plan has landed: it is the plan now, whoever was waiting for it
     const g = gameTime();
     plan = { id: ++planSeq, real: now(), steps: p.steps.map(s => ({ ...s, state: 'next' })), i: 0, reason: p.reason, key: wakeKey(), trigger: c.trigger, day: g.day, time: g.time, model: r.model || null, late: !(req && req.call === c), raw: r.text };
+    if (p.notes) { notes = p.notes.slice(); memVer++; }   // 0.36.7: the full new list of his notes (a missing or unusable one leaves them as they are)
     stale = null; c.plan = plan; plans.unshift(plan); if (plans.length > PLANS_MAX) plans.length = PLANS_MAX; bump();
     push({ note: `New plan (${c.trigger}): ${p.steps.map(s => s.id).join(', ')}${p.dropped.length ? `; left out: ${p.dropped.join(', ')}` : ''}`, planNote: true, planId: plan.id, real: now(), messages: c.messages, raw: r.text });
   }
@@ -168,18 +180,21 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
       if (!c.result.ok) { stale = stale || req.trigger; return finish({ why: c.result.why, ms: waited, messages: c.messages, raw: c.result.raw }); }
       asked = { ms: waited, messages: c.messages, raw: c.raw, model: c.model }; req = null; bump();
     }
-    const canAsk = () => !call && t - lastAsk >= replanGap && canSend() && !!refs;
+    const canAsk = () => !call && !journalCall && t - lastAsk >= replanGap && canSend() && !!refs;
     if (!asked) {
       if (!plan) trigger = stale || 'no plan yet';
       else if (plan.key !== wakeKey()) trigger = 'a new day begins';
       else if (stale) trigger = stale;
     }
     let r = null;
-    if (!trigger) {
+    // 0.36.7: a new plan is wanted but cannot be asked yet (one was asked a moment ago, a request is running, no budget): the CURRENT plan goes on (its next step through `follow`; an impossible step is skipped with its reason) and the trigger stays, so the new plan is asked as soon as the gap allows; the rules decide only when the plan has no usable step left
+    const held = !!trigger && !!plan && !canAsk();
+    if (held) stale = stale || trigger;
+    if (!trigger || held) {
       r = follow(point, menu, aiMenu, canAsk);
       if (r.take) {
         const st = plan.steps[r.step]; let ch = rid === r.take ? rules : r.take, to = null;
-        if (pastime && !r.bridge && st.to) {   // 0.36.5: a destination of the step is used only when the game knows such a place now; else it is ignored and the game picks
+        if (pastime && !r.bridge && st.to) {   // 0.36.5: a destination of the step was checked by `follow` (`toBlock`): it is used when the game knows such a place now; only when the game cannot say (no `destinations`) it is ignored and the game picks
           const d = destinationsNow();
           if (d && Array.isArray(d[r.take]) && d[r.take].includes(st.to)) { to = st.to; st.toUsed = to; ch = r.take === 'stroll' ? { id: 'stroll', kind: to } : { id: r.take, where: to }; }
           else st.toIgnored = st.to;
@@ -195,21 +210,75 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
         }
         return finish({ used: 'ai', ans: { id: r.take, reason: r.why || st.reason || plan.reason, model: plan.model, messages: asked ? asked.messages : null, raw: asked ? asked.raw : null }, to, ms: asked ? asked.ms : null, plan: { i: Math.min(r.step + 1, plan.steps.length), n: plan.steps.length, via: !!r.bridge } }, ch);
       }
-      if (r.hold) return finish({ why: 'plan-hold' });
-      trigger = r.replan;
+      if (r.hold && !(held && r.used)) return finish({ why: 'plan-hold' });   // (a plan with no usable step left while a new one cannot be asked: the usual reasons below, busy, waiting or budget)
+      if (!held) trigger = r.replan;
     }
     // a new plan is wanted
-    if (call) return finish({ why: 'busy' });
+    if (call || journalCall) return finish({ why: 'busy' });   // (0.36.7: the client runs one request at a time, the sunset journal line included)
     if (t - lastAsk < replanGap) return finish({ why: 'waiting' });
     if (!canSend() || !refs) return finish({ why: 'budget' });
     let messages;
-    try { messages = buildPlanMessages({ state: snapshotOf(refs.game, refs.mind), recent: recentNow(), trigger, previous: plan ? plan.steps.map(x => ({ id: x.id, state: x.state === 'next' ? 'not reached' : x.state, note: x.note || '' })) : [], possible: possibleNow(point, aiMenu, menu), mode: mode() }); }
+    try { messages = buildPlanMessages({ state: snapshotOf(refs.game, refs.mind), recent: recentNow(), trigger, previous: plan ? plan.steps.map(x => ({ id: x.id, state: x.state === 'next' ? 'not reached' : x.state, note: x.note || '' })) : [], possible: possibleNow(point, aiMenu, menu), notes, journal: journal.slice(-8), mode: mode() }); }
     catch (e) { return finish({ why: 'error: ' + (e && e.message || e) }); }
     lastAsk = t; stale = stale || trigger;
     const c = send(messages, trigger);
     req = { at: t, last: t, point, rules: pastime ? rules : undefined, trigger, call: c };
     return WAIT;
   }
+
+  /** 0.36.7: the sunset journal line. Called often by main (every frame); does nothing unless the AI is on, it is after sunset (DUSK) of a day not yet written or asked about, no other request runs and the budget allows. One extra request, never waited for: the line is stored when it comes back; no line when the AI is off, there is no key or no budget (the rules never make one up). */
+  const nowLog = []; let nowKey = null;   // 0.36.7: the last 30 changes of what he is doing (mind.now), with the game time, for the panel's copy log
+  function trackNow() {
+    const m = refs && refs.mind; if (!m || typeof m.now !== 'function') return;
+    let n; try { n = m.now(); } catch (e) { return; }
+    const key = [n.goal, n.pastime, n.kind, n.phase, n.trouble].join('|'); if (key === nowKey) return; nowKey = key;
+    const g = gameTime(); nowLog.push({ day: g.day, time: g.time, text: nowText(n) }); if (nowLog.length > 30) nowLog.shift(); bump();
+  }
+  /** 0.36.7: what he is doing now (`mind.now()` and its text), the plan step that is running (null when none or the AI is off), whether they match (null: not known or in between steps) and how long Dave has waited for a plan (seconds, null when not waiting). Read only. */
+  function nowInfo() {
+    const m = refs && refs.mind; if (!m || typeof m.now !== 'function') return null;
+    let n; try { n = m.now(); } catch (e) { return null; }
+    const st = enabled() && plan && plan.running != null ? plan.steps[plan.running] : null;
+    let matches = null;
+    if (st && n.phase !== 'waiting' && n.goal && !(n.goal === 'idle' && (!n.pastime || n.pastime === 'onward'))) matches = PLAN_GOALS.includes(st.id) ? n.goal === st.id : n.goal === 'idle' && n.pastime === st.id;
+    return { n, text: nowText(n), step: st ? { id: st.id, label: stepLabel(st.id) } : null, matches, waited: req ? Math.max(0, now() - req.at) : null };
+  }
+
+  function tick() {
+    trackNow();
+    if (journalCall || call || req || !refs || !enabled()) return;
+    const c = clk(); if (!c || c.day == null || !(c.time >= DUSK && c.time < 1)) return;
+    if (asked === c.day || journal.some(j => j.day === c.day) || !canSend()) return;
+    let messages;
+    try { messages = buildJournalMessages({ state: snapshotOf(refs.game, refs.mind), recent: recentNow(), journal: journal.slice(-8), notes }); } catch (e) { return; }
+    const day = c.day;
+    asked = day; memVer++; journalCall = true; bump();   // asked is kept (and saved) before the answer: a failed or lost request is not repeated the same day, also across a reload
+    let p; try { p = Promise.resolve(ask(messages)); } catch (e) { p = Promise.reject(e); }
+    p.then(r => {
+      const q = parseJournal(r && r.text);
+      if (q.ok) { if (!journal.some(j => j.day === day)) { journal.push({ day, line: q.line }); if (journal.length > JOURNAL_MAX) journal.shift(); } memVer++; }
+      else push({ note: 'The journal line could not be used: ' + q.error, real: now() });
+    }, e => push({ note: 'The journal request failed: ' + (e && e.message || e), real: now() })).then(() => { journalCall = false; bump(); });
+  }
+
+  /** 0.36.7: what is saved with the island (`memory` next to `habit`): the short-term list (the mind's `recent`), his notes, the journal and the day the journal line was last asked; plain data. */
+  function memory() {
+    const r = refs && refs.mind && Array.isArray(refs.mind.recent) ? refs.mind.recent : [];
+    return { recent: r.map(x => ({ t: x.t, day: x.day, kind: x.kind, what: x.what == null ? null : String(x.what), outcome: x.outcome == null ? null : String(x.outcome) })), notes: notes.slice(), journal: journal.map(j => ({ day: j.day, line: j.line })), ...(asked != null ? { asked } : {}) };
+  }
+  /** 0.36.7: hand a saved `memory` back (after `attach`). Anything unusable is skipped; an entry that was under way when the page closed is marked 'interrupted'. */
+  function restore(m) {
+    if (!m || typeof m !== 'object') return;
+    if (Array.isArray(m.notes)) notes = m.notes.map(x => clipLine(x, NOTE_LEN)).filter(Boolean).slice(-NOTES_MAX);
+    if (Array.isArray(m.journal)) journal = m.journal.filter(j => j && Number.isFinite(j.day) && typeof j.line === 'string' && j.line).map(j => ({ day: j.day, line: clipLine(j.line, JOURNAL_LEN) })).slice(-JOURNAL_MAX);
+    if (Number.isFinite(m.asked)) asked = m.asked;
+    const r = refs && refs.mind && Array.isArray(refs.mind.recent) ? refs.mind.recent : null;
+    if (r && Array.isArray(m.recent)) r.splice(0, r.length, ...m.recent.filter(x => x && Number.isFinite(x.t) && Number.isFinite(x.day) && typeof x.kind === 'string').slice(-RECENT_MAX).map(x => ({ t: x.t, day: x.day, kind: x.kind, what: x.what == null ? null : String(x.what), outcome: x.outcome == null ? 'interrupted' : String(x.outcome) })));
+    memVer++; bump();
+  }
+
+  /** 0.36.7: the situation now as the request would tell it, and the pastimes that are not possible now with their reasons (for the panel's "copy log"); null when it cannot be read. */
+  function stateNow() { try { return refs && refs.game ? { text: stateText(snapshotOf(refs.game, refs.mind)), blocked: blockersNow() } : null; } catch (e) { return null; } }
 
   function possibleNow(point, aiMenu) {   // what can be done right now, for the request (null: not known at this point), and (0.36.4) why a pastime cannot be taken now, from the mind's own checks
     const ids = new Set(aiMenu.options.map(o => o.id)), blocked = blockersNow();
@@ -222,13 +291,20 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
   /** The next step of the plan against this menu (see the header): { take, step, why } | { hold } | { replan }. Steps that are done or pointless are marked skipped on the way. */
   function follow(point, menu, aiMenu, canAsk) {
     const ids = new Set(aiMenu.options.map(o => o.id)), here = new Set(menu.options.map(o => o.id)), before = here.has('onward');
+    // 0.36.7: a destination the model named that is not possible now (a stroll to the crabs without a fire, an explore aim) makes the step NOT POSSIBLE, with the real reason: the game never swaps in another place
+    const toBlock = st => {
+      if (!st.to || !STEP_TO[st.id]) return null;
+      const d = destinationsNow(); if (!d || !Array.isArray(d[st.id]) || d[st.id].includes(st.to)) return null;
+      const r = st.id === 'stroll' ? blockersNow()[st.to] : null;
+      return st.id === 'stroll' && st.to === 'crabs' ? `no stroll to the crabs now: ${r || 'no crab spot known'}` : `no ${st.to} place to ${st.id === 'stroll' ? 'stroll to' : 'go to'} now${r ? ': ' + r : ''}`;
+    };
     const skip = (st, why) => { st.state = 'skipped'; st.note = why; st.at = gameTime(); plan.i++; remember(st.id, 'skipped: ' + why); bump(); };
     while (plan.i < plan.steps.length) {
       const k = plan.i, st = plan.steps[k], id = st.id, goalStep = PLAN_GOALS.includes(id);
       if (point === 'goal') {
         if (goalStep) { if (ids.has(id)) { st.state = 'done'; plan.i++; bump(); return { take: id, step: k }; } skip(st, 'not needed now'); continue; }
         // 0.36.5 (point 11): never bridge through free time to a pastime step that cannot happen now (its hours are closed, or the mind has a reason): skip it, or ask for a new plan, as at the pastime point
-        const c = clk(), closed = !!c && c.time != null && !hoursOpen(id, c.time), blocker = blockersNow()[id];
+        const c = clk(), closed = !!c && c.time != null && !hoursOpen(id, c.time), blocker = blockersNow()[id] || toBlock(st);
         if (closed || blocker) {
           const why = blocker || `outside its hours: ${STEP_WHEN[id]}`;
           if (canAsk()) { remember(id, `skipped: not possible (${why})`); return { replan: `the next step, ${stepLabel(id)}, was not possible now (${why})` }; }
@@ -241,10 +317,10 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
         const short = before ? 'onward' : 'linger';
         return ids.has(short) ? { take: short, bridge: true, step: k, why: `A short one first: the plan's next step is ${stepLabel(id)}.` } : { hold: true };
       }
-      if (ids.has(id)) { st.state = 'done'; plan.i++; bump(); return { take: id, step: k }; }
+      if (ids.has(id) && !toBlock(st)) { st.state = 'done'; plan.i++; bump(); return { take: id, step: k }; }
       if (before && !STAGES.before.includes(id) && ids.has('onward')) return { take: 'onward', bridge: true, step: k, why: `On the way to: ${stepLabel(id)}.` };
       // not possible now
-      const why = blockersNow()[id] || STEP_WHEN[id];
+      const why = (ids.has(id) ? toBlock(st) : null) || blockersNow()[id] || STEP_WHEN[id];
       if (canAsk()) { remember(id, `skipped: not possible (${why})`); return { replan: `the next step, ${stepLabel(id)}, was not possible now (${why})` }; }
       skip(st, `not possible (${why})`);
     }
@@ -262,5 +338,5 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
     return !!crit && !!crit.test({ s: vitals() });
   };
   chooser.selfChecked = true;   // game/mind need not check the answer again: the rules' answer is returned as it is, and an AI answer is checked here
-  return { chooser, attach, restates, entries, get version() { return version; }, plans: () => plans.map(planSnap), tally: () => ({ ...count }), inFlight: () => !!call, waiting: () => !!req, plan: planInfo, asking: () => (req ? req.trigger : null) };
+  return { chooser, attach, restates, tick, stateNow, nowInfo, nowLog: () => nowLog.map(x => ({ ...x })), memory, restore, notes: () => notes.slice(), journal: () => journal.map(j => ({ ...j })), get memoryVersion() { return memVer; }, entries, get version() { return version; }, plans: () => plans.map(planSnap), tally: () => ({ ...count }), inFlight: () => !!call, waiting: () => !!req, plan: planInfo, asking: () => (req ? req.trigger : null) };
 }

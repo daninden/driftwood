@@ -12,6 +12,7 @@
  * AI_PLAN_MIN, AI_PLAN_MAX   the length of a plan asked for (a longer one is cut, a shorter one used as it is)
  * AI_AWAKE_MARGIN   how far before AWAKE_MAX (days) the loose leash overrules for tiredness
  * AI_REPLAN_GAP   real seconds between two requests (a new plan is not asked again sooner: a step that is not possible is then skipped, any other reason waits, the rules decide meanwhile)
+ * NOTES_MAX, NOTE_LEN, JOURNAL_LEN, JOURNAL_DAYS, JOURNAL_MAX   (0.36.7 "Memory") his own notes (at most 20 lines of 80 characters), the sunset journal line (140 characters), how many days of the journal go into a plan request (3), and the most lines kept
  * AI_LOG_MAX      decisions kept in the panel's log (memory only)
  * KEY_NAME, ON_NAME, MODE_NAME, COUNT_NAME   the localStorage names: the key (only here, never in the save), whether the AI is on, the leash (0.36.3), the day's counter (COUNT_NAME + '.' + model, one per model)
  *
@@ -35,6 +36,11 @@ export const AI_PLAN_MIN = 3;
 export const AI_PLAN_MAX = 8;
 export const AI_REPLAN_GAP = 20;
 export const AI_AWAKE_MARGIN = 0.25;   // the loose leash steps in when he has been awake this much (days) less than AWAKE_MAX: 6 hours before he falls asleep where he stands (measured: 0.1 was too late, he still collapsed twice in six days under a plan that never sleeps)
+export const NOTES_MAX = 20;   // 0.36.7 "Memory": his own notes: at most this many lines of at most NOTE_LEN characters, written only by the model
+export const NOTE_LEN = 80;
+export const JOURNAL_LEN = 140;   // the sunset journal line: at most this many characters
+export const JOURNAL_DAYS = 3;   // only the last days of the journal go into a plan request (all are kept)
+export const JOURNAL_MAX = 3650;   // lines kept in all (a safety bound; ten years of days)
 export const MODE_NAME = 'driftwood.ai.mode';
 export const KEY_NAME = 'driftwood.ai.key';
 export const ON_NAME = 'driftwood.ai.on';

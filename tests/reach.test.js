@@ -133,10 +133,10 @@ describe('destinations', () => {
     const c1 = ai.chooser('pastime', m, { rand: () => 0.5, ex: () => 0.5, fish: () => 0.5 });
     expect(c1).toEqual({ id: 'stroll', kind: 'river' });
     const c2 = ai.chooser('pastime', m, { rand: () => 0.5, ex: () => 0.5, fish: () => 0.5 });
-    expect(typeof c2 === 'string' || (c2 && c2.kind !== 'palms')).toBe(true);   // 'palms' is not known now: ignored
-    const st = ai.plan().steps; expect(st[0].toUsed).toBe('river'); expect(st[1].toIgnored).toBe('palms');
+    expect(c2).toEqual({ id: 'explore', where: 'forest' });   // 0.36.7: 'palms' is not known now: that step is NOT possible (skipped with the reason), never swapped for another place
+    const st = ai.plan().steps; expect(st[0].toUsed).toBe('river'); expect(st[1].state).toBe('skipped'); expect(st[1].note).toMatch(/no palms place to stroll to now/);
     const c3 = ai.chooser('pastime', m, { rand: () => 0.5, ex: () => 0.5, fish: () => 0.5 });
-    expect(c3).toEqual({ id: 'explore', where: 'forest' });
+    expect(c3).toBeTruthy();   // the plan is used up
   });
 });
 
