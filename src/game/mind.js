@@ -20,6 +20,8 @@
  *             fibre (or a torch in hand), and the fire fed from the piles only when its fuel is nearly out, below FEED_BELOW (0.25 of the most it holds; 0.30.12 "Kindling", was 0.6). An ember still counts as a fire: he feeds it through the same player action and drills only when it has truly died. Since 0.29.12, while idle by day he also wakes a home ember he passes with one dry piece already carried; he never fetches wood or feeds flames by day.
  *   5 stores  by day (DAY_FROM 0.2 to EVENING): a nut husked to carry (NUT_WANT 2, game limits) and for fibre (the first tuft always, up to FIBRE_WANT 3 tufts when he is hungry
  *             enough to eat the nut, `huskWanted`), and wood to the pile at the fire spot, as above, then topped up to PILE_FULL (12) pieces, with the pile's own kind only.
+ *             0.36.10 "Store": the wood comes BEFORE the ordinary husk whenever the store is under WOOD_WANT (the husk goes first only with no fibre to light a fire with, `fibre < 1` and no fire burning, or hungry with no nut);
+ *             a fire still burning by day (embers too) is not fed and wood laid beside it would count for nobody, so with one burning the wood still waits until it is out.
  *   6 idle    (0.28.2) by day (STROLL_FROM to STROLL_TO, `strollNow`, 9 times in 10) a STROLL on known ground instead of standing about: `strollKind` picks one of shore (the waterline:
  *             one to three stretches along it; dry washed-up driftwood within 8 m is picked up when an arm is free and the pile has room), river (to the water, fills empty shells,
  *             a drink if thirsty), palms (a round past a palm or two; husks a nut on the ground if the stores want one) or forest (a berry bush or two; a handful from one that bears
@@ -64,6 +66,7 @@
  * 0.36.7 "Memory": the crab trip's hours are a HABIT of the rules, no longer a condition: the menu's `crabTripOk` is any low water from AI_FROM to AI_TRIP_TO (04:19 to 15:50) with the fire conditions; CRAB_FROM 0.38 to CRAB_TO 0.66 are in `crabHabitOk`, which the rules' choices use (the crab trip first, the rules' stroll kind, `crabDue`), so the rules' lives are the same.
  * 0.36.9 "Voice": feeding the fire is a MENU condition at any hour (`fireStepAny`, `chooseGoalMenu`, `fireStepMenu`; FEED_ANY 7/8 of what the fire holds): a fire of his burns (embers count), a piece fits and dry wood lies ready; the goal menu offers 'fire' then, the evening hours (`fireStep`) are the rules' HABIT (`GOAL_HABIT`: `goalMenu`'s hidden habit, `rulesChooser` passes the option over), so the rules' lives are exactly as before. `mind.camp()` adds `fuel` (days on the fire) and `ring`. The preemption check and the rules keep `chooseGoal`.
  * 0.36.9 "Voice" (second round): the fire goal's outcome is honest (`fireShort`, `mind.fireShort`: 'failed: only 3 of 4 pieces laid, no fire' and the like; a label only), `tideRound(byAi)` rolls no dice for an AI choice (`choice.ai`) and says why it did not run (`blockers().tide`), the menu's calm limits for the pastimes are `CALM_THIRST` / `CALM_HUNGER` (= `THIRST_GO` / `HUNGER_GO`) and the rules' lower limits are `HABIT_CALM` in `habitOk` (`thirst`, `hunger`), `mind.lastNight()` joins sleeps less than `NIGHT_JOIN` apart and has `rest`.
+ * 0.36.10 "Store": (1) `storesStep`: the wood comes before the ordinary husk when the store is short (WOOD_WANT 4 pieces; the husk first only with no fibre to light a fire with, or hungry with no nut); the stores goal had never fetched wood while a nut or a tuft of fibre called for the husk, so the camp store stayed empty by day. (2) The pile that stood at his OLD fire place is not left behind when the lean-to is finished and the fire spot moves to the ring's middle (`stockMid`: the ring's middle, or, before the ring stands, the planned ring's middle): `isOldPile` (a pile of fuel within `OLD_PILE` 2.6 m of a fire or burnt place that lies 3.5 to `OLD_CAMP` 10 m from the stock's middle) is his own (`ownPile`, so `mind.camp()` and the request still count it and no errand takes it as loose material) and a stray (`strays`), which `centreStrays` (the idle pastime `strays`, and `lightFire` before lighting) carries whole into the store, with no ring yet too (laid at the fire spot).
  * 0.36.7 "Memory": `mind.now()` -> { goal, pastime, kind (the stroll's), phase ('standing' | 'walking' | 'working' | 'sitting' | 'resting' | 'waiting' | 'asleep' | 'player'), detail (metres to go when walking, the kind of work), trouble (the event stream's last event when it is a failure within 10 game seconds) }: read only, for the AI panel's "Now" line.
  * 0.36.7 "Memory": `mind.remember(kind, what, outcome)` puts a line into `mind.recent` (the ONE short-term list of 20; ai/chooser adds the plan steps it skipped); no decision reads the list. `crabTripBlock(s)` (exported, pure) is the plain reason why a crab trip is not possible now (null when `crabTripOk`), the same checks in the same order; `mind.blockers()` has it as `crabs` (and the reason 'he knows no spot with crabs near' when the checks pass but no colony is known), and `mind.destinations()` offers 'crabs' exactly when there is no such reason. Read only, no random numbers.
  * 0.36.4 "Hindsight": `mind.blockers()` -> { id: plain reason } why a pastime cannot be taken now (spear: no branch and stone near, fish: no spear, tide, strays, gaze, explore, journey, home, axe: done today and the like; hours not looked at). Read only, draws nothing; ai/chooser puts it into the plan request.
@@ -120,7 +123,7 @@
  * chooseGoal(s) -> 'drink' | 'eat' | 'sleep' | 'fire' | 'stores' | 'idle' | 'none'   pure; s: { asleep, time, thirst, hunger, awake, canLie, water, waterNear,
  *   shellsEmpty, shellsFull, nuts, fibre, torch, fireLit, fireFuel (0..1), stock (pieces' worth of wood in the biggest pile at the fire spot), spare (in the other piles there), cool: {name: true}, canLight }
  * reachablePiece(world, x, z) -> bool   pure (0.33.2 "Mend"): a loose piece he can get his hands on (stand on it or within 0.45 m of it); the fetches (`nearestBy`, `selectStops`) skip the rest. 0.33.2: `feedFire` takes only from a pile with a piece the fire takes (dry enough, no frond).
- * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now (s.pileLogs: pieces in the biggest pile there)
+ * fireStep(s) -> 'light' | 'feed' | 'gather' | null,  storesStep(s) -> 'husk' | 'wood' | null   pure; what the fire / stores goal does now (s.pileLogs: pieces in the biggest pile there) (0.36.10: wood first when the store is short)
  * exploreChance(s), exploreReach(day), exploreWhere(missing, trips), exploreLate(time, secs, speed?), crabDue(s)   pure (0.29.4; crabDue 0.30.16): whether, how far, where to and when to turn back, tested in tests/mind.test.js
  * journeyGap(r), journeyOk(s), journeyRain(weather, total), journeyBrake(s)   pure (0.30.19): the days to the next journey (5 to 7), whether one may start now, whether rain is forecast for it, whether it turns back (tested in tests/journey.test.js)
  * fishChance(s), fishFoodOk(s), spearMakeOk(s)   pure (0.30.17): the pastime's chance, may he fish for food, may he make the spear now (see above; tested in tests/spear.test.js)
@@ -156,7 +159,7 @@
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
  *   mind.tideSpot()  the spot just above the high-water line where wet wood would be laid from where he stands now, { x, z, cost } or null (for the tests)
  *   mind.strollCands(centre?, range?)  { shore, river, palms, forest, crabs: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
- *   mind.camp() -> { fire: 'none' | 'out' | 'embers' | 'low' | 'well', store: { dry, wet, branches, fronds, stones, logs }, journey, fuel (days on the fire, 0.36.9), ring (0.36.9: the fire's place is in a stone ring) }, mind.lastNight() -> { hours, cold, collapse, faint, day } | null, mind.stripWood() -> n   (0.36.6, read only, for the plan request of src/ai: the fire and the store at his camp, how the last night's sleep went, the wet driftwood he knows on the tide strip)
+ *   mind.camp() -> { fire: 'none' | 'out' | 'embers' | 'low' | 'well', store: { dry, wet, branches, fronds, stones, logs } (0.36.10: with the pile at his old fire place, until it is carried in), journey, fuel (days on the fire, 0.36.9), ring (0.36.9: the fire's place is in a stone ring) }, mind.lastNight() -> { hours, cold, collapse, faint, day } | null, mind.stripWood() -> n   (0.36.6, read only, for the plan request of src/ai: the fire and the store at his camp, how the last night's sleep went, the wet driftwood he knows on the tide strip)
  *   mind.homePlan()   { step (homeNext without the time window), work ({ what, lt } a half-built lean-to or an upgrade of a finished one, { what: 'leanto', lt: null, site } a new lean-to, or null), load (the kinds of the next load, in order, or null), site (the chosen site), snap } for the tests
  *   mind.leantoSites(fire)  the places for the lean-to round a fire, best first: [{ x, z, heading, score, r, water, geo }]; mind.siteReason(c, fire) -> null | 'ground' | 'footprint' | 'keep' | 'solid' | 'approach' | 'room' | 'route' (0.30.7: why a lean-to { x, z, heading } does not fit there); mind.stats.home { units, trips, builds (pieces pressed), refused, noMaterial }
  *   mind.materialFind(kind, range?)  nearest eligible loose material or abandoned pile by path cost (test helper); mind.timberPlan(src, n, opts?)  the set `selectStops` would fetch now, farthest first (test helper)
@@ -377,10 +380,15 @@ export function exploreLate(time, secs, speed = 1, back = EXPLORE_BACK) { return
 export function storesStep(s) {
   const t = s.time;
   if (!(t >= DAY_FROM && t < EVENING)) return null;
-  if (huskWanted(s) && !s.cool.husk) return 'husk';
-  // a fire still burning by day is not fed: the wood waits for the evening; a pile is topped up to PILE_FULL pieces once the evening's 6 are there (s.pileLogs: pieces in the biggest pile at the fire spot)
-  if ((s.stock < WOOD_WANT || (s.pileLogs ?? PILE_FULL) < PILE_FULL) && !s.fireLit && !s.cool.gather) return 'wood';
-  return null;
+  const husk = huskWanted(s) && !s.cool.husk;
+  // 0.36.10 "Store": the husk goes first only when he really lacks what the evening needs: no fibre to light a fire with (none burns now), or food (hungry and no nut in his bag)
+  if (husk && ((s.fibre < 1 && !s.fireLit) || (s.hunger >= EAT_AT && s.nuts < 1))) return 'husk';
+  // wood next whenever the store is too small for the night (WOOD_WANT pieces), before the ordinary husk. A fire still burning by day (embers too) is not fed and wood laid beside it (`layAt` puts it 4 m away) is nobody's stock: the wood waits until it is out.
+  // A pile is topped up to PILE_FULL pieces once the evening's wood is there (s.pileLogs: pieces in the biggest pile at the fire spot)
+  const wood = !s.fireLit && !s.cool.gather;
+  if (wood && s.stock < WOOD_WANT) return 'wood';
+  if (husk) return 'husk';
+  return wood && (s.pileLogs ?? PILE_FULL) < PILE_FULL ? 'wood' : null;
 }
 
 /** How long he stands after a task (seconds): r1 in [0,1) decides short or long, r2 in [0,1) where in the range. */
@@ -587,7 +595,7 @@ export function createMind(world, game, opts = {}) {
   const ownPile = q => {
     const fs = fireSpot();
     const rc = ringMid();   // 0.32: piles beside a lean-to that is still a site are no longer building piles, just material (a player's old pair of piles, a load laid down by the handoff); the piles of his camp are his own: the fire's stock (and the aside piles of the stone ring), whatever lies within UP_NEAR of a finished lean-to (the overflow of the stock: fetching it would only move it about), and a journey's camp pile
-    return firePiles(fs).includes(q) || (!!rc && isFuel(q) && dist(q, rc) <= ASIDE_RING + 0.5)
+    return firePiles(fs).includes(q) || (!!rc && isFuel(q) && dist(q, rc) <= ASIDE_RING + 0.5) || isOldPile(q)   // 0.36.10: and the pile that stood at his old fire place, until it is carried into the store
       || game.leantos.list.some(l => l.progress >= 1 && Math.hypot(q.x - l.x, q.z - l.z) <= UP_NEAR)
       || (!!journey && !!journey.camp && Math.hypot(q.x - journey.camp.x, q.z - journey.camp.z) <= 2.6);   // 0.30.19: the camp's pile on a journey is not wood to fetch
   };
@@ -1019,23 +1027,37 @@ export function createMind(world, game, opts = {}) {
   }
   // 0.31.1 "Milk": the stone ring's middle (null without a finished ring), the strays near it (piles of fuel more than a ring's radius from the middle but within the zone where no fire can be lit, game/leanto `noFire`),
   // and how a stray is carried into the ring: taken up, laid at the ring's middle (the pile that stands there, else a first pile by `exactPileDrop`). Only with no fire there (a fire is fed, not laid beside).
-  const STRAY_ZONE = 3.5, ASIDE_RING = STRAY_ZONE + 0.7, STRAY_ENOUGH = 6;   // 0.33.4: the stray zone and the aside pile keep the 3.5 m of 0.31.1 (RING_NOFIRE is 8 m now, the whole zone where no fire is lit or fed)
+  const STRAY_ZONE = 3.5, ASIDE_RING = STRAY_ZONE + 0.7, STRAY_ENOUGH = 6, OLD_CAMP = 10, OLD_PILE = 2.6;   // 0.33.4: the stray zone and the aside pile keep the 3.5 m of 0.31.1 (RING_NOFIRE is 8 m now, the whole zone where no fire is lit or fed); 0.36.10: OLD_CAMP the farthest an old fire place lies from the stock's middle to count, OLD_PILE how far from it its pile may lie
   const ringMid = () => { const h = homeSpot(); return h.kind === 'leanto' && h.lt && game.leantos.has(h.lt, 'ring') ? ringCentre(h.lt) : null; };
   const isFuel = q => q.kind === 'driftwood' || q.kind === 'branch';
-  const strays = () => { const rc = ringMid(); return rc ? W.piles.filter(q => isFuel(q) && dist(q, rc) > RING_R - 0.1 && dist(q, rc) <= STRAY_ZONE + 0.3) : []; };
+  // 0.36.10 "Store": where the camp's stock stands: the ring's middle, or, with a finished lean-to and no ring yet, the fire spot that moved there (null: no finished lean-to, the stock stands at the old fire place as ever)
+  const stockMid = () => { const rc = ringMid(); if (rc) return rc; const h = homeSpot(); return h.kind === 'leanto' && h.lt ? ringCentre(h.lt) : null; };
+  // the pile that stood at his OLD fire place (a fire or burnt place 3.5 to OLD_CAMP m from the stock's middle: the old fire lies 5.5 to 7.8 m from the ring) is not left behind when the lean-to is finished and the fire spot moves: it still counts as his (`ownPile`, `mind.camp()`) and is a stray to carry to the stock
+  const oldPlaces = c => [...game.fire.fires, ...game.fire.burnt].filter(f => { const d = dist(f, c); return d > 3.5 && d <= OLD_CAMP; });
+  const isOldPile = q => {
+    if (!isFuel(q) || !q.logs.length) return false;
+    const c = stockMid(); if (!c || dist(q, c) <= 2.4 || (ringMid() && dist(q, c) <= STRAY_ZONE + 0.3)) return false;   // (a pile at the stock or in the ring's own stray zone is not an old pile)
+    return oldPlaces(c).some(f => dist(f, q) <= OLD_PILE);
+  };
+  const strays = () => {
+    const rc = ringMid(), out = rc ? W.piles.filter(q => isFuel(q) && dist(q, rc) > RING_R - 0.1 && dist(q, rc) <= STRAY_ZONE + 0.3) : [];
+    for (const q of W.piles) if (!out.includes(q) && isOldPile(q)) out.push(q);
+    return out;
+  };
   let strayFailDay = -1;   // 0.33.1 "Hearth": the day a trip left no fuel pile in the ring: no more stray trips that day (never more than one failed trip an evening)
   function* centreStrays() {   // true when he moved wood
-    const rc = ringMid(); if (!rc || fireAt(rc) || strayFailDay === clock.day) return false;
-    const inRingNow = () => W.piles.some(q => isFuel(q) && dist(q, rc) <= RING_R - 0.1);
+    const rc = stockMid(), ring = !!ringMid(); if (!rc || fireAt(rc) || strayFailDay === clock.day) return false;   // 0.36.10: with a finished lean-to and no ring yet the stock stands at the fire spot (`stockMid`) and the old fire's pile is carried there
+    const inRingNow = () => ring ? W.piles.some(q => isFuel(q) && dist(q, rc) <= RING_R - 0.1) : W.piles.some(q => isFuel(q) && dist(q, rc) <= 2.4);
     let moved = false;
     for (let trip = 0; trip < 8; trip++) {
-      const inRing = W.piles.filter(q => isFuel(q) && dist(q, rc) <= RING_R - 0.1).sort((a, b) => b.logs.length - a.logs.length)[0];
       const src = strays().filter(q => !isBad('stray', q)).sort((a, b) => fuelOfPile(b) - fuelOfPile(a))[0];
-      if (!src || (inRing && inRing.logs.length >= STRAY_ENOUGH)) break;   // 0.33.1: with six pieces in the ring the evening's fire is there; the rest of a stray stays where it lies
-      if (!inRing && !game.canPileAt(rc.x, rc.z, pileSolidRadius({ kind: src.kind, logs: src.logs.slice(-CARRY_MAX) }))) { strayFailDay = clock.day; stats.strayRefused = (stats.strayRefused || 0) + 1; ev('stray-refused', {}); break; }   // asked before taking: the game would not lay a pile at the ring's middle
+      const mine = k => W.piles.filter(q => isFuel(q) && (ring ? dist(q, rc) <= RING_R - 0.1 : dist(q, rc) <= 2.4 && (!k || q.kind === k))).sort((a, b) => b.logs.length - a.logs.length)[0];
+      const inRing = mine(ring || !src ? null : src.kind);
+      if (!src || (inRing && inRing.logs.length >= (isOldPile(src) ? PILE_FULL : STRAY_ENOUGH))) break;   // 0.33.1: with six pieces in the ring the evening's fire is there; the rest of a stray stays where it lies (0.36.10: the old fire's pile is carried whole, up to a full pile)
+      if (ring && !inRing && !game.canPileAt(rc.x, rc.z, pileSolidRadius({ kind: src.kind, logs: src.logs.slice(-CARRY_MAX) }))) { strayFailDay = clock.day; stats.strayRefused = (stats.strayRefused || 0) + 1; ev('stray-refused', {}); break; }   // asked before taking: the game would not lay a pile at the ring's middle
       if (W.load()) yield* handoff('stray');
       const take = function* (pile) { const mine = o => !!o.thing && o.thing.kind === 'pile' && o.thing.pile === pile; if (!(yield* goStand('take', pile)) || !pressKind(['pickup'], mine)) return false; yield* waitIdle(); return W.load() > 0; };
-      if (inRing && inRing.kind !== src.kind) {   // the ring holds the other kind: a bigger stray takes its place, the small pile in the ring is carried clear of the zone; a smaller one stays where it lies
+      if (ring && inRing && inRing.kind !== src.kind) {   // the ring holds the other kind: a bigger stray takes its place, the small pile in the ring is carried clear of the zone; a smaller one stays where it lies
         if (fuelOfPile(src) <= fuelOfPile(inRing)) { markBad('stray', src, 3000); continue; }
         const h = homeSpot(), a = h.lt ? h.lt.heading : 0, q = openNear(rc.x + Math.sin(a) * ASIDE_RING, rc.z + Math.cos(a) * ASIDE_RING, 1);
         if (!q || !W.piles.includes(inRing)) break;
@@ -1045,7 +1067,7 @@ export function createMind(world, game, opts = {}) {
       }
       if (!(yield* take(src))) { markBad('stray', src, 600); break; }
       const room = inRing && inRing.logs.length < PILE_FULL;
-      const d = room ? { x: inRing.x, z: inRing.z, pile: inRing, room: PILE_FULL - inRing.logs.length } : { x: rc.x, z: rc.z, exact: true, stock: true, pile: null, room: PILE_FULL };
+      const d = room ? { x: inRing.x, z: inRing.z, pile: inRing, room: PILE_FULL - inRing.logs.length } : ring ? { x: rc.x, z: rc.z, exact: true, stock: true, pile: null, room: PILE_FULL } : { x: rc.x, z: rc.z, pile: null, room: PILE_FULL };
       if (!(yield* toDest(d))) break;
       yield* layAt(d); moved = true; stats.strayTrips = (stats.strayTrips || 0) + 1; ev('stray-merged', { n: src.logs.length });
       if (!inRingNow()) { strayFailDay = clock.day; stats.strayFails = (stats.strayFails || 0) + 1; ev('stray-failed', {}); break; }   // the wood did not stay in the ring: not again today
