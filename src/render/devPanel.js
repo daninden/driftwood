@@ -22,6 +22,7 @@
  * devLabel(version, name, fps, ms?, idle?, zoom?, quality?, hands?, habit?, speed?) -> string   e.g.
  *   'v0.7 · Quiet frames · 30 fps · 9 ms · idle' ('– fps' while there is no
  *   value yet; ' · N ms' only with ms, ' · ×8' only when the test speed (`?speed=N`, game/steps) is above 1, ' · zoom 18' only when zoom is beyond 10, the normal limit; ' · q1 auto' or ' · q1 fixed' only with a quality state, after zoom; the Hands mode (`self`, `computer`, `auto`), ' · idle' only when idle; ' · habit' last, only when habit). Pure.
+ * isDevPanelEvent(e) -> bool   the event came from inside the panel (#dev; 0.36.4: main skips those events, so a click on the panel never takes Dave over or ends his habit). Pure.
  * isToggleKey(e) -> bool       true for the backtick key (code 'Backquote',
  *   not repeating, no Shift/Ctrl/Cmd/Alt: Shift+backtick starts the game over, see src/save). Pure.
  * createDevPanel(el, version, name, visible?) -> { frame(dt, workMs?, idle?, zoom?), setQuality({ level, adapt } | level), setHands(mode), setHabit(on), setSpeed(n), toggle(), visible() }
@@ -57,6 +58,13 @@ export const devLabel = (version, name, fps, ms = null, idle = false, zoom = 0, 
   if (typeof hands === 'boolean') { habit = hands; hands = null; }   // pre-Hands pure callers
   return `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (speed > 1 ? ` \u00b7 \u00d7${Math.round(speed * 100) / 100}` : '') + (zoom > 10.5 ? ` \u00b7 zoom ${Math.round(zoom)}` : '') + (quality === null || quality === undefined ? '' : ` \u00b7 q${typeof quality === 'object' ? quality.level : quality} ${typeof quality === 'object' && !quality.adapt ? 'fixed' : 'auto'}`) + (hands ? ` \u00b7 ${hands}` : '') + (idle ? ' \u00b7 idle' : '') + (habit ? ' \u00b7 habit' : '');
 };
+
+export function isDevPanelEvent(e) {
+  const path = e && e.composedPath && e.composedPath();
+  if (Array.isArray(path) && path.some(n => n && n.id === 'dev')) return true;
+  const t = e && e.target;
+  return !!(t && (t.id === 'dev' || (t.closest && t.closest('#dev'))));
+}
 
 export const isToggleKey = e => e.code === 'Backquote' && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '')) && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
 

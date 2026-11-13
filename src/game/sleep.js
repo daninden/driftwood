@@ -43,6 +43,7 @@
  * createSleep(saved?) -> sleep
  *   sleep.awake          days since rested (0 = fully rested)
  *   sleep.asleep         true while sleeping
+ *   sleep.wakes          how many times he has woken since this game object was made (0.36.5: not saved; ai/chooser reads it: waking is a reason for a new plan)
  *   sleep.nap            true while the sleep is a nap (a short one by day)
  *   sleep.lie            0 standing .. 1 lying (eased, in real seconds)
  *   sleep.rest()         1 fully rested .. 0 has to sleep now
@@ -92,13 +93,13 @@ export const isNight = time => time >= DUSK || time < DAWN;
 export function createSleep(saved) {
   let warp = 0, left = 0;   // warp 0..1 eases the time speed; left: days of sleep to go
   const sleep = {
-    awake: 0, asleep: false, lie: 0, slept: 0, nap: false,
+    awake: 0, asleep: false, lie: 0, slept: 0, nap: false, wakes: 0,
     rest: () => Math.max(0, 1 - sleep.awake / AWAKE_MAX),
     tired: () => Math.min(1, Math.max(0, (sleep.awake - TIRED_AT) / (AWAKE_MAX - TIRED_AT))),
     speed: () => 1 - (1 - TIRED_SLOW) * sleep.tired(),
     canLie: time => sleep.awake >= SLEEP_AFTER || (time !== undefined && isNight(time) && sleep.awake >= NIGHT_AFTER),
     start(night = true) { if (!sleep.asleep) { sleep.asleep = true; sleep.nap = !night; left = night ? SLEEP_DAYS : NAP_DAYS; sleep.slept = 0; } },
-    wake() { if (sleep.asleep) { sleep.asleep = false; sleep.nap = false; left = 0; } },
+    wake() { if (sleep.asleep) { sleep.asleep = false; sleep.nap = false; left = 0; sleep.wakes++; } },
     tire(days) { if (!sleep.asleep) sleep.awake = Math.min(AWAKE_MAX, sleep.awake + days); },
     update, state: () => ({ awake: sleep.awake, asleep: sleep.asleep, left, slept: sleep.slept, nap: sleep.nap }),
   };

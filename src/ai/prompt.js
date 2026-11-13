@@ -6,6 +6,8 @@
  *
  * 0.36.3 "Pastimes": the same request is built for the PASTIME point (inside free time): `buildMessages({ point: 'pastime', ... })` asks "Which pastime does he take now?" and the options are the pastimes (PASTIME_TEXT: what he does and roughly how long it takes in game time, from the measured pastimes of the rules).
  *
+ * 0.36.5 "Reach": the hours in STEP_WHEN / hoursOpen are the AI's (game/mind AI_FROM, AI_WORK_TO, AI_TRIP_TO), not the rules' windows; the system text says drink and eat have no hours, what thirst and hunger cost and what to do on waking in the dark, and that a stroll or explore step may carry "to"; `stateText` adds "(he can drink now, at any hour; slower from 0.5)" next to thirst and hunger from THIRST_GO / HUNGER_GO; the request lists the destinations (`possible.destinations`); `parsePlan` steps carry `to` (STEP_TO: stroll: STROLL_KINDS, explore: EXPLORE_WHERE; unknown values dropped).
+ *
  * Exports:
  *   FIXED                              the fixed system text
  *   GOAL_TEXT, GOAL_LABEL, WHY_TEXT    plain descriptions of the goal options (long, for the request), their short labels (for the panel) and the `why` codes of the options
@@ -14,12 +16,12 @@
  *   hhmm(time) -> 'HH:MM'              a time of day 0..1 as the island's clock
  *   snapshotOf(game, mind) -> state    a plain description of the situation: { day, time, raining, daylight (hours to dusk, 0 at night), fromHome (metres from his camp), thirst, hunger, awake, carries, home, journey, doing } (doing in words, e.g. 'free time, work on his home')
  *   stateText(state) -> string         the state as lines of text
- *   recentText(recent) -> string       the short-term memory, one decision or event a line
+ *   recentText(recent) -> string       the short-term memory, one decision or event a line (0.36.4: without the bookkeeping lines 'goal: idle -> done' and 'pastime: onward -> done'; plan steps that were skipped come with their reason)
  *   optionsOf(menu) -> [{ id, what, why, cost, forced }]   the options as plain data, `what` and `why` in plain words (describeOption) (reading `cost` triggers the lazy estimate of game/intent, which has no side effects)
  *   PLAN_GOALS, PLAN_PASTIMES, PLAN_STEPS   the ids a plan may hold (0.36.3 "Plans"); STEP_WHEN the hours of each in words; hoursOpen(id, time); stepLabel(id), stepText(id)
  *   MODE_TEXT                          what each leash (strict, loose, free) means to the AI, with the real numbers
- *   buildPlanMessages({ state, recent, trigger, previous, possible, mode }) -> messages   the request for a plan: why it is asked, the state, the memory, the old plan, the leash, and every step that can be planned (possible now or not yet)
- *   parsePlan(text) -> { ok, steps: [{ id, reason }], reason, dropped, error }   a plan from the answer (lenient; a bare choice is a plan of one step)
+ *   buildPlanMessages({ state, recent, trigger, previous, possible, mode }) -> messages   the request for a plan: why it is asked, the state, the memory, the old plan (a skipped step with its reason), the leash, and every step that can be planned, marked possible now, not possible now with the plain reason (0.36.4: `possible.blocked` { id: reason }, from game/mind `blockers`), or not now (outside its hours)
+ *   parsePlan(text) -> { ok, steps: [{ id, reason, to }], reason, dropped, error }   a plan from the answer (lenient; a bare choice is a plan of one step)
  *   buildMessages({ state, recent, options, point? }) -> [{ role: 'system', content }, { role: 'user', content }]   (point 'pastime': the question is about the pastimes; default: the goals)
  *   parseAnswer(text, menuIds) -> { ok, id, reason, error }   the first JSON object of the text (code fences stripped), its `choice` must be one of menuIds
  *
@@ -28,7 +30,7 @@
 
 import { THIRSTY_AT, VERY_AT, COLLAPSE_AT } from '../game/thirst.js';
 import { HUNGRY_AT, STARVING_AT } from '../game/hunger.js';
-import { THIRST_GO, HUNGER_GO, TIRED_GO, VERY_HUNGER_AT, BED_THIRST, BED_HUNGER, SUPPER_FROM, LIGHT_FROM, BED_FROM, DAWN, EVENING, DAY_FROM, GAZE_FROM, GAZE_TO, FISH_FROM, FISH_TO, TIDE_ROUND_FROM, TIDE_ROUND_TO, EXPLORE_EARLY, EXPLORE_TO, JOURNEY_FROM, JOURNEY_TO, JOURNEY_DAY, JOURNEY_GAP_MIN, JOURNEY_GAP_MAX, HOME_FROM, HOME_TO, HOME_DAY, AXE_TO, STROLL_FROM, STROLL_TO, SPEAR_DAY } from '../game/mind.js';
+import { THIRST_GO, HUNGER_GO, TIRED_GO, VERY_HUNGER_AT, BED_THIRST, BED_HUNGER, SUPPER_FROM, LIGHT_FROM, BED_FROM, DAWN, EVENING, DAY_FROM, GAZE_FROM, GAZE_TO, FISH_FROM, FISH_TO, TIDE_ROUND_FROM, TIDE_ROUND_TO, EXPLORE_EARLY, EXPLORE_TO, JOURNEY_FROM, JOURNEY_TO, JOURNEY_DAY, AI_FROM, AI_WORK_TO, AI_TRIP_TO, EXPLORE_WHERE, STROLL_KINDS, JOURNEY_GAP_MIN, JOURNEY_GAP_MAX, HOME_FROM, HOME_TO, HOME_DAY, AXE_TO, STROLL_FROM, STROLL_TO, SPEAR_DAY } from '../game/mind.js';
 import { REVIVE_AT, THIRST_SLOW } from '../game/thirst.js';
 import { HUNGER_SLOW } from '../game/hunger.js';
 import { TIRED_AT, AWAKE_MAX, DUSK, TIRED_SLOW, SLEEP_DAYS, COLD_SLEEP, SHELTER_SLEEP, WALLS_SLEEP } from '../game/sleep.js';
@@ -52,13 +54,14 @@ How his world works
 - Home: he builds a lean-to, then walls, a bed and a stone ring for the fire, and at last a hut, piece by piece, in the mornings and afternoons.
 - Tide: it brings new driftwood to the beach every day. Wet wood must dry before it burns.
 - Journeys: now and then he walks far from home, spends a night out and comes back the next morning.
+- Drinking and eating have NO hours: he can do either at any time, in the dark too, once he is thirsty or hungry enough to go (thirst ${THIRST_GO} days, hunger ${HUNGER_GO} days). Thirst slows him from ${THIRSTY_AT} days and hunger from ${HUNGRY_AT}, so going soon after he can is usually wise. When he wakes in the dark the useful things are drink, eat, tend the fire or go back to sleep, not waiting for the day.
 - Day and night: a day is 24 hours on his clock. Dusk is about ${hhmm(DUSK)}, dawn about ${hhmm(DAWN)}.
 
 What you plan with
 - You make a PLAN, not a single choice: an ordered list of steps for the coming hours. Each step is one id from the list you are given: a goal (drink, eat, sleep, fire, stores) or a pastime (home, spear, axe, tide, explore, fish, stroll, journey, gaze, strays, linger). A pastime step means free time spent that way; there is no separate "free time" step. A step is taken when its turn comes and it is possible then; a goal that is not needed when its turn comes (he is not thirsty, say) is skipped, but a pastime that is not possible (wrong hours, no spear) makes the plan useless and you are asked again, with the reason.
 - The list marks what is possible now and what is not yet, with the hours of each: plan ahead, in the order things should happen. You are also asked for a new plan when the plan is used up, a new day begins, or something goes wrong (he gets stuck, an errand fails).
 - cost is the walk in seconds, when known. Look at the state, at what he did lately and at what the day needs. Do not repeat what he just finished without a reason. Variety and character are welcome when nothing is pressing.
-- Pastimes: home (a part of the home, about an hour), spear (an hour or two), axe (an hour or so), tide (the tide strip, half an hour to an hour), explore (an hour or more), fish (about an hour), stroll (about half an hour), journey (a night and a day away), gaze (the sunset, about half an hour), strays (a few minutes), linger (ten minutes or so). Times are game time. Trips turn back by themselves to be home before dark, and a need that grows too far interrupts a pastime.
+- Pastimes: home (a part of the home, about an hour), spear (an hour or two), axe (an hour or so), tide (the tide strip, half an hour to an hour), explore (an hour or more), fish (about an hour), stroll (about half an hour), journey (a night and a day away), gaze (the sunset, about half an hour), strays (a few minutes), linger (ten minutes or so). Times are game time. Free-time pastimes have no fixed hours of the rules' own: any of them can be taken whenever it is daylight and possible (the list gives the real hours), and a trip is only offered when he can be home before dark. A stroll may name where it goes ("to": shore, river, palms, forest or crabs, as the list offers) and exploring may name coast or forest; a value that is not offered is ignored and the game picks. Trips turn back by themselves to be home before dark, and a need that grows too far interrupts a pastime.
 
 What happens when things go wrong (this is what the game really does)
 - Thirst slows him from ${THIRSTY_AT} days (down to ${Math.round(THIRST_SLOW * 100)} % speed at the limit). At ${COLLAPSE_AT} days without a drink he collapses where he stands and sleeps a full sleep (about ${Math.round(SLEEP_DAYS * 24)} hours) on dry ground; he wakes still thirsty (back at ${REVIVE_AT} days). He never dies.
@@ -69,7 +72,8 @@ What happens when things go wrong (this is what the game really does)
 
 Answer format
 Reply with ONLY one JSON object and nothing else, on one line: ${AI_PLAN_MIN} to ${AI_PLAN_MAX} steps, in order, each with a short reason in Dave's own voice, and one short sentence about the plan:
-{"plan": [{"step": "<id>", "reason": "<short>"}, {"step": "<id>", "reason": "<short>"}], "reason": "<one short sentence>"}`;
+{"plan": [{"step": "<id>", "reason": "<short>"}, {"step": "stroll", "to": "<optional place>", "reason": "<short>"}], "reason": "<one short sentence>"}
+("to" is optional and only for stroll and explore.)`;
 
 export const GOAL_TEXT = {
   drink: 'go to fresh water, drink and fill his shells',
@@ -87,12 +91,12 @@ export const PASTIME_TEXT = {
   onward: 'go on with the day: skip the sunset and the tidying and see what else the day offers',
   journey: 'go on a journey: walk far to a place he does not know, spend the night out by a small fire and come back the next morning (a night and a day away)',
   home: 'work on his home: gather what the next part needs and build it in, piece by piece (about an hour, and he keeps at it while he finds material)',
-  spear: 'make the spear from a branch and a stone nearby (an hour or two)',
-  axe: 'work with the axe: make it, or fell a tree and lay the logs by for the hut (an hour or so)',
+  spear: 'make the spear from a branch and a stone (he fetches them from farther off when none lie near the camp; an hour or two)',
+  axe: 'work with the axe: make it (he fetches a branch and a stone if none lie near), or fell a tree and lay the logs by for the hut (an hour or so)',
   tide: 'walk the tide strip and rescue the wet driftwood to a spot above the high-water line (half an hour to an hour)',
   explore: 'explore: walk to the edge of what he knows and look about, home before dark (an hour or more)',
   fish: 'go fishing with his spear (about an hour)',
-  stroll: 'take a stroll over ground he knows: the shore, a river, the palms, the forest or the crabs (about half an hour)',
+  stroll: 'take a stroll over ground he knows: the shore, a river, the palms, the forest or the crabs (about half an hour; crabs is the crab trip: at low water he digs crabs for food and roasts them at the fire)',
   linger: 'stand about at home, by the fire in the evening, and rest a little (ten minutes or so)',
 };
 export const GOAL_LABEL = { drink: 'drink', eat: 'find something to eat', sleep: 'go to bed', fire: 'see to the fire', stores: 'gather supplies', idle: 'free time' };   // the short words for the panel
@@ -115,12 +119,12 @@ export const STEP_WHEN = {
   drink: `once he is thirsty enough to go (${THIRST_GO} days)`, eat: `once he is hungry enough to go (${HUNGER_GO} days)`, sleep: `at bedtime (from ${hhmm(BED_FROM)}), or a nap after half a day awake`,
   fire: `in the evening, from ${hhmm(EVENING)} (lit from ${hhmm(LIGHT_FROM)})`, stores: 'when nuts, fibre or wood are short',
   journey: `${hhmm(JOURNEY_FROM)} to ${hhmm(JOURNEY_TO)}, from day ${JOURNEY_DAY}, every ${JOURNEY_GAP_MIN} to ${JOURNEY_GAP_MAX} days, with the lean-to built and no rain`,
-  home: `${hhmm(HOME_FROM)} to ${hhmm(HOME_TO)}, from day ${HOME_DAY}, while a part of the home is next`, spear: `by day before ${hhmm(EVENING)}, only while he has no spear (a branch and a stone near)`,
-  axe: `${hhmm(HOME_FROM)} to ${hhmm(AXE_TO)}, once the home is complete, one piece of work a day`, tide: `${hhmm(TIDE_ROUND_FROM)} to ${hhmm(TIDE_ROUND_TO)}, once a day, not thirsty or hungry`,
-  explore: `${hhmm(EXPLORE_EARLY)} to ${hhmm(EXPLORE_TO)}, not every day, not thirsty or hungry`, fish: `${hhmm(FISH_FROM)} to ${hhmm(FISH_TO)}, once a day, only with a spear`,
-  stroll: `${hhmm(STROLL_FROM)} to ${hhmm(STROLL_TO)}`, gaze: `${hhmm(GAZE_FROM)} to ${hhmm(GAZE_TO)}, once a day`, strays: `by day (${hhmm(DAY_FROM)} to ${hhmm(EVENING)}) while a stray pile lies near the ring`, linger: 'any time',
+  home: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_WORK_TO)}, from day ${HOME_DAY}, while a part of the home is next`, spear: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_WORK_TO)}, only while he has no spear (he fetches a branch and a stone if none lie near)`,
+  axe: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_WORK_TO)}, once the home is complete, one piece of work a day`, tide: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_TRIP_TO)}, once a day, not thirsty or hungry, home before dark`,
+  explore: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_TRIP_TO)}, not every day, not thirsty or hungry, home before dark`, fish: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_TRIP_TO)}, once a day, only with a spear`,
+  stroll: `${hhmm(STROLL_FROM)} to ${hhmm(STROLL_TO)}`, gaze: `${hhmm(GAZE_FROM)} to ${hhmm(GAZE_TO)}, once a day`, strays: `by day (${hhmm(AI_FROM)} to ${hhmm(AI_WORK_TO)}) while a stray pile lies near the ring`, linger: 'any time',
 };
-const HOURS = { journey: [JOURNEY_FROM, JOURNEY_TO], home: [HOME_FROM, HOME_TO], spear: [DAY_FROM, EVENING], axe: [HOME_FROM, AXE_TO], tide: [TIDE_ROUND_FROM, TIDE_ROUND_TO], explore: [EXPLORE_EARLY, EXPLORE_TO], fish: [FISH_FROM, FISH_TO], stroll: [STROLL_FROM, STROLL_TO], gaze: [GAZE_FROM, GAZE_TO], strays: [DAY_FROM, EVENING] };
+const HOURS = { journey: [JOURNEY_FROM, JOURNEY_TO], home: [AI_FROM, AI_WORK_TO], spear: [AI_FROM, AI_WORK_TO], axe: [AI_FROM, AI_WORK_TO], tide: [AI_FROM, AI_TRIP_TO], explore: [AI_FROM, AI_TRIP_TO], fish: [AI_FROM, AI_TRIP_TO], stroll: [STROLL_FROM, STROLL_TO], gaze: [GAZE_FROM, GAZE_TO], strays: [AI_FROM, AI_WORK_TO] };   // 0.36.5: the AI's hours (game/mind AI_*), not the rules' windows
 /** Is the clock inside the hours of a pastime (true for the goals and for linger: no hours of their own)? */
 export const hoursOpen = (id, time) => { const h = HOURS[id]; return !h || (time >= h[0] && time < h[1]); };
 /** The short label of a step for the panel and the log. */
@@ -137,6 +141,11 @@ export const MODE_TEXT = {
 /** A plan step's why-text when a new plan is asked, for the request (the reasons the chooser gives). */
 const goalLine = (id, mark) => `- ${id}: ${stepText(id)} (${STEP_WHEN[id]}) ${mark}`;
 
+/** 0.36.5: the places a stroll or an exploring trip may name now (`possible.destinations`: { stroll: [kinds], explore: [aims] } from game/mind `destinations`), as lines of the request; none when not known. */
+const destLines = d => (d && (d.stroll || d.explore) ? [`Where a step may go (optional "to"): stroll to ${(d.stroll || []).length ? d.stroll.join(', ') : '(nowhere he knows now)'}; explore to ${(d.explore || []).join(', ') || '(no choice)'}.`, ''] : []);
+/** The destinations a step may carry at all (static): the plan parser keeps a "to" only from these; the chooser checks it against what is possible now. */
+export const STEP_TO = { stroll: STROLL_KINDS, explore: EXPLORE_WHERE };
+
 /**
  * The request for a plan (0.36.3). `trigger` says why a new plan is asked; `previous` the old plan [{ id, state: 'done'|'skipped'|'next' }] (may be empty); `possible`: { goals: Set|null, pastimes: Set|null } the ids that are possible right now
  * (null: not known, the hours of the clock say); `mode` the leash. The plan list keeps the line format `- id: ...` (one id per line).
@@ -144,13 +153,14 @@ const goalLine = (id, mark) => `- ${id}: ${stepText(id)} (${STEP_WHEN[id]}) ${ma
 export function buildPlanMessages({ state, recent, trigger, previous, possible, mode }) {
   const t = (state && state.time) || 0, pos = possible || {};
   const mark = id => {
-    const set = PLAN_GOALS.includes(id) ? pos.goals : pos.pastimes;
-    if (set) return set.has(id) ? '[possible now]' : '[not possible now, maybe later]';
+    const set = PLAN_GOALS.includes(id) ? pos.goals : pos.pastimes, why = !PLAN_GOALS.includes(id) && pos.blocked && pos.blocked[id];
+    if (set) return set.has(id) ? '[possible now]' : why && hoursOpen(id, t) ? `[not possible now: ${why}]` : '[not possible now, maybe later]';
     if (PLAN_GOALS.includes(id)) return '[possible when his need rises or the time comes]';
-    return hoursOpen(id, t) ? '[its hours are open now]' : '[not now: outside its hours]';
+    if (!hoursOpen(id, t)) return '[not now: outside its hours]';
+    return why ? `[not now: ${why}]` : '[its hours are open now]';   // 0.36.4: open hours are not enough: a pastime whose other condition does not hold is marked with the reason
   };
   const lines = PLAN_STEPS.map(id => goalLine(id, mark(id))).join('\n');
-  const prev = (previous || []).length ? previous.map((p, i) => `${i + 1}. ${p.id} (${p.state})`).join(', ') : '(none)';
+  const prev = (previous || []).length ? previous.map((p, i) => `${i + 1}. ${p.id} (${p.state}${p.note ? ': ' + p.note : ''})`).join(', ') : '(none)';
   const user = [
     `Why you are asked for a new plan: ${trigger || 'no plan yet'}.`, '',
     'The situation now', stateText(state || {}), '',
@@ -158,6 +168,7 @@ export function buildPlanMessages({ state, recent, trigger, previous, possible, 
     `Your previous plan: ${prev}`, '',
     MODE_TEXT[mode] || MODE_TEXT.loose, '',
     'The steps you can plan with', lines, '',
+    ...destLines(pos.destinations),
     `Make a plan of ${AI_PLAN_MIN} to ${AI_PLAN_MAX} steps for the coming hours.`,
   ].join('\n');
   return [{ role: 'system', content: FIXED }, { role: 'user', content: user }];
@@ -176,7 +187,8 @@ export function parsePlan(text) {
     const id = typeof r === 'string' ? r.trim() : r && typeof r.step === 'string' ? r.step.trim() : '';
     if (!PLAN_STEPS.includes(id)) { dropped.push(id || '?'); continue; }
     if (steps.length >= AI_PLAN_MAX) { dropped.push(id); continue; }
-    steps.push({ id, reason: r && typeof r.reason === 'string' ? r.reason.trim().slice(0, 200) : '' });
+    const to = r && typeof r.to === 'string' && (STEP_TO[id] || []).includes(r.to.trim().toLowerCase()) ? r.to.trim().toLowerCase() : null;   // 0.36.5: an unknown destination is ignored
+    steps.push({ id, reason: r && typeof r.reason === 'string' ? r.reason.trim().slice(0, 200) : '', to });
   }
   if (!steps.length) return bad('no usable step' + (dropped.length ? ' (' + dropped.slice(0, 3).join(', ') + ')' : ''));
   return { ok: true, steps, reason: typeof o.reason === 'string' ? o.reason.trim().slice(0, 300) : '', dropped, error: null };
@@ -219,17 +231,20 @@ export function stateText(s) {
   const home = !h ? 'no shelter yet' : `lean-to ${h.leanto}%, walls ${h.walls}%, bed ${h.bed}%, stone ring ${h.ring}%, hut ${h.hut}%`;
   return [
     `Day ${s.day}, ${hhmm(s.time)}. Weather: ${s.raining ? 'raining' : 'dry'}. ${s.daylight > 0 ? `About ${d1(s.daylight)} hours of daylight left (dusk about ${hhmm(DUSK)}).` : 'It is dark.'}`,
-    `Thirst: ${d1(s.thirst)} days. Hunger: ${d1(s.hunger)} days. Awake for ${d1(s.awake)} days.`,
+    `Thirst: ${d1(s.thirst)} days${s.thirst >= THIRST_GO ? ` (he can drink now, at any hour; slower from ${THIRSTY_AT})` : ''}. Hunger: ${d1(s.hunger)} days${s.hunger >= HUNGER_GO ? ` (he can eat now, at any hour; slower from ${HUNGRY_AT})` : ''}. Awake for ${d1(s.awake)} days.`,
     `Carrying: ${has.length ? has.join(', ') : 'nothing'}.`,
     `Home: ${home}.`,
     `Now: ${s.doing || 'unknown'}${s.journey ? ' (a journey is on)' : ''}${s.fromHome != null ? `, ${Math.round(s.fromHome)} m from his camp` : ''}.`,
   ].join('\n');
 }
 
+/** Lines that carry nothing for the model (0.36.4): the idle goal that ended and the 'go on with the day' pastime that ended, which come before every pastime. */
+const bookkeeping = r => r && r.outcome === 'done' && ((r.kind === 'goal' && r.what === 'idle') || (r.kind === 'pastime' && r.what === 'onward'));
 export function recentText(recent) {
   const list = Array.isArray(recent) ? recent : [];
   if (!list.length) return '(nothing yet)';
-  return list.map(r => `day ${r.day} ${hhmm((+r.t || 0) % 1)} ${r.kind}: ${r.what == null ? '' : r.what} -> ${r.outcome == null ? 'under way' : r.outcome}`).join('\n');
+  const lines = list.filter(r => !bookkeeping(r)).map(r => `day ${r.day} ${hhmm((+r.t || 0) % 1)} ${r.kind}: ${r.what == null ? '' : r.what} -> ${r.outcome == null ? 'under way' : r.outcome}`).join('\n');
+  return lines || '(nothing yet)';
 }
 
 export function optionsOf(menu) {

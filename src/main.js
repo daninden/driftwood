@@ -51,11 +51,13 @@
  * (render/soundMark) above the moon does the same; the choice is kept in localStorage (audio/pref). The fade-out
  * when the tab is hidden is in audio/sound.
  *
- * The dev panel #dev (render/devPanel, src/version) shows version, name, fps,
+ * The dev panel #dev (render/devPanel, src/version; 0.36.4: events from inside it are ignored by the takeover and the idle tracker, isDevPanelEvent, like those of the AI panel and the Voice log) shows version, name, fps,
  * the work time per frame and `idle` top right; the backtick key toggles it.
  * It is fed the real time between drawn frames and the ms update + render took.
  * While it is visible the furthest zoom is 25 (core/view zoomMax), else 10; the
  * panel then shows `zoom N` when the zoom is beyond 10.
+ *
+ * Voice and AI (0.36.5): when the AI takes a plan step, the chooser's onStep gives voice.announceStep(time, reason, fallbackKind) the step's reason at once (every step kind); the mind's onIntent then says nothing for the fixed intent phrases that only restate that step (ai.restates(goal, kind)); with the AI off nothing changes.
  *
  * Habit and Hands (game/mind, game/input, game/hands): Auto hands the game to
  * the mind after QUIET (30) seconds; Self never does, and Computer does at
@@ -122,7 +124,7 @@ import { createCarryMark, carryState } from './render/carryMark.js';
 import { createGestureMark, gestureState } from './render/gestureMark.js';
 import { createThumbStick, touchOnly } from './render/thumbStick.js';
 import { createActionButton } from './render/actionButton.js';
-import { createDevPanel, DEV_PANEL_VISIBLE } from './render/devPanel.js';
+import { createDevPanel, DEV_PANEL_VISIBLE, isDevPanelEvent } from './render/devPanel.js';
 import { createNamePrompt } from './render/namePrompt.js';
 import { createDayLine, createWakeLine, WAKE_TIME } from './render/nameLines.js';
 import { createInk } from './render/ink.js';
@@ -218,9 +220,9 @@ async function boot() {
   const input = createInput(view.canvas, view.pickGround);
   input.yaw = view.yaw;
   const aiClient = createClient({ fetch: (...a) => window.fetch(...a), storage: store0 });   // 0.36: the optional language-model chooser; off until the player switches it on and enters a key
-  const ai = createAiChooser({ rulesChooser, ask: m => aiClient.send(m), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), mode: aiClient.mode, clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }) });
+  const ai = createAiChooser({ rulesChooser, ask: m => aiClient.send(m), onStep: st => voice.announceStep(game.clock.time, st.reason, st.fallback), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), mode: aiClient.mode, clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }) });
   const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai });
-  const mind = createMind(world, game, { chooser: ai.chooser, saved: saved && saved.habit, onIntent: ({ kind }) => voice.announce(kind, game.clock.time) }), takeover = createTakeover(QUIET, performance.now() / 1000);
+  const mind = createMind(world, game, { chooser: ai.chooser, saved: saved && saved.habit, onIntent: ({ kind, goal }) => { if (!ai.restates(goal, kind)) voice.announce(kind, game.clock.time); } }), takeover = createTakeover(QUIET, performance.now() / 1000);
   ai.attach(mind, game);   // 0.36.1: the chooser reads the state and the short-term memory of a request from them
   let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
   const tnow = () => performance.now() / 1000 + hurried;   // 0.28 "Habit"
@@ -228,7 +230,7 @@ async function boot() {
   let still = 0, stillSaid = false, lastX = game.player.x, lastZ = game.player.z;   // seconds the player has stood still; whether this still period was asked about
   const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
   const poke = e => {
-    if (isVoiceLogEvent(e) || isAiPanelEvent(e)) return;
+    if (isVoiceLogEvent(e) || isAiPanelEvent(e) || isDevPanelEvent(e)) return;
     if (!acting.event(e)) return;
     hands.playerAction(); saveHands(hands.mode); dev.setHands(hands.mode);
     takeover.poke(tnow()); mind.release(); dev.setHabit(false);
@@ -252,7 +254,7 @@ async function boot() {
   const cap = touch ? FRAME_CAP_TOUCH : 0;   // 0: no cap
   const quiet = createIdleTracker(undefined, last);
   let anchor = -Infinity;   // where the frame schedule stands (render/framePacer)
-  const woken = e => { if (isVoiceLogEvent(e) || isAiPanelEvent(e)) return; const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
+  const woken = e => { if (isVoiceLogEvent(e) || isAiPanelEvent(e) || isDevPanelEvent(e)) return; const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove']) window.addEventListener(type, woken, { capture: true, passive: true });
   const STEP = 1 / 60;
   const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };

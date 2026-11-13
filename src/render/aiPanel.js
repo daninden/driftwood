@@ -9,8 +9,13 @@
  * and the log of decisions (0.36.3: goal decisions and free-time (pastime) decisions, each block marked with a small chip, "goal" or "free time"), newest first, one block each, in plain words with the options' `what` texts:
  *   AI blocks: a coloured left border, a bold label, `Day 3, 14:20 — AI chose: fetch wood for the fire` with a tag "different from the rules" when the rules would have chosen otherwise, the AI's reason in quotes,
  *   "The rules would have chosen: ...", "Options were: ...", and "model · answered in 1.2 s" (how long Dave waited).
- *   Rules blocks (grey): `Day 3, 14:35 — Rules chose: fill the store` and "Why not the AI: no answer in 3 s" (reasons in plain words; if the AI had an answer that was not used, what it chose).
+ *   Rules blocks (grey): `Day 3, 14:35 — Rules chose: fill the store` and "Why not the AI: no answer in 10 s" (AI_WAIT) (reasons in plain words; if the AI had an answer that was not used, what it chose).
  * While the AI is off no decision is logged (ai/chooser) and the log says only "The AI is off." A click on a block shows the full request and the raw answer (closed by default). A failed or unusable request is a small red-ish note between the blocks.
+ * The meta line says "step i of n of the plan" (0.36.4: i is the step being taken, 1-based, never above n) or, for a short way on to a step (free time first, onward, linger), "on the way to step i of n of the plan".
+ * 0.36.5 point 10: a step is 'running' ("▶", bold blue, "busy" in the log view) from when it is taken until the next is taken, 'done' ("✓", grey) after that, the first step not yet taken is 'next' ("(next)" after it, plain), the rest plain, 'skipped' "✗" struck through with its reason (ai/chooser plan states).
+ * 0.36.5 "Reach": the default view of the log is BY PLAN (`groupByPlan`): each plan is a header ("New plan, Day 3 07:31 — asked because ...") with its one-sentence reason, then one block per plan step IN PLAN ORDER: the step (with its destination, `to`), the model's reason in quotes, when it was taken and how it stands
+ * (done, next, not reached, skipped with the plain reason, or overruled by the rules: an orange tag, the reason and what the rules did instead); the decisions that belong to a step (a short way on to it: free time, onward, linger) fold into one small grey line ("via: free time, go on with the day"). Decisions the rules made with no plan or when the AI
+ * could not answer (no answer, waiting, busy, budget, an error, a note about a failed request) are grey blocks between the plans in time order, with the plain why. A toggle ("show every decision" / "show the plan steps") switches to the old view, one block per decision, unchanged. A click on a plan header, a step or a grey block shows the full request and the raw answer where there is one.
  * Small, monospace, on a light box, scrollable. It is out of the way of the game: a pointer in the panel never walks Dave or takes him back from his habit (isAiPanelEvent; main skips those events), and typing in the
  * key field reaches no game key (game/input isTyping).
  *
@@ -19,7 +24,9 @@
  *   isAiPanelEvent(e) -> bool     the event came from inside the panel (#ai)
  *   whyText(e) -> string          the reason the rules decided, in plain words ('' when the AI chose). Pure.
  *   blockParts(e) -> { source: 'ai'|'rules', kind: 'goal'|'pastime', kindLabel: 'goal'|'free time', head, tag, reason, rulesLine, optionsLine, meta, why }   the texts of one decision block (strings or ''). Pure.
- *   planLines(plan) -> [{ marker, state, text }], planHead(plan), modeLine(mode)   the plan with a marker at the current step, why it was asked, and what the leash means. Pure.
+ *   groupByPlan(entries, plans) -> [item]   (0.36.5, pure) the log by plan, newest first: { kind: 'plan', id, head, reason, late, steps: [{ i, label, to, toNote, reason, state, stateText, when, tag, overrides: [{ text, n }], via, n }], n (the entry that asked: for the full request) } | { kind: 'rules', n, head, why, entry } (a grey block) | { kind: 'note', text }
+ *   stepWhy(entry) / planWhen(plan)   small texts of the above
+ *   planLines(plan) -> [{ marker ('▶' running, '✓' done, '✗' skipped, ' '), state, text }], planHead(plan), modeLine(mode)   the plan with a marker at the current step, why it was asked, and what the leash means. Pure.
  *   tallyLine(t) -> string        "Since the page was loaded: 5 by the AI, 3 by the rules, 2 different from the rules"
  *   statusLine(status, nowMs) -> string       on or off, asking, all-paused, the last error
  *   modelLines(status, nowMs) -> [string]     one plain line per model
@@ -71,7 +78,7 @@ export function blockParts(e) {
   const head = `${when} — ${isAi ? 'AI' : 'Rules'} chose: ${what(e, chosen)}`;
   const ids = (e.options && e.options.length ? e.options.map(o => o.id) : e.menu) || [];
   const meta = [];
-  if (isAi && e.plan) meta.push(`step ${e.plan.i} of ${e.plan.n} of the plan`);
+  if (isAi && e.plan) { const i = Math.max(1, Math.min(+e.plan.i || 1, +e.plan.n || 1)); meta.push(e.plan.via ? `on the way to step ${i} of ${e.plan.n} of the plan` : `step ${i} of ${e.plan.n} of the plan`); }   // 0.36.4: the step being taken (1-based, never above the plan's length); a short way first (free time, onward, linger) is only "on the way to" the step
   if (isAi) {
     if (e.model) meta.push(e.model);
     if (e.ms != null) meta.push(`answered in ${secs(e.ms)}`);
@@ -91,10 +98,11 @@ export function blockParts(e) {
   };
 }
 
-/** The plan as lines for the panel: a marker at the current step (">" now, "x" done, "-" skipped, " " still to come). Pure. */
+/** The plan as lines for the panel (0.36.5): "▶" the step that is busy now (the last one taken), "✓" done, "✗" skipped, none for the rest; the first step not yet taken says "(next)" after it. Pure. */
+const MARK = { running: '▶', done: '✓', skipped: '✗' };
 export function planLines(plan) {
   if (!plan) return [];
-  return plan.steps.map((s, k) => ({ marker: s.state === 'now' ? '>' : s.state === 'done' ? 'x' : s.state === 'skipped' ? '-' : ' ', state: s.state, text: `${k + 1}. ${s.label}${s.reason ? ' — ' + s.reason : ''}` }));
+  return plan.steps.map((s, k) => ({ marker: MARK[s.state] || ' ', state: s.state, text: `${k + 1}. ${s.label}${s.toUsed || s.to ? ' (' + (s.toUsed || s.to) + ')' : ''}${s.state === 'next' ? ' (next)' : ''}${s.reason ? ' — ' + s.reason : ''}` }));
 }
 export const planHead = plan => (plan ? `Plan from day ${plan.day == null ? '?' : plan.day}, ${plan.time || '--:--'} (asked because: ${plan.trigger})${plan.late ? ' · it came late and is used from now on' : ''}` : 'No plan yet.');
 export const MODE_LINE = {
@@ -135,8 +143,55 @@ export function requestText(messages, raw) {
   return (m || '(no request kept)') + '\n\n[answer]\n' + (raw == null ? '(none)' : raw);
 }
 
+/** 0.36.5: how a trigger of ai/chooser reads in a plan header ("no plan yet" stays as it is). */
+const triggerText = t => (t ? String(t) : 'no plan yet');
+const stateWords = { running: 'busy', done: 'done', next: 'next up', later: 'not reached', 'not reached': 'not reached', skipped: 'skipped' };   // 0.36.5
+const atText = at => (at && at.day != null ? `Day ${at.day}, ${at.time || '--:--'}` : '');
+const optionWhat = (e, id) => what(e, id);
+
+/**
+ * The log by plan (0.36.5). `entries`: the chooser's log, newest first (ai.entries); `plans`: ai.plans() (newest first, each with its steps' states). Entries carry planId and step (0-based) (ai/chooser).
+ *   - an AI decision with `plan.via` is a short way on to its step and folds into the step's grey `via` line; the AI decision without `via` is the step itself (when it was taken);
+ *   - a rules decision with an `override` belongs to the step the plan was on and makes it "overruled" (its tag, the reason, what the rules did);
+ *   - every other rules decision, and a note that is not the new-plan note, stands alone as a grey block, in time order among the plans.
+ * Returns the items newest first (a plan counts at the time it was installed, a decision at its own time).
+ */
+export function groupByPlan(entries, plans) {
+  const list = Array.isArray(entries) ? entries : [], ps = Array.isArray(plans) ? plans : [], byId = new Map();
+  const items = [];
+  for (const p of ps) {
+    const note = list.find(e => e.note && e.planNote && e.planId === p.id);
+    const item = {
+      kind: 'plan', id: p.id, real: p.real || (note && note.real) || 0, head: `New plan, ${atText({ day: p.day, time: p.time })} — asked because: ${triggerText(p.trigger)}${p.late ? ' (it came late and is used from then on)' : ''}`, reason: p.reason ? `"${p.reason}"` : '', late: !!p.late, n: note ? note.n : null,
+      steps: p.steps.map((s, i) => ({
+        i, label: s.label, to: s.toUsed || s.to || null,
+        toNote: s.toUsed ? `to: ${s.toUsed}` : s.to ? `to: ${s.to} (ignored: not possible now, the game picked)` : '',
+        reason: s.reason ? `"${s.reason}"` : '', state: s.state, stateText: stateWords[s.state] || s.state, when: atText(s.at), note: s.state === 'skipped' && s.note ? s.note : '',
+        tag: '', overrides: [], via: [], n: null,
+      })),
+    };
+    byId.set(p.id, item); items.push(item);
+  }
+  for (const e of list.slice().reverse()) {   // oldest first, so a step's lines come in time order
+    if (e.note) { if (!e.planNote) items.push({ kind: 'note', real: e.real || 0, text: e.note, n: e.n }); continue; }
+    const plan = e.planId != null ? byId.get(e.planId) : null, step = plan && e.step != null ? plan.steps[e.step] : null;
+    if (step && e.used === 'ai') {
+      if (e.plan && e.plan.via) step.via.push(what(e, e.ai));
+      else { step.n = e.n; if (!step.when) step.when = atText(e); }
+      continue;
+    }
+    if (step && e.override) {
+      step.tag = 'overruled';
+      step.overrides.push({ text: `Overruled: ${e.override}. The rules chose: ${what(e, e.rules)}`, n: e.n });
+      continue;
+    }
+    items.push({ kind: 'rules', real: e.real || 0, n: e.n, head: `${atText(e)} — Rules chose: ${what(e, e.rules)}`, why: e.override ? `Overruled: ${e.override}` : `Why not the AI: ${whyText(e)}`, entry: e });
+  }
+  return items.sort((a, b) => (b.real || 0) - (a.real || 0));
+}
+
 export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
-  let shown = false, seen = -1, lastStatus = '', lastModels = null, lastPending = '', lastOn = null;
+  let byPlan = true, shown = false, seen = -1, lastStatus = '', lastModels = null, lastPending = '', lastOn = null;
   const open = new Set();
   const mk = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const st = client.status();
@@ -152,9 +207,12 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   const addr = mk('div', 'ai-dim', st.url);
   const modeRow = mk('div', 'ai-modes'), modeNote = mk('div', 'ai-dim'), planBox = mk('div', 'ai-plan');
   const modeBtn = {}; for (const m of AI_MODES) { const b = mk('button', null, m); b.type = 'button'; b.dataset.mode = m; modeBtn[m] = b; modeRow.append(b); }
+  const viewBtn = mk('button', 'ai-view'); viewBtn.type = 'button';
   const status = mk('div', 'ai-status'), tally = mk('div', 'ai-tally'), perModel = mk('div', 'ai-models-status'), pend = mk('div', 'ai-pending'), models = mk('div', 'ai-models'), log = mk('div', 'ai-log');
   models.hidden = true;
-  el.append(title, row, modeRow, modeNote, addr, status, perModel, pend, planBox, models, tally, log);
+  el.append(title, row, modeRow, modeNote, addr, status, perModel, pend, planBox, models, tally, viewBtn, log);
+  const showView = () => { viewBtn.textContent = byPlan ? 'show every decision' : 'show the plan steps'; };
+  showView(); viewBtn.addEventListener('click', () => { byPlan = !byPlan; showView(); seen = -1; update(); });
   const showMode = () => { const m = client.mode(); for (const k of AI_MODES) modeBtn[k].className = k === m ? 'on' : ''; modeNote.textContent = modeLine(m); };
   showMode();
   modeRow.addEventListener('click', e => { const m = e.target && e.target.dataset && e.target.dataset.mode; if (m) { client.setMode(m); showMode(); } });
@@ -186,6 +244,37 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
     }
     tally.textContent = client.on() && client.hasKey() ? tallyLine(ai.tally()) : '';
     if (!(client.on() && client.hasKey())) log.append(mk('div', 'ai-off', 'The AI is off.'));
+    if (byPlan && client.on() && client.hasKey()) {
+      for (const it of groupByPlan(ai.entries, ai.plans())) {
+        if (it.kind === 'note') { log.append(mk('div', 'ai-entry note', it.text)); continue; }
+        if (it.kind === 'rules') {
+          const g = mk('div', 'ai-entry rules'); if (it.n != null) g.dataset.n = String(it.n);
+          g.append(mk('div', 'ai-line', it.head), mk('div', 'ai-sub', it.why));
+          if (it.n != null && open.has(String(it.n))) g.append(mk('pre', 'ai-full', requestText(it.entry.messages, it.entry.raw)));
+          log.append(g); continue;
+        }
+        const g = mk('div', 'ai-plangroup'), h = mk('div', 'ai-entry plannote'); if (it.n != null) h.dataset.n = String(it.n);
+        h.append(mk('b', null, it.head)); if (it.reason) h.append(mk('div', 'ai-sub dim', it.reason));
+        g.append(h);
+        const ask = it.n != null ? ai.entries.find(e => e.n === it.n) : null;
+        if (ask && open.has(String(it.n))) h.append(mk('pre', 'ai-full', requestText(ask.messages, ask.raw)));
+        for (const st of it.steps) {
+          const b = mk('div', `ai-entry ai ai-stepblock ${st.state}`);
+          const head = mk('div', 'ai-line'); head.append(mk('b', null, `${st.i + 1}. ${st.label}${st.to ? ' (' + st.to + ')' : ''}`), ' ', mk('span', 'ai-sub dim', [st.stateText, st.when].filter(Boolean).join(' · ')));
+          if (st.tag) head.append(' ', mk('span', 'ai-tag', st.tag));
+          b.append(head);
+          if (st.reason) b.append(mk('div', 'ai-reason', st.reason));
+          if (st.note) b.append(mk('div', 'ai-sub', st.note));
+          if (st.toNote && !st.to) b.append(mk('div', 'ai-sub dim', st.toNote));
+          for (const o of st.overrides) b.append(mk('div', 'ai-sub', o.text));
+          if (st.via.length) b.append(mk('div', 'ai-sub dim', 'via: ' + st.via.join(', ')));
+          g.append(b);
+        }
+        log.append(g);
+      }
+      if (!ai.entries.length && !ai.plans().length) log.append(mk('div', 'ai-dim', 'No decisions yet.'));
+      return;
+    }
     for (const e of ai.entries) {
       if (e.note) { log.append(mk('div', e.planNote ? 'ai-entry plannote' : 'ai-entry note', e.note)); continue; }
       const p = blockParts(e);

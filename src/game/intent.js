@@ -21,7 +21,7 @@
  *   'goal'     no goal is running: the top-level pick among drink, eat, sleep, fire, stores and idle
  *   'pastime'  inside the idle goal: gaze, ember, strays, journey, home work, spear, axe, tide round, explore, fish, stroll, linger. Two menus (STAGES): `before` (until the wood in his arms goes to camp) and `day`
  *   'event'    something went wrong (stuck, nopath, no-stand, a goal failed or was dropped): the only option is 'continue'
- * A choice is an id, or { id, kind } (the kind of a stroll). A chooser is a function (point, menu, ctx) -> choice | null | WAIT (WAIT only at the goal and pastime points, 0.36.3).
+ * A choice is an id, or { id, kind } (the kind of a stroll) or { id, where } (0.36.5: where an exploring trip aims, 'coast' or 'forest'; the AI's destinations, ai/chooser). A chooser is a function (point, menu, ctx) -> choice | null | WAIT (WAIT only at the goal and pastime points, 0.36.3).
  *   ctx = { rand, ex, fish }: the three random streams of the mind (stroll, exploring, fishing); the rules draw from them in the order and under the conditions the mind always did (a fake chooser need not).
  *
  * Exports:

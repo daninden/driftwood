@@ -1,7 +1,7 @@
 // The dev panel: fps averaging, the label, the backtick toggle and the
 // version module.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { createFpsMeter, devLabel, isToggleKey, createDevPanel, DEV_PANEL_VISIBLE, FPS_WINDOW } from '../src/render/devPanel.js';
+import { createFpsMeter, devLabel, isDevPanelEvent, isToggleKey, createDevPanel, DEV_PANEL_VISIBLE, FPS_WINDOW } from '../src/render/devPanel.js';
 import { VERSION, NAME } from '../src/version.js';
 
 describe('fps meter', () => {
@@ -59,7 +59,7 @@ describe('label and version', () => {
     expect(devLabel('0.10', 'Wet wood', 30, 9, false, 10)).toBe('v0.10 · Wet wood · 30 fps · 9 ms');   // zoom only beyond 10
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.36.3'); expect(NAME).toBe('Plans');
+    expect(VERSION).toBe('0.36.5'); expect(NAME).toBe('Reach');
   });
   it('shows the quality level after the zoom and before idle, only when known', () => {
     expect(devLabel('0.22', 'Crab catch', 30, 9, false, 0, { level: 1, adapt: true })).toBe('v0.22 · Crab catch · 30 fps · 9 ms · q1 auto');
@@ -139,5 +139,17 @@ describe('panel element', () => {
   it('can start hidden', () => {
     const el = fakeEl(); createDevPanel(el, '0.4', 'Dev panel', false);
     expect(el.hidden).toBe(true);
+  });
+});
+
+describe('isDevPanelEvent (0.36.4)', () => {
+  it('knows events from inside the panel, so a click on it never takes Dave over', () => {
+    const panel = { id: 'dev' };
+    expect(isDevPanelEvent({ composedPath: () => [{}, panel] })).toBe(true);
+    expect(isDevPanelEvent({ target: { closest: s => s === '#dev' ? panel : null } })).toBe(true);
+    expect(isDevPanelEvent({ target: panel })).toBe(true);
+    expect(isDevPanelEvent({ target: { closest: () => null } })).toBe(false);
+    expect(isDevPanelEvent({ target: {} })).toBe(false);
+    expect(isDevPanelEvent(null)).toBe(false);
   });
 });

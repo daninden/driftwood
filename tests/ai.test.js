@@ -7,9 +7,9 @@ import { createGame } from '../src/game/game.js';
 import { createMind, chooseGoal, VERY_AT, VERY_HUNGER_AT } from '../src/game/mind.js';
 import { WAIT, goalMenu, makeMenu, option, pastimeMenu, eventMenu, rulesChooser, choiceId, validChoice, isValid, PASTIMES } from '../src/game/intent.js';
 import { FIXED, MODE_TEXT, PLAN_STEPS, hoursOpen, stepLabel, buildPlanMessages, parsePlan, hhmm, snapshotOf, stateText, recentText, optionsOf, buildMessages, parseAnswer, describeOption, GOAL_TEXT, GOAL_LABEL, PASTIME_TEXT } from '../src/ai/prompt.js';
-import { createClient, pacificDay } from '../src/ai/client.js';
+import { createClient, pacificDay, forModel } from '../src/ai/client.js';
 import { createAiChooser, OVERRIDES, MODES, CRITICAL, overridesFor } from '../src/ai/chooser.js';
-import { AI_PER_MIN, AI_PER_DAY, AI_WAIT, AI_MODELS, AI_URL, AI_MODES, AI_MODE_DEFAULT, AI_AWAKE_MARGIN, KEY_NAME, ON_NAME, MODE_NAME, COUNT_NAME } from '../src/ai/config.js';
+import { AI_BUDGET, AI_BUDGET_DEFAULT, AI_WAIT, AI_TIMEOUT, AI_MODELS, AI_URL, AI_MODES, AI_MODE_DEFAULT, AI_AWAKE_MARGIN, KEY_NAME, ON_NAME, MODE_NAME, COUNT_NAME } from '../src/ai/config.js';
 import { THIRST_GO, HUNGER_GO } from '../src/game/mind.js';
 import { DUSK, AWAKE_MAX } from '../src/game/sleep.js';
 import { REVIVE_AT, COLLAPSE_AT } from '../src/game/thirst.js';
@@ -105,8 +105,8 @@ describe('client', () => {
     expect(r).toEqual({ text: '{"choice":"eat"}', ms: 1200, model: AI_MODELS[0] });
     expect(calls[0].url).toBe(AI_URL); expect(calls[0].init.method).toBe('POST'); expect(calls[0].init.headers.Authorization).toBe('Bearer ' + KEY);
     expect(JSON.parse(calls[0].init.body)).toEqual({ model: AI_MODELS[0], messages: [{ role: 'user', content: 'hi' }], temperature: 0.7 });
-    expect(c.status()).toMatchObject({ on: true, hasKey: true, today: 1, perDay: AI_PER_DAY * 3, lastError: null, pausedUntil: 0, inFlight: false });
-    expect(c.status().models.map(m => m.model)).toEqual(AI_MODELS); expect(c.status().models[0]).toMatchObject({ today: 1, perDay: AI_PER_DAY, lastMinute: 1, perMin: AI_PER_MIN, pausedUntil: 0, dead: false });
+    expect(c.status()).toMatchObject({ on: true, hasKey: true, today: 1, perDay: AI_MODELS.reduce((a, m) => a + AI_BUDGET[m].perDay, 0), lastError: null, pausedUntil: 0, inFlight: false });
+    expect(c.status().models.map(m => m.model)).toEqual(AI_MODELS); expect(c.status().models[0]).toMatchObject({ today: 1, perDay: AI_BUDGET[AI_MODELS[0]].perDay, lastMinute: 1, perMin: AI_BUDGET[AI_MODELS[0]].perMin, pausedUntil: 0, dead: false });
     expect(c.status().models[1].today).toBe(0);
     expect(leaks(c.status())).toBe(true);
   });
@@ -123,16 +123,17 @@ describe('client', () => {
     expect(Object.keys(st.dump()).sort()).toEqual([COUNT_NAME + '.' + AI_MODELS[0], KEY_NAME].sort());
     expect(st.dump()[COUNT_NAME + '.' + AI_MODELS[0]]).not.toContain(KEY);
   });
-  it('allows AI_PER_MIN requests in a minute, then refuses until the window moves on', async () => {
+  it('allows the default budget\'s requests in a minute, then refuses until the window moves on', async () => {
     const { c, t, calls } = make(async () => okResponse('ok'), { cfg: ONE });
-    for (let i = 0; i < AI_PER_MIN; i++) { t.ms += 1000; await c.send([]); }
-    expect(c.canSend()).toBe(false); await expect(c.send([])).rejects.toMatchObject({ code: 'budget' }); expect(calls.length).toBe(AI_PER_MIN);
-    t.ms += 60000; expect(c.canSend()).toBe(true); await c.send([]); expect(calls.length).toBe(AI_PER_MIN + 1);
+    const N = AI_BUDGET_DEFAULT.perMin;
+    for (let i = 0; i < N; i++) { t.ms += 1000; await c.send([]); }
+    expect(c.canSend()).toBe(false); await expect(c.send([])).rejects.toMatchObject({ code: 'budget' }); expect(calls.length).toBe(N);
+    t.ms += 60000; expect(c.canSend()).toBe(true); await c.send([]); expect(calls.length).toBe(N + 1);
   });
-  it('allows AI_PER_DAY a day and starts a new count at midnight Pacific time', async () => {
-    const st = { [KEY_NAME]: KEY, [COUNT_NAME + '.m1']: JSON.stringify({ day: pacificDay(T0), n: AI_PER_DAY - 1 }) };
+  it('allows the default budget\'s requests a day and starts a new count at midnight Pacific time', async () => {
+    const st = { [KEY_NAME]: KEY, [COUNT_NAME + '.m1']: JSON.stringify({ day: pacificDay(T0), n: AI_BUDGET_DEFAULT.perDay - 1 }) };
     const { c, t } = make(async () => okResponse('ok'), { storage: st, cfg: ONE });
-    await c.send([]); expect(c.status().today).toBe(AI_PER_DAY);
+    await c.send([]); expect(c.status().today).toBe(AI_BUDGET_DEFAULT.perDay);
     t.ms += 120000; await expect(c.send([])).rejects.toMatchObject({ code: 'budget' });
     expect(pacificDay(Date.UTC(2026, 10, 12, 7, 59))).toBe('2026-11-11'); expect(pacificDay(Date.UTC(2026, 10, 12, 8, 1))).toBe('2026-11-12');   // (PST in November: midnight is 08:00 UTC)
     t.ms = Date.UTC(2026, 10, 13, 9, 0); expect(c.status().today).toBe(0); expect(c.canSend()).toBe(true);
@@ -161,9 +162,10 @@ describe('client', () => {
   const bodyModel = init => JSON.parse(init.body).model;
   it('goes to the first model whose budget allows, then the next, in order; all spent gives budget', async () => {
     const { c, t, calls } = make(async () => okResponse('ok'));
-    for (let i = 0; i < AI_PER_MIN * 3; i++) { t.ms += 100; await c.send([]); }
+    const [a, b, g] = AI_MODELS.map(m => AI_BUDGET[m].perMin);
+    for (let i = 0; i < a + b + g; i++) { t.ms += 100; await c.send([]); }
     const order = calls.map(x => bodyModel(x.init));
-    expect(order.slice(0, AI_PER_MIN).every(m => m === AI_MODELS[0])).toBe(true); expect(order.slice(AI_PER_MIN, AI_PER_MIN * 2).every(m => m === AI_MODELS[1])).toBe(true); expect(order.slice(AI_PER_MIN * 2).every(m => m === AI_MODELS[2])).toBe(true);
+    expect(order.slice(0, a).every(m => m === AI_MODELS[0])).toBe(true); expect(order.slice(a, a + b).every(m => m === AI_MODELS[1])).toBe(true); expect(order.slice(a + b).every(m => m === AI_MODELS[2])).toBe(true); expect(g).toBeGreaterThan(a);   // each model has its own minute budget
     expect(c.canSend()).toBe(false); await expect(c.send([])).rejects.toMatchObject({ code: 'budget' });
     t.ms += 61000; expect(c.canSend()).toBe(true); await c.send([]); expect(bodyModel(calls.at(-1).init)).toBe(AI_MODELS[0]);   // the first is back with its minute
   });
@@ -240,7 +242,7 @@ describe('chooser: plans (0.36.3)', () => {
     expect(go(ai)).toBe('stores'); expect(ai.waiting()).toBe(false); expect(ai.asking()).toBeNull();
     expect(ai.entries.find(e => !e.note)).toMatchObject({ used: 'ai', ai: 'stores', rules: 'stores', point: 'goal', reason: 'because stores', ms: 600, model: 'gemini-x', plan: { i: 1, n: 5 }, menu: ['stores', 'idle'] });
     expect(ai.entries.find(e => !e.note).messages.length).toBe(2); expect(ai.entries.some(e => e.planNote && /New plan \(no plan yet\): stores, home, stroll, linger, fire/.test(e.note))).toBe(true);
-    expect(ai.plan().steps.map(s => s.state)).toEqual(['done', 'now', 'next', 'next', 'next']); expect(ai.plan()).toMatchObject({ trigger: 'no plan yet', reason: 'A plan.', late: false });
+    expect(ai.plan().steps.map(s => s.state)).toEqual(['running', 'next', 'later', 'later', 'later']); expect(ai.plan()).toMatchObject({ trigger: 'no plan yet', reason: 'A plan.', late: false });
   });
   it('follows the plan with no request: a goal step, free time as the way to a pastime step, the steps the pastime point takes, a short pastime on the way to a goal step', async () => {
     const s = setup(); await planned(s);   // stores taken
@@ -249,17 +251,17 @@ describe('chooser: plans (0.36.3)', () => {
     expect(pm(s.ai, dayMenu())).toBe('stroll'); expect(s.ai.entries[0]).toMatchObject({ ai: 'stroll', rules: 'home', plan: { i: 3, n: 5 } });   // (the AI's stroll against the rules' home)
     expect(pm(s.ai, dayMenu({ home: { ok: false } }))).toBe('linger'); expect(s.ai.entries[0]).toMatchObject({ ai: 'linger', rules: 'stroll', reason: 'because linger' });
     expect(pm(s.ai, dayMenu())).toBe('linger'); expect(s.ai.entries[0].reason).toContain('A short one first');   // the next step is a goal (fire): the short pastime first
-    expect(s.ai.plan().steps[4].state).toBe('now'); expect(s.asks.length).toBe(1);
+    expect(s.ai.plan().steps[4].state).toBe('next'); expect(s.asks.length).toBe(1);
     s.t.s += 30; expect(go(s.ai)).toBe(WAIT); expect(s.asks.length).toBe(2); expect(s.ai.asking()).toBe('the plan is used up');   // fire is not on the goal menu: skipped; nothing is left
   });
   it('a goal step that is not on the menu is skipped (done or pointless), a pastime step is reached through free time, a day pastime waits through the first stage and a goal step through a short pastime', async () => {
     const s = setup({ reply: planOf('drink', 'home', 'stroll', 'drink', 'stores', 'linger') }); const m = quietMenu();   // no drink on this menu
     expect(go(s.ai, m)).toBe(WAIT); await flush(); s.t.s += 0.6;
-    expect(go(s.ai, m)).toBe('idle'); expect(s.ai.entries[0]).toMatchObject({ ai: 'idle', reason: expect.stringContaining('on the way to') }); expect(s.ai.plan().steps[0].state).toBe('skipped'); expect(s.ai.plan().steps[1].state).toBe('now');
+    expect(go(s.ai, m)).toBe('idle'); expect(s.ai.entries[0]).toMatchObject({ ai: 'idle', reason: expect.stringContaining('on the way to') }); expect(s.ai.plan().steps[0].state).toBe('skipped'); expect(s.ai.plan().steps[1].state).toBe('next');
     expect(pm(s.ai, beforeMenu({ gaze: { ok: true } }))).toBe('onward'); expect(s.ai.entries[0].reason).toContain('On the way to'); expect(s.ai.entries[0].rules).toBe('gaze');   // 'home' is a day pastime: not the sunset
     expect(pm(s.ai, dayMenu())).toBe('home'); expect(pm(s.ai, dayMenu())).toBe('stroll');
     expect(pm(s.ai, dayMenu())).toBe('linger'); expect(s.ai.entries[0].reason).toContain('A short one first');   // the next step is a goal (drink): the short pastime first
-    expect(s.ai.plan().steps[3].state).toBe('now'); expect(s.asks.length).toBe(1);
+    expect(s.ai.plan().steps[3].state).toBe('next'); expect(s.asks.length).toBe(1);
     expect(go(s.ai, hungryMenu())).toBe('drink'); expect(s.ai.plan().steps[3].state).toBe('done');   // strict: a need is the rules'; it is also the plan's step
   });
   it('a short way on to the step, asked again every step while he rests, is answered the same and logged once', async () => {
@@ -272,14 +274,14 @@ describe('chooser: plans (0.36.3)', () => {
   it('the next step cannot be taken at this point and there is no free time on the goal menu: the rules decide this one point and the step stays', async () => {
     const s = setup({ reply: planOf('home', 'stroll', 'linger') }); const m = goalMenu(calm({ nuts: 0 }), c => (c.cool && c.cool.stores ? 'fire' : 'stores'), limits);   // stores, fire: no idle
     expect(m.options.some(o => o.id === 'idle')).toBe(false);
-    expect(go(s.ai, m)).toBe(WAIT); await flush(); s.t.s += 0.6; expect(go(s.ai, m)).toBe('stores'); expect(s.ai.entries[0]).toMatchObject({ used: 'rules', why: 'plan-hold' }); expect(s.ai.plan().steps[0].state).toBe('now');
+    expect(go(s.ai, m)).toBe(WAIT); await flush(); s.t.s += 0.6; expect(go(s.ai, m)).toBe('stores'); expect(s.ai.entries[0]).toMatchObject({ used: 'rules', why: 'plan-hold' }); expect(s.ai.plan().steps[0].state).toBe('next');
   });
   it('asks for a new plan when the plan is used up, naming why', async () => {
     const s = setup({ reply: planOf('stores') }); await planned(s); s.t.s += 30;
     expect(go(s.ai)).toBe(WAIT); expect(s.asks.length).toBe(2); expect(s.asks[1][1].content).toContain('Why you are asked for a new plan: the plan is used up.'); expect(s.asks[1][1].content).toContain('Your previous plan: 1. stores (done)');
   });
   it('asks for a new plan when a new day begins (before dawn still counts as the day before)', async () => {
-    const s = setup(); await planned(s); s.t.s += 30;
+    const s = setup({ reply: planOf('stores', 'linger', 'stroll') }); await planned(s); s.t.s += 30;
     s.clock.day = 4; s.clock.time = 0.1; expect(go(s.ai)).toBe('idle'); expect(s.asks.length).toBe(1);   // the same waking day: no new plan
     s.clock.time = 0.3; expect(go(s.ai)).toBe(WAIT); expect(s.asks[1][1].content).toContain('Why you are asked for a new plan: a new day begins.');
   });
@@ -293,7 +295,7 @@ describe('chooser: plans (0.36.3)', () => {
     const s = setup({ reply: planOf('fish', 'stroll', 'linger') }); await planned(s, quietMenu());   // 'fish' is a pastime: free time first
     s.t.s += 30; const m = dayMenu({ fish: { ok: false } });
     expect(pm(s.ai, m)).toBe(WAIT); expect(s.asks.length).toBe(2); const q = s.asks[1][1].content;
-    expect(q).toContain('Why you are asked for a new plan: the next step, fish, was not possible now (10:04 to 14:24, once a day, only with a spear).'); expect(q).toContain('Your previous plan: 1. fish (not reached)');
+    expect(q).toContain('Why you are asked for a new plan: the next step, fish, was not possible now (by day, 04:19 to 15:50, once a day, only with a spear).'); expect(q).toContain('Your previous plan: 1. fish (not reached)');
     const g = setup({ reply: planOf('fish', 'stroll', 'linger') }); await planned(g, quietMenu()); g.t.s += 2;   // asked 2.6 s ago: inside AI_REPLAN_GAP
     expect(pm(g.ai, dayMenu({ fish: { ok: false } }))).toBe('stroll'); expect(g.asks.length).toBe(1); expect(g.ai.plan().steps[0].state).toBe('skipped');
   });
@@ -305,7 +307,7 @@ describe('chooser: plans (0.36.3)', () => {
   });
   it('no answer within AI_WAIT seconds: the rules decide that one point; the plan that lands later is used for the next points', async () => {
     let resolve; const s = setup({ reply: () => new Promise(r => { resolve = r; }) });
-    expect(go(s.ai)).toBe(WAIT); for (let i = 0; i < 5; i++) { s.t.s += 0.5; expect(go(s.ai)).toBe(WAIT); } s.t.s += AI_WAIT - 2.5 - 0.1; expect(go(s.ai)).toBe(WAIT); s.t.s += 0.2;
+    expect(go(s.ai)).toBe(WAIT); let el = 0; while (el + 0.5 < AI_WAIT - 0.1) { s.t.s += 0.5; el += 0.5; expect(go(s.ai)).toBe(WAIT); } s.t.s += AI_WAIT - 0.1 - el; expect(go(s.ai)).toBe(WAIT); s.t.s += 0.2;
     expect(go(s.ai)).toBe('stores'); expect(s.ai.entries[0]).toMatchObject({ point: 'goal', used: 'rules', why: 'no answer', ai: null, ms: Math.round(AI_WAIT * 1000 + 100) }); expect(s.ai.waiting()).toBe(false); expect(s.ai.inFlight()).toBe(true);
     expect(whyText({ why: 'no answer' })).toBe(`no answer in ${AI_WAIT} s`);
     resolve({ text: JSON.stringify({ plan: [{ step: 'stores', reason: 'late but good' }, { step: 'home' }, { step: 'linger' }] }), ms: 5 }); await flush(); expect(s.ai.inFlight()).toBe(false); expect(s.ai.plan()).toMatchObject({ late: true });
@@ -440,8 +442,8 @@ describe('typing and the panel', () => {
     expect(createActing().event({ type: 'keydown', code: 'KeyI' })).toBe(false);
   });
   it('0.36.3: the plan with a marker at the current step, why it was asked, the overruled block and the leash text', () => {
-    const plan = { day: 3, time: '14:20', trigger: 'the plan is used up', late: false, reason: 'A calm afternoon.', steps: [{ id: 'stores', label: 'gather supplies', reason: 'low on nuts', state: 'done' }, { id: 'home', label: 'work on his home', reason: '', state: 'now' }, { id: 'drink', label: 'drink', reason: 'before dusk', state: 'next' }, { id: 'fish', label: 'fish', reason: '', state: 'skipped' }] };
-    expect(planLines(plan)).toEqual([{ marker: 'x', state: 'done', text: '1. gather supplies — low on nuts' }, { marker: '>', state: 'now', text: '2. work on his home' }, { marker: ' ', state: 'next', text: '3. drink — before dusk' }, { marker: '-', state: 'skipped', text: '4. fish' }]);
+    const plan = { day: 3, time: '14:20', trigger: 'the plan is used up', late: false, reason: 'A calm afternoon.', steps: [{ id: 'stores', label: 'gather supplies', reason: 'low on nuts', state: 'done' }, { id: 'home', label: 'work on his home', reason: '', state: 'running' }, { id: 'drink', label: 'drink', reason: 'before dusk', state: 'next' }, { id: 'rest', label: 'rest', reason: '', state: 'later' }, { id: 'fish', label: 'fish', reason: '', state: 'skipped' }] };
+    expect(planLines(plan)).toEqual([{ marker: '✓', state: 'done', text: '1. gather supplies — low on nuts' }, { marker: '▶', state: 'running', text: '2. work on his home' }, { marker: ' ', state: 'next', text: '3. drink (next) — before dusk' }, { marker: ' ', state: 'later', text: '4. rest' }, { marker: '✗', state: 'skipped', text: '5. fish' }]);
     expect(planHead(plan)).toBe('Plan from day 3, 14:20 (asked because: the plan is used up)'); expect(planHead({ ...plan, late: true })).toContain('came late'); expect(planHead(null)).toBe('No plan yet.'); expect(planLines(null)).toEqual([]);
     const o = { day: 3, time: '15:00', used: 'rules', why: 'critical', override: 'just before the collapse: thirst has reached 1.30 days (it collapses at 1.5)', planned: 'fish', rules: 'drink', options: [{ id: 'drink', what: 'drink' }, { id: 'stores', what: 'gather supplies' }], point: 'goal' };
     expect(blockParts(o)).toMatchObject({ source: 'rules', tag: 'overruled', head: 'Day 3, 15:00 — Rules chose: drink', why: 'Overruled: just before the collapse: thirst has reached 1.30 days (it collapses at 1.5)', rulesLine: "The plan's next step was: fish" });
@@ -580,4 +582,167 @@ describe('lives with the AI chooser (fake ask, no network)', () => {
     const b = runMind(w, spawn, { days: 0.4, know: true, chooser: ai.chooser });
     expect(sig(b)).toBe(sig(a));
   }, 120000);
+});
+
+describe('0.36.4 "Hindsight": the wait, what is possible, what failed, the step counter, the reasons spoken', () => {
+  const planOf = (...ids) => async () => ({ text: JSON.stringify({ plan: ids.map(step => ({ step, reason: 'because ' + step })), reason: 'A plan.' }), ms: 700, model: 'gemini-x' });
+  const setup = (o = {}) => {
+    const t = { s: 1000 }, clock = { day: 0, time: 0.5 }, asks = [], st = { on: true };
+    const ai = createAiChooser({ rulesChooser, onStep: o.onStep, ask: m => { asks.push(m); return (o.reply || planOf('stores', 'home', 'stroll', 'linger'))(m); }, now: () => t.s, enabled: () => st.on, clock: () => clock, mode: () => 'strict' });
+    ai.attach({ recent: [{ t: 0.4, day: 0, kind: 'goal', what: 'idle', outcome: 'done' }, { t: 0.41, day: 0, kind: 'pastime', what: 'onward', outcome: 'done' }, { t: 0.42, day: 0, kind: 'pastime', what: 'tide', outcome: 'done' }], goal: 'idle', menu: () => quietMenu(), blockers: () => ({ spear: 'no branch and stone near', fish: 'he has no spear' }) }, { clock, thirst: { days: 0.2 }, hunger: { days: 0.3 }, sleep: { awake: 0.3 } });
+    return { ai, t, asks, st };
+  };
+  const dayMenu = (facts = {}) => pastimeMenu('day', { home: { ok: true }, spear: { ok: false }, stroll: { ok: true, chance: 0.9, kind: () => 'shore' }, ...facts });
+  const go = (ai, menu = quietMenu()) => ai.chooser('goal', menu, ctxOf());
+  const pm = (ai, menu) => ai.chooser('pastime', menu, ctxOf());
+  const planned = async (s, menu = quietMenu()) => { expect(go(s.ai, menu)).toBe(WAIT); await flush(); s.t.s += 0.6; return go(s.ai, menu); };
+
+  it('Dave waits up to 10 s for a plan and the request is given up at 12 s', () => {
+    expect(AI_WAIT).toBe(10); expect(AI_TIMEOUT).toBe(12000); expect(AI_TIMEOUT).toBeGreaterThan(AI_WAIT * 1000);
+  });
+
+  it('the plan request marks a pastime whose hours are open but whose other condition fails, with the plain reason', () => {
+    const state = { day: 0, time: 0.5, carries: {} }, blocked = { spear: 'no branch and stone near', fish: 'he has no spear', strays: 'no stray pile near the ring' };
+    const goalPoint = buildPlanMessages({ state, recent: [], trigger: 't', previous: [], possible: { goals: new Set(['stores', 'idle']), pastimes: null, blocked }, mode: 'loose' })[1].content;
+    expect(goalPoint).toMatch(/- spear: .*\[not now: no branch and stone near\]/); expect(goalPoint).toMatch(/- fish: .*\[not now: he has no spear\]/); expect(goalPoint).toMatch(/- strays: .*\[not now: no stray pile near the ring\]/);
+    expect(goalPoint).toMatch(/- stroll: .*\[its hours are open now\]/);
+    const pastimePoint = buildPlanMessages({ state, recent: [], trigger: 't', previous: [], possible: { goals: null, pastimes: new Set(['home', 'stroll']), blocked }, mode: 'loose' })[1].content;
+    expect(pastimePoint).toMatch(/- spear: .*\[not possible now: no branch and stone near\]/); expect(pastimePoint).toMatch(/- home: .*\[possible now\]/);
+    const night = buildPlanMessages({ state: { ...state, time: 0.95 }, recent: [], trigger: 't', previous: [], possible: { goals: null, pastimes: null, blocked }, mode: 'loose' })[1].content;
+    expect(night).toMatch(/- spear: .*\[not now: outside its hours\]/);
+    expect(buildPlanMessages({ state, recent: [], trigger: 't', previous: [{ id: 'spear', state: 'skipped', note: 'not possible (no branch and stone near)' }], possible: {}, mode: 'loose' })[1].content).toContain('1. spear (skipped: not possible (no branch and stone near))');
+  });
+
+  it('the history leaves out the bookkeeping (idle done, onward done) and keeps real outcomes', () => {
+    const t = recentText([{ t: 1.4, day: 1, kind: 'goal', what: 'idle', outcome: 'done' }, { t: 1.41, day: 1, kind: 'pastime', what: 'onward', outcome: 'done' }, { t: 1.42, day: 1, kind: 'pastime', what: 'tide', outcome: 'done' },
+      { t: 1.5, day: 1, kind: 'pastime', what: 'fish', outcome: 'declined' }, { t: 1.52, day: 1, kind: 'goal', what: 'idle', outcome: 'stopped' }, { t: 1.53, day: 1, kind: 'goal', what: 'stores', outcome: 'done' }]);
+    expect(t).not.toContain('idle -> done'); expect(t).not.toContain('onward'); expect(t).toContain('pastime: tide -> done'); expect(t).toContain('pastime: fish -> declined'); expect(t).toContain('goal: idle -> stopped'); expect(t).toContain('goal: stores -> done');
+    expect(recentText([{ t: 1.4, day: 1, kind: 'goal', what: 'idle', outcome: 'done' }])).toBe('(nothing yet)');
+  });
+
+  it('a step that was not possible goes into the next request with its reason, in the history and in the previous plan', async () => {
+    const s = setup({ reply: planOf('spear', 'home', 'stroll') });
+    expect(go(s.ai)).toBe(WAIT); await flush(); s.t.s += 0.6; expect(go(s.ai)).toBe('idle');   // free time first, on the way to the spear
+    s.t.s += 1; expect(pm(s.ai, dayMenu())).toBe('home');   // the spear is not possible (no branch and stone near) and a new plan is too soon: it is skipped, home is taken
+    expect(s.ai.plan().steps[0].state).toBe('skipped');
+    expect(pm(s.ai, dayMenu())).toBe('stroll');
+    s.t.s += 30; expect(pm(s.ai, dayMenu())).toBe(WAIT); expect(s.asks.length).toBe(2);
+    const q = s.asks[1][1].content;
+    expect(q).toContain('plan step: spear -> skipped: not possible (no branch and stone near)'); expect(q).toContain('1. spear (skipped: not possible (no branch and stone near))');
+    expect(q).not.toContain('idle -> done'); expect(q).toContain('pastime: tide -> done');
+    expect(q).toMatch(/- spear: .*\[not possible now: no branch and stone near\]/);
+  });
+
+  it('when a new plan is asked at once because the next step is not possible, the reason is the mind\'s own and is remembered', async () => {
+    const s = setup({ reply: planOf('fish', 'home', 'stroll') });
+    expect(go(s.ai)).toBe(WAIT); await flush(); s.t.s += 30;
+    expect(go(s.ai)).toBe(WAIT);   // 0.36.5 point 11: fish cannot happen (he has no spear): no bridge through free time, a new plan is asked at the goal point
+    expect(s.ai.asking()).toBe('the next step, fish, was not possible now (he has no spear)');
+    expect(s.asks[1][1].content).toContain('plan step: fish -> skipped: not possible (he has no spear)');
+  });
+
+  it('the step counter is the step being taken, 1-based and never above the plan\'s length', async () => {
+    const s = setup({ reply: planOf('drink', 'home', 'stroll', 'linger') });   // no drink on the menu: the first step is skipped
+    await planned(s);
+    expect(s.ai.entries[0]).toMatchObject({ ai: 'idle', plan: { i: 2, n: 4, via: true } });   // free time on the way to step 2
+    expect(pm(s.ai, dayMenu())).toBe('home'); expect(s.ai.entries[0]).toMatchObject({ ai: 'home', plan: { i: 2, n: 4, via: false } });
+    expect(pm(s.ai, dayMenu())).toBe('stroll'); expect(pm(s.ai, dayMenu({ stroll: { ok: false } }))).toBe('linger');
+    for (const e of s.ai.entries.filter(x => x.plan)) { expect(e.plan.i).toBeGreaterThanOrEqual(1); expect(e.plan.i).toBeLessThanOrEqual(e.plan.n); }
+    expect(s.ai.entries[0].plan).toMatchObject({ i: 4, n: 4 });
+    const one = setup({ reply: planOf('stores') }); await planned(one); expect(one.ai.entries[0].plan).toMatchObject({ i: 1, n: 1 });
+  });
+
+  it('the panel shows the counter clamped, and a short way first as "on the way to" the step', () => {
+    const base = { day: 3, time: '15:00', used: 'ai', ai: 'home', rules: 'home', model: 'm', ms: null, options: [{ id: 'home', what: 'work on his home' }] };
+    expect(blockParts({ ...base, plan: { i: 5, n: 4 } }).meta).toBe('step 4 of 4 of the plan · m');
+    expect(blockParts({ ...base, plan: { i: 2, n: 4, via: true } }).meta).toBe('on the way to step 2 of 4 of the plan · m');
+    expect(blockParts({ ...base, plan: { i: 2, n: 4, via: false } }).meta).toBe('step 2 of 4 of the plan · m');
+  });
+
+  it('0.36.5: the reason of every step taken from the plan goes to onStep at once, goals and pastimes alike; a short way on and a rules decision say nothing', async () => {
+    const said = [], s = setup({ onStep: x => said.push(x), reply: planOf('stores', 'home', 'stroll', 'linger') });
+    await planned(s);   // stores taken
+    expect(said).toEqual([{ id: 'stores', goal: 'stores', reason: 'because stores', fallback: 'woodIntent' }]);
+    s.t.s += 1; expect(go(s.ai)).toBe('idle'); expect(said.length).toBe(1);   // free time first: a short way on, game-made text, never said
+    expect(pm(s.ai, dayMenu())).toBe('home'); expect(said[1]).toEqual({ id: 'home', goal: 'idle', reason: 'because home', fallback: 'homeWoodIntent' });
+    expect(pm(s.ai, dayMenu())).toBe('stroll'); expect(said[2]).toEqual({ id: 'stroll', goal: 'idle', reason: 'because stroll', fallback: null });   // a step with no intent of its own is said too
+    expect(said.length).toBe(3);
+  });
+  it('0.36.5: while the step runs, the fixed intent phrases that only restate it are held back; what he lacks on the way is not', async () => {
+    const s = setup({ onStep: () => {} }); await planned(s);   // stores taken
+    expect(s.ai.restates('stores', 'woodIntent')).toBe(true); expect(s.ai.restates('stores', 'woodIntent')).toBe(true);   // not once: for as long as the step runs
+    expect(s.ai.restates('stores', 'fibreIntent')).toBe(false); expect(s.ai.restates('stores', 'foodReserve')).toBe(false);
+    expect(s.ai.restates('drink', 'drinkIntent')).toBe(false);   // another goal
+    s.t.s += 1; go(s.ai); expect(pm(s.ai, dayMenu())).toBe('home');
+    expect(s.ai.restates('idle', 'homeWoodIntent')).toBe(true); expect(s.ai.restates('idle', 'buildIntent')).toBe(true); expect(s.ai.restates('idle', 'explore')).toBe(false);
+    expect(pm(s.ai, dayMenu())).toBe('stroll'); expect(s.ai.restates('idle', 'homeWoodIntent')).toBe(false);   // the stroll has no intent kinds: nothing to hold back
+  });
+  it('0.36.5: with the AI off nothing is held back and nothing is said', async () => {
+    const said = [], s = setup({ onStep: x => said.push(x) }); await planned(s); s.st.on = false;
+    expect(s.ai.restates('stores', 'woodIntent')).toBe(false);
+    s.t.s += 1; go(s.ai); expect(said.length).toBe(1);   // (only the step taken while it was on)
+  });
+
+  it('game/mind blockers: the plain reasons a pastime cannot be taken now', async () => {
+    const w = await generateWorld(1337), spawn = startSpot(w), g = createGame(w, spawn, {}); walkFirstDay(w, g, spawn, {}); g.known.visit(spawn.x, spawn.z);
+    const m = createMind(w, g);
+    const b = m.blockers();
+    expect(typeof b).toBe('object'); expect(b.fish).toBe('he has no spear'); expect(b.axe).toBe('the home is not complete yet'); expect(b.strays).toBe('no stray pile near the ring');
+    for (const v of Object.values(b)) expect(typeof v).toBe('string');
+  });
+});
+
+describe('0.36.4 "Hindsight": the models, a budget per model, Gemma', () => {
+  const T0 = Date.UTC(2026, 10, 13, 20, 0, 0);
+  const make = (storage = { [KEY_NAME]: KEY, [ON_NAME]: '1' }, o = {}) => {
+    const st = fakeStorage(storage), t = { ms: T0 }, calls = [];
+    const c = createClient({ fetch: async (url, init) => { calls.push({ url, init }); return okResponse('ok'); }, storage: st, now: () => t.ms, ...o });
+    return { c, st, t, calls };
+  };
+  const body = x => JSON.parse(x.init.body);
+
+  it('the list is two Gemini models, then Gemma 4, each with its own budget just under Google\'s free tier', () => {
+    expect(AI_MODELS).toEqual(['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it']);
+    expect(AI_BUDGET).toEqual({ 'gemini-3.5-flash-lite': { perMin: 14, perDay: 480 }, 'gemini-3.1-flash-lite': { perMin: 14, perDay: 480 }, 'gemma-4-31b-it': { perMin: 28, perDay: 14000 } });
+  });
+  it('the status gives every model its own budget', () => {
+    const { c } = make();
+    expect(c.status().models.map(m => [m.model, m.perMin, m.perDay])).toEqual([['gemini-3.5-flash-lite', 14, 480], ['gemini-3.1-flash-lite', 14, 480], ['gemma-4-31b-it', 28, 14000]]);
+  });
+  it('a model whose day is spent is passed over for the next one, which has its own count', async () => {
+    const { c, calls } = make({ [KEY_NAME]: KEY, [COUNT_NAME + '.gemini-3.5-flash-lite']: JSON.stringify({ day: pacificDay(T0), n: 480 }) });
+    await c.send([]); expect(body(calls[0]).model).toBe('gemini-3.1-flash-lite');
+    expect(c.status().models.map(m => m.today)).toEqual([480, 1, 0]);
+  });
+  it('when both Gemini models are spent for the day the request goes to Gemma', async () => {
+    const day = pacificDay(T0), full = JSON.stringify({ day, n: 480 });
+    const { c, calls } = make({ [KEY_NAME]: KEY, [COUNT_NAME + '.gemini-3.5-flash-lite']: full, [COUNT_NAME + '.gemini-3.1-flash-lite']: full });
+    await c.send([]); expect(body(calls[0]).model).toBe('gemma-4-31b-it');
+  });
+  it('Gemma gets no system message: its content starts the first user message; no other option is sent; Gemini is unchanged', async () => {
+    const msgs = [{ role: 'system', content: 'SYS' }, { role: 'user', content: 'USER' }];
+    expect(forModel('gemma-4-31b-it', msgs)).toEqual([{ role: 'user', content: 'SYS\n\nUSER' }]);
+    expect(forModel('gemini-3.5-flash-lite', msgs)).toBe(msgs); expect(msgs[0].role).toBe('system');
+    expect(forModel('gemma-4-31b-it', [{ role: 'user', content: 'only' }])).toEqual([{ role: 'user', content: 'only' }]);
+    const g = make(undefined, { models: ['gemma-4-31b-it'] }); await g.c.send(msgs);
+    expect(body(g.calls[0])).toEqual({ model: 'gemma-4-31b-it', messages: [{ role: 'user', content: 'SYS\n\nUSER' }], temperature: 0.7 });
+    const m = make(); await m.c.send(msgs); expect(body(m.calls[0]).messages).toEqual(msgs);
+  });
+});
+
+describe('0.36.5 point 10: the states of the plan steps as shown', () => {
+  const planOf = (...ids) => async () => ({ text: JSON.stringify({ plan: ids.map(step => ({ step, reason: 'because ' + step })), reason: 'A plan.' }), ms: 700, model: 'gemini-x' });
+  it('the step taken last is running, the one before it done, the first not taken next, the rest later; a rules decision ends running', async () => {
+    const t = { s: 1000 }, clock = { day: 3, time: 0.5 }, st = { on: true };
+    const ai = createAiChooser({ rulesChooser, ask: planOf('stores', 'home', 'stroll', 'linger'), now: () => t.s, enabled: () => st.on, clock: () => clock, mode: () => 'strict' });
+    ai.attach({ recent: [], goal: 'idle', menu: () => quietMenu() }, { clock });
+    const menu = () => pastimeMenu('day', { home: { ok: true }, spear: { ok: false }, stroll: { ok: true, chance: 0.9, kind: () => 'shore' } });
+    const pm = () => ai.chooser('pastime', menu(), ctxOf());
+    expect(ai.chooser('goal', quietMenu(), ctxOf())).toBe(WAIT); await flush(); t.s += 0.6; ai.chooser('goal', quietMenu(), ctxOf());   // stores taken
+    expect(ai.plan().steps.map(s => s.state)).toEqual(['running', 'next', 'later', 'later']);
+    t.s += 1; ai.chooser('goal', quietMenu(), ctxOf());   // free time first: a short way on, the running step stays
+    expect(pm()).toBe('home');
+    expect(ai.plan().steps.map(s => s.state)).toEqual(['done', 'running', 'next', 'later']);
+    expect(ai.plans()[0].steps.map(s => s.state)).toEqual(['done', 'running', 'next', 'later']);
+  });
 });

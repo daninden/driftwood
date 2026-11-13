@@ -5,13 +5,19 @@
  * (never the same line twice in a row). Fixed phrases use their own counters, never the world or mind PRNG. The DOM
  * view projects one fading line over Dave and keeps displayed lines in order.
  *
+ * 0.36.4 "Hindsight": a line may carry the AI's own words (`announce(kind, time, said)`, `createThoughts().take(kind, said)`): when the AI is on and Dave starts a step of its plan, main hands over the step's reason (ai/chooser `stepReason`) and it is shown
+ * instead of the kind's fixed phrase, if it is real text of at most SAID_MAX (70) characters (else the fixed phrase, as before). The quiet-time rule (8 s, 60 s per kind) and the log are the same; the fixed phrase's rotation does not advance for such a line.
+ *
+ * 0.36.5 "Reach": the AI's reason is said when the STEP starts, for every step (`announceStep(time, said, fallbackKind)`, `createThoughts().takeStep(said, fallbackKind)`): a line of its own, subject to the 8 s quiet rule but not to the 60 s of a kind (it has no kind); when `said` is not usable (`cleanSaid`), the step's usual fixed phrase (`fallbackKind`, if it has one) goes through the ordinary `take`, else nothing. main calls it from the chooser's `onStep`; the fixed intent phrases that only restate the step are suppressed by main (`ai.restates`).
+ *
  * 0.30.8 "Morning": voice.hold(until) keeps a new line above Dave back until the steady clock `now`
  * (seconds, the one update is given; main uses the wake line's) reaches `until`, while the wake line (render/nameLines) shows. A line accepted meanwhile is logged at once, with its own time, and shown when the hold ends. The quiet-time
  * rule (8 s) still applies at the moment it is said, so at most one line can wait through the 5 s wake line;
  * there is no queue.
  *
- * Exports: PHRASES, phraseFor, voiceTime, createThoughts, isVoiceKey, isVoiceLogEvent, createVoice
- *   (createVoice -> { history, announce, hold(until), update(dt, player, camera, now?), toggle, open }; now defaults to a clock of the dts)
+ * Exports: PHRASES, SAID_MAX, cleanSaid, phraseFor, voiceTime, createThoughts (take, takeStep), isVoiceKey, isVoiceLogEvent, createVoice
+ *   cleanSaid(text) -> string | null   the AI's words made fit for a line: trimmed, single-spaced, null when empty, not text or longer than SAID_MAX
+ *   (createVoice -> { history, announce(kind, time?, said?), announceStep(time?, said?, fallbackKind?), hold(until), update(dt, player, camera, now?), toggle, open }; now defaults to a clock of the dts)
  * Depends on: three, render/screenRect
  */
 import * as THREE from 'three';
@@ -48,6 +54,14 @@ export const PHRASES = {
   needMoreWood: ['This needs more wood to burn.', 'There is not enough wood here.', 'I need a few more pieces.', 'This will not burn for long.'],
 };
 
+/** 0.36.4: the longest line of the AI's own words that is shown above Dave (longer ones fall back to the fixed phrase). */
+export const SAID_MAX = 70;
+export function cleanSaid(text) {
+  if (typeof text !== 'string') return null;
+  const s = text.replace(/\s+/g, ' ').trim();
+  return s && s.length <= SAID_MAX ? s : null;
+}
+
 /** The variant of `kind` for its n-th line: a plain rotation, so a kind never repeats a line twice in a row. Presentation only: no PRNG. */
 export function phraseFor(kind, count = 0) {
   const phrases = PHRASES[kind];
@@ -67,11 +81,18 @@ export function createThoughts() {
   let now = 0, last = -Infinity;
   return {
     update(dt) { now += dt; },
-    take(kind) {
-      const next = phraseFor(kind, counts.get(kind) ?? 0);
-      if (!next || now - last < 8 || now - (shown.get(kind) ?? -Infinity) < 60) return null;
-      last = now; shown.set(kind, now); counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    take(kind, said) {
+      const own = cleanSaid(said), next = own || phraseFor(kind, counts.get(kind) ?? 0);
+      if (!next || !PHRASES[kind] || now - last < 8 || now - (shown.get(kind) ?? -Infinity) < 60) return null;
+      last = now; shown.set(kind, now); if (!own) counts.set(kind, (counts.get(kind) ?? 0) + 1);
       return next;
+    },
+    /** 0.36.5: the AI's reason for the step that starts now, a line of its own (8 s quiet rule only); unusable text: the step's usual fixed phrase if it has one (`fallbackKind`), else null. */
+    takeStep(said, fallbackKind) {
+      const own = cleanSaid(said);
+      if (!own) return fallbackKind ? this.take(fallbackKind) : null;
+      if (now - last < 8) return null;
+      last = now; return own;
     },
   };
 }
@@ -103,10 +124,18 @@ export function createVoice(container, logEl) {
     logEl.appendChild(row); history.push(entry);
     if (atBottom) logEl.scrollTop = logEl.scrollHeight;
   }
-  function announce(kind, time = 0) {
-    const next = thoughts.take(kind);
+  function announce(kind, time = 0, said) {
+    const next = thoughts.take(kind, said);
     if (!next) return null;
     append(next, time);   // the log is never held back
+    if (clock < holdUntil) pending = next; else display(next);
+    return next;
+  }
+  /** 0.36.5: the reason of the plan step that starts now (see createThoughts().takeStep). */
+  function announceStep(time = 0, said, fallbackKind = null) {
+    const next = thoughts.takeStep(said, fallbackKind);
+    if (!next) return null;
+    append(next, time);
     if (clock < holdUntil) pending = next; else display(next);
     return next;
   }
@@ -127,5 +156,5 @@ export function createVoice(container, logEl) {
     const y = Math.max(8, Math.min(rect.height - 8, (1 - point.y) * rect.height / 2));
     line.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px) translate(-50%,-100%)`;
   }
-  return { history, announce, hold, update, toggle() { logEl.hidden = !logEl.hidden; if (!logEl.hidden) logEl.scrollTop = logEl.scrollHeight; }, open: () => !logEl.hidden };
+  return { history, announce, announceStep, hold, update, toggle() { logEl.hidden = !logEl.hidden; if (!logEl.hidden) logEl.scrollTop = logEl.scrollHeight; }, open: () => !logEl.hidden };
 }

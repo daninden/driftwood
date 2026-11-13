@@ -134,7 +134,7 @@ describe('the pure layers stay free of the DOM', () => {
     for (const dir of ['src/core', 'src/world', 'src/game']) for (const f of walk(dir)) {
       const code = fs.readFileSync(f, 'utf8').split('\n').filter(l => !/^\s*(\*|\/\/|\/\*)/.test(l)).map(l => l.replace(/\/\/.*$/, '')).join('\n');
       expect(/\b(document|WebGLRenderingContext|THREE\.)\b/.test(code), `${f} touches the DOM`).toBe(false);
-      if (!f.startsWith('src/world')) expect(/from 'three'/.test(code), `${f} imports Three.js`).toBe(false);   // (world uses only the curve maths of three)
+      if (!f.replace(/\\/g, '/').startsWith('src/world')) expect(/from 'three'/.test(code), `${f} imports Three.js`).toBe(false);   // (world uses only the curve maths of three)
     }
   });
   it('keeps the drawing of the gesture in render, reading the game, never the other way round', () => {

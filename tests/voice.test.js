@@ -2,7 +2,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
-import { PHRASES, phraseFor, voiceTime, createThoughts, createVoice, isVoiceKey, isVoiceLogEvent } from '../src/render/voice.js';
+import { PHRASES, SAID_MAX, cleanSaid, phraseFor, voiceTime, createThoughts, createVoice, isVoiceKey, isVoiceLogEvent } from '../src/render/voice.js';
 import { LACK_KINDS } from '../src/game/lack.js';
 import { PASSIVE_CODES, createActing } from '../src/game/input.js';
 
@@ -114,5 +114,45 @@ describe('Voice', () => {
     expect(isVoiceLogEvent({ composedPath: () => [{}, log] })).toBe(true);
     expect(isVoiceLogEvent({ target: { closest: s => s === '#voice-log' ? log : null } })).toBe(true);
     expect(isVoiceLogEvent({ target: {} })).toBe(false);
+  });
+});
+
+describe('0.36.4 "Hindsight": the AI\'s own words above Dave', () => {
+  it('cleanSaid keeps real text of at most 70 characters, tidied, and nothing else', () => {
+    expect(SAID_MAX).toBe(70);
+    expect(cleanSaid('  I could do with   a drink.  ')).toBe('I could do with a drink.');
+    expect(cleanSaid('x'.repeat(70))).toBe('x'.repeat(70)); expect(cleanSaid('x'.repeat(71))).toBeNull();
+    for (const bad of ['', '   ', null, undefined, 5, {}]) expect(cleanSaid(bad)).toBeNull();
+  });
+  it('a given reason replaces the fixed phrase of its kind; empty or too long falls back to the phrase', () => {
+    const th = createThoughts(); th.update(100);
+    expect(th.take('drinkIntent', 'Water first, then the shore.')).toBe('Water first, then the shore.');
+    th.update(61); expect(th.take('drinkIntent', 'x'.repeat(71))).toBe(PHRASES.drinkIntent[0]);   // (too long: the fixed phrase; its rotation had not moved)
+    th.update(61); expect(th.take('drinkIntent', '')).toBe(PHRASES.drinkIntent[1]);
+    th.update(61); expect(th.take('drinkIntent')).toBe(PHRASES.drinkIntent[2]);   // the AI off: exactly as before
+  });
+  it('the quiet-time rules still apply to such a line (8 s for any line, 60 s for one kind), and a kind without phrases says nothing', () => {
+    const th = createThoughts(); th.update(100);
+    expect(th.take('spearIntent', 'A spear, then.')).toBe('A spear, then.');
+    th.update(5); expect(th.take('fishIntent', 'Fish soon.')).toBeNull();
+    th.update(4); expect(th.take('fishIntent', 'Fish soon.')).toBe('Fish soon.');
+    th.update(20); expect(th.take('fishIntent', 'Again.')).toBeNull(); th.update(41); expect(th.take('fishIntent', 'Again.')).toBe('Again.');
+    expect(th.take('nonsenseKind', 'Hello.')).toBeNull();
+  });
+});
+
+describe('0.36.5 "Reach": the reason of a plan step is said when the step starts', () => {
+  it('takeStep says the AI\'s words as a line of its own, under the 8 s quiet rule but not the 60 s of a kind', () => {
+    const t = createThoughts();
+    t.update(100);
+    expect(t.takeStep('Time to see what is out there.', 'explore')).toBe('Time to see what is out there.');
+    t.update(3); expect(t.takeStep('Another reason', 'explore')).toBeNull();   // inside the quiet time
+    t.update(6); expect(t.takeStep('Another reason', 'explore')).toBe('Another reason');   // the same kind again after 8 s: no 60 s rule
+  });
+  it('takeStep falls back to the step\'s fixed phrase when the text is unusable, and says nothing when there is none', () => {
+    const t = createThoughts(); t.update(100);
+    expect(t.takeStep('x'.repeat(SAID_MAX + 1), 'woodIntent')).toBe(phraseFor('woodIntent', 0));
+    t.update(100); expect(t.takeStep('', null)).toBeNull();
+    t.update(100); expect(t.takeStep(null, 'noSuchKind')).toBeNull();
   });
 });
