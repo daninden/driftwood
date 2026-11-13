@@ -54,6 +54,10 @@
  * BRANCH_BURN, fuelOf(logs) -> the fuel in days of a list of pieces (a branch counts BRANCH_BURN of a piece)
  * TORCH_DAYS, TORCH_COST, TORCH_DRY, DOUSE_DEPTH, WARM_R, BURNT_DAYS, RAIN_BURN, RAIN_OUT, TORCH_RAIN, RING_BURN
  * full(f) -> true when fire f holds as much as it can (FUEL_MAX)
+ * fireOutlook({ fuel, ring, hoursToDawn, dry, branches }) -> { pieces, hoursLeft, perPiece, need, storeHours, max, maxHours }   (0.36.9 "Voice", pure, read only: for the plan request of src/ai) what a fire and a store mean in hours:
+ *   fuel: days of fuel on the fire (0 for none), ring: a stone ring holds it (RING_BURN), hoursToDawn: hours of the clock until dawn, dry: dry pieces of driftwood in the store, branches: branches in the store (a branch is BRANCH_BURN of a piece; wet wood
+ *   does not burn and is left out). pieces: fuel in pieces of driftwood, hoursLeft: how long the fuel burns, perPiece: hours one dry piece burns (BURN, RING_BURN times as long in a ring), need: whole pieces more that the fire needs to last until dawn (0 when it lasts),
+ *   storeHours: hours of fire the store holds, max / maxHours: what the fire holds at most (FUEL_MAX) in pieces and in hours. A wet piece laid on a fire gives half a piece (`feed`), so wet wood never counts here.
  * catchChance(dry, tired, attempts = 0) -> 0..CATCH_TOP   dry: mean dryness 0..1, tired 0..1 (game/sleep), attempts: the attempts made before (fire.attempts)
  * createFire(world, saved?) -> fire
  *   fire.fires             [{ id, x, z, fuel, embers, emberAge, lit, fed, rained? }]  fuel and embers in
@@ -123,6 +127,15 @@ const BURNT_R = 0.7;                          // a new fire this close to a burn
 
 export const full = f => f.fuel >= FUEL_MAX - 1e-9;
 export const catchChance = (dry, tired = 0, attempts = 0) => practised(CATCH, CATCH_TOP, attempts) * Math.max(0, Math.min(1, dry)) ** 2 * (1 - (1 - TIRED_CATCH) * Math.max(0, Math.min(1, tired)));
+/** 0.36.9: what a fire and a store mean in hours (pure; see the header). */
+export function fireOutlook({ fuel = 0, ring = false, hoursToDawn = 0, dry = 0, branches = 0 } = {}) {
+  const k = ring ? RING_BURN : 1, perPiece = BURN * 24 * k, f = Math.max(0, fuel);
+  const hoursLeft = f * 24 * k;
+  return {
+    pieces: f / BURN, hoursLeft, perPiece, need: Math.max(0, Math.ceil((Math.max(0, hoursToDawn) - hoursLeft) / perPiece - 1e-9)),
+    storeHours: (Math.max(0, dry) + Math.max(0, branches) * BRANCH_BURN) * perPiece, max: FUEL_MAX / BURN, maxHours: FUEL_MAX * 24 * k,
+  };
+}
 /** The visual heat left in an ember stage: warm at first, a few red points at its end. */
 export const emberGlow = f => Math.max(0, Math.min(1, f.embers / EMBERS)) ** 1.7;
 

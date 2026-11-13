@@ -15,8 +15,10 @@
  * rule (8 s) still applies at the moment it is said, so at most one line can wait through the 5 s wake line;
  * there is no queue.
  *
- * Exports: PHRASES, SAID_MAX, cleanSaid, phraseFor, voiceTime, createThoughts (take, takeStep), createVoice
- *   cleanSaid(text) -> string | null   the AI's words made fit for a line: trimmed, single-spaced, null when empty, not text or longer than SAID_MAX
+ * 0.36.9 "Voice": SAID_MAX is 140 (was 70): a reason of one or two short sentences, shown on at most TWO lines above him (the CSS `.voice` is up to min(520px, 92vw) wide with balanced wrapping; `display` measures the line in the browser and, if it would take a third line on a narrow screen, cuts it at a word boundary with an ellipsis); a longer text is cut at a word boundary (`cutAtWord`) instead of falling back to the fixed phrase. The AI's own words stay `showTime` seconds (SHOW_OWN 4 s plus SHOW_READ 0.03 s a character, about 8 s for 140), a fixed phrase 3 s as ever.
+ *
+ * Exports: PHRASES, SAID_MAX, cleanSaid, cutAtWord, showTime, isFixedLine, SHOW_FIXED, SHOW_OWN, SHOW_READ, phraseFor, voiceTime, createThoughts (take, takeStep), createVoice
+ *   cleanSaid(text) -> string | null   the AI's words made fit for a line: trimmed, single-spaced, null when empty or not text, cut at a word boundary when longer than SAID_MAX
  *   (createVoice(container) -> { announce(kind, time?, said?), announceStep(time?, said?, fallbackKind?), hold(until), update(dt, player, camera, now?) }; now defaults to a clock of the dts)
  * Depends on: three, render/screenRect
  */
@@ -54,13 +56,27 @@ export const PHRASES = {
   needMoreWood: ['This needs more wood to burn.', 'There is not enough wood here.', 'I need a few more pieces.', 'This will not burn for long.'],
 };
 
-/** 0.36.4: the longest line of the AI's own words that is shown above Dave (longer ones fall back to the fixed phrase). */
-export const SAID_MAX = 70;
+/** 0.36.4: the longest line of the AI's own words that is shown above Dave. 0.36.9 "Voice": 140 (was 70, and a longer one fell back to the fixed phrase): a step reason of one or two short sentences, on at most two lines; a longer text is cut at a word boundary and ends in an ellipsis. */
+export const SAID_MAX = 140;
 export function cleanSaid(text) {
   if (typeof text !== 'string') return null;
   const s = text.replace(/\s+/g, ' ').trim();
-  return s && s.length <= SAID_MAX ? s : null;
+  if (!s) return null;
+  if (s.length <= SAID_MAX) return s;
+  return cutAtWord(s, SAID_MAX);
 }
+/** 0.36.9: `text` cut at a word boundary so that, with the ellipsis, it is at most `max` characters (a single very long word is cut hard); pure. */
+export function cutAtWord(text, max) {
+  if (text.length <= max) return text;
+  const room = Math.max(1, max - 1), head = text.slice(0, room + 1), at = head.lastIndexOf(' ');
+  const cut = at > room * 0.4 ? head.slice(0, at) : text.slice(0, room);
+  return cut.replace(/[\s,;:.\-]+$/, '') + '\u2026';
+}
+
+/** 0.36.9: how long a line stays (seconds), faded in and out within it: the AI's own words 4 s plus reading time by their length (SHOW_READ s a character, 140 characters about 8 s); a fixed phrase 3 s as ever. */
+export const SHOW_FIXED = 3, SHOW_OWN = 4, SHOW_READ = 0.03;
+export const isFixedLine = text => Object.values(PHRASES).some(list => list.includes(text));
+export const showTime = text => (isFixedLine(text) ? SHOW_FIXED : SHOW_OWN + SHOW_READ * String(text || '').length);
 
 /** The variant of `kind` for its n-th line: a plain rotation, so a kind never repeats a line twice in a row. Presentation only: no PRNG. */
 export function phraseFor(kind, count = 0) {
@@ -102,7 +118,7 @@ export function createVoice(container) {
   line.className = 'voice'; line.setAttribute('aria-hidden', 'true'); container.appendChild(line);
   const point = new THREE.Vector3();
   const thoughts = createThoughts();
-  let text = null, age = Infinity, clock = 0, holdUntil = 0, pending = null;
+  let text = null, age = Infinity, clock = 0, holdUntil = 0, pending = null, life = SHOW_FIXED;
 
   function announce(kind, time = 0, said) {
     const next = thoughts.take(kind, said);
@@ -117,7 +133,15 @@ export function createVoice(container) {
     if (clock < holdUntil) pending = next; else display(next);
     return next;
   }
-  function display(next) { text = next; age = 0; line.textContent = next; }
+  function display(next) {
+    text = next; age = 0; life = showTime(next); line.textContent = next;
+    // 0.36.9: at most two lines: on a narrow screen a long reason may need a third, then it is cut at a word boundary (the browser measures; where nothing is measured, as in a test, the line stays as it is)
+    const lh = parseFloat(typeof getComputedStyle === 'function' ? getComputedStyle(line).lineHeight : '') || 20;
+    for (let n = 0; n < 40 && line.offsetHeight > lh * 2.4 && text.length > 12; n++) {
+      const base = text.replace(/\u2026$/, '');
+      text = cutAtWord(base, base.length - 1 - Math.ceil(base.length / 12)); line.textContent = text;
+    }
+  }
   /** Hold new lines above Dave back until the clock reaches `until` (the wake line is showing); a held line is shown then. */
   function hold(until) { holdUntil = Math.max(holdUntil, until); }
   function update(dt, player, camera, now = clock + dt) {
@@ -125,7 +149,7 @@ export function createVoice(container) {
     clock = now;
     if (pending && clock >= holdUntil) { display(pending); pending = null; }
     age += dt;
-    const opacity = age < 3 ? Math.min(1, age / 0.2, (3 - age) / 0.8) : 0;
+    const opacity = age < life ? Math.min(1, age / 0.2, (life - age) / 0.8) : 0;
     line.style.opacity = String(Math.max(0, opacity));
     if (!text || opacity <= 0) return;
     const rect = rectOf(container);

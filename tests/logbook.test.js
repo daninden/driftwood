@@ -7,7 +7,7 @@ import { createGame } from '../src/game/game.js';
 import { createMind } from '../src/game/mind.js';
 import { rulesChooser, goalMenu, makeMenu, option, WAIT } from '../src/game/intent.js';
 import { chooseGoal, VERY_AT, VERY_HUNGER_AT } from '../src/game/mind.js';
-import { FIXED, buildPlanMessages } from '../src/ai/prompt.js';
+import { FIXED, fixedText, buildPlanMessages } from '../src/ai/prompt.js';
 import { createLogbook, wrapChooser, snapshotEntry, hashText, dayLabel, slotOf, fileName, scrubSecrets, LOG_MAX_BYTES, SNAP_EVERY } from '../src/ai/logbook.js';
 import { openLogStore, LOG_DB } from '../src/ai/logStore.js';
 import { saveTextFile } from '../src/render/aiPanel.js';
@@ -66,6 +66,11 @@ describe('the logbook: entries', () => {
     expect(p).toMatchObject({ planId: 1, raw: '{"plan":[]}', req: 'r2' });
     expect(st.length).toBe(2); expect(st[0]).toMatchObject({ trigger: 'no plan yet', reason: 'a calm day' });
     expect(st[1].steps[1]).toMatchObject({ id: 'drink', reason: 'thirsty', state: 'skipped', note: 'no water known' });
+  });
+  it('0.36.9: with the castaway\'s name the fixed part is still stored once (its hash is of the text of that game)', () => {
+    const lb = make(), named = fixedText('Robin');
+    lb.request(msgs('state one', named)); lb.request(msgs('state two', named));
+    const sys = linesOf(lb).filter(x => x.k === 'sys'); expect(sys.length).toBe(1); expect(sys[0]).toMatchObject({ id: 'sys-' + hashText(named), text: named }); expect(named).not.toBe(FIXED);
   });
   it('a request keeps the fixed system text once, then only the rest; an answer is its own line', () => {
     const lb = make();
@@ -245,5 +250,5 @@ describe('the download button', () => {
     saveTextFile('driftwood-log-1-day2.jsonl', '{"a":1}\n', { doc, url });
     expect(made[0]).toMatchObject({ tag: 'a', href: 'blob:x', download: 'driftwood-log-1-day2.jsonl', attached: true }); expect(clicked).toBe(1); expect(removed).toBe(1);
   });
-  it('the version is 0.36.8 "Logbook"', () => { expect(VERSION).toBe('0.36.8'); expect(NAME).toBe('Logbook'); });
+  it('the version is a 0.36 release with a name (the exact one is asserted in tests/devPanel.test.js)', () => { expect(VERSION).toMatch(/^0\.36\.\d+$/); expect(NAME.length).toBeGreaterThan(2); });
 });

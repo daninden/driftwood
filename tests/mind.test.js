@@ -5,7 +5,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { mulberry32 } from '../src/core/noise.js';
-import { createMind, crabHabitOk, AI_FROM, AI_WORK_TO, AI_TRIP_TO, habitOk, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_EARLY, crabDue, EXPLORE_THIRST, EXPLORE_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, SURROUND, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
+import { createMind, crabHabitOk, AI_FROM, AI_WORK_TO, AI_TRIP_TO, habitOk, exploreChance, exploreReach, exploreWhere, exploreLate, EXPLORE_FROM, EXPLORE_TO, EXPLORE_BACK, EXPLORE_GAP, EXPLORE_CHANCE, EXPLORE_MISSING_CHANCE, EXPLORE_REACH0, EXPLORE_EARLY, crabDue, EXPLORE_THIRST, EXPLORE_HUNGER, CALM_THIRST, CALM_HUNGER, homeNext, HOME_DAY, HOME_FROM, HOME_TO, HOME_ORDER, SITE_RINGS, SITE_HIGH, SITE_SLOPE, SURROUND, chooseGoal, errandPreempts, exactPileDrop, fireStep, storesStep, RANK, THIRST_GO, HUNGER_GO, VERY_AT, VERY_HUNGER_AT, BED_FROM, SUPPER_FROM, BED_THIRST, BED_HUNGER, THIRST_TOPUP, TIRED_GO, EVENING, LIGHT_FROM, WOOD_WANT, REST_MIN, REST_MAX, REST_LONG_MIN, REST_LONG_MAX, REST_LONG_CHANCE, PILE_FULL, FIBRE_WANT, STROLL_KINDS, STROLL_FROM, STROLL_TO, restSeconds, strollKind, strollNow, huskWanted, crabTripOk, crabFoodOk, CRAB_TIDE, CRAB_FROM, CRAB_TO, CRAB_FOOD_TO, CRAB_DIGS, CRAB_ROAST_HUNGER } from '../src/game/mind.js';
 import { createTakeover, createActing, CAMERA_CODES, PASSIVE_CODES, QUIET } from '../src/game/input.js';
 import { runMind, walkFirstDay } from './helpers/mindSim.js';
 import { campGame } from './helpers/mindCamp.js';
@@ -663,8 +663,8 @@ describe('exploring: when he goes out (exploreChance, pure)', () => {
   });
   it('only when nothing presses: not thirsty, not hungry, no recent failure (a crab trip first is a habit of the rules, tests/oneMenu.test.js)', () => {
     expect(exploreChance(ex({ last: -9 }))).toBeGreaterThan(0);
-    expect(exploreChance(ex({ last: -9, thirst: EXPLORE_THIRST }))).toBe(0);
-    expect(exploreChance(ex({ last: -9, hunger: EXPLORE_HUNGER }))).toBe(0);
+    expect(exploreChance(ex({ last: -9, thirst: CALM_THIRST }))).toBe(0);
+    expect(exploreChance(ex({ last: -9, hunger: CALM_HUNGER }))).toBe(0);
     expect(exploreChance(ex({ last: -9, cool: { explore: true } }))).toBe(0);
   });
   it('now and then when nothing is missing, much more often (and daily) when something is', () => {
@@ -679,7 +679,7 @@ describe('exploring: when he goes out (exploreChance, pure)', () => {
     const t = (EXPLORE_EARLY + EXPLORE_FROM) / 2;
     expect(exploreChance(ex({ time: t, last: -9 }))).toBe(EXPLORE_CHANCE);                    // possible, calm or not
     expect(exploreChance(ex({ time: t, last: 4, missing: 1 }))).toBe(0);                       // still once a day at most
-    expect(exploreChance(ex({ time: t, last: -9, thirst: EXPLORE_THIRST }))).toBe(0);          // the other start conditions stay
+    expect(exploreChance(ex({ time: t, last: -9, thirst: CALM_THIRST }))).toBe(0);          // the other start conditions stay
     expect(exploreChance(ex({ time: EXPLORE_EARLY - 0.001, last: -9 }))).toBe(0);
     expect(habitOk('explore', { time: t })).toBe(false);                                       // the rules: not calm, the old window
     expect(habitOk('explore', { time: t, calm: false })).toBe(false);

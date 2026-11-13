@@ -7,7 +7,7 @@
  *   1. FOLLOW (no request, no wait). The next step is taken when it is on the current menu and possible.
  *      goal point:     a goal step on the menu is taken; a goal step NOT on the menu is SKIPPED (the rules' menu offers a goal only when it is needed: he is not thirsty, the fire is lit, the stores are full: the step is done or pointless; shown "skipped" in the panel);
  *                      a pastime step is reached through free time: 'idle' is taken (the step stays); if 'idle' is not on the menu the rules decide this one point and the step stays ('plan-hold').
- *      pastime point:  a pastime step on the menu and possible is taken (and done). A day pastime while the first stage (sunset, ember, strays, onward) is asked: 'onward' is taken (the step stays). A goal step while he is in free time: the shortest option ('onward', then 'linger') is taken, so the goal point comes soon (the step stays).
+ *      pastime point:  a pastime step on the menu and possible is taken (and done). A day pastime while the first stage (sunset, ember, strays, onward) is asked: 'onward' is taken (the step stays). A goal step while he is in free time: 'onward' when the first stage is asked, else the rules decide for the moment (0.36.9: no `linger` as a short way on; the step stays).
  *                      A pastime step that is NOT possible (wrong hours, no spear, done today: the option is on the menu but not valid, or its stage has passed) makes the plan useless: a new plan is asked, with the reason ("the next step was fish, but it is not possible now (...)"); if a request was made less than AI_REPLAN_GAP seconds ago, or none can be sent, the step is skipped instead.
  *   2. ASK for a NEW plan when: there is none, the plan is used up (every step done or skipped), a new day has begun (the plan's morning differs from the clock's: before dawn still counts as the day before), an EVENT point was reached since (stuck, no path, no place to stand, a goal failed or was dropped: the reason is told to the model), or the next step is not possible (above).
  *      The request is sent THEN, with the state and the menu of that moment, and the chooser answers WAIT: Dave stands still for at most AI_WAIT real seconds. A plan that lands in time is used at once (this decision takes its first step). On a timeout (`no answer`), an error or an unusable answer the rules decide this one point; a plan that lands later is installed all the same and used at the next decisions
@@ -22,6 +22,8 @@
  *
  * 0.36.5 (point 11): (a) at the GOAL point, before bridging through free time (idle) to a pastime step, the step is checked: its hours (prompt hoursOpen) must be open and `mind.blockers()` must have no entry for it; if not, the step is skipped with the reason, or, when a request is allowed, a new plan is asked ("the next step, watch the sunset, was not possible now (...)"), as at the pastime point; a step that cannot happen is never bridged to (seen live: at night the gaze step was bridged to at every goal decision, drink and eat were never taken, and no pastime point ever came to find it impossible). (b) Waking is a reason for a new plan: `game.sleep.wakes` (counted by game/sleep `wake()`, any sleep: the night, a cold sleep cut short, a nap, a collapse) going up between two decisions asks for a new plan with the trigger "he woke up" (unless one was asked meanwhile: the trigger is used up by the request).
  *
+ * 0.36.9 "Voice": (a) `name()` (an option; main: the name the player gave) goes into the plan and journal requests (ai/prompt `fixedText(name)`); the fixed part may differ per game, `ai/logbook` stores each system text once by its hash. (b) No `linger` as a short way on to a goal step (`follow`): `onward` when the first stage is asked, else `hold` (the rules decide for the moment and the plan stays at that step); a rest only when the plan names it. (c) The fire goal may be on the menu at any hour (game/mind `chooseGoalMenu`): a fire step is possible whenever a fire of his burns and dry wood lies ready.
+ * 0.36.9 (more): (d) `quietAsk`: a decision with one option is the rules' at once but a wanted plan (he woke up in the night, a new day, none yet) is still asked for, without waiting. (e) The days in the request are the player's own (`dayOffset`: `clock()` minus the game's clock). (f) A tide step the AI takes carries `ai: true` in the choice (no dice for the round, game/mind `tideRound(byAi)`).
  * 0.36.7 "Memory": (a) ONE short-term list: game/mind's `recent` (the last 20 events and decisions with their outcomes); a plan step that is skipped or not possible goes into it (`mind.remember`; the old separate list of 8 is gone) and it is what the request calls "What he did lately". (b) His own notes (`notes`, at most NOTES_MAX lines of NOTE_LEN characters) change only when a plan answer carries `notes`. (c) The journal [{ day, line }]: `tick()` (main calls it every frame) asks ONE extra request a day, after sunset (DUSK) when the AI is on, the budget allows and no other request runs; it is not a decision and Dave never waits for it; the answer is stored when it comes back; the day is marked asked before the answer, so a failed request is not repeated that day, also across a reload; with the AI off, no key or no budget there is no line (the rules never write one). While it runs the plan request waits (the client runs one request at a time: the rules decide, why 'busy'). `memory()` / `restore(m)` are the saved form (`recent`, `notes`, `journal`, `asked`; main saves it as `memory` next to `habit`, src/save). (d) The crab fix: a destination the model named that is not possible now (`toBlock`: the game's `destinations()` does not offer it; for the crabs the reason of `blockers().crabs`) makes the step NOT POSSIBLE like any other impossible pastime step (remembered with the reason, a new plan when one can be asked, else skipped); the game never substitutes another place and the step's reason is not spoken (`onStep` comes only for a step that starts as planned).
  *
  * 0.36.7 (point 3): when a new plan is wanted (the plan is used up, a new day, an event, a step not possible) but one cannot be asked yet (asked less than AI_REPLAN_GAP ago, a request running, no budget) and there is a current plan, the chooser follows THAT plan as usual (a step that is not possible is skipped with its reason) and keeps the trigger, so the new plan is asked as soon as the gap allows; only when the plan has no usable step left do the rules decide (why 'busy', 'waiting' or 'budget' as before).
@@ -40,7 +42,7 @@
  *
  * Exports:
  *   OVERRIDES, MODES, CRITICAL, overridesFor(mode)
- *   createAiChooser({ rulesChooser, ask, onStep?, now?, canSend?, enabled?, clock?, log?, wait?, mode?, overrides?, replanGap? }) -> ai
+ *   createAiChooser({ rulesChooser, ask, onStep?, now?, canSend?, enabled?, name?, clock?, log?, wait?, mode?, overrides?, replanGap? }) -> ai
  *     rulesChooser(point, menu, ctx)   the present rules (game/intent rulesChooser)
  *     ask(messages) -> Promise<{ text, ms, model? }>
  *     now() -> real seconds (default: Date.now() / 1000)       canSend() -> bool   the budget allows a request       enabled() -> bool   the AI is on and has a key
@@ -87,10 +89,11 @@ export const overridesFor = mode => { const ids = MODES[mode] || MODES[AI_MODE_D
 const EVENT_TEXT = { stuck: 'he got stuck', nopath: 'he found no path', 'no-stand': 'he found no place to stand', failed: 'a goal failed', dropped: 'a goal was dropped' };
 const eventText = (kind, goal) => `an event: ${EVENT_TEXT[kind] || kind}${goal ? ` (${goal})` : ''}`;
 
-export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => Date.now() / 1000, canSend = () => true, enabled = () => true, clock = null, log = null, wait = AI_WAIT, mode = () => AI_MODE_DEFAULT, overrides = null, replanGap = AI_REPLAN_GAP } = {}) {
+export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => Date.now() / 1000, canSend = () => true, enabled = () => true, name = () => '', clock = null, log = null, wait = AI_WAIT, mode = () => AI_MODE_DEFAULT, overrides = null, replanGap = AI_REPLAN_GAP } = {}) {
   const entries = [], count = { ai: 0, rules: 0, differ: 0 };
   const plans = [];   // 0.36.5: the plans of this page, newest first (PLANS_MAX), kept with their steps' states for the panel's plan view
   let planSeq = 0;
+  const nameNow = () => { try { return name() || ''; } catch (e) { return ''; } };   // 0.36.9: the name the player gave the castaway (main hands a getter: it is asked after the island is loaded)
   let wakes = null, version = 0, call = null, req = null, refs = null, seq = 0, plan = null, stale = null, lastAsk = -Infinity, bridged = null, running = null;   // running (0.36.5): the plan step that was last taken, { goal, id }, while the rules have not decided since
   let notes = [], journal = [], asked = null, journalCall = false, memVer = 0;   // 0.36.7 "Memory": his own notes (written only by the model), the journal [{ day, line }] and the day the journal line was last asked (a failed request is not repeated that day); saved with the island (`memory()`, `restore()`)
 
@@ -108,7 +111,10 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
     if (typeof m.remember === 'function') { m.remember('plan step', id, outcome); return; }
     if (Array.isArray(m.recent)) { const c = refs.game && refs.game.clock || {}; m.recent.push({ t: c.total != null ? +c.total : (+c.day || 0) + (+c.time || 0), day: c.day || 0, kind: 'plan step', what: id, outcome }); if (m.recent.length > RECENT_MAX) m.recent.shift(); }
   };
-  const recentNow = () => { const r = refs && refs.mind && Array.isArray(refs.mind.recent) ? refs.mind.recent : []; return [...r].sort((a, b) => (+a.t || 0) - (+b.t || 0)); };
+  // 0.36.9: the days the model sees are the player's own (the same as the log and the journal): `clock()` counts from the day the game started, the game's own clock does not; the offset is the difference
+  const dayOffset = () => { try { const c = clk(), g = refs && refs.game && refs.game.clock; return c && g && Number.isFinite(c.day) && Number.isFinite(g.day) ? c.day - g.day : 0; } catch (e) { return 0; } };
+  const askState = () => { const st = snapshotOf(refs.game, refs.mind); st.day += dayOffset(); return st; };
+  const recentNow = () => { const r = refs && refs.mind && Array.isArray(refs.mind.recent) ? refs.mind.recent : [], off = dayOffset(); return [...r].sort((a, b) => (+a.t || 0) - (+b.t || 0)).map(x => (off ? { ...x, day: (+x.day || 0) + off } : x)); };
   const blockersNow = () => { try { return (refs && refs.mind && refs.mind.blockers && refs.mind.blockers()) || {}; } catch (e) { return {}; } };
   const nextStep = () => (plan && plan.i < plan.steps.length ? plan.steps[plan.i] : null);
   const noteDone = id => { const st = nextStep(); if (st && st.id === id) { st.state = 'done'; plan.i++; bump(); } };
@@ -148,6 +154,14 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
     call = c; bump(); return c;
   }
 
+  /** 0.36.9 (point 4): a decision with nothing to choose (one option: at night, awake in the dark, only 'stand about' is possible) is the rules' at once, but a plan that is wanted (he woke up, a new day, no plan yet) is still ASKED for, without waiting: it is used at the next decision. Seen live: waking at 03:00 he stood about for 1.5 hours with no request, because the only decision he met had one option. */
+  function quietAsk(point, aiMenu, menu, t) {
+    const trigger = !plan ? (stale || 'no plan yet') : plan.key !== wakeKey() ? 'a new day begins' : stale;
+    if (!trigger || call || journalCall || req || t - lastAsk < replanGap || !canSend() || !refs) return;
+    let messages;
+    try { messages = buildPlanMessages({ state: askState(), recent: recentNow(), trigger, name: nameNow(), previous: plan ? plan.steps.map(x => ({ id: x.id, state: x.state === 'next' ? 'not reached' : x.state, note: x.note || '' })) : [], possible: possibleNow(point, aiMenu, menu), notes, journal: journal.slice(-8), mode: mode() }); } catch (e) { return; }
+    lastAsk = t; stale = stale || trigger; send(messages, trigger);
+  }
   function chooser(point, menu, ctx) {
     if (point === 'event') { if (enabled()) { const o = menu.options[0] || {}; stale = stale || eventText(o.why, o.goal); } return rulesChooser(point, menu, ctx); }
     if (point !== 'goal' && point !== 'pastime') return rulesChooser(point, menu, ctx);
@@ -159,7 +173,7 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
     const wk = refs && refs.game && refs.game.sleep ? refs.game.sleep.wakes : undefined;   // 0.36.5 (point 11): waking from any sleep is a reason for a new plan
     if (typeof wk === 'number') { if (wakes !== null && wk > wakes) stale = stale || 'he woke up'; wakes = wk; }
     const aiMenu = pastime ? makeMenu('pastime', menu.options.filter(isValid)) : menu;
-    if (aiMenu.options.length < 2) { drop(); noteDone(rid); return rules; }
+    if (aiMenu.options.length < 2) { quietAsk(point, aiMenu, menu, t); drop(); noteDone(rid); return rules; }
     const planned = () => { const st = nextStep(); return st ? stepLabel(st.id) : null; };
     const finish = (o, c = rules) => {   // the rules decide
       if (o.used !== 'ai') { running = null; if (plan) plan.running = null; }   // (0.36.5: a step the rules took over is no longer the AI's: its intent phrases speak again)
@@ -199,6 +213,7 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
           if (d && Array.isArray(d[r.take]) && d[r.take].includes(st.to)) { to = st.to; st.toUsed = to; ch = r.take === 'stroll' ? { id: 'stroll', kind: to } : { id: r.take, where: to }; }
           else st.toIgnored = st.to;
         }
+        if (pastime && !r.bridge && r.take === 'tide') ch = { ...(ch && typeof ch === 'object' ? ch : { id: ch }), ai: true };   // 0.36.9: the AI's round is not rolled for (game/mind `tideRound(byAi)`)
         if (!r.bridge) st.at = gameTime();
         if (r.bridge) {   // a short way on to the step (free time first, onward, linger): the mind may ask again every step while he rests, so the same answer within half a second is given silently
           if (bridged && bridged.point === point && bridged.id === r.take && t - bridged.t < 0.5) { bridged.t = t; return ch; }
@@ -218,7 +233,7 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
     if (t - lastAsk < replanGap) return finish({ why: 'waiting' });
     if (!canSend() || !refs) return finish({ why: 'budget' });
     let messages;
-    try { messages = buildPlanMessages({ state: snapshotOf(refs.game, refs.mind), recent: recentNow(), trigger, previous: plan ? plan.steps.map(x => ({ id: x.id, state: x.state === 'next' ? 'not reached' : x.state, note: x.note || '' })) : [], possible: possibleNow(point, aiMenu, menu), notes, journal: journal.slice(-8), mode: mode() }); }
+    try { messages = buildPlanMessages({ state: askState(), recent: recentNow(), trigger, name: nameNow(), previous: plan ? plan.steps.map(x => ({ id: x.id, state: x.state === 'next' ? 'not reached' : x.state, note: x.note || '' })) : [], possible: possibleNow(point, aiMenu, menu), notes, journal: journal.slice(-8), mode: mode() }); }
     catch (e) { return finish({ why: 'error: ' + (e && e.message || e) }); }
     lastAsk = t; stale = stale || trigger;
     const c = send(messages, trigger);
@@ -250,7 +265,7 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
     const c = clk(); if (!c || c.day == null || !(c.time >= DUSK && c.time < 1)) return;
     if (asked === c.day || journal.some(j => j.day === c.day) || !canSend()) return;
     let messages;
-    try { messages = buildJournalMessages({ state: snapshotOf(refs.game, refs.mind), recent: recentNow(), journal: journal.slice(-8), notes }); } catch (e) { return; }
+    try { messages = buildJournalMessages({ state: askState(), recent: recentNow(), journal: journal.slice(-8), notes, name: nameNow() }); } catch (e) { return; }
     const day = c.day;
     asked = day; memVer++; journalCall = true; bump();   // asked is kept (and saved) before the answer: a failed or lost request is not repeated the same day, also across a reload
     let p; try { p = Promise.resolve(ask(messages)); } catch (e) { p = Promise.reject(e); }
@@ -313,9 +328,8 @@ export function createAiChooser({ rulesChooser, ask, onStep = null, now = () => 
         if (ids.has('idle')) return { take: 'idle', bridge: true, step: k, why: `Free time first, on the way to: ${stepLabel(id)}.` };
         return { hold: true };
       }
-      if (goalStep) {
-        const short = before ? 'onward' : 'linger';
-        return ids.has(short) ? { take: short, bridge: true, step: k, why: `A short one first: the plan's next step is ${stepLabel(id)}.` } : { hold: true };
+      if (goalStep) {   // 0.36.9: no `linger` as a bridge to a goal step (a stand about is a rest, taken only when the plan names it): 'onward' when the first stage is asked, else the rules decide for now (`hold`: he goes on with whatever the day offers, the goal comes when its turn is due)
+        return before && ids.has('onward') ? { take: 'onward', bridge: true, step: k, why: `On the way to: ${stepLabel(id)}.` } : { hold: true };
       }
       if (ids.has(id) && !toBlock(st)) { st.state = 'done'; plan.i++; bump(); return { take: id, step: k }; }
       if (before && !STAGES.before.includes(id) && ids.has('onward')) return { take: 'onward', bridge: true, step: k, why: `On the way to: ${stepLabel(id)}.` };

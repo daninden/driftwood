@@ -33,7 +33,7 @@ describe('the menu\'s hours (pure, 0.36.6: the same for every chooser)', () => {
     expect(exploreChance(ex)).toBeGreaterThan(0);
     expect(exploreChance({ ...ex, last: 6 })).toBe(0);   // not every day
     expect(exploreChance({ ...ex, time: 0.7 })).toBe(0);   // a trip is not started after AI_TRIP_TO
-    expect(exploreChance({ ...ex, thirst: 0.3 })).toBe(0);   // the real conditions stay
+    expect(exploreChance({ ...ex, thirst: 0.35 })).toBe(0);   // the real conditions stay
     const fi = { time: 0.3, day: 7, last: 6, spear: true, crabs: 0, fish: 0, thirst: 0, hunger: 0, cool: {} };
     expect(fishChance(fi)).toBeGreaterThan(0); expect(fishChance({ ...fi, spear: false })).toBe(0); expect(fishChance({ ...fi, day: 6 })).toBe(0);
     expect(AI_FROM).toBeLessThan(0.2); expect(AI_TRIP_TO).toBeLessThan(AI_BACK); expect(AI_WORK_TO).toBeLessThanOrEqual(AI_BACK);

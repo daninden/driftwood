@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
-import { createMind, AI_FROM, AI_WORK_TO, axeNext, HOME_FROM, AXE_TO, AXE_CLEAR_R, AXE_OUT_R, AXE_LOGS, AXE_THIRST, AXE_HUNGER, LOG_RING } from '../src/game/mind.js';
+import { createMind, AI_FROM, AI_WORK_TO, axeNext, HOME_FROM, AXE_TO, AXE_CLEAR_R, AXE_OUT_R, AXE_LOGS, AXE_THIRST, AXE_HUNGER, CALM_THIRST, CALM_HUNGER, LOG_RING } from '../src/game/mind.js';
 import { LISTS, treeId, trunkRadius, sizeKind, isGiant } from '../src/game/felled.js';
 import { PILE_MAX } from '../src/game/wood.js';
 import { campGame } from './helpers/mindCamp.js';
@@ -54,8 +54,8 @@ describe('axeNext (pure): the axe project has its turn', () => {
     expect(axeNext({ ...base, axeDay: 5 })).toBe(false);                         // one unit a day
     expect(axeNext({ ...base, builtDay: 5 })).toBe(false);                       // the last piece of the home was finished today
     expect(axeNext({ ...base, day: 1 })).toBe(false);
-    expect(axeNext({ ...base, thirst: AXE_THIRST })).toBe(false);
-    expect(axeNext({ ...base, hunger: AXE_HUNGER })).toBe(false);
+    expect(axeNext({ ...base, thirst: CALM_THIRST })).toBe(false); expect(axeNext({ ...base, thirst: AXE_THIRST })).toBe(true);   // 0.36.9: the menu's limit; AXE_THIRST is the rules' habit
+    expect(axeNext({ ...base, hunger: CALM_HUNGER })).toBe(false);
     expect(axeNext({ ...base, cool: { axe: true } })).toBe(false);
   });
 });

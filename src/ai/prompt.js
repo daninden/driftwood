@@ -2,7 +2,7 @@
  * ai/prompt — what is sent to the language model, and how its answer is read (0.36 "Mind"). Pure: no DOM, no network, no storage, no random numbers. Only the game state it is handed is read (never changed).
  *
  * A request is built anew each time, never a chat: a FIXED part (who Dave is, how the island works, what the options mean, the answer format: a constant, so a provider may cache it) and a user part: the state now, the short-term
- * memory (`mind.recent`, the last 20 decisions and events with their outcomes) and the options of the menu. About 1,500 to 2,500 tokens. Only game state is ever put in it: no name, no key, nothing of the player.
+ * memory (`mind.recent`, the last 20 decisions and events with their outcomes) and the options of the menu. About 1,500 to 2,500 tokens. Only game state is ever put in it: no key, nothing of the player but the name the player gave the castaway (0.36.9, in the fixed part; 'the castaway' when none was given).
  *
  * 0.36.3 "Pastimes": the same request is built for the PASTIME point (inside free time): `buildMessages({ point: 'pastime', ... })` asks "Which pastime does he take now?" and the options are the pastimes (PASTIME_TEXT: what he does and roughly how long it takes in game time, from the measured pastimes of the rules).
  *
@@ -10,8 +10,12 @@
  *
  * 0.36.7 "Memory": his own notes and the journal: `parsePlan` reads an optional `notes` (the full new list: lines cut to NOTE_LEN, at most NOTES_MAX, the newest kept; unusable ones ignored: null = no change), `buildPlanMessages` takes `notes` and `journal` (the notes under "Your notes (you keep these yourself ...)", the last JOURNAL_DAYS days of the journal), the answer format and FIXED explain `notes`; the sunset journal line has its own short request (`JOURNAL_SYSTEM`, `buildJournalMessages`, `parseJournal`); the crab conditions are told honestly: `snapshotOf` has `crab` ({ ok } | { ok: false, why } | null, from `mind.blockers()`), the tide line says a stroll to the crabs is possible only when it is (else why not, at low water), the destinations line adds "Crabs: not now: reason" (`possible.blocked.crabs`).
  *
+ * 0.36.9 "Voice": (a) the castaway's name: `fixedText(name)` is the fixed part for a game (the name the player gave, cleaned, or 'the castaway'; `FIXED` = `fixedText('')`), `journalSystem(name)` likewise; `buildPlanMessages`, `buildMessages` and `buildJournalMessages` take `name`; no other word of the request carries it. (b) The fire and the store in hours: `situationLines` says the pieces on the fire, how long it lasts and how many pieces more the night needs until dawn (game/fire `fireOutlook`), the store with its burn time and the wet wood apart; FIXED explains feeding (a piece burns BURN hours, a branch half, wet wood does not burn, the fire holds FUEL_MAX, the ring's RING_BURN, feeding is possible at any hour while a fire burns and dry wood lies ready). (c) What his days are for (the home's next part, the stores, exploring), that by day he prefers useful work and that stroll, linger and gaze are rests (at most one or two in a plan, mostly afternoon and evening); `stateText` adds "Next part of the home: ..." (`state.nextHome`, from `mind.homePlan()`). (d) A step reason is in his own voice, one or two short sentences, at most SAID_LEN (140) characters (render/voice SAID_MAX is the same number; a test keeps them equal).
+ *
+ * 0.36.9 (second round): `noNumber` (a note without a leading list number, in `parsePlan` and `notesText`), the journal request's no-repeat rule, the 'Last night' line counts a whole night and says 'cut short' only when he is not rested (`lastNight.rest`), `FIXED` says the calm limits (CALM_THIRST / CALM_HUNGER) and that a tired drill rarely catches (DRILL_COST, TIRED_CATCH); the days in a request are the player's (ai/chooser `dayOffset`).
+ *
  * Exports:
- *   FIXED                              the fixed system text
+ *   FIXED, fixedText(name) -> string   the fixed system text (FIXED: for no name: 'the castaway'; fixedText(name): the name the player gave, 0.36.9)
  *   GOAL_TEXT, GOAL_LABEL, WHY_TEXT    plain descriptions of the goal options (long, for the request), their short labels (for the panel) and the `why` codes of the options
  *   PASTIME_TEXT                       plain descriptions of the pastime options (what he does and roughly how long), for the request; the panel's short label of a pastime is the option's own `what`
  *   describeOption(o) -> { what, label, why }   the option in plain words (a goal option: GOAL_TEXT and GOAL_LABEL; a pastime: PASTIME_TEXT and its own `what` as the label; the why code through WHY_TEXT)
@@ -38,14 +42,18 @@
 
 import { THIRSTY_AT, VERY_AT, COLLAPSE_AT } from '../game/thirst.js';
 import { HUNGRY_AT, STARVING_AT } from '../game/hunger.js';
-import { CRAB_TIDE, THIRST_GO, HUNGER_GO, TIRED_GO, VERY_HUNGER_AT, BED_THIRST, BED_HUNGER, SUPPER_FROM, LIGHT_FROM, BED_FROM, DAWN, EVENING, DAY_FROM, GAZE_FROM, GAZE_TO, FISH_FROM, FISH_TO, TIDE_ROUND_FROM, TIDE_ROUND_TO, EXPLORE_EARLY, EXPLORE_TO, JOURNEY_FROM, JOURNEY_TO, JOURNEY_DAY, AI_FROM, AI_WORK_TO, AI_TRIP_TO, EXPLORE_WHERE, STROLL_KINDS, JOURNEY_GAP_MIN, JOURNEY_GAP_MAX, HOME_FROM, HOME_TO, HOME_DAY, AXE_TO, STROLL_FROM, STROLL_TO, SPEAR_DAY } from '../game/mind.js';
+import { CRAB_TIDE, CALM_THIRST, CALM_HUNGER, THIRST_GO, HUNGER_GO, TIRED_GO, VERY_HUNGER_AT, BED_THIRST, BED_HUNGER, SUPPER_FROM, LIGHT_FROM, BED_FROM, DAWN, EVENING, DAY_FROM, GAZE_FROM, GAZE_TO, FISH_FROM, FISH_TO, TIDE_ROUND_FROM, TIDE_ROUND_TO, EXPLORE_EARLY, EXPLORE_TO, JOURNEY_FROM, JOURNEY_TO, JOURNEY_DAY, AI_FROM, AI_WORK_TO, AI_TRIP_TO, EXPLORE_WHERE, STROLL_KINDS, JOURNEY_GAP_MIN, JOURNEY_GAP_MAX, HOME_FROM, HOME_TO, HOME_DAY, AXE_TO, STROLL_FROM, STROLL_TO, SPEAR_DAY } from '../game/mind.js';
 import { REVIVE_AT, THIRST_SLOW } from '../game/thirst.js';
 import { HUNGER_SLOW } from '../game/hunger.js';
+import { BURN, BRANCH_BURN, FUEL_MAX, EMBERS, RING_BURN, DRILL_COST, TIRED_CATCH, fireOutlook } from '../game/fire.js';
+import { cleanName } from '../game/castaway.js';
 import { TIRED_AT, AWAKE_MAX, DUSK, TIRED_SLOW, SLEEP_DAYS, COLD_SLEEP, SHELTER_SLEEP, WALLS_SLEEP } from '../game/sleep.js';
 import { PASTIMES } from '../game/intent.js';
 import { PERIOD, FIRST_HIGH, seaLevel } from '../game/tide.js';
-import { AI_PLAN_MIN, AI_PLAN_MAX, AI_AWAKE_MARGIN, NOTES_MAX, NOTE_LEN, JOURNAL_LEN, JOURNAL_DAYS } from './config.js';
+import { AI_PLAN_MIN, AI_PLAN_MAX, AI_AWAKE_MARGIN, NOTES_MAX, NOTE_LEN, JOURNAL_LEN, JOURNAL_DAYS, SAID_LEN } from './config.js';
 
+/** 0.36.9: the name the player gave the castaway, made safe for a system text (game/castaway cleanName, at most 20 characters; quotes, braces, backticks, backslashes and angle brackets dropped), or '' (then the texts say 'the castaway'). The only thing of the player that goes into a request. */
+export const whoName = name => cleanName(typeof name === 'string' ? name.replace(/["{}`\\<>]/g, ' ') : '');
 const pad = n => String(n).padStart(2, '0');
 export function hhmm(time) {
   const m = Math.floor(((time % 1 + 1) % 1) * 1440 + 1e-9) % 1440;
@@ -53,14 +61,21 @@ export function hhmm(time) {
 }
 
 
-export const FIXED = `You are the mind of Dave, a lone castaway on an uninhabited island. He is calm, practical and a little wry, and he is quite alone. You do not control his hands: his body already knows how to walk, carry, build and work. You plan what he does next, in his own voice.
+/** The fixed part of every request for the castaway called `name` (what the player gave him, cleaned; 'the castaway' when none): a constant for a game (0.36.9). */
+export function fixedText(name) {
+  const named = whoName(name), who = named || 'the castaway';
+  const intro = named ? `You are the mind of ${named}, a lone castaway on an uninhabited island.` : 'You are the mind of the castaway, alone on an uninhabited island.';
+  return `${intro} He is calm, practical and a little wry, and he is quite alone. You do not control his hands: his body already knows how to walk, carry, build and work. You plan what he does next, in his own voice.
 
 How his world works
 - Thirst: counted in days since he last drank. His habit is to go and drink at ${THIRST_GO} (at ${BED_THIRST} between ${hhmm(SUPPER_FROM)} and ${hhmm(LIGHT_FROM)}, so that he does not go to bed parched); he is thirsty at ${THIRSTY_AT}, very thirsty at ${VERY_AT} (that interrupts any errand), and at ${COLLAPSE_AT} he collapses. Fresh water is at the rivers; a half coconut shell carries water; a green coconut also quenches thirst.
 - Hunger: days since he last ate (coconuts, berries, bananas, roasted crabs, fish). His habit is to go and eat at ${HUNGER_GO} (at ${BED_HUNGER} between ${hhmm(SUPPER_FROM)} and ${hhmm(LIGHT_FROM)}); he is hungry at ${HUNGRY_AT}; at ${VERY_HUNGER_AT} it is an emergency that interrupts any errand; at ${STARVING_AT} he is starving.
 - Sleep: his habit is to go to bed from ${hhmm(BED_FROM)} until ${hhmm(DAWN)}, or by day once he has been awake a whole day (${TIRED_GO}); he is tired from ${+TIRED_AT.toFixed(2)} days awake and cannot stay awake much beyond ${AWAKE_MAX}. He sleeps in his lean-to or hut, or on the ground (colder and poorer rest). A fire and a shelter make the night better.
 - Fire: wood (driftwood washed up by the tide, branches) and fibre or a torch to light it. He keeps a fire in the evening and at night. Wet wood does not burn.
+- Feeding the fire: a dry piece of driftwood burns ${+(BURN * 24).toFixed(1)} hours and a branch half as long; in the stone ring everything burns ${RING_BURN} times as long (a piece ${+(BURN * 24 * RING_BURN).toFixed(2)} hours). The fire holds at most ${FUEL_MAX / BURN} pieces (${+(FUEL_MAX * 24).toFixed(0)} hours, ${+(FUEL_MAX * 24 * RING_BURN).toFixed(0)} in the ring); when its wood is gone it sinks to embers for ${EMBERS * 24} hours and then goes out, and he can wake the embers with a piece. Wet wood does not burn until it has dried. The request says how many pieces are on the fire, how long it lasts and how many pieces more the night needs until dawn: with no store for the night the fire goes out and the night is cold. Lighting a fire is hard work: the drill costs about ${Math.round(DRILL_COST * 24)} hours' worth of rest each try, and a tired castaway rarely makes it catch (worn out, only ${Math.round(TIRED_CATCH * 100)} % of the chance), so the fire is best lit well before he is tired; an unlit fire at bedtime means a cold night. Feeding the fire (the fire step) is possible at ANY hour while a fire of his burns and dry wood lies ready; his habit is to do it in the evening, but a long night or a low fire is reason enough at any time.
 - Home: he builds a lean-to, then walls, a bed and a stone ring for the fire, and at last a hut, piece by piece, in the mornings and afternoons.
+- The free-time pastimes (home work aside) are possible only while he is calm: until drinking and eating open for him (thirst under ${CALM_THIRST} days, hunger under ${CALM_HUNGER}); from there on drink or eat, then go on. There is no gap between the two.
+- What his days are for: the home (its next part and how far it is are in the request), keeping the stores (wood for the fire, nuts, fibre, water) and exploring for what is missing. By day he prefers useful work: home, the spear and fishing, the axe, the tide strip, exploring, the stores. A stroll, standing about (linger) and the sunset gaze are REST, not work: at most one or two of them in a plan, mostly in the afternoon and evening. The choice is yours, but a day of strolling and standing about gets nothing done.
 - Tide: it brings new driftwood to the beach every day. Wet wood must dry before it burns.
 - Journeys: now and then he walks far from home, spends a night out and comes back the next morning.
 - Drinking and eating have NO hours: he can do either at any time, in the dark too, once he is thirsty or hungry enough to go (thirst ${THIRST_GO} days, hunger ${HUNGER_GO} days). Thirst slows him from ${THIRSTY_AT} days and hunger from ${HUNGRY_AT}, so going soon after he can is usually wise. When he wakes in the dark the useful things are drink, eat, tend the fire or go back to sleep, not waiting for the day.
@@ -80,18 +95,21 @@ What happens when things go wrong (this is what the game really does)
 - The fire needs dry wood and fibre or a torch to light it; wet wood does not burn. A fire left unfed burns out. Nothing hurts him in the dark by itself, but wherever he is when he must sleep, with no fire within about 3 m his sleep is cold. His habit turns trips back before dark, and on a journey he makes a small fire of his own at the night's camp.
 
 Answer format
-Reply with ONLY one JSON object and nothing else, on one line: ${AI_PLAN_MIN} to ${AI_PLAN_MAX} steps, in order, each with a short reason in Dave's own voice, and one short sentence about the plan:
-{"plan": [{"step": "<id>", "reason": "<short>"}, {"step": "stroll", "to": "<optional place>", "reason": "<short>"}], "reason": "<one short sentence>", "notes": ["<short note>", "..."]}
+Reply with ONLY one JSON object and nothing else, on one line: ${AI_PLAN_MIN} to ${AI_PLAN_MAX} steps, in order, each with a reason in ${who}'s own voice, and one short sentence about the plan:
+{"plan": [{"step": "<id>", "reason": "<his own thought>"}, {"step": "stroll", "to": "<optional place>", "reason": "<his own thought>"}], "reason": "<one short sentence>", "notes": ["<short note>", "..."]}
 ("to" is optional and only for stroll and explore. "notes" is optional: see Your notes below.)
+Each step's "reason" is shown above him as his own thought when the step starts: one or two short sentences in his own voice, first person, plain words, at most ${SAID_LEN} characters (for example "The fire is nearly out and the night is long: I will bring in a few branches before dark."). It says why he does this now, not what the game does.
 
 Your notes
 - You keep short notes for yourself (the request shows them): things worth remembering from day to day, such as where something is good, what failed and why, what he means to do. At most ${NOTES_MAX} lines of at most ${NOTE_LEN} characters each. To change them, return the FULL new list in "notes" (add, rewrite or drop lines); leave "notes" out to keep them as they are. The game never writes them for you.`;
+}
+export const FIXED = fixedText('');
 
 export const GOAL_TEXT = {
   drink: 'go to fresh water, drink and fill his shells',
   eat: 'find something to eat',
   sleep: 'go to bed for the night',
-  fire: 'see to the fire for the evening (wood, lighting it)',
+  fire: 'see to the fire (feed it from the store, gather wood for it, light it in the evening)',
   stores: 'gather supplies: nuts, fibre, wood for the store',
   idle: 'free time: his habits choose a pastime (work on the home, spear, axe, tide line, exploring, fishing, a stroll, rest)',
 };
@@ -129,7 +147,7 @@ export const PLAN_STEPS = [...PLAN_GOALS, ...PLAN_PASTIMES];
 /** When each step is possible, in plain words with the real constants (the clock as the island's hh:mm). */
 export const STEP_WHEN = {
   drink: `once he is thirsty enough to go (${THIRST_GO} days)`, eat: `once he is hungry enough to go (${HUNGER_GO} days)`, sleep: `at bedtime (from ${hhmm(BED_FROM)}), or a nap after half a day awake`,
-  fire: `in the evening, from ${hhmm(EVENING)} (lit from ${hhmm(LIGHT_FROM)})`, stores: 'when nuts, fibre or wood are short',
+  fire: `feeding it: at any hour while a fire of his burns and dry wood lies ready; laying and lighting it: in the evening, from ${hhmm(EVENING)} (lit from ${hhmm(LIGHT_FROM)})`, stores: 'when nuts, fibre or wood are short',
   journey: `${hhmm(JOURNEY_FROM)} to ${hhmm(JOURNEY_TO)}, from day ${JOURNEY_DAY}, every ${JOURNEY_GAP_MIN} to ${JOURNEY_GAP_MAX} days, with the lean-to built and no rain`,
   home: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_WORK_TO)}, from day ${HOME_DAY}, while a part of the home is next`, spear: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_WORK_TO)}, only while he has no spear (he fetches a branch and a stone if none lie near)`,
   axe: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_WORK_TO)}, once the home is complete, one piece of work a day`, tide: `by day, ${hhmm(AI_FROM)} to ${hhmm(AI_TRIP_TO)}, once a day, not thirsty or hungry, home before dark`,
@@ -171,7 +189,9 @@ const destLines = (d, blocked) => {
 export const STEP_TO = { stroll: STROLL_KINDS, explore: EXPLORE_WHERE };
 
 /** 0.36.7: his own notes as lines of the request ('(none yet)' when empty), and the journal of the last JOURNAL_DAYS days (oldest first; none when there is no line). */
-export const notesText = notes => (Array.isArray(notes) && notes.length ? notes.map((n, i) => `${i + 1}. ${n}`).join('\n') : '(none yet)');
+/** A note without a leading list number ("1. Landed..." -> "Landed..."): the request numbers the notes itself, and a number kept in the text came back as "1. 1. Landed" (0.36.9). */
+export const noNumber = t => String(t).replace(/^\s*(?:\d+\s*[.):]\s*)+/, '');
+export const notesText = notes => (Array.isArray(notes) && notes.length ? notes.map((n, i) => `${i + 1}. ${noNumber(n)}`).join('\n') : '(none yet)');
 export const journalLines = journal => {
   const list = (Array.isArray(journal) ? journal : []).filter(j => j && typeof j.line === 'string' && j.line).sort((a, b) => a.day - b.day).slice(-JOURNAL_DAYS);
   return list.length ? ['Your journal, the last days', ...list.map(j => `day ${j.day}: ${j.line}`), ''] : [];
@@ -183,7 +203,7 @@ export const clipLine = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, '
  * The request for a plan (0.36.3). `trigger` says why a new plan is asked; `previous` the old plan [{ id, state: 'done'|'skipped'|'next' }] (may be empty); `possible`: { goals: Set|null, pastimes: Set|null } the ids that are possible right now
  * (null: not known, the hours of the clock say); `mode` the leash. The plan list keeps the line format `- id: ...` (one id per line).
  */
-export function buildPlanMessages({ state, recent, trigger, previous, possible, mode, notes, journal }) {
+export function buildPlanMessages({ state, recent, trigger, previous, possible, mode, notes, journal, name }) {
   const t = (state && state.time) || 0, pos = possible || {};
   const mark = id => {
     const set = PLAN_GOALS.includes(id) ? pos.goals : pos.pastimes, why = !PLAN_GOALS.includes(id) && pos.blocked && pos.blocked[id];
@@ -206,7 +226,7 @@ export function buildPlanMessages({ state, recent, trigger, previous, possible, 
     ...destLines(pos.destinations, pos.blocked),
     `Make a plan of ${AI_PLAN_MIN} to ${AI_PLAN_MAX} steps for the coming hours.`,
   ].join('\n');
-  return [{ role: 'system', content: FIXED }, { role: 'user', content: user }];
+  return [{ role: 'system', content: fixedText(name) }, { role: 'user', content: user }];
 }
 
 /** A plan from the model's text: { ok, steps: [{ id, reason }], reason, dropped: [what was left out], error }. Lenient: unknown steps are dropped, more than AI_PLAN_MAX are cut, fewer than AI_PLAN_MIN are used as they are (at least one valid step is needed); a bare {"choice"} answer is a plan of one step. */
@@ -228,7 +248,7 @@ export function parsePlan(text) {
   if (!steps.length) return bad('no usable step' + (dropped.length ? ' (' + dropped.slice(0, 3).join(', ') + ')' : ''));
   // 0.36.7: his notes: the full new list (lines cut to NOTE_LEN, empty ones dropped, the newest NOTES_MAX kept); a list that is not a list of text is ignored (the old notes stay); an empty list clears them; null: no change
   let notes = null;
-  if (Array.isArray(o.notes)) { const l = o.notes.filter(x => typeof x === 'string').map(x => clipLine(x, NOTE_LEN)).filter(Boolean); if (l.length || !o.notes.length) notes = l.slice(-NOTES_MAX); }
+  if (Array.isArray(o.notes)) { const l = o.notes.filter(x => typeof x === 'string').map(x => clipLine(noNumber(x), NOTE_LEN)).filter(Boolean); if (l.length || !o.notes.length) notes = l.slice(-NOTES_MAX); }
   return { ok: true, steps, reason: typeof o.reason === 'string' ? o.reason.trim().slice(0, 300) : '', notes, dropped, error: null };
 }
 
@@ -257,6 +277,7 @@ export function snapshotOf(game, mind) {
     day: clock.day == null ? 0 : clock.day, time: clock.time == null ? 0 : clock.time, raining: n(() => g.rain, 0) > 0.05, daylight, fromHome,
     thirst: n(() => g.thirst.days), hunger: n(() => g.hunger.days), awake: n(() => g.sleep.awake), carries, home, journey: !!m.journeying, doing,
     crab: n(() => { const b = m.blockers(); return b ? (b.crabs ? { ok: false, why: b.crabs } : { ok: true }) : null; }, null),   // 0.36.7: a stroll to the crabs possible now, or why not (only when the mind can say)
+    nextHome: n(() => { const hp = m.homePlan(); return hp && hp.step ? hp.step : null; }, null),   // 0.36.9: the next part of the home (mind.homePlan, read only)
     camp: n(() => m.camp(), null), tide: n(() => tideNow(clock.total), null), lastNight: n(() => m.lastNight(), null), strip: n(() => m.stripWood(), null),   // 0.36.6: only what the game knows
   };
 }
@@ -266,6 +287,9 @@ export function tideNow(total) {
   const ph = (((total - FIRST_HIGH) / PERIOD) % 1 + 1) % 1, falling = ph < 0.5, level = seaLevel(total);
   return { level, name: level <= CRAB_TIDE ? 'low' : level > -0.1 ? 'high' : 'half', falling, turn: (total + ((falling ? 0.5 : 1) - ph) * PERIOD) % 1 };
 }
+/** Hours from the time of day `time` until the next `to` (0..24). */
+export const hoursTo = (time, to) => (((to - time) % 1 + 1) % 1) * 24;
+const h1 = v => { const r = Math.round(v * 2) / 2; return Number.isInteger(r) ? String(r) : r.toFixed(1); };   // hours to the nearest half
 const d1 = v => (Math.round((+v || 0) * 10) / 10).toFixed(1);
 
 /** 0.36.6: the lines about the camp, the tide, last night and the tide strip: each only when the state has it. */
@@ -273,19 +297,33 @@ function situationLines(s) {
   const out = [], c = s.camp;
   if (c) {
     const FIRE = { none: 'none yet', out: 'out (a burnt place)', embers: 'only embers glowing', low: 'burning low', well: 'burning well' };
-    out.push(`Fire: ${FIRE[c.fire] || c.fire}.`);
-    const st = c.store || {}, bits = [];
-    for (const [k, label] of [['dry', 'dry wood'], ['wet', 'wet'], ['branches', 'branches'], ['fronds', 'fronds'], ['stones', 'stones'], ['logs', 'logs']]) if (st[k] > 0) bits.push(`${st[k]} ${label}`);
+    const st = c.store || {};
+    // 0.36.9: the fire in pieces and hours, and what the night until dawn needs (game/fire `fireOutlook`); only when the camp tells its fuel (an older shape keeps the short line)
+    const detail = typeof c.fuel === 'number' ? fireOutlook({ fuel: c.fire === 'low' || c.fire === 'well' ? c.fuel : 0, ring: !!c.ring, hoursToDawn: hoursTo(s.time, DAWN), dry: st.dry, branches: st.branches }) : null;
+    let fire = `Fire: ${FIRE[c.fire] || c.fire}`;
+    if (detail) {
+      const burning = c.fire === 'low' || c.fire === 'well', night = `for the night until ${hhmm(DAWN)} it needs about ${detail.need} piece${detail.need === 1 ? '' : 's'}${burning ? ' more' : ''}`;
+      if (burning) fire += `, about ${Math.max(1, Math.round(detail.pieces))} piece${Math.round(detail.pieces) === 1 ? '' : 's'} on it, about ${h1(detail.hoursLeft)} hours left (it holds at most ${detail.max}); ${detail.need > 0 ? night : `it will last until dawn (${hhmm(DAWN)})`}`;
+      else if (detail.need > 0) fire += ` (${night})`;
+    }
+    out.push(fire + '.');
+    const bits = [], burn = detail && (st.dry > 0 || st.branches > 0) ? ` (about ${h1(detail.storeHours)} hours of fire)` : '';
+    const dryBits = [];
+    for (const [k, label] of [['dry', 'dry wood'], ['branches', 'branches']]) if (st[k] > 0) dryBits.push(`${st[k]} ${label}`);
+    if (dryBits.length) bits.push(dryBits.join(', ') + (detail ? burn : ''));
+    if (st.wet > 0) bits.push(`${st.wet} wet${detail ? ' (do not burn until dry)' : ''}`);
+    for (const [k, label] of [['fronds', 'fronds'], ['stones', 'stones'], ['logs', 'logs']]) if (st[k] > 0) bits.push(`${st[k]} ${label}`);
     out.push(`Camp store: ${bits.length ? bits.join(', ') : 'nothing'}.`);
   }
   const t = s.tide;
   if (t) out.push(`Tide: ${t.name === 'low' ? 'low' : t.name === 'high' ? 'high' : 'half tide'}, ${t.falling ? 'falling, low water' : 'rising, high water'} about ${hhmm(t.turn)}${t.name === 'low' && s.crab ? (s.crab.ok ? ' (low water is the crab time: a stroll to the crabs is possible now)' : ` (low water, but no stroll to the crabs now: ${s.crab.why})`) : ''}.`);
   const n = s.lastNight;
-  if (n) out.push(`Last night: ${n.collapse ? 'a collapse, he did not lie down himself' : n.cold ? `a cold sleep, no fire close by (${d1(n.hours)} hours)` : n.hours >= 7 ? `a full night (${d1(n.hours)} hours)` : `cut short (${d1(n.hours)} hours)`}.`);
+  if (n) out.push(`Last night: ${n.collapse ? 'a collapse, he did not lie down himself' : n.cold ? `a cold sleep, no fire close by (${d1(n.hours)} hours)` : n.hours >= 7 || (n.rest != null && n.rest >= 0.85) ? `a full night (${d1(n.hours)} hours${n.rest != null ? `, rested ${pct(n.rest)} %` : ''})` : `cut short (${d1(n.hours)} hours${n.rest != null ? `, rested only ${pct(n.rest)} %` : ''})`}.`);   // 0.36.9: all stretches of the night counted (game/mind lastNight), and 'cut short' only when he is really not rested
   if (s.strip != null) out.push(`Tide strip: ${s.strip > 0 ? 'some wet driftwood to rescue' : 'no wet driftwood known there'}.`);
   return out;
 }
 
+const NEXT_HOME = { leanto: 'the lean-to', walls: 'the walls', ring: 'the stone ring', bed: 'the bed', hut: 'the hut' };
 export function stateText(s) {
   const c = s.carries || {}, has = [];
   for (const [k, label] of [['driftwood', 'driftwood'], ['branches', 'branches'], ['fronds', 'fronds'], ['stones', 'stones'], ['fibre', 'fibre'], ['nuts', 'coconuts'], ['emptyShells', 'empty half shells'], ['fullShells', 'full half shells'], ['crabs', 'crabs'], ['fish', 'fish'], ['berries', 'handfuls of berries'], ['bananas', 'banana bunches']]) if (c[k] > 0) has.push(`${c[k]} ${label}`);
@@ -296,7 +334,7 @@ export function stateText(s) {
     `Day ${s.day}, ${hhmm(s.time)}. Weather: ${s.raining ? 'raining' : 'dry'}. ${s.daylight > 0 ? `About ${d1(s.daylight)} hours of daylight left (dusk about ${hhmm(DUSK)}).` : 'It is dark.'}`,
     `Thirst: ${d1(s.thirst)} days${s.thirst >= THIRST_GO ? ` (he can drink now, at any hour; slower from ${THIRSTY_AT})` : ''}. Hunger: ${d1(s.hunger)} days${s.hunger >= HUNGER_GO ? ` (he can eat now, at any hour; slower from ${HUNGRY_AT})` : ''}. Awake for ${d1(s.awake)} days.`,
     `Carrying: ${has.length ? has.join(', ') : 'nothing'}.`,
-    `Home: ${home}.`,
+    `Home: ${home}.${s.nextHome ? ` Next part of the home: ${NEXT_HOME[s.nextHome] || s.nextHome}.` : ''}`,
     ...situationLines(s),
     `Now: ${s.doing || 'unknown'}${s.journey ? ' (a journey is on)' : ''}${s.fromHome != null ? `, ${Math.round(s.fromHome)} m from his camp` : ''}.`,
   ].join('\n');
@@ -321,14 +359,14 @@ export function optionsOf(menu) {
   return out;
 }
 
-export function buildMessages({ state, recent, options, point = 'goal' }) {
+export function buildMessages({ state, recent, options, point = 'goal', name }) {
   const opts = (options || []).map(o => `- ${o.id}: ${o.what}${o.why && o.why !== o.what ? ` (why: ${o.why})` : ''}${o.cost != null ? `, walk about ${o.cost} s` : ''}${o.forced ? ' [FORCED]' : ''}`).join('\n');
   const user = [
     'The situation now', stateText(state || {}), '',
     'What he did lately (oldest first)', recentText(recent), '',
     point === 'pastime' ? 'He is in free time. Which pastime does he take now?' : 'Which option does he pick now?', opts || '(none)',
   ].join('\n');
-  return [{ role: 'system', content: FIXED }, { role: 'user', content: user }];
+  return [{ role: 'system', content: fixedText(name) }, { role: 'user', content: user }];
 }
 
 /** The first balanced JSON object of `text`, or null. */
@@ -363,17 +401,19 @@ export function parseAnswer(text, menuIds) {
 }
 
 /** 0.36.7: the sunset journal line (not a decision: one extra request a day, never waited for). The system text is short; the user part is the day's short-term list and the state. */
-export const JOURNAL_SYSTEM = `You are Dave, a lone castaway on an uninhabited island, calm, practical and a little wry. At sunset you write ONE line in your journal about the day, in your own voice: what happened, how it felt, what you noticed. At most ${JOURNAL_LEN} characters, plain words, no list.
-Reply with ONLY one JSON object on one line: {"line": "<the journal line>"}`;
-export function buildJournalMessages({ state, recent, journal, notes }) {
+export const journalSystem = name => { const n = whoName(name); return `${n ? 'You are ' + n + ', a lone castaway' : 'You are a lone castaway'} on an uninhabited island, calm, practical and a little wry. At sunset you write ONE line in your journal about the day, in your own voice: what happened, how it felt, what you noticed. At most ${JOURNAL_LEN} characters, plain words, no list.
+Do not repeat or paraphrase an earlier line of your journal (they are shown to you): say something new about today.
+Reply with ONLY one JSON object on one line: {"line": "<the journal line>"}`; };
+export const JOURNAL_SYSTEM = journalSystem('');
+export function buildJournalMessages({ state, recent, journal, notes, name }) {
   const user = [
     'The situation now', stateText(state || {}), '',
     'What happened today (oldest first)', recentText(recent), '',
     ...journalLines(journal),
     ...(Array.isArray(notes) && notes.length ? ['Your notes', notesText(notes), ''] : []),
-    'Write today\'s journal line.',
+    'Write today\'s journal line: something new, not a repeat of an earlier line above.',
   ].join('\n');
-  return [{ role: 'system', content: JOURNAL_SYSTEM }, { role: 'user', content: user }];
+  return [{ role: 'system', content: journalSystem(name) }, { role: 'user', content: user }];
 }
 /** The journal line from the model's text: { ok, line } (cut to JOURNAL_LEN) or { ok: false, error }. */
 export function parseJournal(text) {

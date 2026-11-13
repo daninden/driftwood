@@ -29,7 +29,7 @@
  *   POINTS, STAGES, PASTIMES                      the decision points, the order of the pastimes in each stage and what each is (0.36.3: `safety: true` marks a pastime that is a safety matter: the AI is not asked while it is possible; today only 'ember')
  *   option(o, rule?) -> option                    makes an option (fills the shape; `rule` is hidden; o.estimate: the lazy function above, or o.at / o.cost / o.est given as values)
  *   makeMenu(point, options) -> menu
- *   goalMenu(s, choose, limits, estimates?) -> menu   (estimates[goal]: the lazy estimate of that goal's option) the goals he could take now, in the order of `choose` (game/mind chooseGoal): found by asking `choose` again with each goal found taken out. limits: { thirst, hunger } (the emergency levels)
+ *   goalMenu(s, choose, limits, estimates?, habit?) -> menu   (estimates[goal]: the lazy estimate of that goal's option; 0.36.9: `habit(name, s, cool)` -> true | false | undefined is the rules' habit of a goal option, kept hidden like a pastime's: `rulesChooser` passes over an option whose habit says no, other choosers ignore it) the goals he could take now, in the order of `choose` (game/mind chooseGoal): found by asking `choose` again with each goal found taken out. limits: { thirst, hunger } (the emergency levels)
  *   pastimeMenu(stage, facts) -> menu             facts[id]: a value, a function, or { ok, chance, draw, always, kind, estimate }; the options without facts are left out ('onward' and 'linger' are always there); each fact is read lazily, in the rules' order
  *   eventMenu(kind, goal) -> menu                 the one option 'continue'
  *   isValid(option) -> bool                       is the option possible now (the lazy fact `ok`)
@@ -39,6 +39,7 @@
  *   firstChooser(point, menu) -> choice           a fixed fake for tests: the first possible option, a forced one before any other; no random numbers
  * 0.36.6 "One menu": what is POSSIBLE is one set of real conditions, the same for every chooser. The rules' habits (the hour windows of the pastimes, the crab trip first at low water, home by the evening's chores) are not conditions: a pastime fact may carry `habit` (lazy, true when the rules want it now)
  *   and `back` (the time of day by which the rules want a trip home); they are hidden with the rule, only `rulesChooser` reads them (an option the habit refuses is passed over with no draw; a trip it takes comes back as { id, back }). The other choosers see the same menu and ignore them.
+ * 0.36.9 "Voice": the goal menu may carry a habit too (`goalMenu`'s last argument): the fire goal is offered at ANY hour while a fire of his burns and dry wood lies ready (game/mind `chooseGoalMenu`), the rules take it only in the evening.
  * Depends on: nothing.
  */
 
@@ -84,7 +85,7 @@ export function option(o, rule = null) {
 
 export function makeMenu(point, options) { return { point, options }; }
 
-export function goalMenu(s, choose, limits = { thirst: Infinity, hunger: Infinity }, estimates = {}) {
+export function goalMenu(s, choose, limits = { thirst: Infinity, hunger: Infinity }, estimates = {}, habit = null) {
   const options = [];
   if (!s.asleep) {
     const cool = { ...(s.cool || {}) };
@@ -92,7 +93,8 @@ export function goalMenu(s, choose, limits = { thirst: Infinity, hunger: Infinit
       const name = choose({ ...s, cool });
       if (!name || name === 'none' || options.some(o => o.id === name)) break;
       const forced = options.length === 0 && ((name === 'drink' && s.thirst >= limits.thirst) || (name === 'eat' && s.hunger >= limits.hunger));
-      options.push(option({ id: name, goal: name, what: name, why: GOAL_WHY[name] || name, forced, estimate: estimates[name] }));
+      const c0 = { ...cool }, hab = habit && habit(name, s, c0) !== undefined;   // 0.36.9: the rules' habit of this option (`habit(name, s, cool)`: true / false, or undefined when it has none), read when a chooser asks
+      options.push(option({ id: name, goal: name, what: name, why: GOAL_WHY[name] || name, forced, estimate: estimates[name] }, hab ? { habit: () => !!habit(name, s, c0) } : null));
       if (name === 'idle') break;
       cool[name] = true;
     }
@@ -135,7 +137,8 @@ export function validChoice(menu, choice) {
 /** The present rules. goal: the first option (the menu is in the order of chooseGoal); event: 'continue'; pastime: the first option in the order that is possible, where the chances draw from the streams of ctx as the mind always did. */
 export function rulesChooser(point, menu, ctx = {}) {
   const os = menu.options;
-  if (point === 'goal' || point === 'event') return os.length ? os[0].id : null;
+  if (point === 'event') return os.length ? os[0].id : null;
+  if (point === 'goal') { const o = os.find(x => !(x.rule && x.rule.habit && !x.rule.habit())); return o ? o.id : null; }   // 0.36.9: an option the rules' habit passes over (the fire at an hour the menu allows but the rules do not) is skipped; no option has one in the rules' own hours
   for (const o of os) {
     const r = o.rule || {};
     if (r.habit && !r.habit()) continue;   // 0.36.6: a habit of the rules, not a condition: the option is on the menu (the AI may take it), the rules pass it over (no draw)

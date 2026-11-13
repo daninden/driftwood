@@ -224,11 +224,12 @@ describe('chooser: plans (0.36.3)', () => {
   it('always calls the rules first; the event point and a pastime menu with nothing to choose are the rules\' at once, never WAIT', () => {
     const { ai, rulesCalls, asks } = setup();
     expect(pm(ai, beforeMenu())).toBe('onward'); expect(ai.chooser('event', eventMenu('stuck', 'drink'), ctxOf())).toBe('continue');
-    expect(rulesCalls).toEqual(['pastime', 'event']); expect(ai.entries.length).toBe(0); expect(asks.length).toBe(0); expect(ai.chooser.selfChecked).toBe(true);
+    expect(rulesCalls).toEqual(['pastime', 'event']); expect(ai.entries.length).toBe(0); expect(asks.length).toBe(1); expect(ai.waiting()).toBe(false); expect(ai.chooser.selfChecked).toBe(true);
   });
   it('off, a menu of one option: the rules at once; a forced option, a need and a spent budget as the leash says', () => {
     const off = setup(); off.st.on = false; expect(go(off.ai)).toBe('stores'); expect(off.asks.length).toBe(0); expect(off.ai.entries.length).toBe(0); expect(off.ai.tally()).toEqual({ ai: 0, rules: 0, differ: 0 });
-    const one = setup(); expect(go(one.ai, goalMenu(calm(), chooseGoal, limits))).toBe('idle'); expect(one.asks.length).toBe(0); expect(one.ai.entries.length).toBe(0);
+    const one = setup(); expect(go(one.ai, goalMenu(calm(), chooseGoal, limits))).toBe('idle'); expect(one.asks.length).toBe(1); expect(one.ai.waiting()).toBe(false);   // 0.36.9: asked quietly, never waited for
+     expect(one.ai.entries.length).toBe(0);
     const f = setup(); expect(go(f.ai, emergencyMenu())).toBe('drink'); expect(f.ai.entries[0]).toMatchObject({ used: 'rules', why: 'forced', override: expect.any(String) }); expect(f.asks.length).toBe(0);
     const n = setup(); expect(go(n.ai, hungryMenu())).toBe('drink'); expect(n.ai.entries[0]).toMatchObject({ used: 'rules', why: 'need', rules: 'drink' }); expect(n.asks.length).toBe(0); expect(n.ai.waiting()).toBe(false);
     const b = setup(); b.st.can = false; expect(go(b.ai)).toBe('stores'); expect(b.ai.entries[0]).toMatchObject({ used: 'rules', why: 'budget' }); expect(b.asks.length).toBe(0);
@@ -250,7 +251,7 @@ describe('chooser: plans (0.36.3)', () => {
     expect(pm(s.ai, dayMenu())).toBe('home'); expect(s.ai.entries[0]).toMatchObject({ used: 'ai', point: 'pastime', ai: 'home', rules: 'home', plan: { i: 2, n: 5 }, menu: ['home', 'stroll', 'linger'] });
     expect(pm(s.ai, dayMenu())).toBe('stroll'); expect(s.ai.entries[0]).toMatchObject({ ai: 'stroll', rules: 'home', plan: { i: 3, n: 5 } });   // (the AI's stroll against the rules' home)
     expect(pm(s.ai, dayMenu({ home: { ok: false } }))).toBe('linger'); expect(s.ai.entries[0]).toMatchObject({ ai: 'linger', rules: 'stroll', reason: 'because linger' });
-    expect(pm(s.ai, dayMenu())).toBe('linger'); expect(s.ai.entries[0].reason).toContain('A short one first');   // the next step is a goal (fire): the short pastime first
+    expect(pm(s.ai, dayMenu())).toBe('home'); expect(s.ai.entries[0]).toMatchObject({ used: 'rules' }); expect(s.ai.entries[0].why).toBe('plan-hold');   // 0.36.9: the next step is a goal (fire): no linger as a short way on, the rules decide for the moment and the plan stays
     expect(s.ai.plan().steps[4].state).toBe('next'); expect(s.asks.length).toBe(1);
     s.t.s += 30; expect(go(s.ai)).toBe(WAIT); expect(s.asks.length).toBe(2); expect(s.ai.asking()).toBe('the plan is used up');   // fire is not on the goal menu: skipped; nothing is left
   });
@@ -260,7 +261,7 @@ describe('chooser: plans (0.36.3)', () => {
     expect(go(s.ai, m)).toBe('idle'); expect(s.ai.entries[0]).toMatchObject({ ai: 'idle', reason: expect.stringContaining('on the way to') }); expect(s.ai.plan().steps[0].state).toBe('skipped'); expect(s.ai.plan().steps[1].state).toBe('next');
     expect(pm(s.ai, beforeMenu({ gaze: { ok: true } }))).toBe('onward'); expect(s.ai.entries[0].reason).toContain('On the way to'); expect(s.ai.entries[0].rules).toBe('gaze');   // 'home' is a day pastime: not the sunset
     expect(pm(s.ai, dayMenu())).toBe('home'); expect(pm(s.ai, dayMenu())).toBe('stroll');
-    expect(pm(s.ai, dayMenu())).toBe('linger'); expect(s.ai.entries[0].reason).toContain('A short one first');   // the next step is a goal (drink): the short pastime first
+    expect(pm(s.ai, dayMenu())).toBe('home'); expect(s.ai.entries[0].why).toBe('plan-hold');   // 0.36.9: the next step is a goal (drink): no linger bridge, the rules decide for the moment
     expect(s.ai.plan().steps[3].state).toBe('next'); expect(s.asks.length).toBe(1);
     expect(go(s.ai, hungryMenu())).toBe('drink'); expect(s.ai.plan().steps[3].state).toBe('done');   // strict: a need is the rules'; it is also the plan's step
   });

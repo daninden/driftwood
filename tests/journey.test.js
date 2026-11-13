@@ -30,8 +30,8 @@ describe('journeys: when one may start (pure)', () => {
     expect(journeyOk({ ...ok, day: 5, due: 6 })).toBe(false);                 // not before the next one is due
     expect(journeyOk({ ...ok, lean: 'none' })).toBe(false); expect(journeyOk({ ...ok, lean: 'half' })).toBe(false);   // not without a lean-to
     expect(journeyOk({ ...ok, raining: true })).toBe(false); expect(journeyOk({ ...ok, rainSoon: true })).toBe(false);   // not in rain, not with rain forecast
-    expect(journeyOk({ ...ok, thirst: 0.25 })).toBe(false); expect(journeyOk({ ...ok, thirst: 0.24 })).toBe(true);        // not thirsty
-    expect(journeyOk({ ...ok, hunger: 0.3 })).toBe(false); expect(journeyOk({ ...ok, hunger: 0.29 })).toBe(true);         // not hungry
+    expect(journeyOk({ ...ok, thirst: 0.35 })).toBe(false); expect(journeyOk({ ...ok, thirst: 0.34 })).toBe(true);        // not thirsty
+    expect(journeyOk({ ...ok, hunger: 0.4 })).toBe(false); expect(journeyOk({ ...ok, hunger: 0.39 })).toBe(true);         // not hungry
     expect(journeyOk({ ...ok, time: JOURNEY_FROM - 0.01 })).toBe(false); expect(journeyOk({ ...ok, time: JOURNEY_TO })).toBe(false);   // in the morning only
     expect(journeyOk({ ...ok, cool: { journey: true } })).toBe(false);
   });

@@ -73,6 +73,7 @@
  *
  * The logbook (0.36.8 "Logbook", ai/logbook, ai/logStore): a long record for the AI panel's "download log" button: the mind's own events (`onEvent`), the "Now" changes and a snapshot every half game hour (`logbook.tick` each frame), the chooser's decisions and plans (`log`, `planState`), the rules' decisions while the AI is off (`wrapChooser`) and every request to the model with its answer (`ask`). It reads only, changes nothing in the game or the save, and is kept in IndexedDB (written once a second and when the page is hidden) so that it runs on across reloads; it is cleared when a new game starts (`?new`, Shift + backtick, a new seed, no save). With the test parameters it is in memory only.
  *
+ * Voice and AI (0.36.9 "Voice"): with the AI on the mind's fixed intent phrases go through ai/said `intentVoice` (`onIntent`): nearly all silent, a lack goes into the short-term list (`mind.remember`), an emergency keeps its short phrase; with the AI off `voice.announce(kind)` as ever. The castaway's name is handed to the AI chooser as a getter (`name: () => name`) and goes into the request's fixed part.
  * Voice (render/voice): only reasons speak (0.30.20): the mind's intents, and what the player
  * lacks (game.lackAt, once per still period of about 1.5 s); never actions. One short fixed thought above Dave. L opens the
  * in-memory session log with island HH:mm timestamps (no dates); its own
@@ -135,6 +136,7 @@ import { createDayLine, createWakeLine, WAKE_TIME } from './render/nameLines.js'
 import { createInk } from './render/ink.js';
 import { createSoundMark } from './render/soundMark.js';
 import { createVoice } from './render/voice.js';
+import { intentVoice } from './ai/said.js';
 import { createSound } from './audio/sound.js';
 import { createMixer } from './audio/mix.js';
 import { createSoundSwitch, isSoundKey } from './audio/pref.js';
@@ -236,9 +238,13 @@ async function boot() {
   });
   await logbook.open({ clear: fresh || !saved });   // a new game (?new, a new seed, no save) starts a new log; otherwise it runs on
   const quiet0 = f => { try { f(); } catch (e) { /* the logbook never disturbs the game */ } };
-  const ai = createAiChooser({ rulesChooser, log: e => quiet0(() => logbook.decision(e)), ask: m => { let id = null; quiet0(() => { id = logbook.request(m); }); const p = aiClient.send(m); p.then(r => quiet0(() => logbook.answer(id, r)), e => quiet0(() => logbook.answer(id, e))); return p; }, onStep: st => voice.announceStep(game.clock.time, st.reason, st.fallback), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), mode: aiClient.mode, clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }) });
+  const ai = createAiChooser({ rulesChooser, log: e => quiet0(() => logbook.decision(e)), ask: m => { let id = null; quiet0(() => { id = logbook.request(m); }); const p = aiClient.send(m); p.then(r => quiet0(() => logbook.answer(id, r)), e => quiet0(() => logbook.answer(id, e))); return p; }, onStep: st => voice.announceStep(game.clock.time, st.reason, st.fallback), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), mode: aiClient.mode, name: () => name, clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }) });
   const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai, logbook });
-  const mind = createMind(world, game, { chooser: wrapChooser(ai.chooser, { on: aiOn, record: (point, menu, c) => quiet0(() => logbook.rulesDecision(point, menu, c)) }), saved: saved && saved.habit, onEvent: e => quiet0(() => logbook.event(e)), onIntent: ({ kind, goal }) => { if (!ai.restates(goal, kind)) voice.announce(kind, game.clock.time); } }), takeover = createTakeover(QUIET, performance.now() / 1000);
+  const mind = createMind(world, game, { chooser: wrapChooser(ai.chooser, { on: aiOn, record: (point, menu, c) => quiet0(() => logbook.rulesDecision(point, menu, c)) }), saved: saved && saved.habit, onEvent: e => quiet0(() => logbook.event(e)), onIntent: ({ kind, goal }) => {   // 0.36.9: with the AI on nearly nothing fixed is said (ai/said): a restating phrase, an intent of the rules and every lack stay silent, a lack goes into the short-term list, an emergency has its short phrase; with the AI off as ever
+    const v = intentVoice({ on: aiOn(), kind, restated: ai.restates(goal, kind), vitals: { thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake } });
+    if (v.remember) quiet0(() => mind.remember('lack', v.remember, 'seen'));
+    if (v.say) voice.announce(v.say, game.clock.time);
+  } }), takeover = createTakeover(QUIET, performance.now() / 1000);
   ai.attach(mind, game);   // 0.36.1: the chooser reads the state and the short-term memory of a request from them
   ai.restore(saved && saved.memory);   // 0.36.7 "Memory": the short-term list, his notes and the journal come back with the island (with the AI off they are only kept and saved)
   let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
