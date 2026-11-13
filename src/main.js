@@ -71,6 +71,8 @@
  * The AI panel #ai (render/aiPanel, 0.36 "Mind", developer only), toggled with I: an optional language-model chooser that makes plans of goals and pastimes for Dave (src/ai; 0.36.3 "Plans", with a leash chosen in the panel). Off by default; with it off the rules choose exactly as before.
  * The client (ai/client) and the chooser (ai/chooser) are made here, the chooser is handed to createMind and `ai.attach(mind, game)` gives it the state to describe. At a goal or pastime decision the chooser asks the model and Dave waits up to AI_WAIT seconds (0.36.1). The player's own key is kept in localStorage under its own name, never in the save.
  *
+ * The logbook (0.36.8 "Logbook", ai/logbook, ai/logStore): a long record for the AI panel's "download log" button: the mind's own events (`onEvent`), the "Now" changes and a snapshot every half game hour (`logbook.tick` each frame), the chooser's decisions and plans (`log`, `planState`), the rules' decisions while the AI is off (`wrapChooser`) and every request to the model with its answer (`ask`). It reads only, changes nothing in the game or the save, and is kept in IndexedDB (written once a second and when the page is hidden) so that it runs on across reloads; it is cleared when a new game starts (`?new`, Shift + backtick, a new seed, no save). With the test parameters it is in memory only.
+ *
  * Voice (render/voice): only reasons speak (0.30.20): the mind's intents, and what the player
  * lacks (game.lackAt, once per still period of about 1.5 s); never actions. One short fixed thought above Dave. L opens the
  * in-memory session log with island HH:mm timestamps (no dates); its own
@@ -96,7 +98,7 @@
  * While loading, the bar in #loader (index.html) shows how far it is
  * (core/loading); it fades out with the class `ready` on <body>.
  *
- * window.__driftwood exposes { world, game, view, input, mind, takeover, hands, ready, quality, sound, soundSwitch, ai, aiClient, aiPanel } for the smoke
+ * window.__driftwood exposes { world, game, view, input, mind, takeover, hands, ready, quality, sound, soundSwitch, ai, aiClient, aiPanel, logbook } for the smoke
  * test (and `frames`, a read-only count of drawn frames, for checking the pacing), plus three hooks so it does not have to play in real time (a
  * headless browser without a GPU draws only a few frames per second):
  *   pause(on)              stop or restart drawing in the frame loop
@@ -116,6 +118,9 @@ import { createMind } from './game/mind.js';
 import { rulesChooser } from './game/intent.js';
 import { createClient } from './ai/client.js';
 import { createAiChooser } from './ai/chooser.js';
+import { createLogbook, wrapChooser, snapshotEntry } from './ai/logbook.js';
+import { openLogStore } from './ai/logStore.js';
+import { KEY_NAME } from './ai/config.js';
 import { createAiPanel, isAiPanelEvent } from './render/aiPanel.js';
 import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
@@ -159,6 +164,7 @@ async function boot() {
   const saved = testing ? null : store.load();
   const asking = shouldAsk({ testing, saved }) ? createNamePrompt(document.getElementById('ask')) : null;   // asked while the island loads
   const container = document.getElementById('island');
+  const logStoreAsked = testing ? Promise.resolve(null) : openLogStore().catch(() => null);   // 0.36.8: the logbook's IndexedDB opens while the island loads (none in tests, and none if the browser has none: then the log is kept in memory only)
   const cores = (navigator.hardwareConcurrency || 4), parallel = createParallelHeights(() => new HeightWorker(), Math.max(2, Math.min(8, cores - 1)));
   // the height grids in Web Workers when the browser allows it, else on this thread (same result)
   const world = await generateWorld(seed, { progress: breathe, heightfield: parallel }).catch(err => { console.warn('height workers unavailable, building on the main thread', err); return generateWorld(seed, { progress: breathe }); });
@@ -220,9 +226,19 @@ async function boot() {
   const input = createInput(view.canvas, view.pickGround);
   input.yaw = view.yaw;
   const aiClient = createClient({ fetch: (...a) => window.fetch(...a), storage: store0 });   // 0.36: the optional language-model chooser; off until the player switches it on and enters a key
-  const ai = createAiChooser({ rulesChooser, ask: m => aiClient.send(m), onStep: st => voice.announceStep(game.clock.time, st.reason, st.fallback), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), mode: aiClient.mode, clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }) });
-  const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai });
-  const mind = createMind(world, game, { chooser: ai.chooser, saved: saved && saved.habit, onIntent: ({ kind, goal }) => { if (!ai.restates(goal, kind)) voice.announce(kind, game.clock.time); } }), takeover = createTakeover(QUIET, performance.now() / 1000);
+  const aiOn = () => aiClient.on() && aiClient.hasKey();
+  // 0.36.8 "Logbook": a long record of what he really does, for the "download log" button; it only reads (the mind's event stream, the game, the chooser's log), so nothing in his life changes
+  const logbook = createLogbook({
+    store: await logStoreAsked, version: VERSION, name: NAME, seed,
+    clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }),
+    info: () => { const pl = ai.plan(); return { ai: aiOn(), model: pl && pl.model || null, models: aiClient.status().models.map(m => m.model), leash: aiClient.mode() }; },
+    secrets: () => { try { return [store0 && store0.getItem(KEY_NAME)]; } catch (e) { return []; } },
+  });
+  await logbook.open({ clear: fresh || !saved });   // a new game (?new, a new seed, no save) starts a new log; otherwise it runs on
+  const quiet0 = f => { try { f(); } catch (e) { /* the logbook never disturbs the game */ } };
+  const ai = createAiChooser({ rulesChooser, log: e => quiet0(() => logbook.decision(e)), ask: m => { let id = null; quiet0(() => { id = logbook.request(m); }); const p = aiClient.send(m); p.then(r => quiet0(() => logbook.answer(id, r)), e => quiet0(() => logbook.answer(id, e))); return p; }, onStep: st => voice.announceStep(game.clock.time, st.reason, st.fallback), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), mode: aiClient.mode, clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }) });
+  const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai, logbook });
+  const mind = createMind(world, game, { chooser: wrapChooser(ai.chooser, { on: aiOn, record: (point, menu, c) => quiet0(() => logbook.rulesDecision(point, menu, c)) }), saved: saved && saved.habit, onEvent: e => quiet0(() => logbook.event(e)), onIntent: ({ kind, goal }) => { if (!ai.restates(goal, kind)) voice.announce(kind, game.clock.time); } }), takeover = createTakeover(QUIET, performance.now() / 1000);
   ai.attach(mind, game);   // 0.36.1: the chooser reads the state and the short-term memory of a request from them
   ai.restore(saved && saved.memory);   // 0.36.7 "Memory": the short-term list, his notes and the journal come back with the island (with the AI off they are only kept and saved)
   let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
@@ -243,12 +259,15 @@ async function boot() {
   let stopSaving = testing || !!asking, sinceSave = 0;
   const moments = createMomentWatcher(game);   // looks for something worth saving twice a second, not every frame
   const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, habit: mind.state(), memory: ai.memory(), view: view.pose }); sinceSave = 0; } };
-  let memSeen = ai.memoryVersion;
+  let memSeen = ai.memoryVersion, planSeen = -1;
   const viewSaver = createViewSaver();
   const autosave = dt => { sinceSave += dt; if (viewSaver.update(view.pose, dt)) save(); if (moments.update(dt) || sinceSave >= SAVE_EVERY) save(); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
   window.addEventListener('pagehide', save);
-  window.addEventListener('keydown', e => { if (isResetKey(e)) { stopSaving = true; store.clear(); location.reload(); } });
+  setInterval(() => { logbook.flush(); }, 1000);   // 0.36.8: the logbook is written in small batches, once a second, and when the page is hidden or closed
+  window.addEventListener('pagehide', () => { logbook.flush(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') logbook.flush(); });
+  window.addEventListener('keydown', e => { if (isResetKey(e)) { stopSaving = true; store.clear(); Promise.race([logbook.clear(), new Promise(r => setTimeout(r, 600))]).then(() => location.reload(), () => location.reload()); } });
   let last = performance.now(), paused = false, frames = 0;
   const cap = touch ? FRAME_CAP_TOUCH : 0;   // 0: no cap
   const quiet = createIdleTracker(undefined, last);
@@ -283,7 +302,7 @@ async function boot() {
     hands.cycle(); saveHands(hands.mode); dev.setHands(hands.mode);
   });
   if (hands.mode === 'computer') { mind.engage(); dev.setHabit(true); }   // Computer has no quiet wait, even on the ready frame
-  window.__driftwood = { world, game, view, input, mind, takeover, hands, ai, aiClient, aiPanel, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
+  window.__driftwood = { world, game, view, input, mind, takeover, hands, ai, aiClient, aiPanel, logbook, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     requestAnimationFrame(frame);
     if (paused) { last = now; return; }
@@ -309,6 +328,7 @@ async function boot() {
     }
     info.distance = walked;   // the footprints get the whole way walked this frame
     aiPanel.update();
+    quiet0(() => { logbook.tick({ now: mind.now(), snapshot: () => snapshotEntry(game, mind) }); if (ai.version !== planSeen) { planSeen = ai.version; logbook.planState(ai.plans()); } });   // 0.36.8: the "Now" changes, the half-hour snapshot and the plans' states (read only)
     ai.tick();   // 0.36.7: the sunset journal line (one extra request a day, only with the AI on; never waited for)
     if (ai.memoryVersion !== memSeen) { memSeen = ai.memoryVersion; save(); }   // new notes or a journal line are saved at once
     show(info);

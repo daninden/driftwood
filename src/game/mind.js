@@ -150,6 +150,7 @@
  *   opts.saved        (0.31.1 "Milk") a `mind.state()` kept by an earlier visit: journeyDue, journeyTried, exploredDay, journeys (whole numbers; a missing or bad field keeps its start value)
  *   mind.state()      { journeyDue, journeyTried, exploredDay, journeys } plain, for saving (src/save `habit`); the journey in progress is not part of it
  *   opts.onIntent     optional presentation callback before a situation-led errand, once per thought kind per goal; it changes no game state or decisions (0.30.1)
+ *   opts.onEvent      (0.36.8 "Logbook") optional read-only listener on the mind's own event stream, called with { type, day, time, x, z, ...data } for every `ev` event (all of stats.events, also beyond its cap) and for four more that are not in stats.events: 'goal-end' ({ goal, outcome: 'done' | 'failed' | 'stopped' | 'dropped: why', secs }), 'walk' ({ to, dist, goal }: a walk begins), 'act' ({ kind }: a button or a row press: pick up, lay down, feed, light, build, dig, fish, use:nut ...); a listener that throws is ignored; it changes no state and draws no random number (ai/logbook)
  *   mind.home()       { kind: 'leanto' | 'fire' | 'bed' | 'here', x, z }
  *   mind.tideSpot()  the spot just above the high-water line where wet wood would be laid from where he stands now, { x, z, cost } or null (for the tests)
  *   mind.strollCands(centre?, range?)  { shore, river, palms, forest, crabs: [{x, z}] } the places a stroll may go to (all on known ground; for the tests)
@@ -421,6 +422,7 @@ export function exactPileDrop(from, to) {
 
 export function createMind(world, game, opts = {}) {
   const onIntent = typeof opts.onIntent === 'function' ? opts.onIntent : null;
+  const onEvent = typeof opts.onEvent === 'function' ? opts.onEvent : null;   // 0.36.8: a read-only listener on the mind's own event stream (ai/logbook); it changes nothing and a listener that throws is ignored
   const chooser = typeof opts.chooser === 'function' ? opts.chooser : rulesChooser;   // 0.35 "Intentions": who picks from the menu (default: the present rules)
   const p = game.player, clock = game.clock, W = game.wood, known = game.known;
   const rng = mulberry32(hashInt(world.seed + 28, opts.stream || 0, 1)), rngEx = mulberry32(hashInt(world.seed + 29, opts.stream || 0, 2)), rngTide = mulberry32(hashInt(world.seed + 30, opts.stream || 0, 3)), rngFish = mulberry32(hashInt(world.seed + 31, opts.stream || 0, 4));   // exploring (0.29.4) draws from a stream of its own, so that the days without a trip stay as they were
@@ -444,7 +446,8 @@ export function createMind(world, game, opts = {}) {
     takeWake: () => false, takeLight: () => false, pressing: () => false, cancelAction() { pressed = null; }, clearTarget() { inp.target = null; },
     takeAction: () => { const k = pressed; pressed = null; return k; }, takeChoice: () => { const k = choice; choice = null; return k; }, takeSleep: () => { const k = sleepKey; sleepKey = false; return k; },
   };
-  const ev = (type, data) => { if (stats.events.length < (type.startsWith('home') || type.startsWith('axe') || type.startsWith('tide') || type.startsWith('journey') ? 900 : 400)) stats.events.push({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); };
+  const emit = (type, data) => { if (!onEvent) return; try { onEvent({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); } catch (e) { /* the listener is not the mind's business */ } };   // 0.36.8: only tells the listener (no entry in stats.events, no random number)
+  const ev = (type, data) => { emit(type, data); if (stats.events.length < (type.startsWith('home') || type.startsWith('axe') || type.startsWith('tide') || type.startsWith('journey') ? 900 : 400)) stats.events.push({ type, day: clock.day, time: +clock.time.toFixed(3), x: +p.x.toFixed(1), z: +p.z.toFixed(1), ...data }); };
   const idleInput = () => { inp.target = null; inp.run = false; };
   // ---------- 0.35 "Intentions": a decision is a menu, a chooser and the execution ----------
   const ctx = { rand: () => rng(), ex: () => rngEx(), fish: () => rngFish() };   // the streams the rules draw from (the same functions as `rand`, `rngEx`, `rngFish`)
@@ -608,12 +611,12 @@ export function createMind(world, game, opts = {}) {
   function pressKind(kinds, ok = null) {   // a small action of one of kinds (and, with ok, one it accepts): the ring if it is the main one, else its icon in the arc; returns the kind or null
     const a = game.action(), want = kinds.filter(k => ALLOWED.includes(k)), fits = o => want.includes(o.kind) && (!ok || ok(o));
     inp.sit = false;
-    if (a.tap && fits(a.tap)) { lastKind = a.tap.kind; pressed = 'tap'; return a.tap.kind; }
+    if (a.tap && fits(a.tap)) { lastKind = a.tap.kind; pressed = 'tap'; emit('act', { kind: lastKind }); return a.tap.kind; }
     const i = a.options.findIndex(fits);
-    if (i >= 0) { lastKind = a.options[i].kind; choice = i; return lastKind; }
+    if (i >= 0) { lastKind = a.options[i].kind; choice = i; emit('act', { kind: lastKind }); return lastKind; }
     return null;
   }
-  const useRow = kind => { lastKind = 'use:' + kind; idleInput(); inp.sit = false; return game.use(kind, inp); };
+  const useRow = kind => { lastKind = 'use:' + kind; emit('act', { kind: lastKind }); idleInput(); inp.sit = false; return game.use(kind, inp); };
 
   // ---------- walking ----------
   function* walk(x, z, o = {}) {   // to (x, z): true when he got there (or until() is true), false when there is no way; inside known ground (o.free: anywhere, for a search). 0.30.3: a thin wrapper over game/route
@@ -629,6 +632,7 @@ export function createMind(world, game, opts = {}) {
       const d = Math.hypot(x - p.x, z - p.z);
       if (!tap && d <= stop) { idleInput(); return true; }
       if (!route) {
+        emit('walk', { to: [+x.toFixed(1), +z.toFixed(1)], dist: +d.toFixed(1), goal: cur && cur.name });   // 0.36.8
         route = createRoute(fd, p, { x, z }, { stop, tap, near: tap ? 1.3 : 0 });   // tap: a stall within 1.3 m of the thing ends the walk (it lies against a trunk: close enough)
         if (route.state === 'unreachable') { stats.nopath++; ev('nopath', { to: [+x.toFixed(1), +z.toFixed(1)], goal: cur && cur.name }); event('nopath', cur && cur.name); idleInput(); return false; }
       }
@@ -2500,7 +2504,7 @@ export function createMind(world, game, opts = {}) {
   }
   function endGoal(why, failed) {
     if (cur && why) { ev('goal-dropped', { goal: cur.name, why }); }
-    if (cur) { const out = why ? 'dropped: ' + why : why === undefined ? 'stopped' : failed ? 'failed' : 'done'; cur.rec.outcome = out; if (cur.pastime && cur.pastime.outcome === 'running') cur.pastime.outcome = out; if (why || failed) event(why ? 'dropped' : 'failed', cur.name); }
+    if (cur) { const out = why ? 'dropped: ' + why : why === undefined ? 'stopped' : failed ? 'failed' : 'done'; emit('goal-end', { goal: cur.name, outcome: out, secs: +(now - cur.t0).toFixed(1) }); cur.rec.outcome = out; if (cur.pastime && cur.pastime.outcome === 'running') cur.pastime.outcome = out; if (why || failed) event(why ? 'dropped' : 'failed', cur.name); }
     if (cur && (failed || why === 'timeout') && cur.name !== 'idle') cool(cur.name, journey && (cur.name === 'drink' || cur.name === 'eat') ? JOURNEY_COOL : undefined);   // 0.30.19: on a journey a drink or a meal that cannot be had (no water he can reach, no food) is not tried again at once: each try costs the walk its rest
     try { if (cur) cur.it.return(); } catch (e) { /* the generator is gone anyway */ }
     cur = null; mind.goal = null; mind.waiting = false; idleInput(); chose = false; fullPace = false;

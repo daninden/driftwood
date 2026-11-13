@@ -20,6 +20,7 @@
  * (done, next, not reached, skipped with the plain reason, or overruled by the rules: an orange tag, the reason and what the rules did instead); the decisions that belong to a step (a short way on to it: free time, onward, linger) fold into one small grey line ("via: free time, go on with the day"). Decisions the rules made with no plan or when the AI
  * could not answer (no answer, waiting, busy, budget, an error, a note about a failed request) are grey blocks between the plans in time order, with the plain why. A toggle ("show every decision" / "show the plan steps") switches to the old view, one block per decision, unchanged. A click on a plan header, a step or a grey block shows the full request and the raw answer where there is one.
  * 0.36.7 "Memory": under the top line a collapsible "Memory" block (`memoryParts`): his own notes (the model writes them, at most 20 lines) and the journal (one line a day from sunset, newest day first; all are kept in the save); the collapsed state is kept in localStorage like the settings (`driftwood.aiMemoryOpen`, try/catch). It shows what the chooser has (`ai.notes()`, `ai.journal()`), with the AI on or off.
+ * 0.36.8 "Logbook": beside "copy log" a "download log" button (only when main hands in the logbook of ai/logbook) saves the whole logbook as `driftwood-log-<seed>-day<N>.jsonl`: events, snapshots, decisions, plans and the requests, with the AI off too.
  * Small, monospace, on a light box, scrollable. It is out of the way of the game: a pointer in the panel never walks Dave or takes him back from his habit (isAiPanelEvent; main skips those events), and typing in the
  * key field reaches no game key (game/input isTyping).
  *
@@ -40,7 +41,8 @@
  *   pendingLine(waiting, inFlight) -> string
  *   summaryLine(status, { mode, waiting, inFlight }, nowMs) -> { text, problem }, shortModel(name)   (0.36.6, pure) the one line of the collapsed panel after the checkbox, and the problem text shown in red in it
  *   requestText(messages, raw) -> string   the full exchange of an entry, for the expanded view
- *   createAiPanel(el, { client, ai, now? }) -> { toggle(), visible(), update() }   el: the #ai element (index.html); update() is called every frame and touches the DOM only when something changed; listens for I on window
+ *   saveTextFile(name, text, { doc?, url? })   (0.36.8) gives a text to the browser as a file (a Blob and a link with `download`)
+ *   createAiPanel(el, { client, ai, now?, logbook? }) -> { toggle(), visible(), update() }   el: the #ai element (index.html); update() is called every frame and touches the DOM only when something changed; listens for I on window
  *
  * Depends on: ai/config (AI_WAIT, a constant); main hands it the client of ai/client and the chooser of ai/chooser)
  */
@@ -278,7 +280,14 @@ export function nowParts(info, plan = null, entries = []) {
   return { text, mismatch, why };
 }
 
-export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
+/** 0.36.8: hands a text to the browser as a file: a Blob and a temporary link with `download`. DOM only. */
+export function saveTextFile(name, text, { doc = document, url = URL } = {}) {
+  const blob = new Blob([text], { type: 'application/x-ndjson' }), href = url.createObjectURL(blob), a = doc.createElement('a');
+  a.href = href; a.download = name; a.style.display = 'none'; doc.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => { try { url.revokeObjectURL(href); } catch (e) { /* nothing to free */ } }, 10000);
+}
+
+export function createAiPanel(el, { client, ai, now = () => Date.now(), logbook = null } = {}) {
   let byPlan = true, shown = false, seen = -1, lastStatus = '', lastModels = null, lastPending = '', lastOn = null;
   const open = new Set();
   const mk = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
@@ -294,12 +303,12 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
   let expanded = loadOpen(), memOpen = loadMem(), lastSummary = '', lastMem = -1, lastNow = '';
   const nowEl = mk('div', 'ai-now');
   const title = mk('div', 'ai-title', `AI · ${st.models.map(m => m.model).join(' > ')}`);
-  const top = mk('div', 'ai-top'), sum = mk('span', 'ai-sum'), sumText = mk('span', null), sumBad = mk('span', 'ai-bad'), gear = mk('button', 'ai-gear', '⚙'), copy = mk('button', 'ai-copy', 'copy log'); gear.type = 'button'; copy.type = 'button'; copy.title = 'copy the last two game days of the log as text'; gear.setAttribute('aria-label', 'AI settings'); gear.title = 'settings';
+  const top = mk('div', 'ai-top'), sum = mk('span', 'ai-sum'), sumText = mk('span', null), sumBad = mk('span', 'ai-bad'), gear = mk('button', 'ai-gear', '⚙'), copy = mk('button', 'ai-copy', 'copy log'), dl = mk('button', 'ai-copy ai-download', 'download log'); gear.type = 'button'; copy.type = 'button'; dl.type = 'button'; dl.hidden = !logbook; dl.title = 'download the whole logbook (events, snapshots, decisions, plans, requests) as a .jsonl file'; copy.title = 'copy the last two game days of the log as text'; gear.setAttribute('aria-label', 'AI settings'); gear.title = 'settings';
   const settings = mk('div', 'ai-settings');
   const memBox = mk('div', 'ai-memory'), memHead = mk('button', 'ai-mem-head'), memBody = mk('div', 'ai-mem-body'); memHead.type = 'button'; memBox.append(memHead, memBody);
   const row = mk('div', 'ai-row');
   const onLabel = mk('label'); const on = mk('input'); on.type = 'checkbox'; on.checked = client.on(); onLabel.append(on);
-  sum.append(sumText, ' ', sumBad); top.append(onLabel, sum, copy, gear);
+  sum.append(sumText, ' ', sumBad); top.append(onLabel, sum, copy, dl, gear);
   const copyBox = mk('div', 'ai-copybox'); copyBox.hidden = true;
   const key = mk('input', 'ai-key'); key.type = 'password'; key.autocomplete = 'off'; key.spellcheck = false; key.setAttribute('aria-label', 'API key');
   const clear = mk('button', null, 'clear key'); clear.type = 'button';
@@ -332,6 +341,11 @@ export function createAiPanel(el, { client, ai, now = () => Date.now() } = {}) {
     copyBox.textContent = '';   // no clipboard: the text in a box, selected, to copy by hand
     const ta = mk('textarea', 'ai-copytext'); ta.readOnly = true; ta.value = text; ta.rows = 8; const close = mk('button', null, 'close'); close.type = 'button'; close.addEventListener('click', () => { copyBox.hidden = true; });
     copyBox.append(ta, close); copyBox.hidden = false; ta.focus(); ta.select();
+  });
+  dl.addEventListener('click', () => {   // 0.36.8: the logbook as a file (ai/logbook), also with the AI off
+    if (!logbook) return;
+    try { saveTextFile(logbook.fileName(), logbook.text()); dl.textContent = 'downloaded'; } catch (e) { dl.textContent = 'failed'; }
+    setTimeout(() => { dl.textContent = 'download log'; }, 1500);
   });
   const showView = () => { viewBtn.textContent = byPlan ? 'show every decision' : 'show the plan steps'; };
   showView(); viewBtn.addEventListener('click', () => { byPlan = !byPlan; showView(); seen = -1; update(); });
