@@ -134,13 +134,13 @@ describe('point 4: the fire in the request', () => {
   const base = { day: 3, time: 0.8, raining: false, daylight: 1, thirst: 0.2, hunger: 0.2, awake: 0.3, carries: {}, home: null, journey: false, doing: 'free time' };
   it('the request says the pieces on the fire, how long it lasts, the pieces more the night needs and the store with its burn time and the wet wood apart', () => {
     const t = stateText({ ...base, camp: { fire: 'low', fuel: 3 * BURN, ring: false, store: { dry: 4, wet: 2, branches: 3, fronds: 1, stones: 0, logs: 0 } } });
-    expect(t).toMatch(/Fire: burning low, about 3 pieces on it, about 7\.5 hours left \(it holds at most 8\); for the night until 04:04 it needs about \d+ pieces? more\./);
+    expect(t).toMatch(/Fire at his camp: burning low, about 3 pieces on it, about 7\.5 hours left \(it holds at most 8\); for the night until 04:04 it needs about \d+ pieces? more\./);
     expect(t).toContain('Camp store: 4 dry wood, 3 branches (about 14 hours of fire), 2 wet (do not burn until dry), 1 fronds.');
     const none = stateText({ ...base, camp: { fire: 'none', fuel: 0, store: { dry: 0, wet: 0, branches: 0, fronds: 0, stones: 0, logs: 0 } } });
-    expect(none).toMatch(/Fire: none yet \(for the night until 04:04 it needs about \d+ pieces\)\./); expect(none).toContain('Camp store: nothing.');
+    expect(none).toMatch(/Fire at his camp: none yet \(for the night until 04:04 it needs about \d+ pieces\)\./); expect(none).toContain('Camp store: nothing.');
     const full = stateText({ ...base, time: 0.9, camp: { fire: 'well', fuel: 8 * BURN, ring: true, store: { dry: 1, wet: 0, branches: 0, fronds: 0, stones: 0, logs: 0 } } });
     expect(full).toContain('about 8 pieces on it, about 30 hours left'); expect(full).toContain('it will last until dawn (04:04)');
-    expect(stateText({ ...base, camp: { fire: 'low', store: { dry: 6, wet: 2 } } })).toContain('Fire: burning low.');   // a camp that does not tell its fuel keeps the short line
+    expect(stateText({ ...base, camp: { fire: 'low', store: { dry: 6, wet: 2 } } })).toContain('Fire at his camp: burning low.');   // a camp that does not tell its fuel keeps the short line
   });
   it('the system text explains feeding with the real numbers, and that feeding is possible at any hour', () => {
     expect(FIXED).toContain('Feeding the fire'); expect(FIXED).toContain('burns 2.5 hours and a branch half as long'); expect(FIXED).toContain('3.75 hours'); expect(FIXED).toContain('at most 8 pieces'); expect(FIXED).toContain('Wet wood does not burn until it has dried');

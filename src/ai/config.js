@@ -12,6 +12,7 @@
  * AI_PLAN_MIN, AI_PLAN_MAX   the length of a plan asked for (a longer one is cut, a shorter one used as it is)
  * AI_AWAKE_MARGIN   how far before AWAKE_MAX (days) the loose leash overrules for tiredness
  * AI_REPLAN_GAP   real seconds between two requests (a new plan is not asked again sooner: a step that is not possible is then skipped, any other reason waits, the rules decide meanwhile)
+ * LESSONS_MAX (10), LESSON_LEN (140)   (0.37.4 "Lessons") the lessons of full AI play: at most 10 kept, the model may merge or drop them when the list is full
  * NOTES_MAX, NOTE_LEN, JOURNAL_LEN, JOURNAL_DAYS, JOURNAL_MAX   (0.36.7 "Memory") his own notes (at most 20 lines of 80 characters), the sunset journal line (140 characters), how many days of the journal go into a plan request (3), and the most lines kept
  * SAID_LEN      (0.36.9 "Voice") the longest step reason the request asks for, 140 characters (the same as render/voice SAID_MAX)
  * AI_LOG_MAX      decisions kept in the panel's log (memory only)
@@ -43,6 +44,8 @@ export const SAID_LEN = 140;   // 0.36.9 "Voice": the longest step reason shown 
 export const JOURNAL_LEN = 140;   // the sunset journal line: at most this many characters
 export const JOURNAL_DAYS = 3;   // only the last days of the journal go into a plan request (all are kept)
 export const JOURNAL_MAX = 3650;   // lines kept in all (a safety bound; ten years of days)
+export const LESSONS_MAX = 10;   // 0.37.4 "Lessons": the lessons of the days (one asked at sunset in full AI play, in place of the journal line): at most this many kept, each at most LESSON_LEN characters
+export const LESSON_LEN = 140;
 export const MODE_NAME = 'driftwood.ai.mode';
 export const KEY_NAME = 'driftwood.ai.key';
 export const ON_NAME = 'driftwood.ai.on';

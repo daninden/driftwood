@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.4 "Lessons" — 2026-11-17
+
+Agreed with the user after the AI test day (one game day on seed 1337, played headless by `scripts/ai-playtest.js` with a Claude model answering: 115 requests, no collapse, thirst at most 0.45, 15 plans refused for their length, 13 of 251 steps failed, some for reasons that misled). With the AI off nothing changes.
+
+- **The lesson of the day** in place of the journal line: at sunset one request asks what the day taught him; the answer is the full new list of his lessons (at most 10, each at most 140 characters; when full the model merges or drops one); all of them go into every plan request; the AI panel shows them; saved with the island.
+- **The model counts its plan** (`minutes` in the answer): counted 30 or less, the plan is followed even if the game counts up to 40 (the user chose 40); counted over 30, or the game counts over 40, it is refused with both numbers; the next request says when the count was off by 3 minutes or more. Every action in the request says its own minutes.
+- **Rules told plainly** (no advice): drinking lays down what he carries; the cold sleep; the drill uses the fibre either way; the burn time of a piece and a branch; what counts when carrying; a pile is taken from only with empty arms; "buildHere" starts a NEW lean-to, its parts go driftwood, branches, fronds; nothing is picked up with the spear or the axe in hand; what "his camp" means ("Fire at his camp" in the situation).
+- **Fixes:** a failed action says why where the game knows, and the lack of the fire or the spear only for lighting and fishing (a dig or a fill no longer fails with "the pile needs more wood"); "light" is done only when a fire burns (it used to count as done when only the fibre was used); fires and lean-tos keep their number on the menu, a fire tells its pieces and hours left, a lean-to its parts and what it needs next.
+- **Tests:** `tests/actor.test.js` and `tests/planner.test.js` (the count, the reasons, the menu, the lessons).
+- **Choices made while building (not discussed with the user):** the count line only when it is off by 3 minutes or more; a plan without a count of its own keeps the strict 30; the lessons replace the journal only in full AI play (the old chooser keeps its journal until 0.37.5); no old-save migration of the journal.
+
 ## 0.37.3 "Branches" — 2026-11-17
 
 Asked by the user after the question whether Dave can fetch wood with a torch in his hand (he could not: a torch filled his hands). **A torch in one hand, branches under the other arm**, for the player and for Dave alike (with the AI off the old mind never carries wood with a torch, so its lives do not change).

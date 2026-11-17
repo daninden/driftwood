@@ -2,15 +2,15 @@
 // Not part of the game: a tool for development (asked by the user 2026-11-17, to let a Claude model play a test day in place of Gemini).
 //
 // The game runs headless as main does with the AI on (game/game, game/actor, ai/planner, the same request and answer as in the browser); it starts as a new game does
-// (he knows only where he stands). Whenever the planner asks (a plan, or the sunset journal line), the game stands still and the request is written to a file; the
+// (he knows only where he stands). Whenever the planner asks (a plan, or the sunset lesson), the game stands still and the request is written to a file; the
 // game goes on when the answer file is there. In between the game runs as fast as the machine can.
 //
 //   node scripts/ai-playtest.js run <dir> [--seed 1337] [--days 1] [--name ""]   the game (keep it running; it ends after the days, or with Ctrl-C)
 //   node scripts/ai-playtest.js next <dir> [--wait 900]                          waits for the next open request and prints it (its number, then the messages); "END" when the game is over
 //   node scripts/ai-playtest.js answer <dir> <n> <file|->                        hands in the answer to request n (the model's raw text: the JSON of the game's answer format)
 //
-// <dir> holds: request-<n>.json ({ n, kind: 'plan' | 'journal', day, time, messages }), answer-<n>.txt, events.jsonl (the actor's events, the plans and a snapshot every
-// half game hour), and at the end summary.json (thirst and hunger at most, collapses, plans, steps done and failed, rejected plans, errors, the notes and the journal).
+// <dir> holds: request-<n>.json ({ n, kind: 'plan' | 'lesson', day, time, messages }), answer-<n>.txt, events.jsonl (the actor's events, the plans and a snapshot every
+// half game hour), and at the end summary.json (thirst and hunger at most, collapses, plans, steps done and failed, rejected plans, errors, the notes and the lessons).
 // Depends on: world/world, world/spots, game/game, game/actor, game/mind (home and camp for the state), game/actions, ai/planner, ai/prompt
 import fs from 'node:fs';
 import path from 'node:path';
@@ -69,7 +69,7 @@ const log = o => fs.writeSync(out, JSON.stringify({ ...o, day: dayNo(game.clock.
 
 let n = 0;
 const ask = messages => {   // a request: written to a file, answered when the answer file is there
-  const k = ++n, kind = /Write today's journal line/.test(messages[1] && messages[1].content || '') ? 'journal' : 'plan';
+  const k = ++n, kind = /full new list of his lessons/.test(messages[1] && messages[1].content || '') ? 'lesson' : 'plan';
   fs.writeFileSync(file(`request-${k}.json`), JSON.stringify({ n: k, kind, day: dayNo(game.clock.day), time: game.clock.time, messages }, null, 1));
   const t0 = Date.now();
   return new Promise(resolve => {
@@ -112,7 +112,7 @@ while (game.clock.total < end && !stopping) {
       asleep: game.sleep.asleep, fires: game.fire.fires.map(f => +f.fuel.toFixed(3)), torch: !!game.fire.torch, carried: game.wood.carried.length, piles: game.wood.piles.length, leantos: game.leantos.list.length });
   }
 }
-Object.assign(r, { realSeconds: Math.round((Date.now() - t0) / 1000), requests: n, stats: actor.stats, notes: planner.notes(), journal: planner.journal(),
+Object.assign(r, { realSeconds: Math.round((Date.now() - t0) / 1000), requests: n, stats: actor.stats, notes: planner.notes(), lessons: planner.lessons(),
   leantos: game.leantos.list.length, fires: game.fire.fires.length });
 fs.writeFileSync(file('summary.json'), JSON.stringify(r, null, 1));
 console.log(JSON.stringify(r, null, 1));

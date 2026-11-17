@@ -34,6 +34,11 @@
  * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
  * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
  * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * 0.37.4 "Lessons": a failed action says why in plain words where the game knows (`whyNot`: the lack of the fire or the spear only for 'light' and 'fish'; for 'pickup' the
+ * spear or axe in hand, a log, a torch with other wood, taking from a pile with something under his arm, full arms; for 'buildIn' / 'upgrade' the kind the lean-to needs next).
+ * 'light' is done only when a fire burns within 3 m afterwards (the drill uses the fibre either way). Fires and lean-tos keep their number on the menu (fire<n>, leanto<n>: their
+ * place in the game's lists); a fire says its pieces and hours left, a lean-to its parts and what it needs next. The menu's `count` is { claimed, minutes } of the last plan
+ * followed when the chooser counted it itself.
  * The menu also has `light`: { dark, hours (until dusk by day, until dawn in the dark), torch: { minutes left } | null, planted: [{ dist, dir, minutes }] (torches in the ground within 40 m), lit (he stands in firelight) }.
  *
  * Depends on: game/actions, game/dark, game/fish, game/intent (WAIT), game/path, game/route, game/movement, game/water, game/wood, game/felled, game/leanto, game/clock, world/constants
@@ -47,7 +52,9 @@ import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
 import { freshWater } from './water.js';
 import { dryness } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
-import { standFor } from './leanto.js';
+import { standFor, nextKind, built, partsOf, UP_ORDER } from './leanto.js';
+import { fireOutlook, BURN } from './fire.js';
+import { TIRED_AT } from './sleep.js';
 import { WAIT } from './intent.js';
 import { PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
 
@@ -100,8 +107,18 @@ export function createActor(world, game, opts = {}) {
     bananas:   { list: t => game.bananas.bearingIn(t), what: () => 'a banana plant with a bunch' },
   };
   const pileWhat = q => `a pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : 'driftwood (some wet)') : q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : 'logs'}`;
-  const fireWhat = f => (game.fire.strength(f) > 0 ? 'his fire, burning' : f.embers > 0.005 ? 'his fire, embers only' : 'his fire place, cold') + (game.leantos.ring(f.x, f.z) ? ' (in the stone ring)' : '');
-  const leantoWhat = l => l.progress >= 1 ? 'his lean-to' : 'his half-built lean-to';
+  const fireWhat = f => {   // 0.37.4: how long it still burns
+    const ring = !!game.leantos.ring(f.x, f.z), burning = game.fire.strength(f) > 0;
+    const o = burning ? fireOutlook({ fuel: f.fuel, ring }) : null;
+    return (burning ? `his fire, burning, about ${Math.max(1, Math.round(o.pieces))} piece${Math.round(o.pieces) === 1 ? '' : 's'} on it, about ${Math.round(o.hoursLeft * 2) / 2} hours left` : f.embers > 0.005 ? 'his fire, embers only' : 'his fire place, cold') + (ring ? ' (in the stone ring)' : '');
+  };
+  const kindWord = k => (k === 'branch' ? 'a branch' : k === 'frond' ? 'a frond' : k === 'stone' ? 'a stone' : k === 'log' ? 'a log' : 'a piece of driftwood');
+  const leantoWhat = l => {   // 0.37.4: how far it is and what it needs next
+    const next = nextKind(l, 'leanto');
+    if (next) return `his lean-to, begun: ${built(l, 'leanto')} of ${partsOf('leanto').length} parts; next it needs ${kindWord(next)}`;
+    const up = UP_ORDER.map(w => [w, nextKind(l, w)]).find(([, k]) => k);
+    return up ? `his lean-to, finished; next for the ${up[0]}: ${kindWord(up[1])}` : 'his lean-to, finished with walls, bed and ring';
+  };
   function candidates() {   // every thing he knows within SCAN_R, by kind: [{ kind, ref, x, z, what }]
     const out = [], R = SCAN_R, near = q => Math.hypot(q.x - p.x, q.z - p.z) <= R && known.has(q.x, q.z), anywhere = q => known.has(q.x, q.z);   // water, fires and lean-tos he knows are on the menu however far
     for (const q of waterAll) if (anywhere(q)) out.push({ kind: 'water', ref: q, x: q.x, z: q.z, what: 'fresh river water' });
@@ -126,7 +143,7 @@ export function createActor(world, game, opts = {}) {
   const spaced = (list, apart) => { const out = []; for (const c of list) if (!out.some(o => dist(o, c) < apart)) out.push(c); return out; };
 
   // ---------- the menu ----------
-  let menuMemo = null;
+  let menuMemo = null, lastCount = null;   // lastCount (0.37.4): { claimed, minutes } of the last plan followed, when the chooser gave its own count
   function menu() {
     if (menuMemo && menuMemo.t === now) return menuMemo.m;
     const byKind = new Map();
@@ -142,7 +159,8 @@ export function createActor(world, game, opts = {}) {
         if (!(cost < Infinity)) continue;
         count[kind] = (count[kind] || 0) + 1;
         const offers = [...new Set(game.offersAt(c.x, c.z).map(o => o.kind))].filter(k => DO[k]);
-        places.push({ id: kind + count[kind], kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
+        const sid = kind === 'fire' ? game.fire.fires.indexOf(c.ref) + 1 : kind === 'leanto' ? game.leantos.list.indexOf(c.ref) + 1 : 0;   // 0.37.4: fires and lean-tos keep their number
+        places.push({ id: kind + (sid > 0 ? sid : count[kind]), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
           minutes: Math.max(1, Math.ceil(gameMinutes(cost * WALK_SLACK))), nearby: Math.round(c.dist) <= NEARBY, offers });
       }
     }
@@ -155,7 +173,7 @@ export function createActor(world, game, opts = {}) {
     if (game.berries.carried.length) uses.push('berries');
     if (game.bananas.carried.length) uses.push('banana');
     if (game.crabs.carried.length || game.fish.carried.length) uses.push('crab');
-    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, dirs: DIRS.slice(), carries: carries(), light: lightInfo(), minutes: PLAN_MINUTES };
+    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, dirs: DIRS.slice(), carries: carries(), light: lightInfo(), minutes: PLAN_MINUTES, count: lastCount };
     menuMemo = { t: now, m };
     return m;
   }
@@ -306,6 +324,27 @@ export function createActor(world, game, opts = {}) {
   }
   const snapshot = () => JSON.stringify([carries(), +game.thirst.days.toFixed(4), +game.hunger.days.toFixed(4), game.fire.fires.map(f => +f.fuel.toFixed(4)), game.leantos.list.map(l => l.progress + ':' + JSON.stringify(l.parts || l.up || null)),
     W.piles.length, W.piles.reduce((n, q) => n + q.logs.length, 0), game.felled.list.length, p.work ? p.work.kind : null, !!game.spear.at, !!game.axe.at, game.sleep.asleep]);
+  // 0.37.4 "Lessons": why an action is not offered where he stands, in plain words (null when the game does not say); a lack belongs only to its own action
+  function whyNot(kind) {
+    const lack = game.lackAt();
+    if (lack && ((kind === 'fish' && (lack === 'needSpear' || lack === 'spearAway')) || (kind === 'light' && (lack === 'needFibre' || lack === 'needMoreWood')))) return LACK_TEXT[lack] || lack;
+    if (kind === 'pickup') {
+      if (game.spear.hand || game.axe.hand) return `the ${game.spear.hand ? 'spear' : 'axe'} is in his hand: he picks nothing up`;
+      if (W.log) return 'a log is on his shoulder';
+      const pile = W.findAll(p.x, p.z, 1.6, 'pile')[0];
+      if (game.fire.torch && pile && pile.pile.kind !== 'branch') return 'a torch is in his hand: only branches';
+      if (W.load() > 0 && pile) return 'with something under his arm he lays on a pile, he does not take from it';
+      if (W.carried.length >= 3) return 'his arms are full';
+    }
+    if (kind === 'buildIn' || kind === 'upgrade') {
+      const l = game.leantos.list.filter(q => dist(q, p) < 4).sort((a, b) => dist(a, p) - dist(b, p))[0];
+      if (l) {
+        const need = nextKind(l, 'leanto') || UP_ORDER.map(w => nextKind(l, w)).find(Boolean);
+        if (need) return `it needs ${need === 'branch' ? 'a branch' : need === 'frond' ? 'a frond' : need === 'stone' ? 'a stone' : need === 'log' ? 'a log' : 'a piece of driftwood'} next`;
+      }
+    }
+    return null;
+  }
   function* doAction(kind) {
     const want = x => x.kind === kind && !(kind === 'husk' && x.carried);
     idle();
@@ -316,8 +355,8 @@ export function createActor(world, game, opts = {}) {
       if (q) { const w = yield* walk(q.x, q.z, { stop: STOP, maxSecs: 15 }); if (w.ok) { for (let t = 0; t < SETTLE_TICKS && p.moving; t++) yield; o = offersNow().find(want); } }
     }
     if (!o) {
-      const lack = game.lackAt();
-      return { ok: false, reason: 'not offered here' + (lack ? ` (${LACK_TEXT[lack] || lack})` : '') };
+      const why = whyNot(kind);
+      return { ok: false, reason: 'not offered here' + (why ? ` (${why})` : '') };
     }
     const before = snapshot();
     if (!press(x => x.kind === o.kind && sameThing(x.thing, o.thing))) return { ok: false, reason: 'not offered here' };
@@ -330,6 +369,7 @@ export function createActor(world, game, opts = {}) {
       return { ok: true };
     }
     yield* waitActs(); yield* waitIdle();
+    if (kind === 'light' && !game.fire.fires.some(f => game.fire.strength(f) > 0 && dist(f, p) <= 3)) return { ok: false, reason: 'the fire did not catch' + (game.sleep.awake >= TIRED_AT ? ' (he is tired: the drill seldom catches)' : '') };   // 0.37.4: the fibre is used up either way; done only with a fire
     if (snapshot() === before) return { ok: false, reason: kind === 'dig' ? 'the crab got away' : kind === 'light' ? 'the fire did not catch' : kind === 'fish' ? 'he missed the fish' : 'nothing came of it' };
     return { ok: true };
   }
@@ -427,9 +467,10 @@ export function createActor(world, game, opts = {}) {
       const chk = checkPlan(c, m.places);
       if (!chk.ok) { stats.rejected++; last = remember('rejected', 'a plan', 'rejected', chk.reason); emit('rejected', { reason: chk.reason }); why = 'rejected'; idle(); return; }
       stats.plans++;
+      lastCount = chk.claimed !== null && chk.claimed !== undefined ? { claimed: chk.claimed, minutes: chk.minutes } : null;
       actor.plan = { steps: chk.steps, minutes: chk.minutes, at: clock.total, menu: m, say: c && typeof c.say === 'string' ? c.say : '', why };
       remember('plan', chk.steps.map(s => stepText(s, m.places)).join('; '), 'planned');
-      emit('plan', { steps: chk.steps, minutes: chk.minutes, why, say: actor.plan.say, what: chk.steps.map(x => stepText(x, m.places)).join('; ') });
+      emit('plan', { steps: chk.steps, minutes: chk.minutes, claimed: chk.claimed, why, say: actor.plan.say, what: chk.steps.map(x => stepText(x, m.places)).join('; ') });
       gen = runPlan(actor.plan);
     }
     const r = gen.next();

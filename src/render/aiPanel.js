@@ -19,7 +19,7 @@
  * 0.36.5 "Reach": the default view of the log is BY PLAN (`groupByPlan`): each plan is a header ("New plan, Day 3 07:31 — asked because ...") with its one-sentence reason, then one block per plan step IN PLAN ORDER: the step (with its destination, `to`), the model's reason in quotes, when it was taken and how it stands
  * (done, next, not reached, skipped with the plain reason, or overruled by the rules: an orange tag, the reason and what the rules did instead); the decisions that belong to a step (a short way on to it: free time, onward, linger) fold into one small grey line ("via: free time, go on with the day"). Decisions the rules made with no plan or when the AI
  * could not answer (no answer, waiting, busy, budget, an error, a note about a failed request) are grey blocks between the plans in time order, with the plain why. A toggle ("show every decision" / "show the plan steps") switches to the old view, one block per decision, unchanged. A click on a plan header, a step or a grey block shows the full request and the raw answer where there is one.
- * 0.37.1 "Half hour": the option `play` ({ actor, planner }, filled in by main): with the AI on the panel shows full AI play: the "Now" line is the running step (or "waiting for a plan"), the plan box the actor's plan with its thought (`actPlanLines`), the log the planner's requests (`actEntryParts`), the Memory block the planner's notes and journal. The leash buttons are gone.
+ * 0.37.1 "Half hour": the option `play` ({ actor, planner }, filled in by main): with the AI on the panel shows full AI play: the "Now" line is the running step (or "waiting for a plan"), the plan box the actor's plan with its thought (`actPlanLines`), the log the planner's requests (`actEntryParts`), the Memory block the planner's notes and journal (0.37.4 "Lessons": his lessons in place of the journal). The leash buttons are gone.
  *   actPlanLines(plan, index, recent), actEntryParts(entry)   (pure) the plan as marked lines; one request as { n, head, lines, ok }
  * 0.36.7 "Memory": under the top line a collapsible "Memory" block (`memoryParts`): his own notes (the model writes them, at most 20 lines) and the journal (one line a day from sunset, newest day first; all are kept in the save); the collapsed state is kept in localStorage like the settings (`driftwood.aiMemoryOpen`, try/catch). It shows what the chooser has (`ai.notes()`, `ai.journal()`), with the AI on or off.
  * 0.36.8 "Logbook": beside "copy log" a "download log" button (only when main hands in the logbook of ai/logbook) saves the whole logbook as `driftwood-log-<seed>-day<N>.jsonl`: events, snapshots, decisions, plans and the requests, with the AI off too.
@@ -116,9 +116,14 @@ export function blockParts(e) {
 
 /** The plan as lines for the panel (0.36.5): "▶" the step that is busy now (the last one taken), "✓" done, "✗" skipped, none for the rest; the first step not yet taken says "(next)" after it. Pure. */
 const MARK = { running: '▶', done: '✓', skipped: '✗' };
-export function memoryParts(notes, journal) {
-  const n = Array.isArray(notes) ? notes.filter(x => typeof x === 'string' && x) : [], j = (Array.isArray(journal) ? journal : []).filter(x => x && typeof x.line === 'string' && x.line).sort((a, b) => b.day - a.day).map(x => ({ day: x.day, text: `Day ${x.day}: ${x.line}` }));
-  return { head: `Memory: ${n.length} note${n.length === 1 ? '' : 's'}, ${j.length} journal line${j.length === 1 ? '' : 's'}`, notes: n, journal: j };
+export function memoryParts(notes, journal, lessons = null) {
+  const n = Array.isArray(notes) ? notes.filter(x => typeof x === 'string' && x) : [];
+  if (Array.isArray(lessons)) {   // 0.37.4 "Lessons": full AI play keeps lessons in place of the journal
+    const l = lessons.filter(x => typeof x === 'string' && x);
+    return { head: `Memory: ${n.length} note${n.length === 1 ? '' : 's'}, ${l.length} lesson${l.length === 1 ? '' : 's'}`, notes: n, journal: [], lessons: l };
+  }
+  const j = (Array.isArray(journal) ? journal : []).filter(x => x && typeof x.line === 'string' && x.line).sort((a, b) => b.day - a.day).map(x => ({ day: x.day, text: `Day ${x.day}: ${x.line}` }));
+  return { head: `Memory: ${n.length} note${n.length === 1 ? '' : 's'}, ${j.length} journal line${j.length === 1 ? '' : 's'}`, notes: n, journal: j, lessons: null };
 }
 export function planLines(plan) {
   if (!plan) return [];
@@ -358,13 +363,18 @@ export function createAiPanel(el, { client, ai, now = () => Date.now(), logbook 
   const showOpen = () => { settings.hidden = !expanded; gear.className = expanded ? 'ai-gear on' : 'ai-gear'; gear.setAttribute('aria-expanded', String(expanded)); };
   showOpen(); gear.addEventListener('click', () => { expanded = !expanded; saveOpen(expanded); showOpen(); });
   const renderMemory = () => {
-    const mem = play ? play.planner : ai, m = memoryParts(mem.notes ? mem.notes() : [], mem.journal ? mem.journal() : []);
+    const mem = play ? play.planner : ai, m = memoryParts(mem.notes ? mem.notes() : [], mem.journal ? mem.journal() : [], mem.lessons ? mem.lessons() : null);
     memHead.textContent = `${memOpen ? '▾' : '▸'} ${m.head}`; memHead.setAttribute('aria-expanded', String(memOpen)); memBody.hidden = !memOpen; memBody.textContent = '';
     if (!memOpen) return;
     memBody.append(mk('div', 'ai-sub', 'His notes'));
     if (m.notes.length) m.notes.forEach((x, i) => memBody.append(mk('div', 'ai-note', `${i + 1}. ${x}`))); else memBody.append(mk('div', 'ai-dim', '(none yet)'));
-    memBody.append(mk('div', 'ai-sub', 'Journal'));
-    if (m.journal.length) m.journal.forEach(x => memBody.append(mk('div', 'ai-note', x.text))); else memBody.append(mk('div', 'ai-dim', '(no line yet)'));
+    if (m.lessons) {   // 0.37.4 "Lessons"
+      memBody.append(mk('div', 'ai-sub', 'His lessons'));
+      if (m.lessons.length) m.lessons.forEach((x, i) => memBody.append(mk('div', 'ai-note', `${i + 1}. ${x}`))); else memBody.append(mk('div', 'ai-dim', '(none yet)'));
+    } else {
+      memBody.append(mk('div', 'ai-sub', 'Journal'));
+      if (m.journal.length) m.journal.forEach(x => memBody.append(mk('div', 'ai-note', x.text))); else memBody.append(mk('div', 'ai-dim', '(no line yet)'));
+    }
   };
   memHead.addEventListener('click', () => { memOpen = !memOpen; saveMem(memOpen); renderMemory(); });
   copy.addEventListener('click', async () => {

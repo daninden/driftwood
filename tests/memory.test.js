@@ -143,7 +143,9 @@ describe('the AI panel\'s Memory block', () => {
   it('shows the notes in order and the journal newest day first, with plain counts', () => {
     const m = memoryParts(['a', '', 'b'], [{ day: 1, line: 'One' }, { day: 3, line: 'Three' }, { day: 2, line: 'Two' }, { day: 4 }]);
     expect(m.notes).toEqual(['a', 'b']); expect(m.journal.map(j => j.text)).toEqual(['Day 3: Three', 'Day 2: Two', 'Day 1: One']); expect(m.head).toBe('Memory: 2 notes, 3 journal lines');
-    expect(memoryParts(undefined, undefined)).toEqual({ head: 'Memory: 0 notes, 0 journal lines', notes: [], journal: [] });
+    expect(memoryParts(undefined, undefined)).toEqual({ head: 'Memory: 0 notes, 0 journal lines', notes: [], journal: [], lessons: null });
+    const l = memoryParts(['x'], [], ['Wood first.', '']);   // 0.37.4: full AI play shows lessons in place of the journal
+    expect(l.head).toBe('Memory: 1 note, 1 lesson'); expect(l.lessons).toEqual(['Wood first.']);
     expect(memoryParts(['x'], []).head).toBe('Memory: 1 note, 0 journal lines');
   });
 });

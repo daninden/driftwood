@@ -300,7 +300,7 @@ function situationLines(s) {
     const st = c.store || {};
     // 0.36.9: the fire in pieces and hours, and what the night until dawn needs (game/fire `fireOutlook`); only when the camp tells its fuel (an older shape keeps the short line)
     const detail = typeof c.fuel === 'number' ? fireOutlook({ fuel: c.fire === 'low' || c.fire === 'well' ? c.fuel : 0, ring: !!c.ring, hoursToDawn: hoursTo(s.time, DAWN), dry: st.dry, branches: st.branches }) : null;
-    let fire = `Fire: ${FIRE[c.fire] || c.fire}`;
+    let fire = `Fire at his camp: ${FIRE[c.fire] || c.fire}`;   // 0.37.4: "at his camp", other fires are on the menu
     if (detail) {
       const burning = c.fire === 'low' || c.fire === 'well', night = `for the night until ${hhmm(DAWN)} it needs about ${detail.need} piece${detail.need === 1 ? '' : 's'}${burning ? ' more' : ''}`;
       if (burning) fire += `, about ${Math.max(1, Math.round(detail.pieces))} piece${Math.round(detail.pieces) === 1 ? '' : 's'} on it, about ${h1(detail.hoursLeft)} hours left (it holds at most ${detail.max}); ${detail.need > 0 ? night : `it will last until dawn (${hhmm(DAWN)})`}`;

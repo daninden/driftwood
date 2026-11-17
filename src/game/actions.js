@@ -15,14 +15,16 @@
  * when a step starts, not here.
  *
  * Exports:
- *   PLAN_MINUTES (30), PLAN_STEPS (8), NEARBY (15 m), PER_KIND (3), WANDER_MAX (60), WAIT_MAX (60), FISH_MIN (5), FISH_MAX (60)
+ *   PLAN_MINUTES (30), PLAN_STEPS (8), NEARBY (15 m), PER_KIND (3), WANDER_MAX (60), WAIT_MAX (60), FISH_MIN (5), FISH_MAX (60), PLAN_GRACE (40)
  *   DIRS                         the eight directions of a wander, and of the places' bearings
  *   DO, USE                      kind -> { what, secs }: the plain words of an action and its seconds of real time (null: it lasts until it ends by itself, the sleep)
  *   gameMinutes(secs) -> number  real seconds (a game day is DAY_SECONDS) as game minutes; realSecs(minutes) the other way round
  *   dirOf(dx, dz) -> one of DIRS
  *   stepMinutes(step, places) -> number | null   the estimate of one step (null: no estimate, unknown place or kind)
  *   stepText(step, places) -> string             a step in plain words, for logs and the panel
- *   checkPlan(plan, places) -> { ok, steps, minutes, reason }   plan: [step] or { steps: [step] }; ok false with a plain reason when it cannot be followed (0.37.2: a sleep or a fishing not alone, fishing without 5 to 60 minutes)
+ *   checkPlan(plan, places) -> { ok, steps, minutes, claimed, reason }   plan: [step] or { steps: [step], minutes? }; ok false with a plain reason when it cannot be followed (0.37.2: a sleep or a fishing not alone, fishing without 5 to 60 minutes)
+ *     0.37.4 "Lessons": `minutes` is the chooser's own count of the plan (claimed). A plan of several steps is refused when the chooser counted over PLAN_MINUTES; when it
+ *     counted PLAN_MINUTES or less it is followed up to PLAN_GRACE (40) minutes of the game's count; with no count of its own the game's count must be PLAN_MINUTES or less.
  *
  * Depends on: game/clock, game/game (action times), game/shells, game/fire, game/leanto, game/crabs, game/spear, game/axe, game/fish
  */
@@ -43,6 +45,7 @@ export const PER_KIND = 3;        // the nearest places of each kind on the menu
 export const NEARBY_MAX = 5;
 export const WANDER_MAX = 60, WAIT_MAX = 60;   // game minutes a wander or a wait may last
 export const FISH_MIN = 5, FISH_MAX = 60;       // game minutes a fishing may last (chosen by the model, 0.37.2)
+export const PLAN_GRACE = 40;     // 0.37.4 "Lessons": a plan the chooser counted at PLAN_MINUTES or less is still followed when the game counts up to this (the user, 2026-11-17)
 
 export const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 
@@ -161,6 +164,11 @@ export function checkPlan(plan, places) {
     steps.push(step);
   }
   minutes = Math.round(minutes * 10) / 10;
-  if (steps.length > 1 && minutes > PLAN_MINUTES) return { ok: false, steps: [], minutes, reason: `the plan takes about ${Math.round(minutes)} minutes, at most ${PLAN_MINUTES} (a longer step must be a plan of its own)` };
-  return { ok: true, steps, minutes, reason: null };
+  const raw = plan && !Array.isArray(plan) ? Number(plan.minutes) : NaN, claimed = Number.isFinite(raw) && raw >= 0 ? Math.round(raw) : null;   // 0.37.4: the chooser's own count
+  if (steps.length > 1) {
+    if (claimed !== null && claimed > PLAN_MINUTES) return { ok: false, steps: [], minutes, claimed, reason: `you counted ${claimed} minutes, at most ${PLAN_MINUTES} (a longer step must be a plan of its own)` };
+    const limit = claimed !== null ? PLAN_GRACE : PLAN_MINUTES;
+    if (minutes > limit) return { ok: false, steps: [], minutes, claimed, reason: `the game counts about ${Math.round(minutes)} minutes${claimed !== null ? ` (you counted ${claimed})` : ''}, at most ${PLAN_MINUTES} (a longer step must be a plan of its own)` };
+  }
+  return { ok: true, steps, minutes, claimed, reason: null };
 }

@@ -7,7 +7,7 @@ import { createGame } from '../src/game/game.js';
 import { createActor } from '../src/game/actor.js';
 import { WAIT } from '../src/game/intent.js';
 import { DO, DIRS, PLAN_MINUTES } from '../src/game/actions.js';
-import { actFixed, buildActMessages, parseActPlan, menuText, WHY_ASKED } from '../src/ai/actPrompt.js';
+import { actFixed, buildActMessages, parseActPlan, parseLessons, menuText, WHY_ASKED } from '../src/ai/actPrompt.js';
 import { createPlanner, RETRY_SECS, REJECTS_MAX } from '../src/ai/planner.js';
 import { snapshotOf } from '../src/ai/prompt.js';
 import { thinkingText } from '../src/render/thinkingMark.js';
@@ -107,11 +107,27 @@ describe('asking for plans (ai/planner)', () => {
     expect(pl.notes()).toEqual(['palms east']); expect(pl.memoryVersion).toBeGreaterThan(v);
     const p2 = makePlanner().pl; p2.restore(pl.memory()); expect(p2.notes()).toEqual(['palms east']);
   });
-  it('the journal: one request a day after dusk, never while a plan is asked', async () => {
-    const { pl, calls } = makePlanner({ time: DUSK + 0.01, answers: [{ text: '{"line": "A quiet day by the river."}' }] });
-    pl.tick(); expect(calls).toHaveLength(1); await tick();
-    expect(pl.journal()).toEqual([{ day: 1, line: 'A quiet day by the river.' }]);
+  it('the lesson of the day (0.37.4): one request a day after dusk, the full new list kept and saved', async () => {
+    const { pl, calls } = makePlanner({ time: DUSK + 0.01, answers: [{ text: '{"lessons": ["Branches burn fast: a night takes eight pieces."]}' }] });
+    pl.tick(); expect(calls).toHaveLength(1); expect(calls[0][0].content).toContain('ONE new lesson'); await tick();
+    expect(pl.lessons()).toEqual(['Branches burn fast: a night takes eight pieces.']);
     pl.tick(); expect(calls).toHaveLength(1);
+    expect(pl.memory().lessons).toEqual(['Branches burn fast: a night takes eight pieces.']);
+    const { pl: again } = makePlanner({}); again.restore(pl.memory()); expect(again.lessons()).toEqual(pl.lessons());
+  });
+  it('lessons: a single lesson is added to the old list, at most ten kept, numbers taken off', () => {
+    expect(parseLessons('{"lesson": "Fill the shells before dusk."}', ['Old one.']).lessons).toEqual(['Old one.', 'Fill the shells before dusk.']);
+    const many = Array.from({ length: 14 }, (_, i) => `${i + 1}. Lesson ${i + 1}`);
+    const r = parseLessons(JSON.stringify({ lessons: many })); expect(r.lessons).toHaveLength(10); expect(r.lessons[9]).toBe('Lesson 14');
+    expect(parseLessons('nothing').ok).toBe(false);
+  });
+  it('the request carries the lessons and the count of the last plan (0.37.4)', () => {
+    const m = buildActMessages({ state: {}, menu: { ...MENU, count: { claimed: 28, minutes: 36 } }, ask: { why: 'done' }, recent: [], notes: [], lessons: ['Wood first.'] });
+    expect(m[1].content).toContain('HIS LESSONS'); expect(m[1].content).toContain('1. Wood first.');
+    expect(m[1].content).toContain('you counted 28 minutes, the game counted about 36');
+    expect(m[0].content).toContain('"minutes": <your sum');
+    expect(parseActPlan('{"steps": [{"wait": 5}], "minutes": 5}').minutes).toBe(5);
+    expect(parseActPlan('{"steps": [{"wait": 5}]}').minutes).toBeNull();
   });
 });
 

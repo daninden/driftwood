@@ -7,7 +7,7 @@ import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createActor } from '../src/game/actor.js';
 import { WAIT } from '../src/game/intent.js';
-import { checkPlan, stepMinutes, stepText, gameMinutes, realSecs, dirOf, DIRS, DO, USE, PLAN_MINUTES, PLAN_STEPS, NEARBY, FISH_MIN, FISH_MAX } from '../src/game/actions.js';
+import { checkPlan, stepMinutes, stepText, gameMinutes, realSecs, dirOf, DIRS, DO, USE, PLAN_MINUTES, PLAN_STEPS, PLAN_GRACE, NEARBY, FISH_MIN, FISH_MAX } from '../src/game/actions.js';
 import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, FIRE_LIGHT, TORCH_LIGHT } from '../src/game/dark.js';
 import { DUSK, DAWN } from '../src/game/sleep.js';
 import { lightText, menuText, buildActMessages } from '../src/ai/actPrompt.js';
@@ -44,6 +44,14 @@ describe('the steps and the plan check (game/actions)', () => {
     expect(checkPlan([{ go: 'far1' }], places).ok).toBe(true);
     expect(checkPlan([{ wander: 'north', minutes: 50 }], places).ok).toBe(true);
     expect(checkPlan([{ wander: 'north', minutes: 50 }, { do: 'drink' }], places).ok).toBe(false);
+  });
+  it('the chooser\'s own count (0.37.4): counted 30 or less, the game may count up to 40; counted more, refused', () => {
+    expect(PLAN_GRACE).toBe(40);
+    const steps = [{ wait: 20 }, { wait: 15 }];   // the game counts 35
+    expect(checkPlan(steps, places).ok).toBe(false);   // no count of its own: at most 30
+    const ok = checkPlan({ steps, minutes: 28 }, places); expect(ok.ok).toBe(true); expect(ok.claimed).toBe(28); expect(ok.minutes).toBe(35);
+    const over = checkPlan({ steps: [{ wait: 25 }, { wait: 20 }], minutes: 28 }, places); expect(over.ok).toBe(false); expect(over.reason).toMatch(/game counts about 45 minutes \(you counted 28\)/);
+    const said = checkPlan({ steps, minutes: 35 }, places); expect(said.ok).toBe(false); expect(said.reason).toMatch(/you counted 35 minutes, at most 30/);
   });
   it('sleep is a plan of its own: the only step (0.37.2), and its length does not count', () => {
     const one = checkPlan([{ do: 'sleep' }], places);
@@ -166,6 +174,22 @@ describe('following a plan (game/actor)', () => {
     run(g, a, 1);
     expect(a.stats.rejected).toBe(1); expect(a.stats.plans).toBe(0);
     expect(asks[1].why).toBe('rejected'); expect(asks[1].last.reason).toMatch(/at most 30/);
+  });
+  it('reasons belong to their own action (0.37.4): a lack of the fire is not told for a dig; light without a fire fails', () => {
+    const g = fresh(), asks = [];
+    let n = 0;
+    g.fibre.carried = 1;
+    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return n++ ? null : [{ do: 'dig' }]; } });
+    run(g, a, 3);
+    expect(asks[1].last.reason).toBe('not offered here');
+  });
+  it('the menu names a lean-to by its number with what it needs next, and a fire with its hours (0.37.4)', () => {
+    const g = fresh(), a = createActor(w, g, { chooser: () => null });
+    g.leantos.list.push({ id: 1, x: g.player.x + 3, z: g.player.z, heading: 0, progress: 4 / 15 }); g.leantos.version++;
+    g.fire.fires.push({ id: 7, x: g.player.x - 2, z: g.player.z, fuel: 2 * 2.5 / 24, embers: 0.5, lit: g.clock.total, fed: 2 }); g.fire.version++;
+    const m = a.menu(), l = m.places.find(q => q.kind === 'leanto'), f = m.places.find(q => q.kind === 'fire');
+    expect(l.id).toBe('leanto1'); expect(l.what).toMatch(/4 of 15 parts; next it needs a branch/);
+    expect(f.id).toBe('fire1'); expect(f.what).toMatch(/2 pieces on it, about 5 hours left/);
   });
   it('no plan: he stands still and waits, and the chooser is asked again each step', () => {
     const g = fresh();

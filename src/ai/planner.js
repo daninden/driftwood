@@ -3,7 +3,7 @@
  * game, a fake in the tests): no DOM, no storage, no random numbers.
  *
  * `planner.chooser(menu, ask)` is game/actor's chooser. With no plan ready it sends ONE request (ai/actPrompt `buildActMessages`: why it is asked, the state, what he did
- * lately, his notes, the journal and the menu of that moment) and answers WAIT: the actor waits, and main pauses the game meanwhile (the world stands still, so the menu
+ * lately, his notes, his lessons and the menu of that moment) and answers WAIT: the actor waits, and main pauses the game meanwhile (the world stands still, so the menu
  * the plan was written for still holds when it comes). When the answer is there the next call returns it: { steps, say }, which game/actor checks (`checkPlan`); a plan it
  * rejects comes back with why 'rejected' and the reason goes into the next request.
  *   Errors (a failed request: any HTTP error, a timeout, the network; the client already tried the next model) and unusable answers (no JSON, no steps) are retried after
@@ -11,8 +11,9 @@
  *   as an error too, so a model that cannot write a valid plan does not ask for ever.
  *   With the planner not enabled (the AI off, no key) it answers null: the actor waits, and main does not use the actor then.
  * The plan's `say` travels with it (game/actor keeps it on `actor.plan` and in its 'plan' event; main says it above Dave). `notes`, when the answer has them, are the full new list of his notes.
- * The journal: `tick()` (main calls it every frame) asks ONE extra request a day after sunset (DUSK), as 0.36.7 did (ai/prompt `buildJournalMessages`), never while a plan
- * request runs; the day is marked asked before the answer.
+ * 0.37.4 "Lessons": `tick()` (main calls it every frame) asks ONE extra request a day after sunset (DUSK): the lesson of the day (ai/actPrompt `buildLessonMessages`; the answer is
+ * the full new list of his lessons, at most LESSONS_MAX), in place of the journal line of 0.36.7; never while a plan request runs; the day is marked asked before the answer.
+ * The plan's `minutes` (the model's own count, when it gives one) travels with it to game/actor `checkPlan`.
  *
  * createPlanner({ ask, enabled, canSend?, now, state, name?, clock, recent, log? }) -> planner
  *   ask(messages) -> Promise<{ text, model, ms }>     the client's send
@@ -22,16 +23,16 @@
  *   planner.chooser(menu, ask)                        (above)
  *   planner.status() -> { state: 'off' | 'idle' | 'thinking' | 'retrying' | 'failed', errors, retryIn, error, model }
  *   planner.retry()                                   after `failed`: start again (and at once)
- *   planner.tick()                                    the sunset journal line
+ *   planner.tick()                                    the sunset lesson
  *   planner.entries() -> [entry]                      the log, newest first (at most AI_LOG_MAX)
- *   planner.memory() / restore(m)                     { notes, journal, asked }: what is saved with the island (`memory` in the save)
- *   planner.notes(), planner.journal(), planner.memoryVersion, planner.version (changes of the log or the status)
+ *   planner.memory() / restore(m)                     { notes, lessons, asked }: what is saved with the island (`memory` in the save)
+ *   planner.notes(), planner.lessons(), planner.memoryVersion, planner.version (changes of the log or the status)
  *
- * Depends on: ai/actPrompt, ai/prompt (the journal request), ai/config, game/intent (WAIT), game/sleep (DUSK)
+ * Depends on: ai/actPrompt, ai/prompt (clipLine), ai/config, game/intent (WAIT), game/sleep (DUSK)
  */
-import { buildActMessages, parseActPlan } from './actPrompt.js';
-import { buildJournalMessages, parseJournal, clipLine } from './prompt.js';
-import { AI_LOG_MAX, NOTES_MAX, NOTE_LEN, JOURNAL_LEN, JOURNAL_DAYS, JOURNAL_MAX } from './config.js';
+import { buildActMessages, parseActPlan, buildLessonMessages, parseLessons } from './actPrompt.js';
+import { clipLine } from './prompt.js';
+import { AI_LOG_MAX, NOTES_MAX, NOTE_LEN, LESSONS_MAX, LESSON_LEN } from './config.js';
 import { WAIT } from '../game/intent.js';
 import { DUSK } from '../game/sleep.js';
 
@@ -42,12 +43,11 @@ export function createPlanner(o = {}) {
   const ask = o.ask, enabled = o.enabled || (() => false), canSend = o.canSend || (() => true), now = o.now || (() => 0);
   const stateNow = o.state || (() => ({})), name = o.name || (() => ''), clock = o.clock || (() => ({ day: 0, time: 0 })), recent = o.recent || (() => []), log = o.log || (() => {});
   let call = null, ready = null, lastRej = null, errors = 0, retryAt = 0, failed = false, lastError = null, lastModel = null, rejects = 0, n = 0, version = 0;
-  let notes = [], journal = [], asked = null, journalCall = false, memVer = 0;
+  let notes = [], lessons = [], asked = null, lessonCall = false, memVer = 0;
   const items = [];
   const bump = () => { version++; };
   const push = e => { items.unshift(e); if (items.length > AI_LOG_MAX) items.pop(); bump(); try { log(e); } catch (x) { /* the log never disturbs the game */ } };
   const recentNow = () => { try { return (recent() || []).slice(-12); } catch (e) { return []; } };
-  const journalNow = () => journal.slice(-JOURNAL_DAYS);
   const sendNow = messages => { try { return Promise.resolve(ask(messages)); } catch (e) { return Promise.reject(e); } };   // sent at once (a throw is a failed request)
 
   function fail(entry, message) {
@@ -60,7 +60,7 @@ export function createPlanner(o = {}) {
   function send(menu, why, last) {
     const c = clock(), entry = { n: ++n, real: now(), day: c.day, time: c.time, why, reason: last && last.reason || null };
     let messages;
-    try { messages = buildActMessages({ name: name(), state: stateNow(), menu, ask: { why, last }, recent: recentNow(), notes, journal: journalNow() }); }
+    try { messages = buildActMessages({ name: name(), state: stateNow(), menu, ask: { why, last }, recent: recentNow(), notes, lessons }); }
     catch (e) { fail(entry, 'the request could not be built: ' + (e && e.message || e)); return; }
     entry.messages = messages;
     const t0 = now();
@@ -71,8 +71,8 @@ export function createPlanner(o = {}) {
       if (!p.ok) { fail(done, 'the answer could not be used: ' + p.error); return; }
       if (p.notes) { notes = p.notes.slice(); memVer++; }
       errors = 0; lastError = null; retryAt = 0;
-      ready = { steps: p.steps, say: p.say };
-      push({ ...done, ok: true, steps: p.steps, say: p.say });
+      ready = { steps: p.steps, say: p.say, ...(p.minutes !== null ? { minutes: p.minutes } : {}) };
+      push({ ...done, ok: true, steps: p.steps, say: p.say, minutes: p.minutes });
     }, e => { fail(entry, 'the request failed: ' + (e && e.message || String(e))); })
       .then(() => { call = null; bump(); });
     bump();
@@ -93,7 +93,7 @@ export function createPlanner(o = {}) {
         if (rejects >= REJECTS_MAX) { rejects = 0; fail({ n: ++n, real: now(), day: clock().day, time: clock().time, why }, `${REJECTS_MAX} plans in a row could not be followed (${last.reason})`); }
       }
     } else rejects = 0;
-    if (call || journalCall || failed) return WAIT;
+    if (call || lessonCall || failed) return WAIT;
     if (retryAt && now() < retryAt) return WAIT;
     if (!canSend()) { lastError = 'every model is spent or paused'; return WAIT; }
     send(menu, why, last);
@@ -108,30 +108,28 @@ export function createPlanner(o = {}) {
     return { state: failed ? 'failed' : call ? 'thinking' : retryAt > t ? 'retrying' : 'idle', errors, retryIn: retryAt > t ? Math.ceil(retryAt - t) : 0, error: lastError, model: lastModel };
   }
 
-  function tick() {
-    if (journalCall || call || !enabled() || !canSend()) return;
+  function tick() {   // 0.37.4 "Lessons": at sunset one request for the lesson of the day (the full new list of his lessons), in place of the journal line
+    if (lessonCall || call || !enabled() || !canSend()) return;
     const c = clock();
     if (!(c.time >= DUSK)) return;
-    if (asked === c.day || journal.some(j => j.day === c.day)) return;
+    if (asked === c.day) return;
     let messages;
-    const recentOld = recentNow().map(r => ({ t: r.day + r.time, day: r.day, kind: r.kind, what: r.what, outcome: r.outcome }));
-    try { messages = buildJournalMessages({ state: stateNow(), recent: recentOld, journal: journal.slice(-8), notes, name: name() }); } catch (e) { return; }
-    const day = c.day;
-    asked = day; memVer++; journalCall = true; bump();
+    try { messages = buildLessonMessages({ state: stateNow(), recent: (() => { try { return (recent() || []).slice(-40); } catch (e) { return []; } })(), lessons, notes, name: name() }); } catch (e) { return; }
+    asked = c.day; memVer++; lessonCall = true; bump();
     sendNow(messages).then(r => {
-      const q = parseJournal(r && r.text);
-      if (q.ok) { if (!journal.some(j => j.day === day)) { journal.push({ day, line: q.line }); if (journal.length > JOURNAL_MAX) journal.shift(); } memVer++; }
-    }, () => {}).then(() => { journalCall = false; bump(); });
+      const q = parseLessons(r && r.text, lessons);
+      if (q.ok) { lessons = q.lessons; memVer++; }
+    }, () => {}).then(() => { lessonCall = false; bump(); });
   }
 
-  function memory() { return { notes: notes.slice(), journal: journal.map(j => ({ day: j.day, line: j.line })), ...(asked != null ? { asked } : {}) }; }
+  function memory() { return { notes: notes.slice(), lessons: lessons.slice(), ...(asked != null ? { asked } : {}) }; }
   function restore(m) {
     if (!m || typeof m !== 'object') return;
     if (Array.isArray(m.notes)) notes = m.notes.map(x => clipLine(x, NOTE_LEN)).filter(Boolean).slice(-NOTES_MAX);
-    if (Array.isArray(m.journal)) journal = m.journal.filter(j => j && Number.isFinite(j.day) && typeof j.line === 'string' && j.line).map(j => ({ day: j.day, line: clipLine(j.line, JOURNAL_LEN) })).slice(-JOURNAL_MAX);
+    if (Array.isArray(m.lessons)) lessons = m.lessons.filter(x => typeof x === 'string').map(x => clipLine(x, LESSON_LEN)).filter(Boolean).slice(-LESSONS_MAX);
     if (Number.isFinite(m.asked)) asked = m.asked;
     memVer++;
   }
 
-  return { chooser, status, retry, tick, memory, restore, entries: () => items.slice(), notes: () => notes.slice(), journal: () => journal.map(j => ({ ...j })), get memoryVersion() { return memVer; }, get version() { return version; } };
+  return { chooser, status, retry, tick, memory, restore, entries: () => items.slice(), notes: () => notes.slice(), lessons: () => lessons.slice(), get memoryVersion() { return memVer; }, get version() { return version; } };
 }
