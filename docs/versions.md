@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.0 "Actions" — 2026-11-17
+
+The first release of the redesign *Full AI play* (agreed with the user 2026-11-17, `docs/design.md`): the action layer, built beside the old mind. **Nothing in play changes**: `main` does not use it yet, the old mind and its tests are untouched; nothing for players (no change to `README.md`).
+
+- **`game/actions` (new, pure):** the steps of a plan (`go` a place, `wander` a direction for some minutes, `do` one action of the action button, `use` a carried thing, `wait`), each action in plain words with its seconds of work, game minutes (a game minute is 0.83 s of real time), and `checkPlan`: known steps and places, sleep last, at most 8 steps, at most 30 game minutes unless the plan is one step alone.
+- **`game/actor` (new, pure):** the hands that follow a plan like a player (walk targets, the action button, the inventory row, sitting) and report each step done or failed with a plain reason ("not offered here (he has no fibre to light it)", "the coconut is gone", "there is no way there", "the crab got away"). A new plan is asked only when the plan is done, a step failed, a plan was rejected, rain began, he collapsed or he woke (never ahead). `actor.menu()`: what he could do here, what he carries, and the places he knows with distance, direction, minutes and what he could do there.
+- **Tests:** `tests/actor.test.js` (15 tests) with a fixed fake chooser (`tests/helpers/actorSim.js`); two days on seed 1337: about 320 plans, none failed, thirst at most 0.49, hunger at most 0.51.
+- **Choices made while building (not discussed with the user):** an action not offered where he stands is looked for within 3 m and he steps there (the arc offers lay only when nothing else is near); a step whose action changed nothing counts as failed; the menu lists by kind the nearest 3 places and all within 15 m (at most 5), and river water, fires and lean-tos however far; directions with north as -z.
+
 ## 0.36.10 "Store" — 2026-11-14
 
 Agreed with the user (2026-11-14), after the log check of 0.36.8 (seed 1337, AI on) that 0.36.9 investigated: two bugs of the rules, so **the rules' lives change on purpose** (with the AI off too). They were measured on the 24 ten-day lives (seeds 1337, 2024, 7, walked and fresh, streams 0 to 3) against 0.36.9.

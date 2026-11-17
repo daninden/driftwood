@@ -457,7 +457,7 @@ So a fresh game ends in neither thirst collapse nor starving on any of the four 
 
 **Left out for now:** a torch left in his hand is not planted, no trips for crabs (he digs only if he happens to stand at a hole, and roasts a carried crab), no fronds or stones, and a stray frond he picks up with the wood ends up in his piles.
 
-## A place for the camp (0.38.0 "Camp", was 0.37.0; agreed with the user on 2026-11-13, not built)
+## A place for the camp (dropped by the user on 2026-11-17, never built; was "Camp"; agreed with the user on 2026-11-13, not built)
 
 Today the camp is wherever he stands when the computer or his habit first takes over, which is chance. Agreed instead: a new game starts without a camp. He first explores: he walks over unknown ground, drinks, eats and carries what he finds (wood, a nut), builds nothing; the first night he sleeps where he is, by a small fire of his own as on a journey. **Fresh water nearby is a hard condition**: as long as he has not found a fitting spot close to a river or spring he keeps looking. He chooses as soon as he has found a spot by water and has looked about for at least half a day, at the latest on the afternoon of day 2 if he has one by then; if there is still none after day 3 he takes the best spot he knows even when the water is far (he must not wander for ever). The game offers candidate spots on what he has seen, each with a score: sheltered (trees or rock at the back), dry above the high-water line, wood and stones near, flat enough for a lean-to, maybe a view of the sea. With the AI on the model gets up to 3 candidates with a short description ("by the river, sheltered, 40 m from the shore") and chooses one with a reason, which he says aloud (fewer when fewer fitting spots are known; with one the game chooses without asking); with the AI off the game takes the best score. What he carried is laid down at the chosen spot, so the camp starts with a little store. When the player has laid a fire or the first pieces of a lean-to himself, that is the camp and he takes that spot over (the player stays in charge). The player sees the choice only through his words ("water here, and sheltered: here I stay"), no mark on the ground. After that everything goes as now (the first fire there, the lean-to, the home).
 
@@ -485,7 +485,7 @@ An optional language-model mind for Dave, **smarter than the rules**: better cho
 - **Tests.** Local tests and smokes never use AI: a fixed fake mind, no network, no credits.
 - **Proof.** Measured against the rules on the same islands: ground known, home finished, repeated failures and stalls, and thirst, hunger and collapses within the bounds. If it is not measurably better, it only adds atmosphere.
 
-## Full AI play (the redesign; agreed in outline with the user on 2026-11-17, not built)
+## Full AI play (the redesign; agreed in outline with the user on 2026-11-17; being built: 0.37.0 "Actions" built)
 
 What the user decided (2026-11-17); the details marked open are still to be agreed before building.
 
@@ -493,11 +493,12 @@ What the user decided (2026-11-17); the details marked open are still to be agre
 - **One action is one thing.** The AI chooses **where he walks**, then **what he does there**: get a coconut, eat a coconut, fill a shell with water, drink from the river, drink from a shell, pick up driftwood, lay it in the store, and so on. The game does the walking (the path, the time it takes) and carries the action out; it reports back whether it worked and why not.
 - **Where to walk:** the places he knows (the river, a palm, a pile of driftwood, the camp), and **nearby** options (what he can reach from where he stands without a real walk) and a **wander** option for ground he does not know. (Open: how many places per kind, how far.)
 - **A plan is short: at most 30 game minutes.** Every action and walk on the menu carries its estimated game minutes; small actions may be bundled ("to the river, drink, fill the shells, back") as long as they fit; "go and get driftwood" is a plan of its own, and a new plan follows it. (Open: how long actions such as sleep or a journey fit in.)
-- **A new plan when things change:** after a failure (an action not possible or failed, with the reason) and when rain starts. It must be there in time. (Open: asking for the next plan ahead, before the current one ends.)
+- **A new plan when things change:** only when the plan is done, after a failure (an action not possible or failed, with the reason) and when another interruption comes (rain starting). Never asked ahead: the situation may have changed (decided 2026-11-17).
 - **The dark:** dusk is not an interruption; perhaps walking in the dark needs a torch (open).
 - **No plan, no time:** when there is no plan the game pauses and asks again later.
 - **No key, no game:** without an API key the game does not start.
 - **Tests** never use the AI: a fixed fake chooser (a script of actions) plays the scripted lives, in the tests only, never in the game.
+- **0.37.0 "Actions" (built):** the action layer beside the old mind (nothing in play changes yet): the steps (`go` to a place he knows, `wander` a direction for some minutes, `do` one action of the action button, `use` a carried thing, `wait`), their minutes, the plan check (at most 30 minutes unless one step alone, sleep last) and the hands that follow a plan and say why a step failed. The places on the menu: by kind the nearest three and everything within 15 m (at most five), river water, fires and lean-tos however far. Choices made while building: when an action is not offered where he stands (lay is offered only when nothing else is near) he steps aside up to 3 m to where it is; a step "fails" when nothing changed (a crab that got away, a drill that did not catch).
 
 ## Game ideas (not built, not decided)
 
