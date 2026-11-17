@@ -8,26 +8,30 @@
  * and the places he knows with their ids, distance, direction, walking minutes and what he could do there.
  *
  * The answer: one JSON object { "say": "...", "steps": [step], "notes": ["..."]? }. A step is { "go": "<place id>" }, { "wander": "<direction>", "minutes": n },
- * { "do": "<action>" }, { "use": "<thing>" } or { "wait": n }. `say` is the one thought he says aloud when the plan starts (at most SAID_LEN characters, may be empty);
+ * { "do": "<action>" } ({ "do": "fish", "minutes": n } for fishing), { "use": "<thing>" } or { "wait": n }. `say` is the one thought he says aloud when the plan starts (at most SAID_LEN characters, may be empty);
  * `notes` (optional) is the full new list of his notes (as 0.36.7). Whether the plan can be followed is game/actions `checkPlan`'s business, not this module's.
  *
  * Exports:
  *   actFixed(name) -> string                          the fixed system text ('the castaway' when no name was given)
  *   WHY_ASKED                                         why -> the plain sentence of why a plan is asked (game/actor `ask.why`)
- *   menuText(menu) -> string                          the menu as lines of the request
+ *   menuText(menu) -> string                          the menu as lines of the request (0.37.2: with the light line)
+ *   lightText(light) -> string                        0.37.2: dusk or dawn, the torch in his hand, the torches in the ground near him (game/actor `menu().light`)
  *   actRecentText(recent) -> string                   game/actor's records as lines
  *   buildActMessages({ name, state, menu, ask, recent, notes, journal }) -> [{ role: 'system', content }, { role: 'user', content }]
  *   parseActPlan(text) -> { ok, steps, say, notes, error }   the first JSON object of the text (code fences allowed); `steps` as given (checked later), `notes` [text] | null
  *
- * Depends on: game/actions (the words of the actions, the limits), ai/prompt (stateText, hhmm, notesText, journalLines, clipLine, whoName), ai/config, and the numbers of game/thirst, game/hunger, game/sleep, game/fire, game/leanto, game/wood, game/shells
+ * 0.37.2 "Torch": the fixed part tells the dark rule (game/dark) and the torch, that a sleep and a fishing are plans of their own and that fishing takes the minutes the model chooses; the menu has the light line.
+ *
+ * Depends on: game/actions (the words of the actions, the limits), game/dark (the light ranges), ai/prompt (stateText, hhmm, notesText, journalLines, clipLine, whoName), ai/config, and the numbers of game/thirst, game/hunger, game/sleep (DUSK, DAWN), game/fire (torch), game/leanto, game/wood, game/shells
  */
-import { DO, USE, DIRS, PLAN_MINUTES, PLAN_STEPS, NEARBY, WANDER_MAX, WAIT_MAX } from '../game/actions.js';
+import { DO, USE, DIRS, PLAN_MINUTES, PLAN_STEPS, NEARBY, WANDER_MAX, WAIT_MAX, FISH_MIN, FISH_MAX } from '../game/actions.js';
+import { FIRE_LIGHT, TORCH_LIGHT } from '../game/dark.js';
 import { stateText, hhmm, notesText, journalLines, clipLine, whoName } from './prompt.js';
 import { NOTES_MAX, NOTE_LEN, SAID_LEN } from './config.js';
 import { THIRSTY_AT, COLLAPSE_AT } from '../game/thirst.js';
 import { HUNGRY_AT, STARVING_AT } from '../game/hunger.js';
-import { AWAKE_MAX, TIRED_AT } from '../game/sleep.js';
-import { FIRE_MIN } from '../game/fire.js';
+import { AWAKE_MAX, TIRED_AT, DUSK, DAWN } from '../game/sleep.js';
+import { FIRE_MIN, TORCH_DAYS, TORCH_RAIN } from '../game/fire.js';
 import { PARTS } from '../game/leanto.js';
 import { CARRY_MAX, STONE_MAX } from '../game/wood.js';
 import { SHELL_MAX, NUT_MAX, EAT_AT } from '../game/shells.js';
@@ -49,6 +53,7 @@ export function actFixed(name) {
     `- Carrying: up to ${CARRY_MAX} pieces under his arm (driftwood, branches, fronds), up to ${STONE_MAX} stones in his hands, or one log on his shoulder alone. "lay" puts them down: on a pile of the same kind beside him, or as a new pile.`,
     `- His home is built piece by piece, a piece he carries built in where it belongs: a lean-to ("buildHere" with driftwood in his arms where one fits, then "buildIn" beside it: ${count(PARTS.leanto)}), then "upgrade" beside the finished lean-to: walls (${count(PARTS.walls)}), a bed (${count(PARTS.bed)}), a stone ring for the fire (${count(PARTS.ring)}), and at last a hut (logs from felled trees, branches and fronds).`,
     '- Tools: a spear ("makeSpear": a branch in his arms and nothing else, a stone beside him) for fishing in shallow sea water; an axe ("makeAxe": a branch, a stone beside him and a tuft of fibre) to fell trees for logs. The action button holds one of spear, axe and torch at a time.',
+    `- Walking in the dark (from dusk, about ${hhmm(DUSK)}, to dawn, about ${hhmm(DAWN)}): a "go" or a "wander" that has to be walked in the dark needs light. Either he holds a burning torch, or, for a "go" only, he stands in the light of a burning fire (about ${FIRE_LIGHT} m) or of a torch stuck in the ground (about ${TORCH_LIGHT} m) and the place he walks to is in such light too. A "wander" in the dark needs a torch in his hand. A walk that would end after dusk counts as a walk in the dark; by day, a walk that ends before dusk is free. A step that is not allowed fails with the reason. A torch ("torch", at a burning fire) takes half a piece of wood's worth out of that fire, burns about ${Math.round(TORCH_DAYS * 24)} hours (${TORCH_RAIN} times as fast in rain), and can be stuck in the ground with "plant"; he can hold one torch, and then no spear or axe.`,
     '- He knows only the ground he has walked; he learns what he walks past. "wander" takes him out into ground he may not know.',
     '',
     'HOW TO PLAN',
@@ -61,7 +66,8 @@ export function actFixed(name) {
     '  {"use": "<thing>"}: eat or drink something he carries, anywhere. Things:',
     useLines(),
     `  {"wait": n}: rest where he is for 1 to ${WAIT_MAX} minutes.`,
-    '- "sleep" is always the last step: the plan ends when he wakes.',
+    '- "sleep" is a plan of its own: its only step. He sleeps until he wakes, then you are asked again.',
+    `- Fishing is a plan of its own too: {"do": "fish", "minutes": n} with n from ${FISH_MIN} to ${FISH_MAX} game minutes, the only step. He needs the spear in his hand; he walks into the shallows near him if he does not stand in them, and strikes again and again until he catches a fish or the minutes are up (no fish then is a normal end, not an error). You choose how long.`,
     `- A place within ${NEARBY} m is marked "nearby". A place's "can do there" says what the action button would offer standing there, with what he holds now.`,
     '- You are asked for the next plan only when this one is done, when a step failed (you get the reason), when rain starts, when he collapsed and when he wakes. Nothing overrules you: what you choose has its consequences.',
     '',
@@ -80,12 +86,24 @@ export const WHY_ASKED = {
   woke: 'He has just woken up.',
 };
 
+const hoursText = h => (h < 1 ? `${Math.max(1, Math.round(h * 60))} minutes` : `${Math.round(h * 2) / 2} hours`);
+/** 0.37.2: the light of the moment (game/actor `menu().light`): the time of dusk or dawn, the torch in his hand and the torches in the ground near him. */
+export function lightText(light) {
+  if (!light) return '';
+  const out = [light.dark ? `It is dark now; it gets light in about ${hoursText(light.hours)} (dawn about ${hhmm(DAWN)}).` : `It gets dark in about ${hoursText(light.hours)} (dusk about ${hhmm(DUSK)}).`];
+  out.push(light.torch ? `He holds a burning torch, about ${light.torch.minutes} minutes left.` : 'He holds no torch.');
+  out.push(light.lit ? 'He stands in firelight.' : 'He stands outside any firelight.');
+  if (light.planted && light.planted.length) out.push(`Torches in the ground near him: ${light.planted.map(q => `${q.dist} m ${q.dir}, about ${q.minutes} minutes left`).join('; ')}.`);
+  return out.join(' ');
+}
+
 const placeLine = q => `- ${q.id}: ${q.what}, ${q.dist} m ${q.dir}, ${q.minutes} min${q.nearby ? ' (nearby)' : ''}${q.offers && q.offers.length ? `; can do there: ${q.offers.join(', ')}` : ''}`;
 export function menuText(menu) {
   const m = menu || {}, here = m.here || [], uses = m.uses || [], places = m.places || [];
   return [
     `Where he stands he can: ${here.length ? here.map(o => o.id).join(', ') : 'nothing in particular'}.`,
     `He can eat or drink from what he carries: ${uses.length ? uses.map(o => o.id).join(', ') : 'nothing'}.`,
+    ...(m.light ? [lightText(m.light)] : []),
     'Places he knows (nearest first):',
     places.length ? places.map(placeLine).join('\n') : '- (none)',
   ].join('\n');
@@ -100,6 +118,7 @@ export function actRecentText(recent) {
 const askLine = ask => {
   const a = ask || {}, base = WHY_ASKED[a.why] || 'A new plan is wanted.', l = a.last;
   if ((a.why === 'failed' || a.why === 'rejected') && l && l.reason) return `${base} ${a.why === 'failed' ? `"${l.what}" failed: ${l.reason}.` : `Reason: ${l.reason}.`}`;
+  if (a.why === 'done' && l && l.outcome === 'done' && l.reason) return `${base} Its last step ended with: ${l.reason}.`;   // 0.37.2: a fishing with no catch
   return base;
 };
 

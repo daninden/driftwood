@@ -24,7 +24,8 @@ describe('the request and the answer (ai/actPrompt)', () => {
     const f = actFixed('Robin');
     expect(f).toContain('Robin'); expect(actFixed('')).toContain('the castaway');
     for (const k of Object.keys(DO)) expect(f).toContain(`"${k}"`);
-    expect(f).toContain(`${PLAN_MINUTES} game minutes`); expect(f).toMatch(/"say"/); expect(f).toMatch(/sleep" is always the last step/);
+    expect(f).toContain(`${PLAN_MINUTES} game minutes`); expect(f).toMatch(/"say"/); expect(f).toMatch(/"sleep" is a plan of its own/);
+    expect(f).toMatch(/Walking in the dark/); expect(f).toMatch(/burning torch/); expect(f).toMatch(/"plant"/); expect(f).toMatch(/Fishing is a plan of its own/); expect(f).toMatch(/"minutes": n/);
   });
   it('the user part says why it is asked, how the last step went, and the menu with ids and minutes', () => {
     const m = buildActMessages({ name: 'Robin', state: { day: 2, time: 0.4, thirst: 0.2, hunger: 0.1, awake: 0.3, carries: {} }, menu: MENU, ask: { why: 'failed', last: { what: 'husk the coconut here', reason: 'the coconut is gone' } }, recent: [{ day: 2, time: 0.39, kind: 'step', what: 'walk to a coconut', outcome: 'done' }], notes: ['the river is north'], journal: [] });

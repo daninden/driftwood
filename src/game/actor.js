@@ -1,6 +1,6 @@
 /**
  * game/actor — Dave's hands in full AI play (0.37.0 "Actions"): it follows a plan of single actions (game/actions) and reports back how each step went.
- * Pure: no DOM, no WebGL, no network, no random numbers of its own. Beside game/mind for now (0.37.0): nothing in play uses it yet; the tests drive it with a fixed fake chooser.
+ * Pure: no DOM, no WebGL, no network, no random numbers of its own. Beside game/mind (0.37.0); with the AI on it plays Dave (0.37.1); the tests drive it with a fixed fake chooser.
  *
  * Like the mind it adds no game rule: it fills an input object like the player's (a walk target, a press of the action button or an icon of the arc, a click on the inventory
  * row, sitting) and so can do only what a player could do. Walks to a place stay on ground he knows (game/known, as the mind's); a wander may go into ground he does not know.
@@ -15,7 +15,7 @@
  *   actor.input                                   the input object for game.update
  *   actor.step(dt)                                one step of the hands (call before game.update(actor.input, dt))
  *   actor.menu() -> menu                          what he could do now (pure but for the path searches; no state changes):
- *                                                   { here: [{ id, what }], uses: [{ id, what }], places: [place], dirs, carries, minutes: PLAN_MINUTES }
+ *                                                   { here: [{ id, what }], uses: [{ id, what }], places: [place], dirs, carries, light, minutes: PLAN_MINUTES }
  *                                                   place: { id, kind, what, x, z, dist, dir, minutes, nearby, offers: [kind] } (offers: what the action button would offer standing there, with what he holds now)
  *   actor.plan -> { steps, minutes, at, menu, say, why } | null      the plan being followed (menu: the menu it was chosen from; its place ids hold for the whole plan; say: the chooser's thought for it)
  *   actor.stepIndex, actor.waiting, actor.why             the running step, whether he waits for a plan, why the next plan is (or was last) asked
@@ -29,21 +29,31 @@
  * offered here", with what is missing when the game knows, game/lack) and waits until the work is done; it fails when nothing changed (a dig whose crab got away, a drill that
  * did not catch). `use` eats or drinks a carried thing (game/game `use`). `wait` sits for its minutes. A sleep ends when he wakes; then a new plan is asked.
  *
- * Depends on: game/actions, game/intent (WAIT), game/path, game/route, game/movement, game/water, game/wood, game/felled, game/leanto, game/clock, world/constants
+ * 0.37.2 "Torch": a `go` or `wander` that starts in the dark (or would end after dusk) is allowed only with a burning torch in his hand or, for a `go`, with both where he stands and the place
+ * in the light of a burning fire or a torch in the ground (game/dark `walkLight`); else the step fails with the plain reason ("it is dark and he has no torch ...") and a new plan is asked.
+ * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
+ * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
+ * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * The menu also has `light`: { dark, hours (until dusk by day, until dawn in the dark), torch: { minutes left } | null, planted: [{ dist, dir, minutes }] (torches in the ground within 40 m), lit (he stands in firelight) }.
+ *
+ * Depends on: game/actions, game/dark, game/fish, game/intent (WAIT), game/path, game/route, game/movement, game/water, game/wood, game/felled, game/leanto, game/clock, world/constants
  */
 import { HALF, T, NT } from '../world/constants.js';
 import { createPath } from './path.js';
 import { createRoute } from './route.js';
-import { canStand, WALK_SPEED } from './movement.js';
+import { canStand, terrainAt, WALK_SPEED } from './movement.js';
+import { fishableAt, FISH_DEPTH } from './fish.js';
+import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
 import { freshWater } from './water.js';
 import { dryness } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
 import { standFor } from './leanto.js';
 import { WAIT } from './intent.js';
-import { PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText } from './actions.js';
+import { PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
 
 export const RECENT_MAX = 20;
 export const SCAN_R = 150;          // metres round him in which the menu looks for places he knows
+export const FISH_WALK = 40;        // metres: how far from where he stands a fishing looks for the shallows (known ground only)
 const STOP = 0.12, SETTLE = 3, WALK_SLACK = 1.25, SETTLE_TICKS = 12, ASIDE = 3;   // the follower's stop at a standing point (as game/mind), and the walk's estimate made a little longer for the slower pace of a load
 
 export function createActor(world, game, opts = {}) {
@@ -145,10 +155,17 @@ export function createActor(world, game, opts = {}) {
     if (game.berries.carried.length) uses.push('berries');
     if (game.bananas.carried.length) uses.push('banana');
     if (game.crabs.carried.length || game.fish.carried.length) uses.push('crab');
-    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, dirs: DIRS.slice(), carries: carries(), minutes: PLAN_MINUTES };
+    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, dirs: DIRS.slice(), carries: carries(), light: lightInfo(), minutes: PLAN_MINUTES };
     menuMemo = { t: now, m };
     return m;
   }
+  const lightsNow = () => ({ fires: game.fire.fires.filter(f => game.fire.strength(f) > 0), torches: game.fire.torches });
+  function lightInfo() {
+    const t = clock.time, dark = isDark(t), mins = q => Math.max(0, Math.round(q.left * 1440));
+    const planted = game.fire.torches.map(q => ({ dist: Math.round(dist(q, p)), dir: dirOf(q.x - p.x, q.z - p.z), minutes: mins(q) })).filter(q => q.dist <= 40).sort((a, b) => a.dist - b.dist).slice(0, 3);
+    return { dark, hours: dark ? hoursToDawn(t) : hoursToDusk(t), torch: game.fire.torch ? { minutes: mins(game.fire.torch) } : null, planted, lit: litAt(p.x, p.z, lightsNow()) };
+  }
+  const walkOk = (to, minutes) => walkLight({ time: clock.time, minutes, torch: !!game.fire.torch, from: p, to, lights: lightsNow() });   // game/dark: may a walk start now?
   function carries() {
     const n = k => W.carried.filter(l => (k === 'branch' ? l.branch : k === 'frond' ? l.frond : !l.branch && !l.frond)).length;
     return { driftwood: n('driftwood'), branches: n('branch'), fronds: n('frond'), stones: W.stones.length, log: !!W.log, fibre: game.fibre.carried, nuts: game.shells.nuts,
@@ -316,6 +333,38 @@ export function createActor(world, game, opts = {}) {
     if (snapshot() === before) return { ok: false, reason: kind === 'dig' ? 'the crab got away' : kind === 'light' ? 'the fire did not catch' : kind === 'fish' ? 'he missed the fish' : 'nothing came of it' };
     return { ok: true };
   }
+  const isFish = x => x.kind === 'fish';
+  function fishSpotNear() {   // the nearest spot within FISH_WALK of him, on known ground, in the middle of the shallows band (a step either way is still shallows); null when none
+    for (let r = 2; r <= FISH_WALK; r += 2) for (let i = 0; i < 24; i++) {
+      const a = i * Math.PI / 12, x = p.x + Math.sin(a) * r, z = p.z + Math.cos(a) * r;
+      if (!(Math.abs(x) < HALF - 8 && Math.abs(z) < HALF - 8) || !inside(x, z)) continue;
+      const t = terrainAt(world, x, z, game.sea);
+      if (fishableAt(t) && t.depth >= FISH_DEPTH[0] + 0.04 && t.depth <= FISH_DEPTH[1] - 0.04 && canStand(world, x, z, game.sea)) return { x, z };
+    }
+    return null;
+  }
+  function* fishFor(minutes) {   // strikes again and again until a fish is caught (done) or the minutes are up (done: "no fish in N minutes"); not offered at all: the reason
+    const t0 = clock.total, fish0 = game.fish.carried.length, over = () => (clock.total - t0) * 1440 >= minutes;
+    let moves = 0;
+    idle();
+    while (!over()) {
+      if (!offersNow().some(isFish)) {
+        const s = moves < 3 && game.spear.hand ? fishSpotNear() : null;   // (no spear in his hand: no point in looking for the shallows; the reason comes from the action)
+        if (s) {
+          moves++;
+          const ok = walkOk(s, Math.max(1, Math.ceil(gameMinutes(Math.hypot(s.x - p.x, s.z - p.z) / WALK_SPEED * WALK_SLACK))));
+          if (!ok.ok) return { ok: false, reason: ok.reason };
+          const w = yield* walk(s.x, s.z, { stop: 0.3, until: () => offersNow().some(isFish), maxSecs: 60 });
+          if (!w.ok) return w;
+          continue;
+        }
+      }
+      const tries = game.fish.tries, r = yield* doAction('fish');
+      if (game.fish.carried.length > fish0) return { ok: true };
+      if (game.fish.tries === tries) return r;   // no strike was made: not offered here (with the reason)
+    }
+    return { ok: true, note: `no fish in ${minutes} minutes` };
+  }
   function* useThing(kind) {
     const before = snapshot(), row = kind === 'crab' ? 'crab' : kind;
     idle(); inp.sit = false;
@@ -333,9 +382,13 @@ export function createActor(world, game, opts = {}) {
   }
   function* runStep(s, places) {
     const k = stepKind(s);
-    if (k === 'go') return yield* goTo(places.find(q => q.id === s.go));
-    if (k === 'wander') return yield* wander(s.wander, s.minutes);
-    if (k === 'do') return yield* doAction(s.do);
+    if (k === 'go') {
+      const pl = places.find(q => q.id === s.go);
+      if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, stepMinutes(s, places)); if (!ok.ok) return { ok: false, reason: ok.reason }; }   // 0.37.2: the dark rule, when the walk starts
+      return yield* goTo(pl);
+    }
+    if (k === 'wander') { const ok = walkOk(null, s.minutes); if (!ok.ok) return { ok: false, reason: ok.reason }; return yield* wander(s.wander, s.minutes); }
+    if (k === 'do') return s.do === 'fish' ? yield* fishFor(s.minutes) : yield* doAction(s.do);
     if (k === 'use') return yield* useThing(s.use);
     if (k === 'wait') return yield* rest(s.wait);
     return { ok: false, reason: 'not a step' };

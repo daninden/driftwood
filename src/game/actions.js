@@ -6,20 +6,23 @@
  *   { go: id }                 walk to a place of the menu (game/actor lists them: what he knows, nearest first, `nearby` within NEARBY metres)
  *   { wander: dir, minutes }   walk out that way for some minutes, also over ground he does not know yet (dir one of DIRS; north is -z, east is +x)
  *   { do: kind }               one action of the action button where he stands (DO: the game's own kinds, game/game `actionsAt`)
+ *   { do: 'fish', minutes }    fishing for FISH_MIN to FISH_MAX minutes (0.37.2): he strikes again and again until he catches a fish or the minutes run out
  *   { use: kind }              one thing he carries, eaten or drunk (USE: game/game `use`, the inventory row)
  *   { wait: minutes }          he sits (or stands) where he is
  * The game does the walking and the work and reports back whether the step worked (game/actor). A plan fits in PLAN_MINUTES of game time (the estimates of its steps added
- * up); a plan of ONE step may be longer (a far walk, a long wander, a sleep). A sleep is always the last step: the plan ends when he wakes.
+ * up); a plan of ONE step may be longer (a far walk, a long wander). Since 0.37.2 a sleep and a fishing are plans of their own: each must be the ONLY step of its plan (the sleep
+ * lasts until he wakes, the fishing until a fish is caught or its minutes are up; its estimate is its minutes). Walking in the dark needs light (game/dark): checked by game/actor
+ * when a step starts, not here.
  *
  * Exports:
- *   PLAN_MINUTES (30), PLAN_STEPS (8), NEARBY (15 m), PER_KIND (3), WANDER_MAX (60), WAIT_MAX (60)
+ *   PLAN_MINUTES (30), PLAN_STEPS (8), NEARBY (15 m), PER_KIND (3), WANDER_MAX (60), WAIT_MAX (60), FISH_MIN (5), FISH_MAX (60)
  *   DIRS                         the eight directions of a wander, and of the places' bearings
  *   DO, USE                      kind -> { what, secs }: the plain words of an action and its seconds of real time (null: it lasts until it ends by itself, the sleep)
  *   gameMinutes(secs) -> number  real seconds (a game day is DAY_SECONDS) as game minutes; realSecs(minutes) the other way round
  *   dirOf(dx, dz) -> one of DIRS
  *   stepMinutes(step, places) -> number | null   the estimate of one step (null: no estimate, unknown place or kind)
  *   stepText(step, places) -> string             a step in plain words, for logs and the panel
- *   checkPlan(plan, places) -> { ok, steps, minutes, reason }   plan: [step] or { steps: [step] }; ok false with a plain reason when it cannot be followed
+ *   checkPlan(plan, places) -> { ok, steps, minutes, reason }   plan: [step] or { steps: [step] }; ok false with a plain reason when it cannot be followed (0.37.2: a sleep or a fishing not alone, fishing without 5 to 60 minutes)
  *
  * Depends on: game/clock, game/game (action times), game/shells, game/fire, game/leanto, game/crabs, game/spear, game/axe, game/fish
  */
@@ -39,6 +42,7 @@ export const NEARBY = 15;         // metres: a place this close is `nearby` (no 
 export const PER_KIND = 3;        // the nearest places of each kind on the menu (all the nearby ones too, up to NEARBY_MAX)
 export const NEARBY_MAX = 5;
 export const WANDER_MAX = 60, WAIT_MAX = 60;   // game minutes a wander or a wait may last
+export const FISH_MIN = 5, FISH_MAX = 60;       // game minutes a fishing may last (chosen by the model, 0.37.2)
 
 export const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 
@@ -57,14 +61,14 @@ export const DO = Object.freeze({
   torch:     { what: 'take a burning torch', secs: STOOP },
   plant:     { what: 'stick the torch in the ground', secs: STOOP },
   light:     { what: 'light the pile beside him (fire drill, uses fibre)', secs: DRILL_TIME },
-  sleep:     { what: 'lie down to sleep (until he wakes)', secs: null },
+  sleep:     { what: 'lie down to sleep until he wakes (a plan of its own, the only step)', secs: null },
   buildHere: { what: 'start a lean-to here with the driftwood he carries', secs: PIECE_TIME },
   buildIn:   { what: 'build a piece he carries into the lean-to', secs: PIECE_TIME },
   upgrade:   { what: 'build a piece he carries into his home (walls, bed, ring, hut)', secs: PIECE_TIME },
   makeSpear: { what: 'make a spear (the branch he carries, a stone beside him)', secs: SPEAR_TIME },
   takeSpear: { what: 'take up the spear', secs: STOOP },
   laySpear:  { what: 'lay the spear down', secs: STOOP },
-  fish:      { what: 'strike at a fish with the spear', secs: FISH_TIME },
+  fish:      { what: 'fish with the spear in shallow sea water, for the minutes you give, until he catches one (a plan of its own, the only step)', secs: FISH_TIME },
   makeAxe:   { what: 'make an axe (the branch he carries, a stone beside him, a tuft of fibre)', secs: AXE_TIME },
   takeAxe:   { what: 'take up the axe', secs: STOOP },
   layAxe:    { what: 'lay the axe down', secs: STOOP },
@@ -104,7 +108,7 @@ export function stepMinutes(s, places) {
   if (k === 'go') { const q = placeOf(places, s.go); return q ? q.minutes : null; }
   if (k === 'wander') return Number.isFinite(s.minutes) ? s.minutes : null;
   if (k === 'wait') return Number.isFinite(s.wait) ? s.wait : null;
-  if (k === 'do') { const d = DO[s.do]; return d ? (d.secs === null ? 0 : gameMinutes(d.secs)) : null; }
+  if (k === 'do') { const d = DO[s.do]; if (d && s.do === 'fish' && Number.isFinite(s.minutes)) return s.minutes; return d ? (d.secs === null ? 0 : gameMinutes(d.secs)) : null; }
   if (k === 'use') { const d = USE[s.use]; return d ? gameMinutes(d.secs) : null; }
   return null;
 }
@@ -114,12 +118,12 @@ export function stepText(s, places) {
   if (k === 'go') { const q = placeOf(places, s.go); return 'walk to ' + (q ? q.what : s.go); }
   if (k === 'wander') return `wander ${s.wander} for ${s.minutes} minutes`;
   if (k === 'wait') return `rest for ${s.wait} minutes`;
-  if (k === 'do') return DO[s.do] ? DO[s.do].what : String(s.do);
+  if (k === 'do') return s.do === 'fish' && Number.isFinite(s.minutes) ? `fish with the spear for up to ${s.minutes} minutes` : DO[s.do] ? DO[s.do].what : String(s.do);
   if (k === 'use') return USE[s.use] ? USE[s.use].what : String(s.use);
   return 'an unknown step';
 }
 
-/** Can the plan be followed? It checks the steps (known kinds and places, sensible minutes), the sleep last, and the time: at most PLAN_MINUTES unless it is one step alone.
+/** Can the plan be followed? It checks the steps (known kinds and places, sensible minutes), the sleep and the fishing alone, and the time: at most PLAN_MINUTES unless it is one step alone.
  *  Whether an action is possible is not known beforehand (it depends on where he stands then): that is checked when the step starts (game/actor). */
 export function checkPlan(plan, places) {
   const list = Array.isArray(plan) ? plan : plan && Array.isArray(plan.steps) ? plan.steps : null;
@@ -141,9 +145,17 @@ export function checkPlan(plan, places) {
       const m = whole(Number(s.wait));
       if (!m || m > WAIT_MAX) return { ok: false, steps: [], minutes: 0, reason: `step ${n}: a rest lasts 1 to ${WAIT_MAX} minutes` };
       step = { wait: m };
-    } else if (k === 'do') { if (!DO[s.do]) return { ok: false, steps: [], minutes: 0, reason: `step ${n}: "${s.do}" is not an action` }; step = { do: s.do }; }
-    else { if (!USE[s.use]) return { ok: false, steps: [], minutes: 0, reason: `step ${n}: "${s.use}" is not something to eat or drink` }; step = { use: s.use }; }
-    if (step.do === 'sleep' && i < list.length - 1) return { ok: false, steps: [], minutes: 0, reason: 'sleep must be the last step' };
+    } else if (k === 'do') {
+      if (!DO[s.do]) return { ok: false, steps: [], minutes: 0, reason: `step ${n}: "${s.do}" is not an action` };
+      step = { do: s.do };
+      if (s.do === 'fish') {
+        const m = whole(Number(s.minutes));
+        if (!m || m < FISH_MIN || m > FISH_MAX) return { ok: false, steps: [], minutes: 0, reason: `step ${n}: fishing lasts ${FISH_MIN} to ${FISH_MAX} minutes ("minutes")` };
+        step.minutes = m;
+      }
+    } else { if (!USE[s.use]) return { ok: false, steps: [], minutes: 0, reason: `step ${n}: "${s.use}" is not something to eat or drink` }; step = { use: s.use }; }
+    if (step.do === 'sleep' && list.length > 1) return { ok: false, steps: [], minutes: 0, reason: 'sleep must be the only step of its plan (he sleeps until he wakes; the next plan follows)' };
+    if (step.do === 'fish' && list.length > 1) return { ok: false, steps: [], minutes: 0, reason: 'fishing must be the only step of its plan (walk to the water in a plan of its own first)' };
     if (typeof s.say === 'string' && s.say.trim()) step.say = s.say.trim();
     minutes += stepMinutes(step, places);
     steps.push(step);
