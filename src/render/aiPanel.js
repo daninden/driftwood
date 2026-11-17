@@ -19,6 +19,8 @@
  * 0.36.5 "Reach": the default view of the log is BY PLAN (`groupByPlan`): each plan is a header ("New plan, Day 3 07:31 — asked because ...") with its one-sentence reason, then one block per plan step IN PLAN ORDER: the step (with its destination, `to`), the model's reason in quotes, when it was taken and how it stands
  * (done, next, not reached, skipped with the plain reason, or overruled by the rules: an orange tag, the reason and what the rules did instead); the decisions that belong to a step (a short way on to it: free time, onward, linger) fold into one small grey line ("via: free time, go on with the day"). Decisions the rules made with no plan or when the AI
  * could not answer (no answer, waiting, busy, budget, an error, a note about a failed request) are grey blocks between the plans in time order, with the plain why. A toggle ("show every decision" / "show the plan steps") switches to the old view, one block per decision, unchanged. A click on a plan header, a step or a grey block shows the full request and the raw answer where there is one.
+ * 0.37.1 "Half hour": the option `play` ({ actor, planner }, filled in by main): with the AI on the panel shows full AI play: the "Now" line is the running step (or "waiting for a plan"), the plan box the actor's plan with its thought (`actPlanLines`), the log the planner's requests (`actEntryParts`), the Memory block the planner's notes and journal. The leash buttons are gone.
+ *   actPlanLines(plan, index, recent), actEntryParts(entry)   (pure) the plan as marked lines; one request as { n, head, lines, ok }
  * 0.36.7 "Memory": under the top line a collapsible "Memory" block (`memoryParts`): his own notes (the model writes them, at most 20 lines) and the journal (one line a day from sunset, newest day first; all are kept in the save); the collapsed state is kept in localStorage like the settings (`driftwood.aiMemoryOpen`, try/catch). It shows what the chooser has (`ai.notes()`, `ai.journal()`), with the AI on or off.
  * 0.36.8 "Logbook": beside "copy log" a "download log" button (only when main hands in the logbook of ai/logbook) saves the whole logbook as `driftwood-log-<seed>-day<N>.jsonl`: events, snapshots, decisions, plans and the requests, with the AI off too.
  * Small, monospace, on a light box, scrollable. It is out of the way of the game: a pointer in the panel never walks Dave or takes him back from his habit (isAiPanelEvent; main skips those events), and typing in the
@@ -47,6 +49,9 @@
  * Depends on: ai/config (AI_WAIT, a constant); main hands it the client of ai/client and the chooser of ai/chooser)
  */
 
+import { stepText } from '../game/actions.js';
+import { WHY_ASKED } from '../ai/actPrompt.js';
+import { hhmm } from '../ai/prompt.js';
 import { AI_WAIT, AI_MODES } from '../ai/config.js';
 import { VERSION, NAME } from '../version.js';
 
@@ -287,7 +292,35 @@ export function saveTextFile(name, text, { doc = document, url = URL } = {}) {
   setTimeout(() => { try { url.revokeObjectURL(href); } catch (e) { /* nothing to free */ } }, 10000);
 }
 
-export function createAiPanel(el, { client, ai, now = () => Date.now(), logbook = null } = {}) {
+/** 0.37.1 "Half hour": the current plan of full AI play as lines: [{ marker ('▶' running, '✓' done, '✗' failed, ' ' to come), state, text }] (pure). plan: game/actor `plan`, index: `stepIndex`, recent: `recent`. */
+export function actPlanLines(plan, index, recent) {
+  if (!plan) return [];
+  const rec = (recent || []).slice(), done = [];
+  for (let i = rec.length - 1; i >= 0 && rec[i].kind === 'step'; i--) done.unshift(rec[i]);   // the step records since the plan began (newest last)
+  return plan.steps.map((st, i) => {
+    const text = stepTextOf(st, plan.menu && plan.menu.places);
+    const r = i < index ? done[done.length - (index - i)] : null;
+    if (i < index) return { marker: r && r.outcome === 'failed' ? '✗' : '✓', state: r && r.outcome === 'failed' ? 'failed' : 'done', text: r && r.reason ? `${text} (${r.reason})` : text };
+    if (i === index) return { marker: '▶', state: 'running', text };
+    return { marker: ' ', state: 'next', text };
+  });
+}
+/** 0.37.1: one request of the planner as plain lines for the log: { head, lines, n } (pure). */
+export function actEntryParts(e) {
+  const when = `Day ${e.day} ${hhmm(e.time)}`, why = WHY_ASKED[e.why] || e.why;
+  const lines = [];
+  if (e.ok) {
+    if (e.say) lines.push(`"${e.say}"`);
+    for (const st of e.steps || []) lines.push('· ' + stepTextOf(st, null));
+    if (e.rejected) lines.push('not followed: ' + e.rejected);
+  } else lines.push(e.error || 'failed');
+  const meta = [e.model, Number.isFinite(e.ms) ? `${(e.ms / 1000).toFixed(1)} s` : null].filter(Boolean).join(' · ');
+  if (meta) lines.push(meta);
+  return { n: e.n, head: `${when}: ${why}`, lines, ok: !!e.ok && !e.rejected };
+}
+const stepTextOf = (st, places) => { try { return stepText(st, places); } catch (e) { return JSON.stringify(st); } };
+
+export function createAiPanel(el, { client, ai, now = () => Date.now(), logbook = null, play = null } = {}) {
   let byPlan = true, shown = false, seen = -1, lastStatus = '', lastModels = null, lastPending = '', lastOn = null;
   const open = new Set();
   const mk = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
@@ -320,12 +353,12 @@ export function createAiPanel(el, { client, ai, now = () => Date.now(), logbook 
   const viewBtn = mk('button', 'ai-view'); viewBtn.type = 'button';
   const status = mk('div', 'ai-status'), tally = mk('div', 'ai-tally'), perModel = mk('div', 'ai-models-status'), pend = mk('div', 'ai-pending'), models = mk('div', 'ai-models'), log = mk('div', 'ai-log');
   models.hidden = true;
-  settings.append(title, row, modeRow, modeNote, addr, status, perModel, pend, models, tally);
+  settings.append(title, row, addr, status, perModel, pend, models, tally);   // 0.37.1: no leash any more (nothing overrules the AI)
   el.append(nowEl, top, copyBox, settings, memBox, planBox, viewBtn, log);
   const showOpen = () => { settings.hidden = !expanded; gear.className = expanded ? 'ai-gear on' : 'ai-gear'; gear.setAttribute('aria-expanded', String(expanded)); };
   showOpen(); gear.addEventListener('click', () => { expanded = !expanded; saveOpen(expanded); showOpen(); });
   const renderMemory = () => {
-    const m = memoryParts(ai.notes ? ai.notes() : [], ai.journal ? ai.journal() : []);
+    const mem = play ? play.planner : ai, m = memoryParts(mem.notes ? mem.notes() : [], mem.journal ? mem.journal() : []);
     memHead.textContent = `${memOpen ? '▾' : '▸'} ${m.head}`; memHead.setAttribute('aria-expanded', String(memOpen)); memBody.hidden = !memOpen; memBody.textContent = '';
     if (!memOpen) return;
     memBody.append(mk('div', 'ai-sub', 'His notes'));
@@ -370,8 +403,25 @@ export function createAiPanel(el, { client, ai, now = () => Date.now(), logbook 
   });
   window.addEventListener('keydown', e => { if (isAiKey(e)) toggle(); });
 
+  function renderPlay() {   // 0.37.1: full AI play: the current plan, then each request (newest first; a click shows the full request)
+    const { actor, planner } = play, pl = actor.plan, st = planner.status();
+    planBox.append(mk('div', 'ai-plan-head', pl ? `Plan (${WHY_ASKED[pl.why] || pl.why}), about ${Math.round(pl.minutes)} min` : st.state === 'thinking' ? 'Asking for a plan…' : st.state === 'failed' ? 'No plan: ' + (st.error || 'the AI does not answer') : 'No plan yet.'));
+    if (pl && pl.say) planBox.append(mk('div', 'ai-reason', `"${pl.say}"`));
+    for (const l of actPlanLines(pl, actor.stepIndex, actor.recent)) planBox.append(mk('div', `ai-step ${l.state}`, `${l.marker} ${l.text}`));
+    const items = planner.entries();
+    for (const e of items) {
+      const p = actEntryParts(e), g = mk('div', p.ok ? 'ai-entry ai' : 'ai-entry note'); g.dataset.n = String(p.n);
+      g.append(mk('div', 'ai-line', p.head));
+      for (const t of p.lines) g.append(mk('div', 'ai-sub', t));
+      if (open.has(String(p.n))) g.append(mk('pre', 'ai-full', requestText(e.messages, e.raw)));
+      log.append(g);
+    }
+    if (!items.length) log.append(mk('div', 'ai-dim', 'No plans yet.'));
+  }
   function renderLog() {
     log.textContent = ''; planBox.textContent = '';
+    if (play && client.on() && client.hasKey()) { viewBtn.hidden = true; tally.textContent = ''; renderPlay(); return; }
+    viewBtn.hidden = false;
     const pl = ai.plan(), asking = ai.asking();
     if (!byPlan && client.on() && client.hasKey()) {   // 0.36.6: the plan box only in the per-decision view; the per-step view has the newest plan group as the current plan
       planBox.append(mk('div', 'ai-plan-head', asking ? `Asking for a new plan (${asking})...` : planHead(pl)));
@@ -430,16 +480,19 @@ export function createAiPanel(el, { client, ai, now = () => Date.now(), logbook 
   function update() {
     if (!shown) return;
     const cs = client.status(), s = statusLine(cs, now()), ml = modelLines(cs, now());
-    { const np = nowParts(ai.nowInfo ? ai.nowInfo() : null, ai.plan(), ai.entries), t = np.text ? 'Now: ' + np.text : ''; if (t !== lastNow) { lastNow = t; nowEl.textContent = t; nowEl.classList.toggle('mismatch', np.mismatch); } }
-    const sm = summaryLine(cs, { mode: client.mode(), waiting: ai.waiting(), inFlight: ai.inFlight() }, now()), key2 = sm.text + '|' + sm.problem;
+    if (play && play.actor && client.on() && client.hasKey()) {   // 0.37.1: the running step of the plan, or that he waits for one
+      const ac = play.actor, pl = ac.plan, t = 'Now: ' + (ac.waiting || !pl ? 'waiting for a plan' : ac.stepIndex >= 0 ? stepTextOf(pl.steps[ac.stepIndex], pl.menu.places) : 'starting the plan');
+      if (t !== lastNow) { lastNow = t; nowEl.textContent = t; nowEl.classList.remove('mismatch'); }
+    } else { const np = nowParts(ai.nowInfo ? ai.nowInfo() : null, ai.plan(), ai.entries), t = np.text ? 'Now: ' + np.text : ''; if (t !== lastNow) { lastNow = t; nowEl.textContent = t; nowEl.classList.toggle('mismatch', np.mismatch); } }
+    const sm = summaryLine(cs, play ? { waiting: play.actor.waiting, inFlight: play.planner.status().state === 'thinking' } : { mode: client.mode(), waiting: ai.waiting(), inFlight: ai.inFlight() }, now()), key2 = sm.text + '|' + sm.problem;
     if (key2 !== lastSummary) { lastSummary = key2; sumText.textContent = sm.text; sumBad.textContent = sm.problem; sum.classList.toggle('bad', !!sm.problem); }
     if (s !== lastStatus) { lastStatus = s; status.textContent = s; }
     const mt = ml.join('\n'); if (mt !== lastModels) { lastModels = mt; perModel.textContent = mt; }
     const p = pendingLine(ai.waiting(), ai.inFlight());
     if (p !== lastPending) { lastPending = p; pend.textContent = p; }
     const isOn = client.on() && client.hasKey();
-    if (ai.memoryVersion !== lastMem) { lastMem = ai.memoryVersion; renderMemory(); }
-    if (ai.version !== seen || isOn !== lastOn) { seen = ai.version; lastOn = isOn; renderLog(); }
+    const memV = play ? play.planner.memoryVersion : ai.memoryVersion; if (memV !== lastMem) { lastMem = memV; renderMemory(); }
+    const ver = play && isOn ? play.planner.version * 1000 + (play.actor.stepIndex + 1) + play.actor.stats.steps * 7 + play.actor.stats.plans * 13 : ai.version; if (ver !== seen || isOn !== lastOn) { seen = ver; lastOn = isOn; renderLog(); }
   }
   function toggle() { shown = !shown; el.hidden = !shown; if (shown) { seen = -1; lastMem = -1; update(); } }
   el.hidden = true;

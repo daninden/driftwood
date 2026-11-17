@@ -485,7 +485,7 @@ An optional language-model mind for Dave, **smarter than the rules**: better cho
 - **Tests.** Local tests and smokes never use AI: a fixed fake mind, no network, no credits.
 - **Proof.** Measured against the rules on the same islands: ground known, home finished, repeated failures and stalls, and thirst, hunger and collapses within the bounds. If it is not measurably better, it only adds atmosphere.
 
-## Full AI play (the redesign; agreed in outline with the user on 2026-11-17; being built: 0.37.0 "Actions" built)
+## Full AI play (the redesign; agreed in outline with the user on 2026-11-17; being built: 0.37.0 "Actions" and 0.37.1 "Half hour" built)
 
 What the user decided (2026-11-17); the details marked open are still to be agreed before building.
 
@@ -499,6 +499,7 @@ What the user decided (2026-11-17); the details marked open are still to be agre
 - **No key, no game:** without an API key the game does not start.
 - **Tests** never use the AI: a fixed fake chooser (a script of actions) plays the scripted lives, in the tests only, never in the game.
 - **0.37.0 "Actions" (built):** the action layer beside the old mind (nothing in play changes yet): the steps (`go` to a place he knows, `wander` a direction for some minutes, `do` one action of the action button, `use` a carried thing, `wait`), their minutes, the plan check (at most 30 minutes unless one step alone, sleep last) and the hands that follow a plan and say why a step failed. The places on the menu: by kind the nearest three and everything within 15 m (at most five), river water, fires and lean-tos however far. Choices made while building: when an action is not offered where he stands (lay is offered only when nothing else is near) he steps aside up to 3 m to where it is; a step "fails" when nothing changed (a crab that got away, a drill that did not catch).
+- **0.37.1 "Half hour" (built):** with the AI on the model plays him with these actions; with it off the old mind plays as before (until 0.37.3). The request: why a plan is asked and how the last step went, the state, what he did lately, his notes and journal, and the menu; the answer: a plan and one thought he says when it starts. While there is no plan the whole game pauses ("thinking…" at the top); retries after 2, 5, 10 and 30 s, every kind of error tries the next model, then "He cannot think: …" with a "try again" button. The leash is gone: nothing overrules the model. About 40 to 60 requests a game day (agreed 2026-11-17). Walking in the dark is free until 0.37.2. Choices made while building: three refused plans in a row count as a failed request; with the AI on the player's walking keys and clicks do nothing.
 
 ## Game ideas (not built, not decided)
 

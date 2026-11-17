@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.1 "Half hour" — 2026-11-17
+
+The second release of *Full AI play* (agreed with the user 2026-11-17: about 40 to 60 requests a game day, no leash, one thought per plan, free walking in the dark until 0.37.2). With the AI on, the language model plays Dave with the single actions of 0.37.0; with it off the old mind plays as before.
+
+- **The request and the answer** (`ai/actPrompt`, new): a fixed part (the island, every action in plain words, the half hour, the answer format) and the moment: why a plan is asked and how the last step went, the state, what he did lately, his notes and journal, and the menu (what he can do here, what he carries to eat or drink, the places he knows with id, distance, direction, minutes and what he could do there). The answer: `{ "say", "steps", "notes"? }`.
+- **The planner** (`ai/planner`, new): one request when there is no plan; **the game pauses meanwhile** (the world stands still; "thinking…" at the top of the screen, `render/thinkingMark`). Retries after 2, 5, 10 and 30 s, then "He cannot think: …" with a "try again" button. Three refused plans in a row count as a failed request. His notes and the sunset journal as before.
+- **The client** tries the next model after any error (also a 5xx, a timeout or the network), not only after 429 and 404; a refused key is not retried.
+- **The panel:** no leash buttons; with the AI on the "Now" line is the running step, the plan box the current plan with its thought and ✓ / ✗ / ▶, the log the requests (why, thought, steps, or what went wrong; a click shows the full request). `README.md`: *How to play* and the **I** entry of *Controls* rewritten.
+- **Tests:** `tests/planner.test.js` (13 tests, among them the actor and the planner with a fake model: the clock stands still while he waits). A browser run with a fake model checked the pause, the "thinking…" line, the first plan and the panel.
+- **Choices made while building (not discussed with the user):** with the AI on the player's walking keys and clicks do nothing (the view still turns and zooms); three refused plans in a row count as an error; the old chooser stays in the code (unused with the AI on) until 0.37.3; the test runner leaves `.claude/**` out (pushed before this release).
+
 ## 0.37.0 "Actions" — 2026-11-17
 
 The first release of the redesign *Full AI play* (agreed with the user 2026-11-17, `docs/design.md`): the action layer, built beside the old mind. **Nothing in play changes**: `main` does not use it yet, the old mind and its tests are untouched; nothing for players (no change to `README.md`).

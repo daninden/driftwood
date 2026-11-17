@@ -17,7 +17,7 @@
  *   actor.menu() -> menu                          what he could do now (pure but for the path searches; no state changes):
  *                                                   { here: [{ id, what }], uses: [{ id, what }], places: [place], dirs, carries, minutes: PLAN_MINUTES }
  *                                                   place: { id, kind, what, x, z, dist, dir, minutes, nearby, offers: [kind] } (offers: what the action button would offer standing there, with what he holds now)
- *   actor.plan -> { steps, minutes, at, menu } | null      the plan being followed (menu: the menu it was chosen from; its place ids hold for the whole plan)
+ *   actor.plan -> { steps, minutes, at, menu, say, why } | null      the plan being followed (menu: the menu it was chosen from; its place ids hold for the whole plan; say: the chooser's thought for it)
  *   actor.stepIndex, actor.waiting, actor.why             the running step, whether he waits for a plan, why the next plan is (or was last) asked
  *   actor.recent -> [record]                      the last RECENT_MAX records { day, time, kind ('step' | 'plan' | 'rejected' | 'interrupt'), what, outcome ('done' | 'failed' | ...), reason }
  *   actor.stats                                   { plans, rejected, steps, done, failed, interrupts, waits (steps with no plan) }
@@ -374,9 +374,9 @@ export function createActor(world, game, opts = {}) {
       const chk = checkPlan(c, m.places);
       if (!chk.ok) { stats.rejected++; last = remember('rejected', 'a plan', 'rejected', chk.reason); emit('rejected', { reason: chk.reason }); why = 'rejected'; idle(); return; }
       stats.plans++;
-      actor.plan = { steps: chk.steps, minutes: chk.minutes, at: clock.total, menu: m };
+      actor.plan = { steps: chk.steps, minutes: chk.minutes, at: clock.total, menu: m, say: c && typeof c.say === 'string' ? c.say : '', why };
       remember('plan', chk.steps.map(s => stepText(s, m.places)).join('; '), 'planned');
-      emit('plan', { steps: chk.steps, minutes: chk.minutes, why });
+      emit('plan', { steps: chk.steps, minutes: chk.minutes, why, say: actor.plan.say, what: chk.steps.map(x => stepText(x, m.places)).join('; ') });
       gen = runPlan(actor.plan);
     }
     const r = gen.next();

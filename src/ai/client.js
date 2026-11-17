@@ -6,7 +6,7 @@
  *
  * Models: config AI_MODELS, in order of preference. Each has its own budget (at most its AI_BUDGET perMin requests in any 60 seconds, a sliding window in memory, and its perDay a day, a counter in storage per model name, reset when the
  * Pacific-time date changes, as Google's free quota does) and its own pause. A request goes to the first model that is not dead, not paused and within its budget. HTTP 429 pauses that model until Retry-After (else 60 s);
- * 404 (model not found) marks it dead for the rest of the session; either way the SAME request is retried once on the next available model. Every attempt that is sent counts for its model, whatever the answer.
+ * 404 (model not found) marks it dead for the rest of the session; either way the SAME request is retried once on the next available model; 0.37.1: so is every other error (a 5xx, a timeout, the network), except a refused key (401, 403). Every attempt that is sent counts for its model, whatever the answer.
  *
  * Exports:
  *   pacificDay(ms) -> 'YYYY-MM-DD'     the date in America/Los_Angeles
@@ -109,8 +109,8 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
       try { const out = await attempt(first, messages); lastError = null; return out; }
       catch (e) {
         lastError = e.message;
-        if (e.status !== 429 && e.status !== 404) throw e;
-        const second = next([first]);   // the same request, once, on the next model
+        if (e.status === 401 || e.status === 403) throw e;   // a key that is refused is refused by every model
+        const second = next([first]);   // the same request, once, on the next model (0.37.1: after any error, also a 5xx, a timeout or the network; was only 429 and 404)
         if (!second) throw e;
         const out = await attempt(second, messages); lastError = null; return out;
       }

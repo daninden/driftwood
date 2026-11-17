@@ -99,7 +99,9 @@
  * While loading, the bar in #loader (index.html) shows how far it is
  * (core/loading); it fades out with the class `ready` on <body>.
  *
- * window.__driftwood exposes { world, game, view, input, mind, takeover, hands, ready, quality, sound, soundSwitch, ai, aiClient, aiPanel, logbook } for the smoke
+ * Full AI play (0.37.1 "Half hour"): with the AI on (aiOn) the language model plays him through game/actor and ai/planner instead of the mind; the player's walking input is not used; while the actor
+ * waits for a plan the frame calls game.update(input, 0) only (the game pauses) and render/thinkingMark shows "thinking…"; the plan's thought is said above him (voice.announceStep); planner.tick() writes the journal; the save's memory merges the old chooser's and the planner's.
+ * window.__driftwood exposes { world, game, view, input, mind, actor, planner, takeover, hands, ready, quality, sound, soundSwitch, ai, aiClient, aiPanel, logbook } for the smoke
  * test (and `frames`, a read-only count of drawn frames, for checking the pacing), plus three hooks so it does not have to play in real time (a
  * headless browser without a GPU draws only a few frames per second):
  *   pause(on)              stop or restart drawing in the frame loop
@@ -119,10 +121,15 @@ import { createMind } from './game/mind.js';
 import { rulesChooser } from './game/intent.js';
 import { createClient } from './ai/client.js';
 import { createAiChooser } from './ai/chooser.js';
+import { createPlanner } from './ai/planner.js';
+import { snapshotOf } from './ai/prompt.js';
+import { createActor } from './game/actor.js';
+import { stepText } from './game/actions.js';
 import { createLogbook, wrapChooser, snapshotEntry } from './ai/logbook.js';
 import { openLogStore } from './ai/logStore.js';
 import { KEY_NAME } from './ai/config.js';
 import { createAiPanel, isAiPanelEvent } from './render/aiPanel.js';
+import { createThinkingMark } from './render/thinkingMark.js';
 import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
 import { createHungerMark } from './render/hungerMark.js';
@@ -239,13 +246,33 @@ async function boot() {
   await logbook.open({ clear: fresh || !saved });   // a new game (?new, a new seed, no save) starts a new log; otherwise it runs on
   const quiet0 = f => { try { f(); } catch (e) { /* the logbook never disturbs the game */ } };
   const ai = createAiChooser({ rulesChooser, log: e => quiet0(() => logbook.decision(e)), ask: m => { let id = null; quiet0(() => { id = logbook.request(m); }); const p = aiClient.send(m); p.then(r => quiet0(() => logbook.answer(id, r)), e => quiet0(() => logbook.answer(id, e))); return p; }, onStep: st => voice.announceStep(game.clock.time, st.reason, st.fallback), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), mode: aiClient.mode, name: () => name, clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }) });
-  const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai, logbook });
+  const play = {};   // 0.37.1: the actor and the planner, filled in below (the panel reads them only once it is shown)
+  const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai, logbook, play });
   const mind = createMind(world, game, { chooser: wrapChooser(ai.chooser, { on: aiOn, record: (point, menu, c) => quiet0(() => logbook.rulesDecision(point, menu, c)) }), saved: saved && saved.habit, onEvent: e => quiet0(() => logbook.event(e)), onIntent: ({ kind, goal }) => {   // 0.36.9: with the AI on nearly nothing fixed is said (ai/said): a restating phrase, an intent of the rules and every lack stay silent, a lack goes into the short-term list, an emergency has its short phrase; with the AI off as ever
     const v = intentVoice({ on: aiOn(), kind, restated: ai.restates(goal, kind), vitals: { thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake } });
     if (v.remember) quiet0(() => mind.remember('lack', v.remember, 'seen'));
     if (v.say) voice.announce(v.say, game.clock.time);
   } }), takeover = createTakeover(QUIET, performance.now() / 1000);
   ai.attach(mind, game);   // 0.36.1: the chooser reads the state and the short-term memory of a request from them
+  // 0.37.1 "Half hour": with the AI on, the language model plays him with single actions (game/actor, ai/planner); the old mind (above) plays only with the AI off
+  const askLogged = m => { let id = null; quiet0(() => { id = logbook.request(m); }); const p = aiClient.send(m); p.then(r => quiet0(() => logbook.answer(id, r)), e => quiet0(() => logbook.answer(id, e))); return p; };
+  let actor = null;
+  const actState = () => {
+    const st = snapshotOf(game, { home: () => mind.home(), camp: () => mind.camp(), stripWood: () => mind.stripWood() });
+    const pl = actor && actor.plan;
+    st.doing = pl && actor.stepIndex >= 0 ? stepText(pl.steps[actor.stepIndex], pl.menu.places) : 'between plans';
+    st.day = dayNumber(game.clock.day, startDay);
+    return st;
+  };
+  const planner = createPlanner({ ask: askLogged, enabled: aiOn, canSend: aiClient.canSend, now: () => performance.now() / 1000, state: actState, name: () => name,
+    clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time }), recent: () => (actor ? actor.recent.map(r => ({ ...r, day: dayNumber(r.day, startDay) })) : []) });
+  actor = createActor(world, game, { chooser: planner.chooser, onEvent: e => {
+    quiet0(() => logbook.event(e));
+    if (e.type === 'plan' && e.say) voice.announceStep(game.clock.time, e.say, null);   // his one thought for the plan, said when it starts
+  } });
+  planner.restore(saved && saved.memory);
+  play.actor = actor; play.planner = planner;
+  const thinking = createThinkingMark(document.getElementById('thinking'), { retry: () => planner.retry() });
   ai.restore(saved && saved.memory);   // 0.36.7 "Memory": the short-term list, his notes and the journal come back with the island (with the AI off they are only kept and saved)
   let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
   const tnow = () => performance.now() / 1000 + hurried;   // 0.28 "Habit"
@@ -264,8 +291,8 @@ async function boot() {
   button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
   let stopSaving = testing || !!asking, sinceSave = 0;
   const moments = createMomentWatcher(game);   // looks for something worth saving twice a second, not every frame
-  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, habit: mind.state(), memory: ai.memory(), view: view.pose }); sinceSave = 0; } };
-  let memSeen = ai.memoryVersion, planSeen = -1;
+  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, habit: mind.state(), memory: { ...ai.memory(), ...planner.memory() }, view: view.pose }); sinceSave = 0; } };
+  let memSeen = ai.memoryVersion + planner.memoryVersion, planSeen = -1;
   const viewSaver = createViewSaver();
   const autosave = dt => { sinceSave += dt; if (viewSaver.update(view.pose, dt)) save(); if (moments.update(dt) || sinceSave >= SAVE_EVERY) save(); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
@@ -308,7 +335,7 @@ async function boot() {
     hands.cycle(); saveHands(hands.mode); dev.setHands(hands.mode);
   });
   if (hands.mode === 'computer') { mind.engage(); dev.setHabit(true); }   // Computer has no quiet wait, even on the ready frame
-  window.__driftwood = { world, game, view, input, mind, takeover, hands, ai, aiClient, aiPanel, logbook, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
+  window.__driftwood = { world, game, view, input, mind, actor, planner, takeover, hands, ai, aiClient, aiPanel, logbook, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     requestAnimationFrame(frame);
     if (paused) { last = now; return; }
@@ -324,24 +351,30 @@ async function boot() {
     input.yaw = view.yaw;
     if (wantsToMove(input) || input.pressing()) takeover.poke(tnow());   // a held key or a walk still going (not the camera, 0.29.1)
     takeover.update(tnow());
-    const driving = hands.driving(takeover.active());
+    const playing = aiOn();   // 0.37.1: the AI plays him (game/actor); the player's walking keys and clicks do nothing meanwhile (the view still turns and zooms)
+    const driving = !playing && hands.driving(takeover.active());
     if (driving !== mind.active) { if (driving) mind.engage(); else mind.release(); dev.setHabit(driving); }
-    const use = driving ? mind.input : input;   // whose hands the castaway has this frame
+    const use = playing ? actor.input : driving ? mind.input : input;   // whose hands the castaway has this frame
     let info = null, walked = 0;
     for (const h of subSteps(dt, speed)) {   // one step at speed 1; with ?speed=N the frame's game time is N * dt in steps of at most 0.1 s
-      if (driving) { mind.input.yaw = view.yaw; mind.step(h); }
+      if (playing) {
+        actor.input.yaw = view.yaw;
+        actor.step(actor.waiting ? 0 : h);
+        if (actor.waiting) { info = game.update(use, 0); break; }   // no plan: the game pauses (the world stands still) until the planner has one
+      } else if (driving) { mind.input.yaw = view.yaw; mind.step(h); }
       info = game.update(use, h); walked += info.distance;
     }
+    thinking.update(playing && actor.waiting, planner.status());
     info.distance = walked;   // the footprints get the whole way walked this frame
     aiPanel.update();
     quiet0(() => { logbook.tick({ now: mind.now(), snapshot: () => snapshotEntry(game, mind) }); if (ai.version !== planSeen) { planSeen = ai.version; logbook.planState(ai.plans()); } });   // 0.36.8: the "Now" changes, the half-hour snapshot and the plans' states (read only)
-    ai.tick();   // 0.36.7: the sunset journal line (one extra request a day, only with the AI on; never waited for)
-    if (ai.memoryVersion !== memSeen) { memSeen = ai.memoryVersion; save(); }   // new notes or a journal line are saved at once
+    planner.tick();   // 0.36.7 / 0.37.1: the sunset journal line (one extra request a day, only with the AI on; never waited for)
+    if (ai.memoryVersion + planner.memoryVersion !== memSeen) { memSeen = ai.memoryVersion + planner.memoryVersion; save(); }   // new notes or a journal line are saved at once
     show(info);
     {   // 0.30.20: after about 1.5 s of standing still where something is almost possible, Dave says what is missing, once per still period
       const p = game.player, moved = Math.hypot(p.x - lastX, p.z - lastZ) > 0.01 || wantsToMove(input) || input.pressing() || game.sleep.asleep || p.work;
       lastX = p.x; lastZ = p.z;
-      if (moved || mind.active) { still = 0; stillSaid = false; }
+      if (moved || mind.active || playing) { still = 0; stillSaid = false; }
       else { still += dt; if (still >= 1.5 && !stillSaid) { stillSaid = true; const kind = game.lackAt(); if (kind) voice.announce(kind, game.clock.time); } }
     }
     hurried += (speed - 1) * dt;
