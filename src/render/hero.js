@@ -34,6 +34,7 @@
  * forth; to dig for a crab he kneels the same way, hands forward and scraping, and he kneels the same way at a fire to roast one (0.22). A burning torch (player.torch) he holds up in front of him in his
  * left hand. Since 0.30.17 "Spear" (player.spear) the spear is in his right hand in place of the staff; to fish (player.work 'fish') he stands, leans over the water, peers with the point of the spear forward and down (the hand near the butt), and thrusts the point into the water in the last third.
  *
+ * 0.37.3 "Branches": carrying wood (branches) with a burning torch, the torch is held up in the right hand in place of the staff; the bundle stays under the left arm.
  * 0.31 "Axe": the stone axe (player.axe, render/axe) is in his right hand in place of the staff, head up when he carries it. To fell a tree (player.work 'fell') he stands and chops: the arm goes up
  * over his head and the axe comes down in front of him, about every CHOP_PERIOD seconds (render/chop `chopPose`, real time from the start of the work, so the sound of audio/sound, which uses the same rhythm, follows
  * it), his body leaning into the blow. A log (the `log` argument, a game/wood `wood.log`) lies on his right shoulder at its real length, held there by the raised right arm; he walks bent a little under it.
@@ -199,7 +200,7 @@ export function createHero(scene) {
     const wk = p.work, kneel = wk && wk.kind !== 'fish' && wk.kind !== 'fell' ? Math.min(1, wk.f * (wk.kind === 'drill' || wk.kind === 'build' ? 14 : wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip' || wk.kind === 'dig' ? 4 : wk.kind === 'roast' ? 6 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && (wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip');
     const holding = !!p.spear && !(p.lie > 0), fishing = holding && !!wk && wk.kind === 'fish';   // 0.30.17: he stands and peers, then strikes in the last third
     const holdingAxe = !!p.axe && !(p.lie > 0) && !holding, chopping = holdingAxe && !!wk && wk.kind === 'fell', shoulder = !!log && !(p.lie > 0);   // 0.31: the axe in his hand, chopping, a log on his shoulder
-    staff.visible = !drilling && !holding && !holdingAxe && !shoulder; drill.visible = drilling; spear.visible = holding; axe.visible = holdingAxe;
+    staff.visible = !drilling && !holding && !holdingAxe && !shoulder && !(p.torch && !(p.lie > 0) && load.length > 0); drill.visible = drilling; spear.visible = holding; axe.visible = holdingAxe;
     if (chopping) { if (chopT < 0) chopT = performance.now() / 1000; } else chopT = -1;
     const chop = chopping ? chopPose((performance.now() / 1000 - chopT) / CHOP_PERIOD) : { arm: 0, lean: 0 };
     chopK += ((chopping ? 1 : 0) - chopK) * 0.2;
@@ -207,6 +208,8 @@ export function createHero(scene) {
     group.position.set(p.x, p.y - Math.min(0.35, wade * 0.6), p.z); group.rotation.y = p.heading;
     const tired = p.tired || 0, thirsty = p.thirsty || 0, lie = p.lie || 0, ly = lie * lie * (3 - 2 * lie);
     const burden = load.length + (shoulder ? 1.5 : 0), sw = p.moving ? Math.sin(p.phase) * Math.min(0.75, 0.3 + p.speed * 0.1) * (1 - 0.35 * tired) * (1 - Math.min(0.6, CARRY_STRIDE * burden)) : 0, carry = load.length > 0;
+    const torchR = lit && carry;   // 0.37.3 "Branches": the bundle under the left arm, the torch in the right hand in place of the staff
+    if (torch.parent !== (torchR ? shR : shL)) (torchR ? shR : shL).add(torch);
     const bend = Math.sin(Math.PI * Math.min(1, p.stoop || 0));   // down and up again
     const sit = Math.sin(Math.PI * Math.min(1, ly * 1.6)) * (ly < 0.62 ? 1 : 0);   // knees bend on the way down and up
     const sp = sitPose((p.sitting || 0) * (1 - ly));   // sitting on the ground (0.29.2)
@@ -230,7 +233,7 @@ export function createHero(scene) {
       shL.rotation.z = (carry ? -0.35 : lit ? -0.15 : 0) * (1 - sp.e) + 0.2 * sp.e;
       shL.rotation.x += (((chopping ? chop.arm * 0.85 : carry ? -0.35 : lit ? -1.0 - sw * 0.1 : -sw * 0.8) - bend * 0.5) * (1 - sp.e) + sp.arm - shL.rotation.x) * 0.4;   // the left arm holds the bundle, or the torch up in front
       const strike = fishing ? Math.min(1, Math.max(0, (wk.f - 0.7) / 0.12)) * (wk.f < 0.95 ? 1 : 0.4) : 0;   // peering (spear held ready, forward and down), then the thrust
-      shR.rotation.x += ((chopping ? chop.arm : shoulder ? -2.55 : fishing ? -1.1 - 0.6 * strike : sw * 0.5 - 0.15 - bend * 0.6) * (1 - sp.e) + sp.arm - shR.rotation.x) * (fishing ? 0.5 : chopping ? 0.6 : 0.4);
+      shR.rotation.x += ((chopping ? chop.arm : shoulder ? -2.55 : fishing ? -1.1 - 0.6 * strike : torchR ? -1.0 - sw * 0.1 - bend * 0.5 : sw * 0.5 - 0.15 - bend * 0.6) * (1 - sp.e) + sp.arm - shR.rotation.x) * (fishing ? 0.5 : chopping ? 0.6 : 0.4);
       spear.rotation.x += ((fishing ? 3.5 + 1.1 * strike : 0.3) - spear.rotation.x) * 0.3;   // fishing: the POINT forward and down (about 135 degrees from upright when peering, 160 in the thrust, in the world: the arm's -1.1..-1.7 plus this), the butt behind the hand
       spearGrip += ((fishing ? 1 : 0) - spearGrip) * 0.3; spear.position.set(0.06, -0.3 + 0.4 * spearGrip * Math.cos(spear.rotation.x), 0.1 + 0.4 * spearGrip * Math.sin(spear.rotation.x));   // fishing: the hand slides down the pole to near the butt (0.25 m from it), as for a real thrust
       axe.rotation.x += ((chopping ? Math.PI : 0.3) - axe.rotation.x) * 0.25;   // head up when carried, the head out along his arm when he chops

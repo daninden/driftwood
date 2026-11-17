@@ -103,7 +103,7 @@
  *     nearest of 'dig' (0.22: a crab hiding in a hole within DIG_REACH that it fled into, fewer than 2 crabs carried, no torch in hand, not in water: kneels
  *     DIG_TIME, about half the time he catches it, game/crabs), 'roast' (0.22: a crab carried, a fire with flames within BESIDE, no torch in hand: kneels
  *     ROAST_TIME and eats one, hunger.eat(CRAB_FOOD); a nearer coconut or hole wins, and it beats 'torch' at the same fire) and 'pickup' (a piece within REACH, or a pile within BESIDE when
- *     his arm is empty; no hand free with a torch; room for CARRY_MAX), 'husk'
+ *     his arm is empty; with a torch in hand only branches, 0.37.3 "Branches"; room for CARRY_MAX), 'husk'
  *     (a coconut within REACH: kneels HUSK_TIME, one tuft of fibre when there is room; then he eats the nut, hunger.eat(), thirst.sip(NUT_DRINK), when hungry, else carries it), 'torch'
  *     (empty-handed: a burning brand out of a fire within BESIDE, not from
  *     embers, or a torch in the ground within REACH) and 'drink' (fresh river
@@ -352,6 +352,7 @@ export function createGame(world, spawn, opts = {}) {
   // 0.32 "Piece by piece": a site is built piece by piece with what he carries (game/leanto). The kinds he has: driftwood, branches and fronds under his arm, stones in his hands.
   let viewYaw = YAW;   // the camera's yaw at the last update (input.yaw): the way the open side of a new lean-to faces; the mind may write it before it presses
   const piecesHeld = () => { const ks = new Set(wood.carried.map(kindOf)); if (wood.stones.length) ks.add('stone'); if (wood.log) ks.add('log'); return ks; };
+  const branchesOnly = () => !wood.log && !wood.stones.length && wood.carried.length > 0 && wood.carried.every(l => l.branch);   // 0.37.3 "Branches": only branches under his arm (a torch may go with them)
   const handsFree = () => !fire.torch && !spear.hand && !axe.hand;   // (0.33: a log on his shoulder is no hindrance: it is a piece of the hut, and no other piece is carried with it)
   const naturalNear = (x, z) => {   // the trunks, boulders and crags within 4.5 m of a point (each once)
     const seen = new Set();
@@ -458,9 +459,10 @@ export function createGame(world, spawn, opts = {}) {
     const blaze = load ? fire.find(px, pz, BESIDE, 'fire') : null;
     if (blaze && dryPiece() && !full(blaze.fire) && !leantos.noFire(blaze.fire.x, blaze.fire.z)) small.push({ kind: 'feed', fire: blaze.fire, thing: blaze });   // dry wood beside a fire feeds it, whatever else is near
     const cands = [];   // what else he could do; the nearest first
-    if (!torch && !hand) {   // stones go in his hands (at most STONE_MAX), everything else under his arm (at most CARRY_MAX)
-      const room = l => wood.log ? false : l.timber ? load === 0 : l.stone ? wood.stones.length < STONE_MAX : wood.carried.length < CARRY_MAX;   // 0.31: a log is carried alone
-      const log = wood.find(px, pz, REACH, 'log', room), pile = load ? null : wood.find(px, pz, BESIDE, 'pile');   // with wood in his arm a pile is laid on, not taken from
+    if (!hand) {   // stones go in his hands (at most STONE_MAX), everything else under his arm (at most CARRY_MAX); 0.37.3 "Branches": with a torch in his hand only branches
+      const room = l => torch && !l.branch ? false : wood.log ? false : l.timber ? load === 0 : l.stone ? wood.stones.length < STONE_MAX : wood.carried.length < CARRY_MAX;   // 0.31: a log is carried alone
+      const log = wood.find(px, pz, REACH, 'log', room);
+      const pile = load ? null : torch ? (wood.findAll(px, pz, BESIDE, 'pile').find(q => q.pile.kind === 'branch') || null) : wood.find(px, pz, BESIDE, 'pile');   // with wood in his arm a pile is laid on, not taken from
       if (log) cands.push({ d: log.d, a: { kind: 'pickup', thing: log } });
       if (pile) cands.push({ d: pile.d, a: { kind: 'pickup', thing: pile } });
     }
@@ -486,7 +488,7 @@ export function createGame(world, spawn, opts = {}) {
     }
     if (axe.hand && !swim) { const tr = felled.nearest(px, pz, FELL_REACH); if (tr) cands.push({ d: tr.d, a: { kind: 'fell', tree: tr } }); }   // 0.31: the axe in his hand, a trunk beside him, dry ground: chop it down
     if (spear.hand && fishableAt(hereAt(px, pz)) && !fish.full()) cands.push({ d: 0, a: { kind: 'fish' } });   // 0.30.17: shallow sea water, the spear in his hand
-    if (!load && !torch && !hand) {
+    if ((!load || branchesOnly()) && !torch && !hand) {   // 0.37.3 "Branches": with only branches under his arm a hand is still free for a torch
       const f = fire.find(px, pz, BESIDE, 'fire'), t = fire.find(px, pz, REACH, 'torch');
       if (f && f.fire.fuel > TORCH_COST) cands.push({ d: f.d, a: { kind: 'torch', fire: f.fire, thing: f } });   // flames, not embers
       if (t) cands.push({ d: t.d, a: { kind: 'torch', torch: t.torch, thing: t } });
@@ -496,7 +498,7 @@ export function createGame(world, spawn, opts = {}) {
     cands.sort((p, q) => p.d - q.d);
     for (const c of cands) if (!small.some(x => x.kind === c.a.kind)) small.push(c.a);   // one of each kind (the nearest): two icons alike would say nothing
     if (!small.length) {   // nothing near to do: what is in his hands, then a carried bite
-      if (torch) { if (plantSpot(px, pz)) small.push({ kind: 'plant' }); }
+      if (torch) { if (load && !swim) small.push({ kind: 'lay' }); if (plantSpot(px, pz)) small.push({ kind: 'plant' }); }   // 0.37.3: branches carried with the torch are laid down first
       else if (hand) { /* the spear is laid down below */ }
       else if (load) { if (!swim) small.push({ kind: 'lay' }); }
       else if (!swim) {   // empty hands: a full shell when thirsty, else something carried when hungry

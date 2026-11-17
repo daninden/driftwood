@@ -599,3 +599,36 @@ describe('the thumb stick stops kneeling work', () => {
     expect(wantsToMove(makeInput({ target: { x: 1, z: 1 } }))).toBe(true);
   });
 });
+
+// 0.37.3 "Branches": a torch in one hand, branches under the other arm (nothing else goes with a torch)
+describe('branches with a torch (0.37.3)', () => {
+  const branch = (n, o = {}) => ({ id: 700000 + n, x: E.x, y: 1, z: E.z, len: 1.2, a: 0, rad: 0.05, branch: true, ...o });
+  const withBranches = (g, n) => { for (let i = 0; i < n; i++) g.wood.carried.push(branch(i)); };
+  it('takes a torch from a fire with only branches under his arm, not with driftwood', () => {
+    const g = scene({ fire: fireAt(E.x + 0.8, E.z, FUEL_MAX) }); withBranches(g, 2);
+    expect(g.actions().some(a => a.kind === 'torch')).toBe(true);
+    const h = scene({ carried: 1, fire: fireAt(E.x + 0.8, E.z, FUEL_MAX) });
+    expect(h.actions().some(a => a.kind === 'torch')).toBe(false);
+    const m = scene({ carried: 1, fire: fireAt(E.x + 0.8, E.z, FUEL_MAX) }); withBranches(m, 1);   // driftwood and a branch: no hand free
+    expect(m.actions().some(a => a.kind === 'torch')).toBe(false);
+  });
+  it('picks up a branch with a torch in his hand, but no driftwood', () => {
+    const g = scene({}); withBranches(g, 2);
+    press(g, 'tap', 2);   // laid down: a pile of branches beside him
+    expect(g.wood.carried.length).toBe(0); expect(g.wood.piles.some(p => p.kind === 'branch')).toBe(true);
+    g.fire.torch = { left: TORCH_DAYS };
+    expect(g.action().tap.kind).toBe('pickup');
+    press(g, 'tap', 2); expect(g.wood.carried.length).toBeGreaterThan(0); expect(g.wood.carried.every(l => l.branch)).toBe(true); expect(g.fire.torch).not.toBeNull();
+    const d = createGame(w, at(logs[0].x + 0.3, logs[0].z), { fire: { torch: { left: TORCH_DAYS } } });
+    expect(d.actions().some(a => a.kind === 'pickup')).toBe(false);   // driftwood: no hand free
+  });
+  it('lays branches down and feeds them to a fire with the torch still in his hand', () => {
+    const g = scene({ torch: true }); withBranches(g, 2);
+    expect(g.action().tap.kind).toBe('lay');
+    expect(g.actions().some(a => a.kind === 'plant')).toBe(true);
+    const f = scene({ torch: true, fire: fireAt(E.x + 0.8, E.z, 2 * BURN) }); withBranches(f, 1);
+    expect(f.action().tap.kind).toBe('feed');
+    const fuel = f.fire.fires[0].fuel; press(f, 'tap', 2);
+    expect(f.wood.carried.length).toBe(0); expect(f.fire.fires[0].fuel).toBeGreaterThan(fuel - 0.01); expect(f.fire.torch).not.toBeNull();
+  });
+});

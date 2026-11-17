@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.3 "Branches" — 2026-11-17
+
+Asked by the user after the question whether Dave can fetch wood with a torch in his hand (he could not: a torch filled his hands). **A torch in one hand, branches under the other arm**, for the player and for Dave alike (with the AI off the old mind never carries wood with a torch, so its lives do not change).
+
+- **The rule** (`game/game` `actionsAt`): with a burning torch in his hand the action button picks up branches only (a loose branch, or from a pile of branches), lays them down (before sticking the torch in the ground when nothing else is near) and puts them on a fire; with only branches under his arm it still takes a torch from a fire or out of the ground. Driftwood, fronds, stones, logs, coconuts, digging, building, the spear and the axe are unchanged: the torch goes in the ground first.
+- **The look** (`render/hero`): carrying branches with a torch, he holds the torch up in his right hand in place of his staff; the bundle stays under his left arm.
+- **The request** (`ai/actPrompt`): one sentence says what goes with a torch, so the model no longer plans a pickup of driftwood with a torch in his hand (that gap was in 0.37.2).
+- **Tests:** `tests/action.test.js` *branches with a torch (0.37.3)* (3 tests). Looked at in the browser: the torch in the right hand and the bundle under the left arm, by day and at night.
+- **For development:** `scripts/ai-playtest.js` (new, asked by the user): a game of full AI play without a browser whose requests are answered through files (`run`, `next`, `answer`), so any model, a Claude model for example, can play a test day; it writes the events, a snapshot every half game hour and a summary. Not part of the game.
+- **Choices made while building (not discussed with the user):** from a pile only a pile of branches (a mixed pile does not exist); a torch is not taken with driftwood and branches together; the torch moves to the right hand only while wood is carried.
+
 ## 0.37.2 "Torch" — 2026-11-17
 
 The third release of *Full AI play* (agreed with the user 2026-11-17): walking in the dark needs light, and sleeping and fishing are plans of their own. With the AI on the language model plays Dave with this; with it off nothing changes.
