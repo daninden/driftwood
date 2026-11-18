@@ -35,6 +35,7 @@
  *   stepWhy(entry) / planWhen(plan)   small texts of the above
  *   planLines(plan) -> [{ marker ('▶' running, '✓' done, '✗' skipped, ' '), state, text }], planHead(plan), modeLine(mode)   the plan with a marker at the current step, why it was asked, and what the leash means. Pure.
  *   memoryParts(notes, journal) -> { head, notes: [text], journal: [{ day, text }] }   (0.36.7, pure) the Memory block: its head ("Memory: 3 notes, 2 journal lines"), the notes in order, the journal newest day first
+ *   playLogText({ entries, model, days }) -> string   (0.37.8, pure) the "copy log" text with the AI on: the last request as the model saw it, then the requests of the last 2 game days
  *   logText({ items, tally, state, model, mode, models, days }) -> string   (0.36.7, pure) the plain-text log of the last 2 game days for the "copy log" button: the version, model and leash, the tally, the situation now with the "not now" reasons, then each plan (why asked, its steps with reason and outcome, via, overruled) and the rules' own decisions with why not the AI, oldest first; never the key, never the full requests
  *   nowParts(info, plan, entries) -> { text, mismatch, why }   (0.36.7, pure) the "Now" line at the top of the panel (also with the AI off): what Dave is actually doing (mind.now), "waiting for a plan (4 s of 10)", and in quiet ink with the reason when it is not the plan's running step
  *   tallyLine(t) -> string        "Since the page was loaded: 5 by the AI, 3 by the rules, 2 different from the rules"
@@ -324,6 +325,22 @@ export function actEntryParts(e) {
   return { n: e.n, head: `${when}: ${why}`, lines, ok: !!e.ok && !e.rejected };
 }
 const stepTextOf = (st, places) => { try { return stepText(st, places); } catch (e) { return JSON.stringify(st); } };
+/**
+ * 0.37.8 "Firelight": the plain-text log of full AI play for the "copy log" button (pure; before, the button copied the old mind's log even with the AI on). `entries` are
+ * the planner's requests (newest first), `days` how many game days back from the newest. The last request's own text comes first (what the model saw: the situation, what he
+ * did lately, the notes, the lessons, the menu), then every request of those days, oldest first, with its plan, its thought and what was not followed. Never holds the key.
+ */
+export function playLogText({ entries = [], model = null, days = 2 } = {}) {
+  const top = Math.max(-Infinity, ...entries.map(e => e.day).filter(Number.isFinite));
+  const keep = entries.filter(e => !Number.isFinite(e.day) || top === -Infinity || e.day > top - days).slice().reverse();
+  const out = [`Driftwood ${VERSION} "${NAME}" · AI log (full AI play), the last ${days} game days`, `Model: ${model || 'none yet'} · ${entries.length} requests since the page was loaded`];
+  const last = entries.find(e => Array.isArray(e.messages) && e.messages.length > 1);
+  if (last) out.push('', `The last request (day ${last.day} ${hhmm(last.time)}), as the model saw it`, String(last.messages[1].content || ''));
+  out.push('', 'The requests, oldest first');
+  for (const e of keep) { const pt = actEntryParts(e); out.push(pt.head); for (const t of pt.lines) out.push('  ' + t); }
+  if (!keep.length) out.push('(none yet)');
+  return out.join('\n');
+}
 
 export function createAiPanel(el, { client, ai, now = () => Date.now(), logbook = null, play = null } = {}) {
   let byPlan = true, shown = false, seen = -1, lastStatus = '', lastModels = null, lastPending = '', lastOn = null;
@@ -378,7 +395,8 @@ export function createAiPanel(el, { client, ai, now = () => Date.now(), logbook 
   };
   memHead.addEventListener('click', () => { memOpen = !memOpen; saveMem(memOpen); renderMemory(); });
   copy.addEventListener('click', async () => {
-    const s = client.status(), pl = ai.plan(), text = logText({ items: groupByPlan(ai.entries, ai.plans()), tally: ai.tally(), state: ai.stateNow ? ai.stateNow() : null, nowLog: ai.nowLog ? ai.nowLog() : [], model: pl && pl.model, mode: client.mode(), models: s.models.map(m => m.model) });
+    const s = client.status(), pl = ai.plan(), full = play && play.planner && client.on() && client.hasKey(), last = full ? play.planner.entries().find(e => e.model) : null;
+    const text = full ? playLogText({ entries: play.planner.entries(), model: last ? last.model : null }) : logText({ items: groupByPlan(ai.entries, ai.plans()), tally: ai.tally(), state: ai.stateNow ? ai.stateNow() : null, nowLog: ai.nowLog ? ai.nowLog() : [], model: pl && pl.model, mode: client.mode(), models: s.models.map(m => m.model) });
     let ok = false; try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { ok = false; }
     if (ok) { copyBox.hidden = true; copy.textContent = 'copied'; setTimeout(() => { copy.textContent = 'copy log'; }, 1500); return; }
     copyBox.textContent = '';   // no clipboard: the text in a box, selected, to copy by hand

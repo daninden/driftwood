@@ -34,6 +34,10 @@
  * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
  * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
  * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * 0.37.8 "Firelight": no walk in the dark without light again (game/dark; the half pace of 0.37.6 is gone); a walk's minutes are at the pace he has now (`paceNow`: his load,
+ * tired, thirsty, hungry, as game/game; WALK_SLACK 1.1, was 1.25 for the load); his fires and lean-tos stay on the menu when no route to them is found (the straight line x LEG_DETOUR);
+ * reasons for a refused sleep (in water, too soon after waking at night, by day before half a day awake) and take up the axe or spear (already in hand, none lying, a log, stones, the
+ * other tool, a torch, too far).
  * 0.37.7 "Reasons": a `do` waits while the game has an action queued (player.queued: the bend that lays the wood down before a fell, a drink or a fill), so a "fell" with wood
  * under his arm lasts the whole felling (it ended after the bend before); a hut with no room says what is in its way and where (`hutWay`, game `hutBlock`); a refused "feed" says
  * why (no wood, no fire beside him, the wood too wet, the fire full, a fire within RING_NOFIRE of his stone ring).
@@ -54,22 +58,22 @@ import { createPath } from './path.js';
 import { createRoute } from './route.js';
 import { canStand, terrainAt, WALK_SPEED } from './movement.js';
 import { fishableAt, FISH_DEPTH } from './fish.js';
-import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, DARK_PACE } from './dark.js';
+import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
 import { freshWater } from './water.js';
-import { dryness } from './wood.js';
+import { dryness, LOG_WALK, CARRY_SLOW } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
 import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, RING_NOFIRE } from './leanto.js';
 import { fireOutlook, full as fireFull, BURN, TORCH_DRY } from './fire.js';
-import { TIRED_AT } from './sleep.js';
+import { TIRED_AT, SLEEP_AFTER, NIGHT_AFTER } from './sleep.js';
 import { WAIT } from './intent.js';
-import { PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
+import { PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, LEG_DETOUR, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
 
 const BESIDE_FIRE = 1.2;          // game BESIDE: a fire this close (from its edge) is beside him
 export const RECENT_MAX = 20;
 export const SCAN_R = 150;          // metres round him in which the menu looks for places he knows
 export const FISH_WALK = 40;        // metres: how far from where he stands a fishing looks for the shallows (known ground only)
 export const walkMinutes = metres => Math.max(1, Math.ceil(gameMinutes(metres / WALK_SPEED * WALK_SLACK)));   // 0.37.5: a walk of that many metres of route in game minutes (with a little slack)
-const STOP = 0.12, SETTLE = 3, WALK_SLACK = 1.25, SETTLE_TICKS = 12, ASIDE = 3;   // the follower's stop at a standing point (as game/mind), and the walk's estimate made a little longer for the slower pace of a load
+const STOP = 0.12, SETTLE = 3, WALK_SLACK = 1.1, SETTLE_TICKS = 12, ASIDE = 3;   // the follower's stop at a standing point (as game/mind), and the walk's estimate made a little longer for the slower pace of a load
 
 export function createActor(world, game, opts = {}) {
   const chooser = typeof opts.chooser === 'function' ? opts.chooser : () => null;
@@ -96,6 +100,7 @@ export function createActor(world, game, opts = {}) {
   const idle = () => { inp.target = null; inp.run = false; };
   const busy = () => game.sleep.asleep || p.lie > 0 || !!p.work || !!p.queued || p.stoop > 0 || (p.sitting > 0 && !inp.sit);
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  const paceNow = () => Math.max(0.2, (W.log ? LOG_WALK : 1 - CARRY_SLOW * W.load()) * game.sleep.speed() * game.thirst.speed() * game.hunger.speed());   // 0.37.8 "Firelight": the share of his full pace (game/game update)
   const HUT_IN_WAY = { leanto: 'another lean-to', tree: 'a tree trunk', rock: 'a boulder', pile: 'a pile', fire: 'a fire place', burnt: 'a burnt place (old ashes)' };
   function hutWay(l) {   // 0.37.7 "Reasons": what keeps the hut from fitting round finished lean-to l, in words (game `hutBlock`)
     const b = game.hutBlock(l);
@@ -183,14 +188,15 @@ export function createActor(world, game, opts = {}) {
       const pick = [...nearby, ...rest].slice(0, Math.max(PER_KIND, nearby.length));
       for (const c of pick) {
         const r = c.dist < 1.5 ? null : path.find(p, c);   // 0.37.5 "Ways": the walk's minutes from the length of its route (the path's cost in paced seconds was about four times the real walk)
-        if (c.dist >= 1.5 && !r) continue;
-        let len = 0, q0 = p; if (r) for (const q of r.pts) { len += Math.hypot(q.x - q0.x, q.z - q0.z); q0 = q; }
+        const always = kind === 'fire' || kind === 'leanto';   // 0.37.8 "Firelight": his fires and lean-tos are always on the menu; a route to the middle of a fire in the ring by the hut can fail (a fire vanished from the menu while it burned), then the straight line counts, as a later walk of a plan
+        if (c.dist >= 1.5 && !r && !always) continue;
+        let len = 0, q0 = p; if (r) for (const q of r.pts) { len += Math.hypot(q.x - q0.x, q.z - q0.z); q0 = q; } else if (c.dist >= 1.5) len = c.dist * LEG_DETOUR;
         count[kind] = (count[kind] || 0) + 1;
         const offers = [...new Set(game.offersAt(c.x, c.z).map(o => o.kind))].filter(k => DO[k]);
         const sid = kind === 'fire' ? game.fire.fires.indexOf(c.ref) + 1 : kind === 'leanto' ? game.leantos.list.indexOf(c.ref) + 1 : 0;   // 0.37.4: fires and lean-tos keep their number
-        const mins = walkMinutes(len), slow = c.dist >= 1.5 && walkOk(c, mins).slow;   // 0.37.6: a walk in the dark without light takes twice as long
+        const mins = walkMinutes(len / paceNow());   // 0.37.8: at the pace he walks with now (his load, tired, thirsty, hungry), as game/game
         places.push({ id: kind + (sid > 0 ? sid : count[kind]), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
-          minutes: slow ? Math.ceil(mins / DARK_PACE) : mins, nearby: Math.round(c.dist) <= NEARBY, offers, ...(slow ? { slow: true } : {}) });
+          minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers });
       }
     }
     places.sort((a, b) => a.dist - b.dist);
@@ -366,6 +372,22 @@ export function createActor(world, game, opts = {}) {
       if ((tool || torch || W.load() > 0) && k === 'log') return 'a log is carried alone, with nothing else in his arms or hands';
       if (W.carried.length >= 3) return 'his arms are full';
     }
+    if (kind === 'takeAxe' || kind === 'takeSpear') {   // 0.37.8 "Firelight": the tests of game `canHold` and the reach, in words
+      const name = kind === 'takeAxe' ? 'axe' : 'spear', tool = kind === 'takeAxe' ? game.axe : game.spear, other = kind === 'takeAxe' ? game.spear : game.axe;
+      if (tool.hand) return `the ${name} is already in his hand`;
+      if (!tool.at) return `there is no ${name} lying anywhere`;
+      if (W.log) return 'a log is on his shoulder: he carries it alone';
+      if (W.stones && W.stones.length) return 'stones fill both his hands (lay them down first)';
+      if (other.hand) return `the ${name === 'axe' ? 'spear' : 'axe'} is in his hand: one tool at a time ("${name === 'axe' ? 'laySpear' : 'layAxe'}" first)`;
+      if (game.fire.torch && (name === 'axe' || W.carried.length)) return name === 'axe' ? 'a torch is in his hand: felling takes both hands, so no axe with it ("plant" first)' : 'the torch and the wood under his arm fill his hands';
+      const d = dist(tool.at, p); if (d > 0.55) return `the ${name} lies ${Math.round(d)} m ${dirOf(tool.at.x - p.x, tool.at.z - p.z)} of him: he must stand right at it`;
+    }
+    if (kind === 'sleep') {   // 0.37.8: the tests of game `sleepable` and sleep `canLie`, in words
+      const t = terrainAt(world, p.x, p.z, game.sea), awake = game.sleep.awake, night = isDark(game.clock.time);
+      if (t.depth > 0.05 || t.climb > 0.25) return 'he cannot lie down here (water, or a climbing route): a few steps away, on dry ground';
+      if (night && awake < NIGHT_AFTER) return `he woke not long ago: at night he can lie down again after about ${Math.round(NIGHT_AFTER * 24 * 2) / 2} hours awake (awake for ${(Math.round(awake * 100) / 100)} day)`;
+      if (!night && awake < SLEEP_AFTER) return `by day he can lie down only after half a day awake (awake for ${(Math.round(awake * 100) / 100)} day)`;
+    }
     if (kind === 'feed') {   // 0.37.7 "Reasons": the very tests of game `actionsAt` for 'feed', in words
       if (!W.load()) return 'he has no wood under his arm';
       const b = game.fire.find(p.x, p.z, BESIDE_FIRE, 'fire');
@@ -444,8 +466,7 @@ export function createActor(world, game, opts = {}) {
           moves++;
           const ok = walkOk(s, Math.max(1, Math.ceil(gameMinutes(Math.hypot(s.x - p.x, s.z - p.z) / WALK_SPEED * WALK_SLACK))));
           if (!ok.ok) return { ok: false, reason: ok.reason };
-          inp.pace = ok.slow ? DARK_PACE : 1;
-          let w; try { w = yield* walk(s.x, s.z, { stop: 0.3, until: () => offersNow().some(isFish), maxSecs: 60 }); } finally { inp.pace = 1; }
+          const w = yield* walk(s.x, s.z, { stop: 0.3, until: () => offersNow().some(isFish), maxSecs: 60 });
           if (!w.ok) return w;
           continue;
         }
@@ -476,11 +497,8 @@ export function createActor(world, game, opts = {}) {
     const k = stepKind(s);
     if (k === 'go') {
       const pl = places.find(q => q.id === s.go);
-      let slow = false;
-      if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, stepMinutes(s, places)); if (!ok.ok) return { ok: false, reason: ok.reason }; slow = ok.slow; }   // 0.37.2: the dark rule, when the walk starts
-      if (!slow) return yield* goTo(pl);
-      inp.pace = DARK_PACE;   // 0.37.6 "Free hands": in the dark without light he feels his way over known ground, at half pace
-      try { return yield* goTo(pl); } finally { inp.pace = 1; }
+      if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, stepMinutes(s, places)); if (!ok.ok) return { ok: false, reason: ok.reason }; }   // 0.37.2: the dark rule, when the walk starts (0.37.8: no walk without light)
+      return yield* goTo(pl);
     }
     if (k === 'wander') { const ok = walkOk(null, s.minutes); if (!ok.ok) return { ok: false, reason: ok.reason }; return yield* wander(s.wander, s.minutes); }
     if (k === 'do') return s.do === 'fish' ? yield* fishFor(s.minutes) : yield* doAction(s.do);

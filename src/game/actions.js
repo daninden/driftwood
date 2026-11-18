@@ -24,8 +24,8 @@
  *   legMinutes(a, b), METRES_PER_MINUTE, LEG_DETOUR, LEG_SLACK   (0.37.5 "Ways") a walk between two places of a plan: the straight line x 1.3 at the walking pace with the menu's slack; about 1.9 m a game minute
  *   stepText(step, places) -> string             a step in plain words, for logs and the panel
  *   checkPlan(plan, places) -> { ok, steps, minutes, claimed, reason }   plan: [step] or { steps: [step], minutes? }; ok false with a plain reason when it cannot be followed (0.37.2: a sleep or a fishing not alone, fishing without 5 to 60 minutes)
- *     0.37.4 "Lessons": `minutes` is the chooser's own count of the plan (claimed). A plan of several steps is refused when the chooser counted over PLAN_MINUTES; when it
- *     counted PLAN_MINUTES or less it is followed up to PLAN_GRACE (40) minutes of the game's count; with no count of its own the game's count must be PLAN_MINUTES or less.
+ *     0.37.4 "Lessons": `minutes` is the chooser's own count of the plan (claimed). 0.37.8 "Firelight": PLAN_MINUTES is the size a plan is asked to have; a plan of several
+ *     steps is refused only when the chooser's count or the game's is over PLAN_GRACE (so a walk and an hour of felling fit).
  *
  * Depends on: game/clock, game/movement (WALK_SPEED), game/game (action times), game/shells, game/fire, game/leanto, game/crabs, game/spear, game/axe, game/fish
  */
@@ -48,7 +48,7 @@ export const NEARBY_MAX = 5;
 export const WANDER_MAX = 60, WAIT_MAX = 60;   // game minutes a wander or a wait may last
 export const FISH_MIN = 5, FISH_MAX = 60;       // game minutes a fishing may last (chosen by the model, 0.37.2)
 export const LEG_DETOUR = 1.3, LEG_SLACK = 1.25;   // 0.37.5 "Ways": a walk from one place of the plan to the next: the straight line made a little longer for the way round, and the slack of the menu's walks
-export const PLAN_GRACE = 80;     // 0.37.4 "Lessons": a plan the chooser counted at PLAN_MINUTES or less is still followed when the game counts up to this (the user, 2026-11-17: 40 for 30; 0.37.6: 80 for 60)
+export const PLAN_GRACE = 80;     // 0.37.8 "Firelight": a plan of several steps is followed up to this, by the chooser's count or the game's (0.37.4 "Lessons": only the game's count, when the chooser counted PLAN_MINUTES or less) (the user, 2026-11-17: 40 for 30; 0.37.6: 80 for 60)
 
 export const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 
@@ -133,7 +133,7 @@ export function stepText(s, places) {
   return 'an unknown step';
 }
 
-/** Can the plan be followed? It checks the steps (known kinds and places, sensible minutes), the sleep and the fishing alone, and the time: at most PLAN_MINUTES unless it is one step alone.
+/** Can the plan be followed? It checks the steps (known kinds and places, sensible minutes), the sleep and the fishing alone, and the time: at most PLAN_GRACE (0.37.8; PLAN_MINUTES before) unless it is one step alone.
  *  Whether an action is possible is not known beforehand (it depends on where he stands then): that is checked when the step starts (game/actor). */
 export function checkPlan(plan, places) {
   const list = Array.isArray(plan) ? plan : plan && Array.isArray(plan.steps) ? plan.steps : null;
@@ -173,10 +173,9 @@ export function checkPlan(plan, places) {
   }
   minutes = Math.round(minutes * 10) / 10;
   const raw = plan && !Array.isArray(plan) ? Number(plan.minutes) : NaN, claimed = Number.isFinite(raw) && raw >= 0 ? Math.round(raw) : null;   // 0.37.4: the chooser's own count
-  if (steps.length > 1) {
-    if (claimed !== null && claimed > PLAN_MINUTES) return { ok: false, steps: [], minutes, claimed, reason: `you counted ${claimed} minutes, at most ${PLAN_MINUTES} (a longer step must be a plan of its own)` };
-    const limit = claimed !== null ? PLAN_GRACE : PLAN_MINUTES;
-    if (minutes > limit) return { ok: false, steps: [], minutes, claimed, reason: `the game counts about ${Math.round(minutes)} minutes${claimed !== null ? ` (you counted ${claimed})` : ''}, at most ${PLAN_MINUTES} (a longer step must be a plan of its own)` };
+  if (steps.length > 1) {   // 0.37.8 "Firelight": the hour is the size of a plan, not its limit; refused only over PLAN_GRACE, by the chooser's count or the game's
+    if (claimed !== null && claimed > PLAN_GRACE) return { ok: false, steps: [], minutes, claimed, reason: `you counted ${claimed} minutes, at most ${PLAN_GRACE} (a longer step must be a plan of its own)` };
+    if (minutes > PLAN_GRACE) return { ok: false, steps: [], minutes, claimed, reason: `the game counts about ${Math.round(minutes)} minutes${claimed !== null ? ` (you counted ${claimed})` : ''}, at most ${PLAN_GRACE} (a longer step must be a plan of its own)` };
   }
   return { ok: true, steps, minutes, claimed, reason: null };
 }

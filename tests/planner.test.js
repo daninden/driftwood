@@ -11,7 +11,7 @@ import { actFixed, buildActMessages, parseActPlan, parseLessons, menuText, WHY_A
 import { createPlanner, RETRY_SECS, REJECTS_MAX } from '../src/ai/planner.js';
 import { snapshotOf } from '../src/ai/prompt.js';
 import { thinkingText } from '../src/render/thinkingMark.js';
-import { actPlanLines, actEntryParts } from '../src/render/aiPanel.js';
+import { actPlanLines, actEntryParts, playLogText } from '../src/render/aiPanel.js';
 import { DUSK } from '../src/game/sleep.js';
 import { walkFirstDay } from './helpers/mindSim.js';
 
@@ -42,6 +42,24 @@ describe('the request and the answer (ai/actPrompt)', () => {
     expect(u).toContain('coconut1'); expect(u).toContain('the river is north'); expect(u).toContain('walk to a coconut -> done');
     expect(u).toContain('Where he stands he can: drink.');
     expect(menuText({})).toContain('(none)');
+  });
+  it('a number n in the notes keeps his old note n (0.37.8 "Firelight": a model wrote [1, ..., 9, "new"] and lost nine notes)', () => {
+    const old = ['the river is north', 'fire1 is in the ring', 'logs by the lean-to'];
+    const p = parseActPlan('{"steps": [{"wait": 5}], "notes": [1, 3, "Day 2: the hut is begun", 7, 2.5]}', old);
+    expect(p.notes).toEqual(['the river is north', 'logs by the lean-to', 'Day 2: the hut is begun']);
+    expect(parseActPlan('{"steps": [{"wait": 5}], "notes": [1, "x"]}').notes).toEqual(['x']);   // no old notes: a number keeps nothing
+    expect(actFixed('')).toContain('a number n keeps your note n as it is');
+  });
+  it('"copy log" with the AI on is the log of full AI play: the last request as the model saw it, then the requests (0.37.8 "Firelight")', () => {
+    const e = (n, day, time, extra) => ({ n, day, time, why: 'done', ok: true, say: 'thought ' + n, steps: [{ wait: 5 }], model: 'm1', ms: 1200, messages: [{ role: 'system', content: 'S' }, { role: 'user', content: 'USER TEXT ' + n }], ...extra });
+    const entries = [e(3, 4, 0.5), e(2, 3, 0.4, { rejected: 'you counted 85 minutes, at most 80' }), e(1, 1, 0.3)];   // newest first, as the planner keeps them
+    const t = playLogText({ entries, model: 'm1' });
+    expect(t).toMatch(/AI log \(full AI play\), the last 2 game days/); expect(t).toContain('Model: m1');
+    expect(t).toContain('USER TEXT 3'); expect(t).not.toContain('USER TEXT 2');   // only the last request in full
+    expect(t.indexOf('thought 2')).toBeLessThan(t.indexOf('thought 3')); expect(t).not.toContain('thought 1');   // oldest first, the last 2 days
+    expect(t).toContain('not followed: you counted 85 minutes, at most 80');
+    expect(t).not.toMatch(/by the rules|Camp store|Not now/);
+    expect(playLogText({})).toContain('(none yet)');
   });
   it('reads the first JSON object, also in a code fence, with his thought and notes', () => {
     const p = parseActPlan('Sure!\n```json\n{"say": "Water first.", "steps": [{"go": "water1"}, {"do": "drink"}], "notes": ["river north", 5]}\n```');

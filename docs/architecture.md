@@ -258,6 +258,17 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Firelight (0.37.8)
+
+After the AI test game on 0.37.7 and a Gemini game of the user's. Only full AI play changes.
+- **The dark:** `game/dark` `walkLight` returns `{ ok, reason }` again (no `slow`, no `DARK_PACE`): without light the walk is refused; `game/actor` sets no pace.
+- **The plan limit:** `game/actions` `checkPlan` refuses a plan of several steps only when `claimed` or the game's count is over `PLAN_GRACE` (80); `PLAN_MINUTES` (60) is the size the request asks for.
+- **Notes:** `ai/actPrompt` `parseActPlan(text, old)`: a whole number n in `notes` is note n of `old` (the planner passes its notes).
+- **Copy log:** `render/aiPanel` `playLogText({ entries, model, days })` (pure) when the AI is on with a key and `play` is there; else `logText` as before.
+- **The menu:** `game/actor` `paceNow()` (load by `CARRY_SLOW` / `LOG_WALK`, times `sleep.speed()`, `thirst.speed()`, `hunger.speed()`, as `game/game` update) divides the route's metres; `WALK_SLACK` 1.1; fires and lean-tos without a route get the straight line x `LEG_DETOUR`.
+- **Reasons:** `whyNot('sleep')` (`sleepable`, `canLie` with `SLEEP_AFTER` / `NIGHT_AFTER`), `whyNot('takeAxe' | 'takeSpear')` (`canHold` and the reach).
+- **Tests:** `tests/actor.test.js`, `tests/planner.test.js`.
+
 ### Reasons (0.37.7)
 
 After a five-day AI test game on 0.37.6 (185 requests, 24 of 705 steps failed, the hut refused all game long with no reason). Only full AI play changes.

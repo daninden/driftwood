@@ -10,7 +10,7 @@
  *   RETRY_SECS (2, 5, 10, 30 s of real time); after the last one the planner stops (`failed`) until `retry()` (the "try again" button). Three rejected plans in a row count
  *   as an error too, so a model that cannot write a valid plan does not ask for ever.
  *   With the planner not enabled (the AI off, no key) it answers null: the actor waits, and main does not use the actor then.
- * The plan's `say` travels with it (game/actor keeps it on `actor.plan` and in its 'plan' event; main says it above Dave). `notes`, when the answer has them, are the full new list of his notes.
+ * The plan's `say` travels with it (game/actor keeps it on `actor.plan` and in its 'plan' event; main says it above Dave). `notes`, when the answer has them, are the full new list of his notes (0.37.8: a number n in it keeps his note n, `parseActPlan(text, notes)`).
  * 0.37.4 "Lessons": `tick()` (main calls it every frame) asks ONE extra request a day after sunset (DUSK): the lesson of the day (ai/actPrompt `buildLessonMessages`; the answer is
  * the full new list of his lessons, at most LESSONS_MAX), in place of the journal line of 0.36.7; never while a plan request runs; the day is marked asked before the answer.
  * The plan's `minutes` (the model's own count, when it gives one) travels with it to game/actor `checkPlan`.
@@ -67,7 +67,7 @@ export function createPlanner(o = {}) {
     call = sendNow(messages).then(r => {
       const text = r && typeof r.text === 'string' ? r.text : '';
       lastModel = r && r.model || lastModel;
-      const p = parseActPlan(text), done = { ...entry, model: r && r.model || null, ms: r && Number.isFinite(r.ms) ? r.ms : Math.round((now() - t0) * 1000), raw: text };
+      const p = parseActPlan(text, notes), done = { ...entry, model: r && r.model || null, ms: r && Number.isFinite(r.ms) ? r.ms : Math.round((now() - t0) * 1000), raw: text };
       if (!p.ok) { fail(done, 'the answer could not be used: ' + p.error); return; }
       if (p.notes) { notes = p.notes.slice(); memVer++; }
       errors = 0; lastError = null; retryAt = 0;

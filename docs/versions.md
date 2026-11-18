@@ -2,6 +2,20 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.8 "Firelight" — 2026-11-18
+
+Agreed with the user after a five-day AI test game on 0.37.7 (seed 1337, Claude Haiku models answering, 159 requests: no collapse, thirst and hunger at most 0.57; lean-to complete on day 2, the hut begun on day 2 and finished on day 3, after a trunk and a pile in its way were named and cleared; 3 plans refused, 9 of 638 steps failed; plans a median 29 game minutes) and a Gemini game of the user's (day 1 to day 2 08:51: 73 answers, all usable, but one plan of a walk and an hour of felling refused 16 times in a row). Only full AI play changes.
+
+- **No walk in the dark without light** (back as in 0.37.2): a walk in the dark only with a burning torch in his hand, or between two places both in the light of a burning fire (14 m) or a torch in the ground (9 m). The half pace of 0.37.6 is gone: a walk in the dark without light could not be seen.
+- **The hour is the size of a plan, not its limit:** a plan of several steps is refused only when the model's count or the game's is over 80 minutes (before, the model's own count over 60 was refused, so a walk to a tree and an hour of felling never fitted).
+- **Notes kept by number:** a number n in the new list of notes keeps his note n (a model wrote `[1, 2, ... 9, "new"]` and lost nine notes).
+- **"Copy log" with the AI on** copies the log of full AI play: the last request as the model saw it, then every request of the last two game days with its plan, its thought and what was not followed (before, it copied the old mind's log: "0 by the AI, 0 by the rules", the camp store, a wrong day).
+- **Walk minutes at the pace he has now:** the menu counts his load (each piece 12% slower, a log at 55%) and whether he is tired, thirsty or hungry; the rules say so for a later walk in a plan (walks were 10 to 35% longer than the menu's minutes).
+- **His fires and lean-tos stay on the menu** when no route to them is found (a fire vanished from the menu while it burned): the straight line counts then.
+- **Reasons and rules:** a refused sleep says why (in water or on a climbing route; at night not again within about 3½ hours of waking, now also in the rules; by day not before half a day awake); a refused "take up the axe" (or spear) says why (already in his hand, none lying, a log or stones, the other tool, a torch, too far).
+- **Tests:** `tests/actor.test.js` (the dark rule, the plan limit, the reasons, the fire on the menu, the pace), `tests/planner.test.js` (notes by number, the copy log).
+- **Choices made while building (not discussed with the user):** WALK_SLACK 1.1 (was 1.25, which stood for the load now counted); a fire or lean-to with no route counts the straight line x 1.3.
+
 ## 0.37.7 "Reasons" — 2026-11-18
 
 Agreed with the user after a five-day AI test game on 0.37.6 (seed 1337, Claude Haiku models answering, 185 requests, about 37 a game day against 80 to 115 before: no collapse, thirst at most 0.63, hunger 0.54; lean-to with walls, bed and ring by day 2, the axe on day 3, 12 logs felled and stacked by the lean-to, but the hut was refused all game long with "something stands in its way"; 9 plans refused, 24 of 705 steps failed). Plans ran a median 21 game minutes (only 12 of about 160 reached the hour): no change for that, the rules give no advice. The walk minutes were right (a real walk 0.87 to 0.9 of the menu's). Only full AI play changes; the player and the old mind are untouched.
