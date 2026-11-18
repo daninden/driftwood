@@ -93,6 +93,15 @@ describe('picking berries', () => {
     const h = besideBush({ hunger: { days: 0.1 }, berries: g.berries.state() });
     expect(h.berries.carried.length).toBe(2); expect(kind(h)).not.toBe('berries');   // full hands, not hungry: nothing to pick
   });
+  it('not hungry with full hands eats them anyway (0.37.6 "Free hands": picking is always possible)', () => {
+    const g = besideBush({ hunger: { days: 0.1 }, berries: { carried: [0, 0], picked: [] } });
+    expect(kind(g)).toBe('berries'); expect(g.action().tap.eat).toBe(true); press(g);
+    expect(g.hunger.days).toBeLessThan(0.01); expect(g.berries.carried.length).toBe(2); expect(g.berries.bearing(B0)).toBe(false);
+  });
+  it('eats carried berries with a torch in his hand, or standing in water (0.37.6)', () => {
+    const g = besideBush({ hunger: { days: 0.1 }, berries: { carried: [0], picked: [] }, fire: { fires: [], torch: { left: 0.05 }, torches: [], attempts: 0, nextId: 1 } });
+    expect(g.use('berries', makeInput())).toBe(true); expect(g.berries.carried.length).toBe(0);
+  });
   it('hungry with full hands still eats on the spot', () => {
     const g = besideBush({ hunger: { days: 1 }, berries: { carried: [0, 0], picked: [] } });
     expect(kind(g)).toBe('berries'); press(g);

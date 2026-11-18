@@ -320,12 +320,12 @@ describe('a torch', () => {
     const b = createGame(w, spawn, { fire: burning() }); b.wood.take({ kind: 'log', log: logs[0] }); tapFire(b);
     expect(b.fire.torch).toBeNull(); expect(b.wood.carried.length).toBe(0);
   });
-  it('leaves no hand free for wood', () => {
+  it('leaves the other arm free for wood (0.37.6 "Free hands")', () => {
     const g = createGame(w, spawn, { fire: { ...burning(), torch: { left: TORCH_DAYS } } }), log = logs[0];
     g.player.x = log.x + 1; g.player.z = log.z; g.player.y = w.H(g.player.x, g.player.z);
     const input = makeInput({ target: { x: log.x, z: log.z, tap: true } });
     run(g, input, 2); input.action = 'tap'; run(g, input, 1);
-    expect(g.wood.carried.length).toBe(0);
+    expect(g.wood.carried.length).toBe(1); expect(g.fire.torch).not.toBeNull();
   });
   it('is stuck in the ground with the button, and taken up again with the button beside it', () => {
     const g = createGame(w, spawn, { fire: { torch: { left: TORCH_DAYS } } });

@@ -117,6 +117,13 @@ describe('making the axe', () => {
 });
 
 describe('the hand: one of spear, axe, torch', () => {
+  it('fells with wood under his arm: the wood is laid down first (0.37.6 "Free hands")', () => {
+    const { g } = treeScene('tree');
+    g.wood.take({ kind: 'log', log: aBranch(g) }, g.clock.total); expect(g.wood.carried.length).toBe(1);
+    expect(kinds(g)).toContain('fell');
+    doKind(g, 'fell'); run(g, makeInput(), 2);
+    expect(g.wood.carried.length).toBe(0); expect(g.player.work && g.player.work.kind).toBe('fell');
+  });
   it('lays the axe down at his feet and takes it up again; the spear cannot be taken meanwhile', () => {
     const { g } = treeScene('tree');
     put(g, spawn.x, spawn.z);
@@ -297,7 +304,7 @@ describe('logs', () => {
     const { g, log } = felledScene();
     put(g, log.x, log.z);
     g.axe.hand = true; g.axe.at = null;
-    expect(kinds(g)).not.toContain('pickup');                       // the axe in his hand
+    expect(g.actions().some(a => a.kind === 'pickup' && a.thing.kind === 'log' && a.thing.log === log)).toBe(false);   // the axe in his hand (a branch of the crown he could take)
     g.axe.hand = false; g.axe.at = { x: 0, z: 0 };
     g.wood.carried.push(aBranch(g)); expect(g.wood.take({ kind: 'log', log }, 0)).toBe(0);
     g.wood.carried.length = 0;

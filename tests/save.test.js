@@ -54,7 +54,7 @@ function busyGame() {
   input.hold = true; run(g, input, 16);
   expect(g.fire.fires.length).toBeGreaterThan(0);
   expect(g.fire.takeTorch(g.fire.fires[0])).toBe(true); g.player.torch = true;
-  input.action = 'tap'; run(g, input, 1);
+  g.act({ kind: 'plant' }); run(g, input, 1);   // 0.37.6: the torch stuck in the ground (beside a pile the ring would take wood)
   expect(g.fire.torches.length).toBe(1);
   g.fire.takeTorch(g.fire.fires[0]);
   run(g, input, 3);

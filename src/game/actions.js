@@ -15,7 +15,7 @@
  * when a step starts, not here.
  *
  * Exports:
- *   PLAN_MINUTES (30), PLAN_STEPS (8), NEARBY (15 m), PER_KIND (3), WANDER_MAX (60), WAIT_MAX (60), FISH_MIN (5), FISH_MAX (60), PLAN_GRACE (40)
+ *   PLAN_MINUTES (60, 0.37.6; was 30), PLAN_STEPS (8), NEARBY (15 m), PER_KIND (3), WANDER_MAX (60), WAIT_MAX (60), FISH_MIN (5), FISH_MAX (60), PLAN_GRACE (80, 0.37.6; was 40)
  *   DIRS                         the eight directions of a wander, and of the places' bearings
  *   DO, USE                      kind -> { what, secs }: the plain words of an action and its seconds of real time (null: it lasts until it ends by itself, the sleep)
  *   gameMinutes(secs) -> number  real seconds (a game day is DAY_SECONDS) as game minutes; realSecs(minutes) the other way round
@@ -40,7 +40,7 @@ import { MAKE_TIME as AXE_TIME, FELL_TIME } from './axe.js';
 import { FISH_TIME } from './fish.js';
 import { WALK_SPEED } from './movement.js';
 
-export const PLAN_MINUTES = 30;   // the user (2026-11-17): a plan covers at most half an hour of game time
+export const PLAN_MINUTES = 60;   // the user (2026-11-17): a plan covers at most half an hour of game time; 0.37.6 "Free hands" (the user, 2026-11-18): an hour
 export const PLAN_STEPS = 8;
 export const NEARBY = 15;         // metres: a place this close is `nearby` (no real walk)
 export const PER_KIND = 3;        // the nearest places of each kind on the menu (all the nearby ones too, up to NEARBY_MAX)
@@ -48,7 +48,7 @@ export const NEARBY_MAX = 5;
 export const WANDER_MAX = 60, WAIT_MAX = 60;   // game minutes a wander or a wait may last
 export const FISH_MIN = 5, FISH_MAX = 60;       // game minutes a fishing may last (chosen by the model, 0.37.2)
 export const LEG_DETOUR = 1.3, LEG_SLACK = 1.25;   // 0.37.5 "Ways": a walk from one place of the plan to the next: the straight line made a little longer for the way round, and the slack of the menu's walks
-export const PLAN_GRACE = 40;     // 0.37.4 "Lessons": a plan the chooser counted at PLAN_MINUTES or less is still followed when the game counts up to this (the user, 2026-11-17)
+export const PLAN_GRACE = 80;     // 0.37.4 "Lessons": a plan the chooser counted at PLAN_MINUTES or less is still followed when the game counts up to this (the user, 2026-11-17: 40 for 30; 0.37.6: 80 for 60)
 
 export const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 

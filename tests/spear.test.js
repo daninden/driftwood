@@ -70,12 +70,14 @@ describe('making a spear', () => {
     expect(buttonIcons(a).options.find(o => o.label === 'Make a spear').key).toBe('spear');
     expect(ICONS.spear).toBeTruthy(); expect(LABEL_OF.makeSpear).toBe('Make a spear');
   });
-  it('is not offered without the branch, with other wood too, away from a stone, in the water or when a spear exists', () => {
+  it('is not offered without the branch, away from a stone, in the water or when a spear exists; with other wood too it is (0.37.6), the rest laid down first', () => {
     const none = createGame(w, { x: stone.x + 0.3, z: stone.z, y: w.H(stone.x + 0.3, stone.z) }, { time: 0.3, day: 1 });
     expect(kinds(none)).not.toContain('makeSpear');                                                    // no branch
     const { g } = stoneScene();
     g.wood.carried.push({ id: 800001, x: g.player.x, y: g.player.y, z: g.player.z, len: 1.4, a: 0.3, rad: 0.1 });   // a piece of driftwood too
-    expect(kinds(g)).not.toContain('makeSpear');
+    expect(kinds(g)).toContain('makeSpear');
+    g.act({ kind: 'makeSpear' }); run(g, makeInput(), 0.5);
+    expect(g.player.work && g.player.work.kind).toBe('make'); expect(g.wood.carried.length).toBe(1); expect(g.wood.carried[0].branch).toBe(true);   // the driftwood lies on a pile
     const drift = stoneScene().g; drift.wood.carried.length = 0; drift.wood.carried.push({ id: 800002, x: 0, y: 0, z: 0, len: 1.4, a: 0.3, rad: 0.1 });   // driftwood, not a branch
     expect(kinds(drift)).not.toContain('makeSpear');
     const far = stoneScene().g; put(far, stone.x + 4, stone.z + 1.5);
@@ -113,16 +115,17 @@ describe('making a spear', () => {
 
 describe('the spear in his hand', () => {
   const armed = (extra = {}) => createGame(w, { x: stone.x + 0.3, z: stone.z, y: w.H(stone.x + 0.3, stone.z) }, { time: 0.3, day: 1, sleep: { awake: 0.2 }, spear: { hand: true, at: null }, ...extra });
-  it('fills his hand like a torch: no wood, no frond, no stone picked up, no torch taken', () => {
+  it('fills one hand (0.37.6 "Free hands"): wood under the other arm, no stone, and a torch only with no wood', () => {
     const g = armed();
     g.wood.piles.push({ x: g.player.x + 1.0, z: g.player.z, kind: 'driftwood', logs: [{ id: 820001, x: 0, y: 0, z: 0, len: 1.4, a: 0.3, rad: 0.1 }] });
     expect(g.wood.find(g.player.x, g.player.z, 1.2, 'pile')).toBeTruthy();
-    expect(kinds(g)).not.toContain('pickup');
+    expect(g.actions().filter(a => a.kind === 'pickup').every(a => a.thing.kind === 'pile')).toBe(true);
+    expect(kinds(g)).toContain('pickup');                                              // the pile of driftwood
     expect(g.wood.find(g.player.x, g.player.z, 0.55, 'log')).toBeTruthy();           // the stone is right there, and is not offered
-    const free = armed({ spear: undefined }); expect(kinds(free)).toContain('pickup');   // without the spear it is
-    g.act({ kind: 'pickup' }); run(g, makeInput({ action: 'tap' }), 0.7); expect(g.wood.load()).toBe(0);
+    g.act(g.actions().find(a => a.kind === 'pickup')); run(g, makeInput(), 0.7); expect(g.wood.carried.length).toBe(1); expect(g.wood.stones.length).toBe(0); expect(g.spear.hand).toBe(true);
     const t = createGame(w, { x: spawn.x, z: spawn.z, y: w.H(spawn.x, spawn.z) }, { time: 0.3, day: 1, spear: { hand: true, at: null }, fire: { fires: [fireAt(spawn.x + 0.5, spawn.z)], burnt: [], torch: null, torches: [], attempts: 0, nextId: 3 } });
-    expect(kinds(t)).not.toContain('torch');
+    expect(kinds(t)).toContain('torch');                                               // the other hand is free for a torch
+    t.wood.carried.push({ id: 820002, x: 0, y: 0, z: 0, len: 1.4, a: 0.3, rad: 0.1 }); expect(kinds(t)).not.toContain('torch');   // not with wood under the arm too
   });
   it('can be laid down with the action button, at his feet, and taken up again from within reach', () => {
     const g = armed(), x = g.player.x, z = g.player.z;

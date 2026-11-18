@@ -76,10 +76,10 @@ describe('what a short press does', () => {
     expect(g.action().tap).toMatchObject({ kind: 'pickup', thing: { kind: 'pile' } });
     press(g); expect(g.wood.carried.length).toBe(CARRY_MAX); expect(g.wood.piles[0].logs.length).toBe(2);
   });
-  it('picks nothing up with a torch in his hand, or with his arm full', () => {
+  it('picks wood up with a torch in his hand (0.37.6 "Free hands"), nothing with his arm full', () => {
     const l = logs[0];
     const g = createGame(w, at(l.x + 0.3, l.z), { fire: { torch: { left: TORCH_DAYS } } });
-    expect(g.action().tap.kind).toBe('plant');   // no hand free for wood
+    expect(g.action().tap.kind).toBe('pickup'); expect(g.action().options.map(o => o.kind)).toContain('plant');   // the other arm is free for wood
     const f = createGame(w, at(l.x + 0.3, l.z), { wood: { carried: ids(40, 3), piles: [] } });
     expect(f.action().tap.kind).toBe('lay');
   });
@@ -233,9 +233,9 @@ describe('what the big actions do (light, sleep)', () => {
     expect(g.wood.carried.length).toBe(0);   // lighting does not pick it up
     run(g, makeInput(), DRILL_TIME); expect(g.fibre.carried).toBe(1);
   });
-  it('lights it with a torch in his hand, no fibre needed (a short press sticks the torch in the ground)', () => {
+  it('lights it with a torch in his hand, no fibre needed (0.37.6: the arc sticks the torch in the ground)', () => {
     const g = scene({ pile: FIRE_MIN, torch: true });
-    expect(kinds(g)).toEqual(['plant', 'light']); expect(bigOf(g).torch).toBe(true);
+    expect(kinds(g)).toEqual(['pickup', 'light']); expect(g.action().options.map(o => o.kind).slice(0, 2)).toEqual(['plant', 'light']); expect(bigOf(g).torch).toBe(true);   // 0.37.6: he could take from the pile
     press(g, 'big', 2); expect(g.fire.fires.length).toBe(1); expect(g.fire.torch).toBeNull(); expect(g.wood.piles.length).toBe(0);
   });
   it('is offered only for a pile of at least four, beside him, with something to light it with, on dry ground', () => {
@@ -328,7 +328,7 @@ describe('the options: the arc above the ring (0.27.4 "Choices")', () => {
     expect(g.action().tap).toMatchObject({ kind: 'pickup' });
     expect(g.action().options.map(o => o.kind)).toEqual(['light', 'sleep']); expect(g.action().options.every(o => o.big)).toBe(true);
     const f = scene({ carried: 1, pile: FIRE_MIN, fibre: 1, fire: fireAt(E.x + 0.8, E.z, 2 * BURN), pileAt: [-0.5, 0] });
-    expect(f.action().tap).toMatchObject({ kind: 'feed' }); expect(f.action().options.map(o => o.kind)).toEqual(['light', 'sleep']);
+    expect(f.action().tap).toMatchObject({ kind: 'feed' }); expect(f.action().options.map(o => o.kind)).toEqual(['lay', 'light', 'sleep']);   // 0.37.6: laying down stays in the arc
     for (const g2 of [g, f, scene(), scene({ pile: FIRE_MIN, torch: true }), scene({ carried: 2 })]) expect(g2.action().tap === null || !g2.action().tap.big).toBe(true);
     for (const g2 of [g, f, scene()]) press(g2, 'tap', 2);   // the ring never lights, builds or sleeps
     expect(g.sleep.asleep || f.sleep.asleep).toBe(false); expect(g.fire.attempts + f.fire.attempts).toBe(0);
@@ -601,18 +601,18 @@ describe('the thumb stick stops kneeling work', () => {
 });
 
 // 0.37.3 "Branches": a torch in one hand, branches under the other arm (nothing else goes with a torch)
-describe('branches with a torch (0.37.3)', () => {
+describe('wood with a torch (0.37.3, 0.37.6 "Free hands")', () => {
   const branch = (n, o = {}) => ({ id: 700000 + n, x: E.x, y: 1, z: E.z, len: 1.2, a: 0, rad: 0.05, branch: true, ...o });
   const withBranches = (g, n) => { for (let i = 0; i < n; i++) g.wood.carried.push(branch(i)); };
-  it('takes a torch from a fire with only branches under his arm, not with driftwood', () => {
+  it('takes a torch from a fire with wood under his arm (branches or driftwood), not with stones in his hands; the ring lays the wood down', () => {
     const g = scene({ fire: fireAt(E.x + 0.8, E.z, FUEL_MAX) }); withBranches(g, 2);
-    expect(g.actions().some(a => a.kind === 'torch')).toBe(true);
+    expect(g.actions().some(a => a.kind === 'torch')).toBe(true); expect(g.action().tap.kind).toBe('lay');
     const h = scene({ carried: 1, fire: fireAt(E.x + 0.8, E.z, FUEL_MAX) });
-    expect(h.actions().some(a => a.kind === 'torch')).toBe(false);
-    const m = scene({ carried: 1, fire: fireAt(E.x + 0.8, E.z, FUEL_MAX) }); withBranches(m, 1);   // driftwood and a branch: no hand free
+    expect(h.actions().some(a => a.kind === 'torch')).toBe(true);
+    const m = scene({ fire: fireAt(E.x + 0.8, E.z, FUEL_MAX) }); m.wood.stones.push({ id: 990001, x: E.x, y: 1, z: E.z, len: 0.2, a: 0, rad: 0.1, stone: true });
     expect(m.actions().some(a => a.kind === 'torch')).toBe(false);
   });
-  it('picks up a branch with a torch in his hand, but no driftwood', () => {
+  it('picks up a branch or driftwood with a torch in his hand', () => {
     const g = scene({}); withBranches(g, 2);
     press(g, 'tap', 2);   // laid down: a pile of branches beside him
     expect(g.wood.carried.length).toBe(0); expect(g.wood.piles.some(p => p.kind === 'branch')).toBe(true);
@@ -620,7 +620,7 @@ describe('branches with a torch (0.37.3)', () => {
     expect(g.action().tap.kind).toBe('pickup');
     press(g, 'tap', 2); expect(g.wood.carried.length).toBeGreaterThan(0); expect(g.wood.carried.every(l => l.branch)).toBe(true); expect(g.fire.torch).not.toBeNull();
     const d = createGame(w, at(logs[0].x + 0.3, logs[0].z), { fire: { torch: { left: TORCH_DAYS } } });
-    expect(d.actions().some(a => a.kind === 'pickup')).toBe(false);   // driftwood: no hand free
+    expect(d.actions().some(a => a.kind === 'pickup')).toBe(true);   // driftwood too: the other arm is free
   });
   it('lays branches down and feeds them to a fire with the torch still in his hand', () => {
     const g = scene({ torch: true }); withBranches(g, 2);
@@ -630,5 +630,51 @@ describe('branches with a torch (0.37.3)', () => {
     expect(f.action().tap.kind).toBe('feed');
     const fuel = f.fire.fires[0].fuel; press(f, 'tap', 2);
     expect(f.wood.carried.length).toBe(0); expect(f.fire.fires[0].fuel).toBeGreaterThan(fuel - 0.01); expect(f.fire.torch).not.toBeNull();
+  });
+});
+
+describe('free hands (0.37.6)', () => {
+  const brook = (extra = {}) => createGame(w, at(BANK.x - 0.5, BANK.z), { sleep: { awake: 0.1 }, ...extra });
+  it('drinks at a river whenever he likes, thirsty or not; an empty shell can be filled beside it', () => {
+    const g = brook({ thirst: { days: 0.01 } });
+    expect(g.actions().map(o => o.kind)).toContain('drink');
+    g.act(g.actions().find(o => o.kind === 'drink')); run(g, makeInput(), 0.3);
+    expect(g.player.work && g.player.work.kind).toBe('drink');
+    const s = brook({ thirst: { days: 1 }, shells: { full: [false], nuts: 0 } });
+    expect(s.action().tap.kind).toBe('drink'); expect(s.actions().map(o => o.kind)).toContain('fill');   // thirsty: the ring drinks, the arc fills
+  });
+  it('takes more from a pile with something under his arm, while there is room; the ring still lays down', () => {
+    const g = scene({ carried: 1, pile: 5 });
+    expect(g.action().tap.kind).toBe('lay');
+    const take = g.actions().find(o => o.kind === 'pickup'); expect(take).toBeTruthy();
+    g.act(take); run(g, makeInput(), 1);
+    expect(g.wood.carried.length).toBe(CARRY_MAX); expect(g.wood.piles[0].logs.length).toBe(5 - (CARRY_MAX - 1));
+    expect(g.actions().some(o => o.kind === 'pickup')).toBe(false);   // arms full
+  });
+  it('keeps laying down in the arc, whatever else is near', () => {
+    const g = scene({ carried: 1, fire: fireAt(E.x + 0.8, E.z, 2 * BURN) });
+    expect(g.action().tap.kind).toBe('feed'); expect(g.action().options.map(o => o.kind)).toContain('lay');
+  });
+  it('takes the spear up with wood under his arm, and a torch beside the spear', () => {
+    const g = scene({ carried: 1 }); g.spear.at = { x: E.x + 0.3, z: E.z };
+    expect(g.actions().some(o => o.kind === 'takeSpear')).toBe(true);
+    g.act(g.actions().find(o => o.kind === 'takeSpear')); run(g, makeInput(), 1);
+    expect(g.spear.hand).toBe(true); expect(g.wood.carried.length).toBe(1);
+    const t = scene({ fire: fireAt(E.x + 0.8, E.z, 2 * BURN) }); t.spear.hand = true;
+    expect(t.actions().some(o => o.kind === 'torch')).toBe(true);
+    const a = scene({ fire: fireAt(E.x + 0.8, E.z, 2 * BURN) }); a.axe.hand = true;
+    expect(a.actions().some(o => o.kind === 'torch')).toBe(false);   // not with the axe: felling takes both hands
+    const st = scene(); st.spear.at = { x: E.x + 0.3, z: E.z }; st.wood.stones.push({ id: 990002, x: E.x, y: 1, z: E.z, len: 0.2, a: 0, rad: 0.1, stone: true });
+    expect(st.actions().some(o => o.kind === 'takeSpear')).toBe(false);   // stones take both hands
+  });
+  it('always offers sticking the torch in the ground', () => {
+    const g = scene({ torch: true, pile: 3 });
+    expect(g.action().tap.kind).toBe('pickup'); expect(g.action().options.map(o => o.kind)).toContain('plant');
+  });
+  it('lays the wood down before a drink with a torch and wood: both hands free', () => {
+    const g = brook({ thirst: { days: 1 }, fire: { fires: [], torch: { left: TORCH_DAYS }, torches: [], attempts: 0, nextId: 1 } });
+    g.wood.carried.push({ ...logs[40] });
+    g.act(g.actions().find(o => o.kind === 'drink')); run(g, makeInput(), PICK_TIME + 0.5);
+    expect(g.fire.torch).toBeNull(); expect(g.wood.carried.length).toBe(0); expect(g.player.work && g.player.work.kind).toBe('drink');
   });
 });

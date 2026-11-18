@@ -8,7 +8,7 @@ import { createGame } from '../src/game/game.js';
 import { createActor } from '../src/game/actor.js';
 import { WAIT } from '../src/game/intent.js';
 import { checkPlan, stepMinutes, stepText, gameMinutes, realSecs, dirOf, DIRS, DO, USE, PLAN_MINUTES, PLAN_STEPS, PLAN_GRACE, legMinutes, METRES_PER_MINUTE, NEARBY, FISH_MIN, FISH_MAX } from '../src/game/actions.js';
-import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, FIRE_LIGHT, TORCH_LIGHT } from '../src/game/dark.js';
+import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, FIRE_LIGHT, TORCH_LIGHT, DARK_PACE } from '../src/game/dark.js';
 import { DUSK, DAWN } from '../src/game/sleep.js';
 import { lightText, menuText, buildActMessages, actState } from '../src/ai/actPrompt.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
@@ -20,13 +20,13 @@ import { runActor } from './helpers/actorSim.js';
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
 
-const places = [{ id: 'water1', kind: 'water', what: 'fresh river water', minutes: 12 }, { id: 'drift1', kind: 'driftwood', what: 'a piece of dry driftwood', minutes: 20 }, { id: 'far1', kind: 'water', what: 'fresh river water', minutes: 45 }];
+const places = [{ id: 'water1', kind: 'water', what: 'fresh river water', minutes: 12 }, { id: 'drift1', kind: 'driftwood', what: 'a piece of dry driftwood', minutes: 40 }, { id: 'far1', kind: 'water', what: 'fresh river water', minutes: 90 }];
 
 describe('the steps and the plan check (game/actions)', () => {
   it('game minutes: a game day is DAY_SECONDS of real time', () => {
     expect(gameMinutes(DAY_SECONDS)).toBe(1440);
     expect(realSecs(30)).toBeCloseTo(25, 6);
-    expect(PLAN_MINUTES).toBe(30);
+    expect(PLAN_MINUTES).toBe(60);   // 0.37.6 "Free hands": an hour (was 30)
   });
   it('directions: north is -z, east is +x', () => {
     expect(dirOf(0, -1)).toBe('north'); expect(dirOf(1, 0)).toBe('east'); expect(dirOf(0, 1)).toBe('south'); expect(dirOf(-1, 0)).toBe('west'); expect(dirOf(1, -1)).toBe('north-east');
@@ -38,20 +38,20 @@ describe('the steps and the plan check (game/actions)', () => {
     expect(c.minutes).toBeCloseTo(12 + gameMinutes(DO.drink.secs) + 2 * gameMinutes(DO.fill.secs), 1);
     expect(checkPlan({ steps: [{ use: 'nut' }, { wait: 10 }] }, places).ok).toBe(true);
   });
-  it('more than half an hour is refused, unless it is one step alone', () => {
-    const c = checkPlan([{ go: 'drift1' }, { do: 'pickup' }, { go: 'water1' }], places);
-    expect(c.ok).toBe(false); expect(c.reason).toMatch(/at most 30/);
+  it('more than an hour is refused, unless it is one step alone', () => {
+    const c = checkPlan([{ go: 'drift1' }, { do: 'pickup' }, { go: 'water1' }, { wait: 10 }], places);
+    expect(c.ok).toBe(false); expect(c.reason).toMatch(/at most 60/);
     expect(checkPlan([{ go: 'far1' }], places).ok).toBe(true);
-    expect(checkPlan([{ wander: 'north', minutes: 50 }], places).ok).toBe(true);
-    expect(checkPlan([{ wander: 'north', minutes: 50 }, { do: 'drink' }], places).ok).toBe(false);
+    expect(checkPlan([{ wander: 'north', minutes: 60 }], places).ok).toBe(true);
+    expect(checkPlan([{ wander: 'north', minutes: 60 }, { do: 'drink' }], places).ok).toBe(false);
   });
-  it('the chooser\'s own count (0.37.4): counted 30 or less, the game may count up to 40; counted more, refused', () => {
-    expect(PLAN_GRACE).toBe(40);
-    const steps = [{ wait: 20 }, { wait: 15 }];   // the game counts 35
-    expect(checkPlan(steps, places).ok).toBe(false);   // no count of its own: at most 30
-    const ok = checkPlan({ steps, minutes: 28 }, places); expect(ok.ok).toBe(true); expect(ok.claimed).toBe(28); expect(ok.minutes).toBe(35);
-    const over = checkPlan({ steps: [{ wait: 25 }, { wait: 20 }], minutes: 28 }, places); expect(over.ok).toBe(false); expect(over.reason).toMatch(/game counts about 45 minutes \(you counted 28\)/);
-    const said = checkPlan({ steps, minutes: 35 }, places); expect(said.ok).toBe(false); expect(said.reason).toMatch(/you counted 35 minutes, at most 30/);
+  it('the chooser\'s own count (0.37.4): counted 60 or less, the game may count up to 80 (0.37.6, was 30 and 40); counted more, refused', () => {
+    expect(PLAN_GRACE).toBe(80);
+    const steps = [{ wait: 40 }, { wait: 30 }];   // the game counts 70
+    expect(checkPlan(steps, places).ok).toBe(false);   // no count of its own: at most 60
+    const ok = checkPlan({ steps, minutes: 55 }, places); expect(ok.ok).toBe(true); expect(ok.claimed).toBe(55); expect(ok.minutes).toBe(70);
+    const over = checkPlan({ steps: [{ wait: 50 }, { wait: 40 }], minutes: 55 }, places); expect(over.ok).toBe(false); expect(over.reason).toMatch(/game counts about 90 minutes \(you counted 55\)/);
+    const said = checkPlan({ steps, minutes: 70 }, places); expect(said.ok).toBe(false); expect(said.reason).toMatch(/you counted 70 minutes, at most 60/);
   });
   it('a later walk in a plan counts from the place before (0.37.5)', () => {
     const pl = [{ id: 'a1', kind: 'driftwood', what: 'a', x: 0, z: 0, minutes: 5 }, { id: 'b1', kind: 'driftwood', what: 'b', x: 6, z: 0, minutes: 25 }];
@@ -120,18 +120,18 @@ describe('the dark rule (game/dark)', () => {
     expect(walkLight({ time: night, minutes: 40, torch: true, from: far, to: { x: 200, z: 0 }, lights: {} }).ok).toBe(true);
     expect(walkLight({ time: night, minutes: 40, torch: true, from: far, to: null, lights: {} }).ok).toBe(true);
   });
-  it('(b) in the dark without a torch both ends must be in firelight (14 m) or torchlight (9 m); a wander is never allowed', () => {
-    expect(walkLight({ time: night, minutes: 3, torch: false, from: at, to: near, lights }).ok).toBe(true);
+  it('(b) in the dark without a torch both ends in firelight (14 m) or torchlight (9 m) go at full pace, any other walk at half pace (0.37.6); a wander is never allowed', () => {
+    expect(walkLight({ time: night, minutes: 3, torch: false, from: at, to: near, lights })).toEqual({ ok: true, reason: null, slow: false });
     const out = walkLight({ time: night, minutes: 3, torch: false, from: at, to: { x: 14.5, z: 0 }, lights });
-    expect(out.ok).toBe(false); expect(out.reason).toBe('it is dark and he has no torch, and the place is outside the firelight');
+    expect(out).toEqual({ ok: true, reason: null, slow: true });
     const start = walkLight({ time: night, minutes: 3, torch: false, from: far, to: near, lights });
-    expect(start.ok).toBe(false); expect(start.reason).toMatch(/stands outside the firelight/);
+    expect(start.ok).toBe(true); expect(start.slow).toBe(true); expect(DARK_PACE).toBe(0.5);
     const w = walkLight({ time: night, minutes: 20, torch: false, from: at, to: null, lights });
     expect(w.ok).toBe(false); expect(w.reason).toMatch(/it is dark and he has no torch/);
     const torchOnly = { fires: [], torches: [{ x: 0, z: 0 }] };
     expect(litAt(8.9, 0, torchOnly)).toBe(true); expect(litAt(9.1, 0, torchOnly)).toBe(false); expect(litAt(13.9, 0, lights)).toBe(true); expect(litAt(14.1, 0, lights)).toBe(false);
     expect(walkLight({ time: night, minutes: 3, torch: false, from: at, to: { x: 8, z: 0 }, lights: torchOnly }).ok).toBe(true);
-    expect(walkLight({ time: night, minutes: 3, torch: false, from: at, to: { x: 12, z: 0 }, lights: torchOnly }).ok).toBe(false);
+    expect(walkLight({ time: night, minutes: 3, torch: false, from: at, to: { x: 12, z: 0 }, lights: torchOnly }).slow).toBe(true);
   });
 });
 
@@ -176,10 +176,10 @@ describe('following a plan (game/actor)', () => {
   });
   it('a plan that is too long is not followed: it is remembered as rejected and the chooser is asked again', () => {
     const g = fresh(), asks = [];
-    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return asks.length === 1 ? [{ wait: 25 }, { wait: 25 }] : null; } });
+    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return asks.length === 1 ? [{ wait: 40 }, { wait: 30 }] : null; } });
     run(g, a, 1);
     expect(a.stats.rejected).toBe(1); expect(a.stats.plans).toBe(0);
-    expect(asks[1].why).toBe('rejected'); expect(asks[1].last.reason).toMatch(/at most 30/);
+    expect(asks[1].why).toBe('rejected'); expect(asks[1].last.reason).toMatch(/at most 60/);
   });
   it('reasons belong to their own action (0.37.4): a lack of the fire is not told for a dig; light without a fire fails', () => {
     const g = fresh(), asks = [];
@@ -194,7 +194,7 @@ describe('following a plan (game/actor)', () => {
     g.leantos.list.push({ id: 1, x: g.player.x + 3, z: g.player.z, heading: 0, progress: 4 / 15 }); g.leantos.version++;
     g.fire.fires.push({ id: 7, x: g.player.x - 2, z: g.player.z, fuel: 2 * 2.5 / 24, embers: 0.5, lit: g.clock.total, fed: 2 }); g.fire.version++;
     const m = a.menu(), l = m.places.find(q => q.kind === 'leanto'), f = m.places.find(q => q.kind === 'fire');
-    expect(l.id).toBe('leanto1'); expect(l.what).toMatch(/4 of 15 parts; next it needs a branch/);
+    expect(l.id).toBe('leanto1'); expect(l.what).toMatch(/4 of 15 parts; it still needs 6 branches, then 5 fronds/);   // 0.37.6: all it still needs, counted
     expect(f.id).toBe('fire1'); expect(f.what).toMatch(/2 pieces on it, about 5 hours left/);
   });
   it('the menu\'s walk minutes are close to the real walk (0.37.5: the route\'s length, not its paced cost)', () => {
@@ -259,44 +259,49 @@ describe('the dark rule in the actor (game/actor, 0.37.2)', () => {
     run(g2, b, 3);
     expect(b.stats.failed === 0 || /no ground/.test(outcome(b).reason)).toBe(true);
   });
-  it('in the dark with no torch and no fire a walk fails with the reason, and a new plan is asked because of it', () => {
-    const g = at(NIGHT), asks = [];
-    let n = 0;
-    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return n++ ? null : [{ go: m.places.find(q => q.kind === 'water').id }]; } });
+  it('in the dark with no torch and no fire a walk to a place he knows goes ahead at half pace (0.37.6), and the menu counts it twice as long', () => {
+    const g = at(NIGHT), day = at(0.5);
+    const m = createActor(w, g, {}).menu(), md = createActor(w, day, {}).menu();
+    const wn = m.places.find(q => q.kind === 'water'), wd = md.places.find(q => q.kind === 'water');
+    expect(wn.slow).toBe(true); expect(wd.slow).toBeUndefined(); expect(wn.minutes).toBeGreaterThanOrEqual(2 * wd.minutes - 1);
+    const a = createActor(w, g, { chooser: once(mm => [{ go: mm.places.find(q => q.kind === 'water').id }]) });
     const x0 = g.player.x, z0 = g.player.z;
-    run(g, a, 2);
-    expect(a.stats.failed).toBe(1); expect(outcome(a).reason).toMatch(/it is dark and he has no torch/);
-    expect(asks[1].why).toBe('failed'); expect(asks[1].last.reason).toMatch(/outside the firelight/);
-    expect(Math.hypot(g.player.x - x0, g.player.z - z0)).toBeLessThan(0.5);
+    let paces = [];
+    run(g, a, 3, 0.1, () => paces.push(a.input.pace));
+    expect(a.stats.failed).toBe(0); expect(paces).toContain(0.5);
+    expect(Math.hypot(g.player.x - x0, g.player.z - z0)).toBeGreaterThan(0.5);
   });
   it('a wander in the dark fails without a torch even beside a burning fire', () => {
     const g = at(NIGHT);
     g.fire.fires.push({ id: 90, x: g.player.x + 1, z: g.player.z, fuel: 0.1, embers: 0 });
     const a = createActor(w, g, { chooser: once([{ wander: 'north', minutes: 10 }]) });
     run(g, a, 2);
-    expect(a.stats.failed).toBe(1); expect(outcome(a).reason).toMatch(/a wander needs one/);
+    expect(a.stats.failed).toBe(1); expect(outcome(a).reason).toMatch(/a wander over ground he may not know needs one/);
   });
-  it('(b) a walk inside the light of a burning fire is allowed, with embers only it is not', () => {
+  it('(b) a walk inside the light of a burning fire goes at full pace, with embers only or beyond the light at half pace', () => {
     const g = at(NIGHT), probe = createActor(w, g, {});
     const spot = probe.menu().places.find(q => q.dist >= 4 && q.dist <= 24 && q.kind !== 'fire');
     expect(spot).toBeTruthy();
     const mid = { x: (g.player.x + spot.x) / 2, z: (g.player.z + spot.z) / 2 };   // within 12 m of both ends
     g.fire.fires.push({ id: 91, x: mid.x, z: mid.z, fuel: 0.1, embers: 0 });
     const a = createActor(w, g, { chooser: once(m => [{ go: m.places.find(q => q.x === spot.x && q.z === spot.z).id }]) });
-    run(g, a, 1);
-    expect(a.stats.failed).toBe(0);   // the walk goes on (no step has ended after a second)
+    let full = [];
+    run(g, a, 1, 0.1, () => full.push(a.input.pace));
+    expect(a.stats.failed).toBe(0); expect(full.every(x => x === 1)).toBe(true);   // the walk goes on (no step has ended after a second)
     const g2 = at(NIGHT);
     g2.fire.fires.push({ id: 92, x: mid.x, z: mid.z, fuel: 0, embers: 0.3 });
     const b = createActor(w, g2, { chooser: once(m => [{ go: m.places.find(q => q.x === spot.x && q.z === spot.z).id }]) });
-    run(g2, b, 1);
-    expect(b.stats.failed).toBe(1); expect(outcome(b).reason).toMatch(/outside the firelight/);
+    let half = [];
+    run(g2, b, 1, 0.1, () => half.push(b.input.pace));
+    expect(b.stats.failed).toBe(0); expect(half).toContain(0.5);
     const g3 = at(NIGHT);   // a fire with flames, but the place lies beyond its light
     g3.fire.fires.push({ id: 93, x: g3.player.x - 1, z: g3.player.z, fuel: 0.1, embers: 0 });
     const far = probe.menu().places.find(q => Math.hypot(q.x - g3.player.x, q.z - g3.player.z) > 16 && q.kind !== 'fire');
     expect(far).toBeTruthy();
     const c = createActor(w, g3, { chooser: once(m => [{ go: m.places.find(q => q.x === far.x && q.z === far.z).id }]) });
-    run(g3, c, 1);
-    expect(c.stats.failed).toBe(1); expect(outcome(c).reason).toBe('it is dark and he has no torch, and the place is outside the firelight');
+    let half3 = [];
+    run(g3, c, 1, 0.1, () => half3.push(c.input.pace));
+    expect(c.stats.failed).toBe(0); expect(half3).toContain(0.5);
   });
   it('(c) by day a walk is not stopped, but one that would end after dusk is', () => {
     const g = at(0.4);

@@ -51,14 +51,13 @@ import { createPath } from './path.js';
 import { createRoute } from './route.js';
 import { canStand, terrainAt, WALK_SPEED } from './movement.js';
 import { fishableAt, FISH_DEPTH } from './fish.js';
-import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
+import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, DARK_PACE } from './dark.js';
 import { freshWater } from './water.js';
 import { dryness } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
 import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone } from './leanto.js';
 import { fireOutlook, BURN } from './fire.js';
 import { TIRED_AT } from './sleep.js';
-import { DRINK_AT } from './shells.js';
 import { WAIT } from './intent.js';
 import { PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
 
@@ -118,15 +117,21 @@ export function createActor(world, game, opts = {}) {
     return (burning ? `his fire, burning, about ${Math.max(1, Math.round(o.pieces))} piece${Math.round(o.pieces) === 1 ? '' : 's'} on it, about ${Math.round(o.hoursLeft * 2) / 2} hours left` : f.embers > 0.005 ? 'his fire, embers only' : 'his fire place, cold') + (ring ? ' (in the stone ring)' : '');
   };
   const kindWord = k => (k === 'branch' ? 'a branch' : k === 'frond' ? 'a frond' : k === 'stone' ? 'a stone' : k === 'log' ? 'a log' : 'a piece of driftwood');
-  const leantoWhat = l => {   // 0.37.4: how far it is and what it needs next
+  const kindPlural = (k, n) => (n === 1 ? kindWord(k) : `${n} ${k === 'branch' ? 'branches' : k === 'frond' ? 'fronds' : k === 'stone' ? 'stones' : k === 'log' ? 'logs' : 'pieces of driftwood'}`);
+  const stillNeeds = (l, w) => {   // 0.37.6 "Free hands": what a part still needs, in order, the runs of one kind counted: "3 branches, then 5 fronds"
+    const rest = partsOf(w).slice(built(l, w)), runs = [];
+    for (const k of rest) { const r = runs[runs.length - 1]; if (r && r.k === k) r.n++; else runs.push({ k, n: 1 }); }
+    return runs.map(r => kindPlural(r.k, r.n)).join(', then ');
+  };
+  const leantoWhat = l => {   // 0.37.4: how far it is and what it needs next (0.37.6: all it still needs, counted)
     const next = nextKind(l, 'leanto');
-    if (next) return `his lean-to, begun: ${built(l, 'leanto')} of ${partsOf('leanto').length} parts; next it needs ${kindWord(next)}`;
+    if (next) return `his lean-to, begun: ${built(l, 'leanto')} of ${partsOf('leanto').length} parts; it still needs ${stillNeeds(l, 'leanto')}`;
     const up = UP_ORDER.map(w => [w, nextKind(l, w)]).find(([, k]) => k);
-    if (up) return `his lean-to, finished; next for the ${up[0]}: ${kindWord(up[1])}`;
+    if (up) return `his lean-to, finished; the ${up[0]} still need${up[0] === 'walls' ? '' : 's'} ${stillNeeds(l, up[0])}`;
     if (hutDone(l)) return 'his hut, finished';   // 0.37.5: the hut too
     const hk = hutKind(l);
     if (!hk) return 'his lean-to, finished with walls, bed and ring';
-    return `his lean-to with walls, bed and ring; the hut: ${built(l, 'hut')} of ${partsOf('hut').length} parts, next it needs ${hk === 'log' ? 'a log on his shoulder' : kindWord(hk)}${!hutBegun(l) && !game.hutFits(l) ? ' (but the hut has no room here: something stands in its way)' : ''}`;
+    return `his lean-to with walls, bed and ring; the hut: ${built(l, 'hut')} of ${partsOf('hut').length} parts, it still needs ${stillNeeds(l, 'hut')}${hk === 'log' ? ' (each log carried alone on his shoulder)' : ''}${!hutBegun(l) && !game.hutFits(l) ? ' (but the hut has no room here: something stands in its way)' : ''}`;
   };
   function candidates() {   // every thing he knows within SCAN_R, by kind: [{ kind, ref, x, z, what }]
     const out = [], R = SCAN_R, near = q => Math.hypot(q.x - p.x, q.z - p.z) <= R && known.has(q.x, q.z), anywhere = q => known.has(q.x, q.z);   // water, fires and lean-tos he knows are on the menu however far
@@ -170,8 +175,9 @@ export function createActor(world, game, opts = {}) {
         count[kind] = (count[kind] || 0) + 1;
         const offers = [...new Set(game.offersAt(c.x, c.z).map(o => o.kind))].filter(k => DO[k]);
         const sid = kind === 'fire' ? game.fire.fires.indexOf(c.ref) + 1 : kind === 'leanto' ? game.leantos.list.indexOf(c.ref) + 1 : 0;   // 0.37.4: fires and lean-tos keep their number
+        const mins = walkMinutes(len), slow = c.dist >= 1.5 && walkOk(c, mins).slow;   // 0.37.6: a walk in the dark without light takes twice as long
         places.push({ id: kind + (sid > 0 ? sid : count[kind]), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
-          minutes: walkMinutes(len), nearby: Math.round(c.dist) <= NEARBY, offers });
+          minutes: slow ? Math.ceil(mins / DARK_PACE) : mins, nearby: Math.round(c.dist) <= NEARBY, offers, ...(slow ? { slow: true } : {}) });
       }
     }
     places.sort((a, b) => a.dist - b.dist);
@@ -338,12 +344,13 @@ export function createActor(world, game, opts = {}) {
   function whyNot(kind) {
     const lack = game.lackAt();
     if (lack && ((kind === 'fish' && (lack === 'needSpear' || lack === 'spearAway')) || (kind === 'light' && (lack === 'needFibre' || lack === 'needMoreWood')))) return LACK_TEXT[lack] || lack;
-    if (kind === 'pickup') {
-      if (game.spear.hand || game.axe.hand) return `the ${game.spear.hand ? 'spear' : 'axe'} is in his hand: he picks nothing up`;
-      if (W.log) return 'a log is on his shoulder';
-      const pile = W.findAll(p.x, p.z, 1.6, 'pile')[0];
-      if (game.fire.torch && pile && pile.pile.kind !== 'branch') return 'a torch is in his hand: only branches';
-      if (W.load() > 0 && pile) return 'with something under his arm he lays on a pile, he does not take from it';
+    if (kind === 'pickup') {   // 0.37.6 "Free hands": his two hands
+      if (W.log) return 'a log is on his shoulder: he carries it alone';
+      const tool = game.spear.hand ? 'spear' : game.axe.hand ? 'axe' : null, torch = !!game.fire.torch;
+      if (tool && torch) return `the ${tool} and a torch fill his hands`;
+      const pile = W.findAll(p.x, p.z, 1.6, 'pile')[0], k = pile ? pile.pile.kind : null;
+      if ((tool || torch) && k === 'stone') return `stones take both hands: the ${tool || 'torch'} is in one`;
+      if ((tool || torch || W.load() > 0) && k === 'log') return 'a log is carried alone, with nothing else in his arms or hands';
       if (W.carried.length >= 3) return 'his arms are full';
     }
     if (kind === 'dig') {   // 0.37.5
@@ -351,8 +358,11 @@ export function createActor(world, game, opts = {}) {
       if (game.crabs.full()) return 'he carries as many crabs as he can';
       return 'no crab is hiding in a hole beside him; they hide when he comes near at low water, and the holes may be empty';
     }
-    if (kind === 'lay' && W.load() > 0) return 'other things close by take the button here: lay down a few steps away, on open ground';   // 0.37.5
-    if (kind === 'drink' && game.thirst.days <= DRINK_AT && game.shells.empty()) return 'he is not thirsty: the river offers "fill" for his empty shell';
+    if (kind === 'lay' && W.load() > 0) return 'there is no room to lay it down here (water, or the camp too close): a few steps away, on open ground';   // 0.37.5; 0.37.6: "lay" is always offered on dry ground
+    if (kind === 'fill' && !game.shells.empty()) return 'he has no empty shell';
+    if (kind === 'torch' && game.axe.hand) return 'the axe is in his hand: felling takes both hands, so no torch with it';   // 0.37.6
+    if (kind === 'torch' && game.spear.hand && W.carried.length) return 'the spear and the wood under his arm fill his hands';
+    if ((kind === 'buildIn' || kind === 'upgrade' || kind === 'buildHere' || kind === 'makeSpear' || kind === 'makeAxe') && (game.spear.hand || game.axe.hand || game.fire.torch)) return `that needs both hands: the ${game.spear.hand ? 'spear' : game.axe.hand ? 'axe' : 'torch'} is in one ("${game.spear.hand ? 'laySpear' : game.axe.hand ? 'layAxe' : 'plant'}" first)`;
     if (kind === 'laySpear' || kind === 'layAxe') { if (!(kind === 'laySpear' ? game.spear.hand : game.axe.hand)) return `the ${kind === 'laySpear' ? 'spear' : 'axe'} is not in his hand`; }
     if (kind === 'buildIn' || kind === 'upgrade') {
       const l = game.leantos.list.filter(q => dist(q, p) < 4).sort((a, b) => dist(a, p) - dist(b, p))[0];
@@ -413,7 +423,8 @@ export function createActor(world, game, opts = {}) {
           moves++;
           const ok = walkOk(s, Math.max(1, Math.ceil(gameMinutes(Math.hypot(s.x - p.x, s.z - p.z) / WALK_SPEED * WALK_SLACK))));
           if (!ok.ok) return { ok: false, reason: ok.reason };
-          const w = yield* walk(s.x, s.z, { stop: 0.3, until: () => offersNow().some(isFish), maxSecs: 60 });
+          inp.pace = ok.slow ? DARK_PACE : 1;
+          let w; try { w = yield* walk(s.x, s.z, { stop: 0.3, until: () => offersNow().some(isFish), maxSecs: 60 }); } finally { inp.pace = 1; }
           if (!w.ok) return w;
           continue;
         }
@@ -444,8 +455,11 @@ export function createActor(world, game, opts = {}) {
     const k = stepKind(s);
     if (k === 'go') {
       const pl = places.find(q => q.id === s.go);
-      if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, stepMinutes(s, places)); if (!ok.ok) return { ok: false, reason: ok.reason }; }   // 0.37.2: the dark rule, when the walk starts
-      return yield* goTo(pl);
+      let slow = false;
+      if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, stepMinutes(s, places)); if (!ok.ok) return { ok: false, reason: ok.reason }; slow = ok.slow; }   // 0.37.2: the dark rule, when the walk starts
+      if (!slow) return yield* goTo(pl);
+      inp.pace = DARK_PACE;   // 0.37.6 "Free hands": in the dark without light he feels his way over known ground, at half pace
+      try { return yield* goTo(pl); } finally { inp.pace = 1; }
     }
     if (k === 'wander') { const ok = walkOk(null, s.minutes); if (!ok.ok) return { ok: false, reason: ok.reason }; return yield* wander(s.wander, s.minutes); }
     if (k === 'do') return s.do === 'fish' ? yield* fishFor(s.minutes) : yield* doAction(s.do);

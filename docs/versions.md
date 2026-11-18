@@ -2,6 +2,21 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.6 "Free hands" — 2026-11-18
+
+Agreed with the user: as few rules as possible, only what the real world would not allow. For the player and for Dave alike.
+
+- **Two hands:** one hand holds the spear or the axe, one a torch, and under the other arm he carries wood (driftwood, branches, fronds). So the spear or the axe with wood; a torch with wood (any wood now, not only branches) or with the spear, never with both, never with the axe; stones take both hands; a log takes everything. He takes from a pile with something under his arm while there is room. He takes up the spear or the axe with one free hand.
+- **Laid down first:** felling with wood under his arm lays the wood down first; making the spear or the axe lays down everything but one branch; drinking with a torch and wood plants the torch and lays the wood.
+- **Always offered:** drinking at a river, thirsty or not (an empty shell can be filled beside it); picking berries and bananas (with no room he eats them); laying down wood and sticking the torch in the ground (kept in the arc, as the spear and the axe). Beside a pile, a fire or a torch the ring still lays wood down. Berries and a banana can be eaten with a torch in his hand or standing in water.
+- **The dark (with the AI on):** without light a walk to a place he knows goes at half pace instead of failing; the menu counts it twice as long. A wander in the dark still needs a torch.
+- **Plans of up to an hour** (60 game minutes; a plan the model counted at 60 or less is followed up to 80; were 30 and 40).
+- **Building facts in the request:** one "buildIn" or "upgrade" builds in one piece and the rest stays under his arm; the menu tells everything a lean-to, its upgrades and the hut still need, counted ("6 branches, then 5 fronds"). No advice.
+- **Kept, by the user's choice:** one spear and one axe; no fire within 8 m of a finished stone ring but in the ring; no wet wood and no logs on a fire.
+- **Tests:** `tests/action.test.js` (*free hands*), `tests/forage.test.js`, `tests/spear.test.js`, `tests/axe.test.js`, `tests/fire.test.js`, `tests/save.test.js`, `tests/actor.test.js`.
+- **One red test, pushed with the user's consent (2026-11-18):** `tests/mindLife7.fresh.test.js`, stream 0: the old rules mind (Dave with the AI off) clips the edge of a climbing route for 3 ticks on an exploring walk on day 4 ("daily exploring ticks on climbing routes" 3, must be 0). No new rule causes it: his life runs a little differently and meets an old weakness of the exploring finder (the straight walk between two allowed cells can cross a route's edge). Two fixes (a clearance of 1 m or 0.5 m round the finder's cells) made it green but cost the journeys on seed 1337 fresh, so they were not kept. The old mind goes in 0.37.7 "Only him", and this test with it.
+- **Choices made while building (not discussed with the user):** the ring still lays wood down beside a pile, a fire or a torch, so a press does what it did (taking more, or the torch, is in the arc); thirsty at the river the ring drinks and the arc fills, hardly thirsty with an empty shell the other way round, as before; building in, making a tool and sitting still need the tool and the torch out of his hands; the walk into the shallows to fish also goes at half pace in the dark.
+
 ## 0.37.5 "Ways" — 2026-11-18
 
 Agreed with the user after a three-day AI test game on 0.37.4 (seed 1337, a Claude model answering, 234 requests: no collapse, thirst at most 0.54, hunger 0.63, lean-to with walls and bed, spear and axe made; 7 plans refused, 20 of 532 steps failed). With the AI off only the arc changes (point 3).

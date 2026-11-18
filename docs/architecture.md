@@ -258,6 +258,17 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Free hands (0.37.6)
+
+As few rules as possible, only what the real world would not allow (agreed with the user 2026-11-18). For the player and for Dave alike: everything is in `game/game` `actionsAt`, so `game/stand`, `game/actor` and the arc follow by themselves.
+- **The hands:** `canHold(kind)` ('torch' | 'spear' | 'axe') and the `room(piece)` test of `actionsAt` hold the rule: one hand the spear or the axe, one a torch, wood under the other arm (at most `CARRY_MAX`), stones both hands (`STONE_MAX`), a log everything. A torch with wood or with the spear, never with both, never with the axe; no stones with a tool or a torch. A pile is taken from whenever it has a kind he has room for (`pileSample`). Building in (`handsFree`), making a tool, and sitting are unchanged: tool and torch out of his hands.
+- **Laid down first:** `fell` with wood under his arm lays it down and queues the felling (`queued = 'fell'`, as a drink); drinking with a torch and wood plants the torch and lays the wood; `makeSpear` / `makeAxe` need a branch under his arm and `layBut()` lays down everything else.
+- **The ring and the arc:** with wood under his arm beside a pile, or where a torch could be taken, the ring lays down (`layFirst`); `lay` and `plant` are always offered on dry ground and kept in the arc like `laySpear` / `layAxe` (`actionAt` `keeps`). Drink is always offered at river water and `fill` beside it with an empty shell (not thirsty with an empty shell the ring fills, as before). Berries and bananas are always picked: eaten when hungry or with no room. `use` eats berries and a banana with a torch in hand or in water.
+- **The dark:** `game/dark` `walkLight` returns `slow` (and `DARK_PACE` 0.5): without light a `go` is allowed at half pace, a wander still needs a torch. `game/actor` sets `input.pace` to `DARK_PACE` for the walk (and the fishing's step into the shallows) and the menu's place minutes double (`slow: true`, "in the dark, half pace" in the request).
+- **Plans:** `PLAN_MINUTES` 60 and `PLAN_GRACE` 80 (were 30 and 40).
+- **Building facts:** the menu's lean-to text says all it still needs, counted (`stillNeeds`: "6 branches, then 5 fronds"); the fixed part says one `buildIn` / `upgrade` builds in one piece and the rest stays under his arm. `whyNot` gives the new reasons (the hands, no empty shell, the torch with the axe, both hands for building and making).
+- **Tests:** `tests/action.test.js` (*free hands*), `tests/forage.test.js`, `tests/spear.test.js`, `tests/axe.test.js`, `tests/fire.test.js`, `tests/actor.test.js` (the dark at half pace, plans of an hour).
+
 ### Ways (0.37.5)
 
 After a three-day AI test game on 0.37.4 (234 requests, 7 plans refused, 20 of 532 steps failed, no collapse): 45 single walks took a third of their menu minutes (median), measured again headless: the real walk is the straight distance at WALK_SPEED.

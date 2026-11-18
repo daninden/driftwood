@@ -353,8 +353,18 @@ export function createGame(world, spawn, opts = {}) {
   // 0.32 "Piece by piece": a site is built piece by piece with what he carries (game/leanto). The kinds he has: driftwood, branches and fronds under his arm, stones in his hands.
   let viewYaw = YAW;   // the camera's yaw at the last update (input.yaw): the way the open side of a new lean-to faces; the mind may write it before it presses
   const piecesHeld = () => { const ks = new Set(wood.carried.map(kindOf)); if (wood.stones.length) ks.add('stone'); if (wood.log) ks.add('log'); return ks; };
-  const branchesOnly = () => !wood.log && !wood.stones.length && wood.carried.length > 0 && wood.carried.every(l => l.branch);   // 0.37.3 "Branches": only branches under his arm (a torch may go with them)
-  const handsFree = () => !fire.torch && !spear.hand && !axe.hand;   // (0.33: a log on his shoulder is no hindrance: it is a piece of the hut, and no other piece is carried with it)
+  const handsFree = () => !fire.torch && !spear.hand && !axe.hand;
+  /** 0.37.6 "Free hands": his two hands. One hand holds the spear or the axe (the right), one a torch; under the other arm he carries wood (driftwood, branches, fronds); stones take both hands,
+   *  a log takes everything. So: a torch with the spear or with wood under his arm, not with the axe (felling takes both hands) and not with both; the spear or the axe with wood under his arm or with
+   *  the spear, a torch; nothing with stones in his hands or a log on his shoulder. canHold(kind): could he take up `kind` ('torch' | 'spear' | 'axe') with what he holds now? */
+  function canHold(kind) {
+    if (wood.log || wood.stones.length) return false;
+    const bundle = wood.carried.length > 0;
+    if (kind === 'torch') return !fire.torch && !axe.hand && !(spear.hand && bundle);
+    if (spear.hand || axe.hand) return false;   // one tool at a time
+    return !fire.torch || (kind === 'spear' && !bundle);
+  }
+  const pileSample = p => ({ timber: p.kind === 'log', stone: p.kind === 'stone', branch: p.kind === 'branch', frond: p.kind === 'frond' });   // a piece of a pile's kind, for `room`   // (0.33: a log on his shoulder is no hindrance: it is a piece of the hut, and no other piece is carried with it)
   const naturalNear = (x, z) => {   // the trunks, boulders and crags within 4.5 m of a point (each once)
     const seen = new Set();
     for (let dx = -3; dx <= 3; dx += 3) for (let dz = -3; dz <= 3; dz += 3) for (const o of obstaclesNear(world, x + dx, z + dz)) if (Math.hypot(o.x - x, o.z - z) < 4.5 + o.r) seen.add(o);
@@ -434,12 +444,23 @@ export function createGame(world, spawn, opts = {}) {
   const sleepable = (px = player.x, pz = player.z) => { const t = hereAt(px, pz); return !wet(t) && t.climb <= 0.25; };
   const sitOk = () => { const t = here(); return !wet(t) && t.depth <= 0.05 && t.climb <= 0.25 && t.s < SIT_SLOPE; };   // 0.29.2: level dry ground, no climbing route
 
-  // 0.30.17 "Spear": he can make the spear when no spear exists, one branch is under his arm and nothing else is carried, and a stone (loose, or a pile of stones) lies beside him, on dry ground
+  // 0.30.17 "Spear": he can make the spear when no spear exists, a branch is under his arm, and a stone (loose, or a pile of stones) lies beside him, on dry ground (0.37.6 "Free hands": what else he
+  // carries is laid down first, `layBut`; the spear or axe in his hand, a torch or a log still stand in the way: the work takes both hands)
   const stoneBeside = (px, pz) => wood.findAll(px, pz, REACH, 'log').some(c => c.log.stone) || wood.findAll(px, pz, BESIDE, 'pile').some(c => c.pile.kind === 'stone');
-  const makeable = (px, pz) => !spear.has() && !axe.hand && !fire.torch && wood.load() === 1 && wood.carried.length === 1 && !!wood.carried[0].branch && !wet(hereAt(px, pz)) && stoneBeside(px, pz);
-  // 0.31 "Axe": the axe is made like the spear and uses up a stone and a tuft of fibre as well as the branch: no axe exists, nothing in his hands, exactly one branch under his arm and nothing else carried, a loose stone within REACH or a pile of stones
+  const oneBranch = () => !wood.log && wood.carried.some(l => !!l.branch);
+  const makeable = (px, pz) => !spear.has() && !spear.hand && !axe.hand && !fire.torch && oneBranch() && !wet(hereAt(px, pz)) && stoneBeside(px, pz);
+  // 0.31 "Axe": the axe is made like the spear and uses up a stone and a tuft of fibre as well as the branch: no axe exists, nothing in his hands, a branch under his arm (0.37.6: the rest is laid down first), a loose stone within REACH or a pile of stones
   // within BESIDE, a tuft of fibre, on dry ground
-  const makeableAxe = (px, pz) => !axe.has() && !spear.hand && !fire.torch && fibre.carried > 0 && wood.load() === 1 && wood.carried.length === 1 && !!wood.carried[0].branch && !wet(hereAt(px, pz)) && stoneBeside(px, pz);
+  const makeableAxe = (px, pz) => !axe.has() && !spear.hand && !axe.hand && !fire.torch && fibre.carried > 0 && oneBranch() && !wet(hereAt(px, pz)) && stoneBeside(px, pz);
+  /** 0.37.6: lay down everything he carries but one branch (for the spear or the axe). Returns true when only that branch is left (or nothing else was carried). */
+  function layBut() {
+    if (wood.load() === 1) return true;
+    const i = wood.carried.findIndex(l => !!l.branch); if (i < 0) return false;
+    const [b] = wood.carried.splice(i, 1);
+    const ok = wood.load() === 0 || lay(player.heading + Math.PI);
+    wood.carried.push(b); wood.version++;
+    return ok && wood.load() === 1;
+  }
   const useStone = () => {   // the stone of the axe is used up: the nearest loose one, else one off a pile of stones
     const loose = wood.findAll(player.x, player.z, REACH, 'log').find(c => c.log.stone);
     if (loose) { if (!stones.take(loose.log)) return false; wood.version++; return true; }
@@ -455,23 +476,23 @@ export function createGame(world, spawn, opts = {}) {
    *  `actions()` is `actionsAt` at his feet, and game/stand asks it at the spots it considers, so the standing points never disagree with the game. */
   function actionsAt(px, pz) {
     if (sleep.asleep || sleep.lie > 0 || work) return [];
-    const load = wood.load(), torch = !!fire.torch, swim = wet(hereAt(px, pz)), hand = spear.hand || axe.hand;   // 0.30.17: a spear in his hand fills it like a torch (no wood, no stone, no torch); 0.31: an axe too (only one of spear, axe and torch)
+    const load = wood.load(), torch = !!fire.torch, swim = wet(hereAt(px, pz)), tool = spear.hand || axe.hand;   // 0.37.6 "Free hands": see `canHold`
     const small = [];
     const blaze = load ? fire.find(px, pz, BESIDE, 'fire') : null;
     if (blaze && dryPiece() && !full(blaze.fire) && !leantos.noFire(blaze.fire.x, blaze.fire.z)) small.push({ kind: 'feed', fire: blaze.fire, thing: blaze });   // dry wood beside a fire feeds it, whatever else is near
     const cands = [];   // what else he could do; the nearest first
-    if (!hand) {   // stones go in his hands (at most STONE_MAX), everything else under his arm (at most CARRY_MAX); 0.37.3 "Branches": with a torch in his hand only branches
-      const room = l => torch && !l.branch ? false : wood.log ? false : l.timber ? load === 0 : l.stone ? wood.stones.length < STONE_MAX : wood.carried.length < CARRY_MAX;   // 0.31: a log is carried alone
+    {   // 0.37.6 "Free hands": what he can take up follows from his two hands (`room`): wood under the arm beside a tool or a torch, stones only with no tool and no torch, a log only with nothing else
+      const room = l => wood.log ? false : l.timber ? load === 0 && !torch && !tool : l.stone ? !torch && !tool && wood.stones.length < STONE_MAX : !(torch && tool) && wood.carried.length < CARRY_MAX;
       const log = wood.find(px, pz, REACH, 'log', room);
-      const pile = load ? null : torch ? (wood.findAll(px, pz, BESIDE, 'pile').find(q => q.pile.kind === 'branch') || null) : wood.find(px, pz, BESIDE, 'pile');   // with wood in his arm a pile is laid on, not taken from
+      const pile = wood.findAll(px, pz, BESIDE, 'pile').find(q => room(pileSample(q.pile))) || null;   // 0.37.6: with something under his arm he can still take from a pile, as long as there is room
       if (log) cands.push({ d: log.d, a: { kind: 'pickup', thing: log } });
       if (pile) cands.push({ d: pile.d, a: { kind: 'pickup', thing: pile } });
     }
     const coco = fibre.find(px, pz, REACH);   // 0.27.1: always husked (a tuft when there is room); at the end he eats it when hungry (or with two carried already), else carries it
     if (coco) cands.push({ d: coco.d, a: { kind: 'husk', thing: coco } });
-    for (const [f, kind] of [[berries, 'berries'], [bananas, 'bananas']]) {   // 0.26: berry bushes and banana plants; hungry he eats on the spot, else the pick is carried (if there is room)
-      const p = f.find(px, pz, REACH), eat = hunger.days > EAT_AT;
-      if (p && (eat || !f.full())) cands.push({ d: p.d, a: { kind, eat, thing: p } });
+    for (const [f, kind] of [[berries, 'berries'], [bananas, 'bananas']]) {   // 0.26: berry bushes and banana plants; hungry he eats on the spot, else the pick is carried (0.37.6 "Free hands": with no room he eats it anyway)
+      const p = f.find(px, pz, REACH), eat = hunger.days > EAT_AT || f.full();
+      if (p) cands.push({ d: p.d, a: { kind, eat, thing: p } });
     }
     if (!torch && !swim) {   // 0.22: crabs; the roast comes before the torch at the same fire (equal distances keep their order)
       const f = crabs.carried.length || fish.carried.length ? fire.find(px, pz, BESIDE, 'fire') : null;
@@ -479,29 +500,36 @@ export function createGame(world, spawn, opts = {}) {
       const h = crabs.full() ? null : wildlife.hiding(px, pz, DIG_REACH);
       if (h) cands.push({ d: h.d, a: { kind: 'dig', thing: h } });
     }
-    if (!load && !torch && !hand && spear.at) {   // 0.30.17: the spear lying within reach is taken up (empty arms and hands)
+    if (canHold('spear') && spear.at) {   // 0.30.17: the spear lying within reach is taken up (0.37.6: one free hand is enough)
       const d = Math.hypot(spear.at.x - px, spear.at.z - pz);
       if (d <= REACH) cands.push({ d, a: { kind: 'takeSpear', thing: { kind: 'spear', x: spear.at.x, z: spear.at.z } } });
     }
-    if (!load && !torch && !hand && axe.at) {   // 0.31: the axe lying within reach is taken up like the spear
+    if (canHold('axe') && axe.at) {   // 0.31: the axe lying within reach is taken up like the spear
       const d = Math.hypot(axe.at.x - px, axe.at.z - pz);
       if (d <= REACH) cands.push({ d, a: { kind: 'takeAxe', thing: { kind: 'axe', x: axe.at.x, z: axe.at.z } } });
     }
-    if (axe.hand && !swim) { const tr = felled.nearest(px, pz, FELL_REACH); if (tr) cands.push({ d: tr.d, a: { kind: 'fell', tree: tr } }); }   // 0.31: the axe in his hand, a trunk beside him, dry ground: chop it down
+    if (axe.hand && !swim) { const tr = felled.nearest(px, pz, FELL_REACH); if (tr) cands.push({ d: tr.d, a: { kind: 'fell', tree: tr } }); }   // 0.31: the axe in his hand, a trunk beside him, dry ground: chop it down (0.37.6: what is under his arm is laid down first)
     if (spear.hand && fishableAt(hereAt(px, pz)) && !fish.full()) cands.push({ d: 0, a: { kind: 'fish' } });   // 0.30.17: shallow sea water, the spear in his hand
-    if ((!load || branchesOnly()) && !torch && !hand) {   // 0.37.3 "Branches": with only branches under his arm a hand is still free for a torch
+    if (canHold('torch')) {   // 0.37.3 "Branches", 0.37.6 "Free hands": a hand is free for a torch beside wood under his arm or the spear in his hand
       const f = fire.find(px, pz, BESIDE, 'fire'), t = fire.find(px, pz, REACH, 'torch');
       if (f && f.fire.fuel > TORCH_COST) cands.push({ d: f.d, a: { kind: 'torch', fire: f.fire, thing: f } });   // flames, not embers
       if (t) cands.push({ d: t.d, a: { kind: 'torch', torch: t.torch, thing: t } });
     }
     const wp = findWater(world, px, pz, DRINK_REACH, game.sea);
-    if (wp && (load ? !swim : torch ? !!plantBesideSpot(px, pz) : true)) cands.push({ d: Math.hypot(wp.x - px, wp.z - pz), a: { kind: thirst.days <= DRINK_AT && shells.empty() ? 'fill' : 'drink', thing: wp } });   // wood is laid down and a torch stuck in the ground first
+    if (wp && (load ? !swim : true) && (torch ? !!plantBesideSpot(px, pz) : true)) {   // wood is laid down and a torch stuck in the ground first
+      const d = Math.hypot(wp.x - px, wp.z - pz), fillFirst = thirst.days <= DRINK_AT && shells.empty();   // not thirsty with an empty shell: the ring fills it (as before), the drink is in the arc
+      cands.push({ d: d + (fillFirst ? 1e-6 : 0), a: { kind: 'drink', thing: wp } });   // 0.37.6 "Free hands": he can always drink, thirsty or not
+      if (shells.empty()) cands.push({ d: d + (fillFirst ? 0 : 1e-6), a: { kind: 'fill', thing: wp } });   // and fill an empty shell
+    }
+    // 0.37.6: with something under his arm beside a pile, a fire or a torch, the ring lays it down (taking more, or a torch, is in the arc), as before these could be taken with a load
+    const layFirst = load > 0 && !swim && (wood.findAll(px, pz, BESIDE, 'pile').length > 0 || cands.some(c => c.a.kind === 'torch'));
+    if (layFirst) small.push({ kind: 'lay' });
     cands.sort((p, q) => p.d - q.d);
     for (const c of cands) if (!small.some(x => x.kind === c.a.kind)) small.push(c.a);   // one of each kind (the nearest): two icons alike would say nothing
-    if (!small.length) {   // nothing near to do: what is in his hands, then a carried bite
-      if (torch) { if (load && !swim) small.push({ kind: 'lay' }); if (plantSpot(px, pz)) small.push({ kind: 'plant' }); }   // 0.37.3: branches carried with the torch are laid down first
-      else if (hand) { /* the spear is laid down below */ }
-      else if (load) { if (!swim) small.push({ kind: 'lay' }); }
+    if (load && !swim && !layFirst) small.push({ kind: 'lay' });   // 0.37.6 "Free hands": laying down what he carries is always offered (after the nearer things; with nothing near it is the ring's action)
+    if (torch && plantSpot(px, pz)) small.push({ kind: 'plant' });   // 0.37.6: sticking the torch in the ground is always offered (after the nearer things and the wood, which is laid down first)
+    if (!small.length) {   // nothing near to do: a carried bite
+      if (torch || tool) { /* the spear or axe is laid down below */ }
       else if (!swim) {   // empty hands: a full shell when thirsty, else something carried when hungry
         if (shells.full() && thirst.days > SIP_AT) small.push({ kind: 'sip' });
         else if (hunger.days > EAT_AT && berries.carried.length) small.push({ kind: 'eatBerries' });   // 0.26: what spoils first is eaten first
@@ -525,8 +553,8 @@ export function createGame(world, spawn, opts = {}) {
   function actionAt(px, pz) {
     const list = actionsAt(px, pz), tap = list.length && !list[0].big ? list[0] : null, rest = tap ? list.slice(1) : list;
     const bigs = rest.filter(o => o.big), smalls = rest.filter(o => !o.big);
-    const keep = smalls.find(o => o.kind === 'laySpear' || o.kind === 'layAxe');   // 0.37.5 "Ways": laying the spear or the axe down always keeps its place in the arc (as designed; three nearer things pushed it out)
-    const room = Math.max(0, OPTIONS - bigs.length), first = keep ? smalls.filter(o => o !== keep).slice(0, Math.max(0, room - 1)).concat(room > 0 ? [keep] : []) : smalls.slice(0, room);
+    const keeps = smalls.filter(o => o.kind === 'laySpear' || o.kind === 'layAxe' || o.kind === 'lay' || o.kind === 'plant');   // 0.37.5 "Ways": laying the spear or the axe down always keeps its place in the arc (as designed; three nearer things pushed it out); 0.37.6: laying down wood and planting the torch too
+    const room = Math.max(0, OPTIONS - bigs.length), kept = keeps.slice(0, room), first = smalls.filter(o => !kept.includes(o)).slice(0, Math.max(0, room - kept.length)).concat(kept);
     return { tap, options: [...first, ...bigs].slice(0, OPTIONS) };
   }
   /** Everything the action button, its arc and the keys would offer at (px, pz): the ring's action and the arc's options, in one list (pure). */
@@ -552,10 +580,12 @@ export function createGame(world, spawn, opts = {}) {
 
   /** 0.27.2 'Row': use a drawing of the inventory row at once. kind: 'nut' | 'water' | 'berries' | 'banana' | 'crab'. Returns true when it was started
    *  (a nut, water and a crab kneel; berries and a banana are eaten at once), false when nothing happened. Hunger and thirst never go below 0,
-   *  and it works when not hungry or thirsty (the player chooses). Refused asleep or lying down, kneeling already, stooping, with a torch in hand and in water.
+   *  and it works when not hungry or thirsty (the player chooses). Refused asleep or lying down, kneeling already, stooping; what he kneels for (a nut, water, a roast) also with a torch in hand and in water
+   *  (0.37.6 "Free hands": berries and a banana he eats with a torch in his hand or standing in water).
    *  Wood under his arm stays there (eating needs no free hands). A crab needs a fire with flames beside him (BESIDE). */
   function use(kind, input) {
-    if (sleep.asleep || sleep.lie > 0 || work || queued || player.stoop > 0 || fire.torch || wet(here())) return false;
+    if (sleep.asleep || sleep.lie > 0 || work || queued || player.stoop > 0) return false;
+    if ((fire.torch || wet(here())) && kind !== 'berries' && kind !== 'banana') return false;
     if (kind === 'nut') { if (!shells.nuts) return false; work = { kind: 'husk', t: 0, dur: EAT_TIME, thing: null }; }
     else if (kind === 'water') { if (!shells.full()) return false; work = { kind: 'sip', t: 0, dur: SIP_TIME, thing: null }; }
     else if (kind === 'berries' || kind === 'banana') {
@@ -577,20 +607,22 @@ export function createGame(world, spawn, opts = {}) {
     else if (a.kind === 'husk') { work = { kind: 'husk', t: 0, dur: a.thing ? HUSK_TIME : EAT_TIME, thing: a.thing ? a.thing.coco : null }; notifyAction(a.thing ? 'husk' : 'eatNut'); }   // no thing: a carried nut (already husked: EAT_TIME)
     else if (a.kind === 'berries' || a.kind === 'bananas') {
       const f = a.kind === 'berries' ? berries : bananas;
-      if ((a.eat || !f.full()) && f.pick(a.thing.plant, clock.total)) { if (a.eat) hunger.eat(a.kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); else f.stow(clock.total); stoop(PICK_TIME); notifyAction(a.kind); }
+      const eat = a.eat || f.full();
+      if (f.pick(a.thing.plant, clock.total)) { if (eat) hunger.eat(a.kind === 'berries' ? BERRY_FOOD : BANANA_FOOD); else f.stow(clock.total); stoop(PICK_TIME); notifyAction(a.kind); }
     } else if (a.kind === 'eatBerries' || a.kind === 'eatBanana') {
       if ((a.kind === 'eatBerries' ? berries : bananas).eat()) { hunger.eat(a.kind === 'eatBerries' ? BERRY_FOOD : BANANA_FOOD); stoop(PICK_TIME); notifyAction(a.kind); }
     }
     else if (a.kind === 'sip') { work = { kind: 'sip', t: 0, dur: SIP_TIME, thing: null }; notifyAction('sip'); }
     else if (a.kind === 'dig') { work = { kind: 'dig', t: 0, dur: DIG_TIME, thing: a.thing.id }; notifyAction('dig'); }
     else if (a.kind === 'roast') { work = { kind: 'roast', t: 0, dur: ROAST_TIME, thing: a.fire, food: a.food || 'crab' }; notifyAction('roast'); }
-    else if (a.kind === 'makeSpear') { if (makeable(player.x, player.z)) { work = { kind: 'make', t: 0, dur: MAKE_TIME, thing: null }; notifyAction('makeSpear'); } }
-    else if (a.kind === 'makeAxe') { if (makeableAxe(player.x, player.z)) { work = { kind: 'makeAxe', t: 0, dur: AXE_MAKE_TIME, thing: null }; notifyAction('makeAxe'); } }
+    else if (a.kind === 'makeSpear') { if (makeable(player.x, player.z) && layBut()) { work = { kind: 'make', t: 0, dur: MAKE_TIME, thing: null }; notifyAction('makeSpear'); } }   // 0.37.6: the rest laid down first
+    else if (a.kind === 'makeAxe') { if (makeableAxe(player.x, player.z) && layBut()) { work = { kind: 'makeAxe', t: 0, dur: AXE_MAKE_TIME, thing: null }; notifyAction('makeAxe'); } }
     else if (a.kind === 'takeAxe') { if (axe.take()) { stoop(); notifyAction('takeAxe'); } }
     else if (a.kind === 'layAxe') { if (!wet(here()) && axe.lay(player.x, player.z)) { stoop(); notifyAction('layAxe'); } }
     else if (a.kind === 'fell') {   // 0.31: he chops standing (no kneeling); the progress of an interrupted felling is kept in game/felled
       const tr = felled.nearest(player.x, player.z, FELL_REACH);
-      if (axe.hand && tr && !wet(here())) { const p0 = felled.chopped(tr.id); work = { kind: 'fell', t: 0, dur: Math.max(0.01, FELL_TIME * (1 - p0)), thing: tr.id, p0 }; face(tr); notifyAction('fell'); }
+      if (axe.hand && tr && !wet(here()) && wood.load()) { if (lay(player.heading + Math.PI)) { stoop(PICK_TIME); queued = 'fell'; } }   // 0.37.6: what is under his arm is laid down first (felling takes both hands)
+      else if (axe.hand && tr && !wet(here())) { const p0 = felled.chopped(tr.id); work = { kind: 'fell', t: 0, dur: Math.max(0.01, FELL_TIME * (1 - p0)), thing: tr.id, p0 }; face(tr); notifyAction('fell'); }
     }
     else if (a.kind === 'fish') { work = { kind: 'fish', t: 0, dur: FISH_TIME, thing: null }; notifyAction('fish'); }
     else if (a.kind === 'takeSpear') { if (spear.take()) { stoop(); notifyAction('takeSpear'); } }
@@ -600,7 +632,7 @@ export function createGame(world, spawn, opts = {}) {
       if (l) { fire.feed(a.fire, dryness(l, clock.total), l.branch ? BRANCH_BURN : 1); stoop(PICK_TIME); notifyAction('feed'); }
     } else if (a.kind === 'torch') { if (a.fire ? fire.takeTorch(a.fire) : fire.pickTorch(a.torch)) { stoop(); notifyAction('torch'); } }
     else if (a.kind === 'drink' || a.kind === 'fill') {
-      if (wood.load() || fire.torch) { const torch = !!fire.torch; if (torch ? plantBeside() : lay(player.heading + Math.PI)) { stoop(torch ? STOOP : PICK_TIME); queued = a.kind; } }   // hands first, then drink or fill
+      if (wood.load() || fire.torch) { const torch = !!fire.torch, planted = !torch || plantBeside(), laid = planted && (!wood.load() || lay(player.heading + Math.PI)); if (planted && laid) { stoop(torch && !wood.carried.length ? STOOP : PICK_TIME); queued = a.kind; } }   // hands first (the torch in the ground, the wood laid down: 0.37.6 both), then drink or fill
       else drink(a.thing, a.kind);
     } else if (a.kind === 'lay') { if (lay(player.heading)) { stoop(PICK_TIME); notifyAction('lay'); } }
     else if (a.kind === 'plant') { if (plantTorch()) { stoop(); notifyAction('plant'); } }
@@ -746,9 +778,10 @@ export function createGame(world, spawn, opts = {}) {
       if (player.stoop > 0) {
         player.stoop = Math.max(0, player.stoop - dt / stoopDur);
         res = stepPlayer(world, player, null, dt);
-      } else if (queued) {   // hands are free now: kneel and drink
+      } else if (queued) {   // hands are free now: kneel and drink (0.37.6: or fell the tree)
         const q = queued; queued = null;
-        const wp = findWater(world, player.x, player.z, DRINK_REACH, game.sea);
+        if (q === 'fell') { const tr = felled.nearest(player.x, player.z, FELL_REACH); if (axe.hand && tr && !wet(here()) && !wood.load()) { const p0 = felled.chopped(tr.id); work = { kind: 'fell', t: 0, dur: Math.max(0.01, FELL_TIME * (1 - p0)), thing: tr.id, p0 }; face(tr); notifyAction('fell'); } }
+        const wp = q === 'fell' ? null : findWater(world, player.x, player.z, DRINK_REACH, game.sea);
         if (wp && !wood.load() && !fire.torch) drink(wp, q);
         res = stepPlayer(world, player, null, dt);
       } else if (a && Math.hypot(input.target.x - player.x, input.target.z - player.z) < (a.kind === 'light' || a.kind === 'kindle' || a.kind === 'buildIn' || a.kind === 'upgrade' || a.close ? 0.15 : REACH)) {
