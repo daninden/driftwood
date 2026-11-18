@@ -34,6 +34,9 @@
  * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
  * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
  * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * 0.37.5 "Ways": a place's minutes come from the length of the route (`walkMinutes`: metres / WALK_SPEED with WALK_SLACK; the path's paced cost was about four times the real walk);
+ * more reasons (`whyNot`: dig, drink when not thirsty, lay, the tool not in hand, the hut's next part or no room for it); a lean-to with walls, bed and ring tells the hut's parts
+ * and whether it has room; `use` waits until he stands still and says a torch or water stands in the way.
  * 0.37.4 "Lessons": a failed action says why in plain words where the game knows (`whyNot`: the lack of the fire or the spear only for 'light' and 'fish'; for 'pickup' the
  * spear or axe in hand, a log, a torch with other wood, taking from a pile with something under his arm, full arms; for 'buildIn' / 'upgrade' the kind the lean-to needs next).
  * 'light' is done only when a fire burns within 3 m afterwards (the drill uses the fibre either way). Fires and lean-tos keep their number on the menu (fire<n>, leanto<n>: their
@@ -52,15 +55,17 @@ import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
 import { freshWater } from './water.js';
 import { dryness } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
-import { standFor, nextKind, built, partsOf, UP_ORDER } from './leanto.js';
+import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone } from './leanto.js';
 import { fireOutlook, BURN } from './fire.js';
 import { TIRED_AT } from './sleep.js';
+import { DRINK_AT } from './shells.js';
 import { WAIT } from './intent.js';
 import { PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
 
 export const RECENT_MAX = 20;
 export const SCAN_R = 150;          // metres round him in which the menu looks for places he knows
 export const FISH_WALK = 40;        // metres: how far from where he stands a fishing looks for the shallows (known ground only)
+export const walkMinutes = metres => Math.max(1, Math.ceil(gameMinutes(metres / WALK_SPEED * WALK_SLACK)));   // 0.37.5: a walk of that many metres of route in game minutes (with a little slack)
 const STOP = 0.12, SETTLE = 3, WALK_SLACK = 1.25, SETTLE_TICKS = 12, ASIDE = 3;   // the follower's stop at a standing point (as game/mind), and the walk's estimate made a little longer for the slower pace of a load
 
 export function createActor(world, game, opts = {}) {
@@ -117,7 +122,11 @@ export function createActor(world, game, opts = {}) {
     const next = nextKind(l, 'leanto');
     if (next) return `his lean-to, begun: ${built(l, 'leanto')} of ${partsOf('leanto').length} parts; next it needs ${kindWord(next)}`;
     const up = UP_ORDER.map(w => [w, nextKind(l, w)]).find(([, k]) => k);
-    return up ? `his lean-to, finished; next for the ${up[0]}: ${kindWord(up[1])}` : 'his lean-to, finished with walls, bed and ring';
+    if (up) return `his lean-to, finished; next for the ${up[0]}: ${kindWord(up[1])}`;
+    if (hutDone(l)) return 'his hut, finished';   // 0.37.5: the hut too
+    const hk = hutKind(l);
+    if (!hk) return 'his lean-to, finished with walls, bed and ring';
+    return `his lean-to with walls, bed and ring; the hut: ${built(l, 'hut')} of ${partsOf('hut').length} parts, next it needs ${hk === 'log' ? 'a log on his shoulder' : kindWord(hk)}${!hutBegun(l) && !game.hutFits(l) ? ' (but the hut has no room here: something stands in its way)' : ''}`;
   };
   function candidates() {   // every thing he knows within SCAN_R, by kind: [{ kind, ref, x, z, what }]
     const out = [], R = SCAN_R, near = q => Math.hypot(q.x - p.x, q.z - p.z) <= R && known.has(q.x, q.z), anywhere = q => known.has(q.x, q.z);   // water, fires and lean-tos he knows are on the menu however far
@@ -155,13 +164,14 @@ export function createActor(world, game, opts = {}) {
       const close = c => Math.round(c.dist) <= NEARBY, nearby = pool.filter(close).slice(0, NEARBY_MAX), rest = pool.filter(c => !close(c));
       const pick = [...nearby, ...rest].slice(0, Math.max(PER_KIND, nearby.length));
       for (const c of pick) {
-        const cost = c.dist < 1.5 ? 0 : path.cost(p, c);
-        if (!(cost < Infinity)) continue;
+        const r = c.dist < 1.5 ? null : path.find(p, c);   // 0.37.5 "Ways": the walk's minutes from the length of its route (the path's cost in paced seconds was about four times the real walk)
+        if (c.dist >= 1.5 && !r) continue;
+        let len = 0, q0 = p; if (r) for (const q of r.pts) { len += Math.hypot(q.x - q0.x, q.z - q0.z); q0 = q; }
         count[kind] = (count[kind] || 0) + 1;
         const offers = [...new Set(game.offersAt(c.x, c.z).map(o => o.kind))].filter(k => DO[k]);
         const sid = kind === 'fire' ? game.fire.fires.indexOf(c.ref) + 1 : kind === 'leanto' ? game.leantos.list.indexOf(c.ref) + 1 : 0;   // 0.37.4: fires and lean-tos keep their number
         places.push({ id: kind + (sid > 0 ? sid : count[kind]), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
-          minutes: Math.max(1, Math.ceil(gameMinutes(cost * WALK_SLACK))), nearby: Math.round(c.dist) <= NEARBY, offers });
+          minutes: walkMinutes(len), nearby: Math.round(c.dist) <= NEARBY, offers });
       }
     }
     places.sort((a, b) => a.dist - b.dist);
@@ -336,8 +346,17 @@ export function createActor(world, game, opts = {}) {
       if (W.load() > 0 && pile) return 'with something under his arm he lays on a pile, he does not take from it';
       if (W.carried.length >= 3) return 'his arms are full';
     }
+    if (kind === 'dig') {   // 0.37.5
+      if (game.fire.torch) return 'a torch is in his hand';
+      if (game.crabs.full()) return 'he carries as many crabs as he can';
+      return 'no crab is hiding in a hole beside him; they hide when he comes near at low water, and the holes may be empty';
+    }
+    if (kind === 'lay' && W.load() > 0) return 'other things close by take the button here: lay down a few steps away, on open ground';   // 0.37.5
+    if (kind === 'drink' && game.thirst.days <= DRINK_AT && game.shells.empty()) return 'he is not thirsty: the river offers "fill" for his empty shell';
+    if (kind === 'laySpear' || kind === 'layAxe') { if (!(kind === 'laySpear' ? game.spear.hand : game.axe.hand)) return `the ${kind === 'laySpear' ? 'spear' : 'axe'} is not in his hand`; }
     if (kind === 'buildIn' || kind === 'upgrade') {
       const l = game.leantos.list.filter(q => dist(q, p) < 4).sort((a, b) => dist(a, p) - dist(b, p))[0];
+      if (l && hutReady(l) && !hutDone(l)) { const hk = hutKind(l); if (hk === 'log' && !hutBegun(l) && !game.hutFits(l)) return 'the hut has no room here: something stands in its way'; if (hk) return `the hut needs ${hk === 'log' ? 'a log on his shoulder' : kindWord(hk)} next`; }
       if (l) {
         const need = nextKind(l, 'leanto') || UP_ORDER.map(w => nextKind(l, w)).find(Boolean);
         if (need) return `it needs ${need === 'branch' ? 'a branch' : need === 'frond' ? 'a frond' : need === 'stone' ? 'a stone' : need === 'log' ? 'a log' : 'a piece of driftwood'} next`;
@@ -408,7 +427,8 @@ export function createActor(world, game, opts = {}) {
   function* useThing(kind) {
     const before = snapshot(), row = kind === 'crab' ? 'crab' : kind;
     idle(); inp.sit = false;
-    if (!game.use(row, inp)) return { ok: false, reason: kind === 'crab' ? 'he needs a fire with flames beside him' : 'he cannot do that now' };
+    for (let t = 0; t < 60 && busy(); t++) yield;   // 0.37.5: he finishes a bend or gets up first (a use while he still stooped failed)
+    if (!game.use(row, inp)) return { ok: false, reason: kind === 'crab' ? 'he needs a fire with flames beside him' : game.fire.torch ? 'a torch is in his hand: plant it first' : terrainAt(world, p.x, p.z, game.sea).depth > 0.05 ? 'he stands in water' : 'he cannot do that now' };
     emit('act', { kind: 'use:' + kind });
     yield; yield* waitIdle();
     return snapshot() === before ? { ok: false, reason: 'nothing came of it' } : { ok: true };

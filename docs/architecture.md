@@ -258,6 +258,15 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Ways (0.37.5)
+
+After a three-day AI test game on 0.37.4 (234 requests, 7 plans refused, 20 of 532 steps failed, no collapse): 45 single walks took a third of their menu minutes (median), measured again headless: the real walk is the straight distance at WALK_SPEED.
+- **Walk minutes:** `game/actor` `walkMinutes(metres)` from the found route's length (`path.find` points) instead of `path.cost`; `game/actions` `legMinutes(a, b)` (straight line x `LEG_DETOUR` 1.3, `LEG_SLACK` 1.25) for a `go` after a `go` in `checkPlan` / `stepMinutes(step, places, from)`; `METRES_PER_MINUTE` for the request.
+- **The situation:** `ai/actPrompt` `actState(state, menu)` takes `carries` from the actor's menu (hand, not `spear.has()`; the log) and drops the old mind's `camp`, `fromHome`, `nextHome`, `lastNight`, `crab`.
+- **The arc:** `game/game` `actionAt` keeps `laySpear` / `layAxe` among the options.
+- **Reasons and menu:** `whyNot` for dig, drink, lay, laySpear / layAxe, the hut (`hutKind`, `hutFits`); the lean-to's text tells the hut; `useThing` waits while `busy()`.
+- **Tests:** `tests/actor.test.js` (a later walk, the menu's minutes against a real walk, the situation, the dig reason); `tests/helpers/actorSim.js` asks `lay` directly (the actor steps aside).
+
 ### Lessons (0.37.4)
 
 After the AI test day (`scripts/ai-playtest.js`, seed 1337, one day, a Claude model answering): 115 requests, 15 plans refused for their length, 13 of 251 steps failed, misleading reasons.

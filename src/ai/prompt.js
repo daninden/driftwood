@@ -20,6 +20,7 @@
  *   PASTIME_TEXT                       plain descriptions of the pastime options (what he does and roughly how long), for the request; the panel's short label of a pastime is the option's own `what`
  *   describeOption(o) -> { what, label, why }   the option in plain words (a goal option: GOAL_TEXT and GOAL_LABEL; a pastime: PASTIME_TEXT and its own `what` as the label; the why code through WHY_TEXT)
  *   hhmm(time) -> 'HH:MM'              a time of day 0..1 as the island's clock
+ *   (0.37.5: stateText tells a log on his shoulder among what he carries.)
  *   snapshotOf(game, mind) -> state    a plain description of the situation: { day, time, raining, daylight (hours to dusk, 0 at night), fromHome (metres from his camp), thirst, hunger, awake, carries, home, journey, doing } (doing in words, e.g. 'free time, work on his home')
  *   stateText(state) -> string         the state as lines of text
  *   0.36.6: the situation also tells, when the game knows it (a missing part is left out, never guessed): `camp` (mind.camp: the fire, 'none' / 'out' / 'embers' / 'low' / 'well', and the store of his own piles: dry and wet driftwood, branches, fronds, stones, logs), `tide` (tideNow: high, half or low water now, rising or falling, when it turns),
@@ -327,7 +328,7 @@ const NEXT_HOME = { leanto: 'the lean-to', walls: 'the walls', ring: 'the stone 
 export function stateText(s) {
   const c = s.carries || {}, has = [];
   for (const [k, label] of [['driftwood', 'driftwood'], ['branches', 'branches'], ['fronds', 'fronds'], ['stones', 'stones'], ['fibre', 'fibre'], ['nuts', 'coconuts'], ['emptyShells', 'empty half shells'], ['fullShells', 'full half shells'], ['crabs', 'crabs'], ['fish', 'fish'], ['berries', 'handfuls of berries'], ['bananas', 'banana bunches']]) if (c[k] > 0) has.push(`${c[k]} ${label}`);
-  for (const [k, label] of [['spear', 'a spear'], ['axe', 'an axe'], ['torch', 'a torch']]) if (c[k]) has.push(label);
+  for (const [k, label] of [['spear', 'a spear'], ['axe', 'an axe'], ['torch', 'a torch'], ['log', 'a log on his shoulder']]) if (c[k]) has.push(label);   // 0.37.5: the log too
   const h = s.home;
   const home = !h ? 'no shelter yet' : `lean-to ${h.leanto}%, walls ${h.walls}%, bed ${h.bed}%, stone ring ${h.ring}%, hut ${h.hut}%`;
   return [

@@ -162,6 +162,7 @@
  *   `pieceCost('hut')` rest a piece. In a finished hut (`hutDone`) the sleep gets `hut: true` (game/sleep), no fire can be lit in or within half a metre of its walls (`leantos.noFire`), no torch is planted there and a burning torch
  *   is doused when he walks in.
  * 0.33.1 "Hearth": the middle of a finished stone ring takes a fuel pile despite the keep-free apron of the lean-to or hut (tested against the pile's own circle only) and CAMP_GAP (`blockedAt`: otherwise only a solid that really overlaps refuses it).
+ * 0.37.5 "Ways": `actionAt` keeps 'laySpear' / 'layAxe' among the arc's options whenever it is offered (three nearer small things pushed it out, against the design).
  * 0.33.4 "One hearth": the no-fire zone round a finished stone ring is RING_NOFIRE (8 m, was 3.5) from the ring's middle, and 'feed' is not offered for a fire that lies in it (leantos.noFire): a fire beside the ring that burned before the ring was built is not fed and burns out, for the player and for Dave; the fire in the ring itself (and any fire away from the ring) is fed as before. Torches are unchanged (a torch can still be taken from such a fire while it burns).
  * 0.31.1 "Milk": 'light' (and 'kindle') is not offered for a pile that lies more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring (leantos.noFire): beside a ring a fire is lit only in the ring itself; a pile elsewhere is unaffected. It is not started either when the pile moved there meanwhile (no fibre is used).
  * 0.31 "Axe" (game/axe, game/felled, game/logs): small kinds `makeAxe` (no axe exists, no spear or torch in hand, exactly one branch under his arm and nothing else, a loose stone within REACH or a pile of stones within BESIDE, a tuft of fibre,
@@ -524,7 +525,9 @@ export function createGame(world, spawn, opts = {}) {
   function actionAt(px, pz) {
     const list = actionsAt(px, pz), tap = list.length && !list[0].big ? list[0] : null, rest = tap ? list.slice(1) : list;
     const bigs = rest.filter(o => o.big), smalls = rest.filter(o => !o.big);
-    return { tap, options: [...smalls.slice(0, Math.max(0, OPTIONS - bigs.length)), ...bigs].slice(0, OPTIONS) };
+    const keep = smalls.find(o => o.kind === 'laySpear' || o.kind === 'layAxe');   // 0.37.5 "Ways": laying the spear or the axe down always keeps its place in the arc (as designed; three nearer things pushed it out)
+    const room = Math.max(0, OPTIONS - bigs.length), first = keep ? smalls.filter(o => o !== keep).slice(0, Math.max(0, room - 1)).concat(room > 0 ? [keep] : []) : smalls.slice(0, room);
+    return { tap, options: [...first, ...bigs].slice(0, OPTIONS) };
   }
   /** Everything the action button, its arc and the keys would offer at (px, pz): the ring's action and the arc's options, in one list (pure). */
   function offersAt(px, pz) { const a = actionAt(px, pz); return a.tap ? [a.tap, ...a.options] : a.options; }

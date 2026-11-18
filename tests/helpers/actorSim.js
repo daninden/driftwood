@@ -28,7 +28,7 @@ export function needsChooser(game) {
       const k = first(m, 'coconut'); if (k && may(k)) return walk(k, [{ do: 'husk' }]);
     }
     if (night) return has(m, 'sleep') ? [{ do: 'sleep' }] : [{ wait: 20 }];
-    if (c.driftwood >= 2) return has(m, 'lay') ? [{ do: 'lay' }] : [{ wait: 5 }];
+    if (c.driftwood >= 2) return [{ do: 'lay' }];   // 0.37.5: the actor steps aside to where the game offers it
     const d = m.places.find(q => q.kind === 'driftwood' && /dry/.test(q.what));
     if (d && may(d)) return walk(d, [{ do: 'pickup' }]);
     return [{ wait: 20 }];

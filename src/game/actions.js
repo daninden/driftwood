@@ -20,13 +20,14 @@
  *   DO, USE                      kind -> { what, secs }: the plain words of an action and its seconds of real time (null: it lasts until it ends by itself, the sleep)
  *   gameMinutes(secs) -> number  real seconds (a game day is DAY_SECONDS) as game minutes; realSecs(minutes) the other way round
  *   dirOf(dx, dz) -> one of DIRS
- *   stepMinutes(step, places) -> number | null   the estimate of one step (null: no estimate, unknown place or kind)
+ *   stepMinutes(step, places, from?) -> number | null   the estimate of one step (null: no estimate, unknown place or kind); 0.37.5: a `go` from `from` (the place of the go before it in the plan) is legMinutes(from, place)
+ *   legMinutes(a, b), METRES_PER_MINUTE, LEG_DETOUR, LEG_SLACK   (0.37.5 "Ways") a walk between two places of a plan: the straight line x 1.3 at the walking pace with the menu's slack; about 1.9 m a game minute
  *   stepText(step, places) -> string             a step in plain words, for logs and the panel
  *   checkPlan(plan, places) -> { ok, steps, minutes, claimed, reason }   plan: [step] or { steps: [step], minutes? }; ok false with a plain reason when it cannot be followed (0.37.2: a sleep or a fishing not alone, fishing without 5 to 60 minutes)
  *     0.37.4 "Lessons": `minutes` is the chooser's own count of the plan (claimed). A plan of several steps is refused when the chooser counted over PLAN_MINUTES; when it
  *     counted PLAN_MINUTES or less it is followed up to PLAN_GRACE (40) minutes of the game's count; with no count of its own the game's count must be PLAN_MINUTES or less.
  *
- * Depends on: game/clock, game/game (action times), game/shells, game/fire, game/leanto, game/crabs, game/spear, game/axe, game/fish
+ * Depends on: game/clock, game/movement (WALK_SPEED), game/game (action times), game/shells, game/fire, game/leanto, game/crabs, game/spear, game/axe, game/fish
  */
 import { DAY_SECONDS } from './clock.js';
 import { DRINK_TIME, HUSK_TIME, PICK_TIME, STOOP } from './game.js';
@@ -37,6 +38,7 @@ import { DIG_TIME, ROAST_TIME } from './crabs.js';
 import { MAKE_TIME as SPEAR_TIME } from './spear.js';
 import { MAKE_TIME as AXE_TIME, FELL_TIME } from './axe.js';
 import { FISH_TIME } from './fish.js';
+import { WALK_SPEED } from './movement.js';
 
 export const PLAN_MINUTES = 30;   // the user (2026-11-17): a plan covers at most half an hour of game time
 export const PLAN_STEPS = 8;
@@ -45,6 +47,7 @@ export const PER_KIND = 3;        // the nearest places of each kind on the menu
 export const NEARBY_MAX = 5;
 export const WANDER_MAX = 60, WAIT_MAX = 60;   // game minutes a wander or a wait may last
 export const FISH_MIN = 5, FISH_MAX = 60;       // game minutes a fishing may last (chosen by the model, 0.37.2)
+export const LEG_DETOUR = 1.3, LEG_SLACK = 1.25;   // 0.37.5 "Ways": a walk from one place of the plan to the next: the straight line made a little longer for the way round, and the slack of the menu's walks
 export const PLAN_GRACE = 40;     // 0.37.4 "Lessons": a plan the chooser counted at PLAN_MINUTES or less is still followed when the game counts up to this (the user, 2026-11-17)
 
 export const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
@@ -89,6 +92,10 @@ export const USE = Object.freeze({
 
 export const gameMinutes = secs => secs / DAY_SECONDS * 1440;
 export const realSecs = minutes => minutes / 1440 * DAY_SECONDS;
+/** 0.37.5: game minutes of a walk from place a to place b of the same plan (both { x, z }): the menu's minutes count from where he stands, a later walk from the place before. */
+export const legMinutes = (a, b) => Math.max(1, Math.ceil(gameMinutes(Math.hypot(b.x - a.x, b.z - a.z) * LEG_DETOUR / WALK_SPEED * LEG_SLACK)));
+/** 0.37.5: about how many metres he walks in a game minute on open ground (for the request). */
+export const METRES_PER_MINUTE = WALK_SPEED * (DAY_SECONDS / 1440) / LEG_SLACK;
 
 /** The direction from a point to another (dx east, dz south): north is -z. */
 export function dirOf(dx, dz) {
@@ -106,9 +113,9 @@ export function stepKind(s) {
   return null;
 }
 
-export function stepMinutes(s, places) {
+export function stepMinutes(s, places, from = null) {
   const k = stepKind(s);
-  if (k === 'go') { const q = placeOf(places, s.go); return q ? q.minutes : null; }
+  if (k === 'go') { const q = placeOf(places, s.go); return !q ? null : from && Number.isFinite(q.x) && Number.isFinite(from.x) ? legMinutes(from, q) : q.minutes; }
   if (k === 'wander') return Number.isFinite(s.minutes) ? s.minutes : null;
   if (k === 'wait') return Number.isFinite(s.wait) ? s.wait : null;
   if (k === 'do') { const d = DO[s.do]; if (d && s.do === 'fish' && Number.isFinite(s.minutes)) return s.minutes; return d ? (d.secs === null ? 0 : gameMinutes(d.secs)) : null; }
@@ -133,7 +140,7 @@ export function checkPlan(plan, places) {
   if (!list || !list.length) return { ok: false, steps: [], minutes: 0, reason: 'the plan has no steps' };
   if (list.length > PLAN_STEPS) return { ok: false, steps: [], minutes: 0, reason: `the plan has ${list.length} steps, at most ${PLAN_STEPS}` };
   const steps = [];
-  let minutes = 0;
+  let minutes = 0, at = null;   // at (0.37.5): the place the last `go` led to (a later walk counts from there); null at the start and after a wander
   for (let i = 0; i < list.length; i++) {
     const s = list[i], k = stepKind(s), n = i + 1;
     if (!k) return { ok: false, steps: [], minutes: 0, reason: `step ${n} is not a step` };
@@ -160,7 +167,8 @@ export function checkPlan(plan, places) {
     if (step.do === 'sleep' && list.length > 1) return { ok: false, steps: [], minutes: 0, reason: 'sleep must be the only step of its plan (he sleeps until he wakes; the next plan follows)' };
     if (step.do === 'fish' && list.length > 1) return { ok: false, steps: [], minutes: 0, reason: 'fishing must be the only step of its plan (walk to the water in a plan of its own first)' };
     if (typeof s.say === 'string' && s.say.trim()) step.say = s.say.trim();
-    minutes += stepMinutes(step, places);
+    minutes += stepMinutes(step, places, at);
+    if (step.go) at = placeOf(places, step.go); else if (step.wander) at = null;
     steps.push(step);
   }
   minutes = Math.round(minutes * 10) / 10;

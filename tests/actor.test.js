@@ -7,10 +7,10 @@ import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createActor } from '../src/game/actor.js';
 import { WAIT } from '../src/game/intent.js';
-import { checkPlan, stepMinutes, stepText, gameMinutes, realSecs, dirOf, DIRS, DO, USE, PLAN_MINUTES, PLAN_STEPS, PLAN_GRACE, NEARBY, FISH_MIN, FISH_MAX } from '../src/game/actions.js';
+import { checkPlan, stepMinutes, stepText, gameMinutes, realSecs, dirOf, DIRS, DO, USE, PLAN_MINUTES, PLAN_STEPS, PLAN_GRACE, legMinutes, METRES_PER_MINUTE, NEARBY, FISH_MIN, FISH_MAX } from '../src/game/actions.js';
 import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, FIRE_LIGHT, TORCH_LIGHT } from '../src/game/dark.js';
 import { DUSK, DAWN } from '../src/game/sleep.js';
-import { lightText, menuText, buildActMessages } from '../src/ai/actPrompt.js';
+import { lightText, menuText, buildActMessages, actState } from '../src/ai/actPrompt.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { walkFirstDay } from './helpers/mindSim.js';
 import { terrainAt, canStand } from '../src/game/movement.js';
@@ -52,6 +52,12 @@ describe('the steps and the plan check (game/actions)', () => {
     const ok = checkPlan({ steps, minutes: 28 }, places); expect(ok.ok).toBe(true); expect(ok.claimed).toBe(28); expect(ok.minutes).toBe(35);
     const over = checkPlan({ steps: [{ wait: 25 }, { wait: 20 }], minutes: 28 }, places); expect(over.ok).toBe(false); expect(over.reason).toMatch(/game counts about 45 minutes \(you counted 28\)/);
     const said = checkPlan({ steps, minutes: 35 }, places); expect(said.ok).toBe(false); expect(said.reason).toMatch(/you counted 35 minutes, at most 30/);
+  });
+  it('a later walk in a plan counts from the place before (0.37.5)', () => {
+    const pl = [{ id: 'a1', kind: 'driftwood', what: 'a', x: 0, z: 0, minutes: 5 }, { id: 'b1', kind: 'driftwood', what: 'b', x: 6, z: 0, minutes: 25 }];
+    const c = checkPlan({ steps: [{ go: 'a1' }, { go: 'b1' }], minutes: 10 }, pl);
+    expect(c.ok).toBe(true); expect(c.minutes).toBe(5 + legMinutes(pl[0], pl[1])); expect(legMinutes(pl[0], pl[1])).toBeLessThan(10);
+    expect(METRES_PER_MINUTE).toBeGreaterThan(1.5); expect(METRES_PER_MINUTE).toBeLessThan(2.5);
   });
   it('sleep is a plan of its own: the only step (0.37.2), and its length does not count', () => {
     const one = checkPlan([{ do: 'sleep' }], places);
@@ -181,7 +187,7 @@ describe('following a plan (game/actor)', () => {
     g.fibre.carried = 1;
     const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return n++ ? null : [{ do: 'dig' }]; } });
     run(g, a, 3);
-    expect(asks[1].last.reason).toBe('not offered here');
+    expect(asks[1].last.reason).toMatch(/^not offered here \(no crab is hiding/); expect(asks[1].last.reason).not.toMatch(/pile/);
   });
   it('the menu names a lean-to by its number with what it needs next, and a fire with its hours (0.37.4)', () => {
     const g = fresh(), a = createActor(w, g, { chooser: () => null });
@@ -190,6 +196,20 @@ describe('following a plan (game/actor)', () => {
     const m = a.menu(), l = m.places.find(q => q.kind === 'leanto'), f = m.places.find(q => q.kind === 'fire');
     expect(l.id).toBe('leanto1'); expect(l.what).toMatch(/4 of 15 parts; next it needs a branch/);
     expect(f.id).toBe('fire1'); expect(f.what).toMatch(/2 pieces on it, about 5 hours left/);
+  });
+  it('the menu\'s walk minutes are close to the real walk (0.37.5: the route\'s length, not its paced cost)', () => {
+    const g = fresh(); let target = null, given = false;
+    const a = createActor(w, g, { chooser: m => { if (given) return null; given = true; target = m.places.filter(q => q.dist >= 15 && q.dist <= 40 && !['fire', 'leanto'].includes(q.kind))[0]; return [{ go: target.id }]; } });
+    const t0 = g.clock.total;
+    for (let i = 0; i < 3000 && !(given && a.waiting); i++) { a.step(0.1); g.update(a.input, 0.1); }
+    const real = (g.clock.total - t0) * 1440;
+    expect(target).toBeTruthy(); expect(real).toBeGreaterThan(target.minutes * 0.4); expect(real).toBeLessThan(target.minutes * 1.6);
+  });
+  it('the situation in full AI play: what he really holds, no camp of the old mind (0.37.5)', () => {
+    const st = actState({ carries: { spear: true }, camp: { fire: 'none', store: {} }, fromHome: 4, nextHome: 'walls' }, { carries: { spear: false, log: true } });
+    expect(st.camp).toBeNull(); expect(st.fromHome).toBeNull(); expect(st.nextHome).toBeNull(); expect(st.carries).toEqual({ spear: false, log: true });
+    const m = buildActMessages({ state: { carries: {}, camp: { fire: 'none', store: {} } }, menu: { places: [], here: [], uses: [], carries: { log: true } }, ask: { why: 'done' }, recent: [], notes: [], lessons: [] });
+    expect(m[1].content).toContain('a log on his shoulder'); expect(m[1].content).not.toContain('Fire at his camp');
   });
   it('no plan: he stands still and waits, and the chooser is asked again each step', () => {
     const g = fresh();

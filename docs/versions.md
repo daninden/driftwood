@@ -2,6 +2,18 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.5 "Ways" — 2026-11-18
+
+Agreed with the user after a three-day AI test game on 0.37.4 (seed 1337, a Claude model answering, 234 requests: no collapse, thirst at most 0.54, hunger 0.63, lean-to with walls and bed, spear and axe made; 7 plans refused, 20 of 532 steps failed). With the AI off only the arc changes (point 3).
+
+- **Walks as long as they really are:** the menu's minutes come from the length of the route; before, they came from the path's paced cost and were about three to four times the real walk (45 walks of the test game took a third of their minutes), so a half-hour plan held one short walk. A later walk in the same plan now counts from the place before; the request says he walks about 1.9 m a game minute.
+- **What he really holds:** the situation took "a spear" from whether a spear exists (it could lie on the ground), and left out a log on his shoulder; now it is what he holds. The old mind's camp lines are gone with the AI on ("Fire at his camp: none yet" stood beside a burning fire); every fire and lean-to is on the menu.
+- **Laying the spear or the axe down** keeps its icon in the arc whenever three nearer things would push it out, for the player too (as the design always said).
+- **The hut** on the menu: its parts, the next piece and whether it has room; the request says how the first log goes in.
+- **Plain reasons and rules:** no crab hiding (a colony empties), not thirsty ("fill" instead of "drink"), "lay" puts down everything, no room to lay, a torch or water in the way of eating; eating waits until he stands still (a bite while he still stooped failed); a sleep counts 0 minutes in a plan.
+- **Tests:** `tests/actor.test.js` (a later walk, the menu's minutes against a real walk, the situation, the dig reason); the fake chooser of `tests/helpers/actorSim.js` asks "lay" directly.
+- **Choices made while building (not discussed with the user):** the straight line x 1.3 for a later walk (the model cannot know the route between two places either); the camp, last night and crab lines dropped rather than rewritten; no game-level test of the arc with three nearer things (hard to set up), the rule is checked by reading.
+
 ## 0.37.4 "Lessons" — 2026-11-17
 
 Agreed with the user after the AI test day (one game day on seed 1337, played headless by `scripts/ai-playtest.js` with a Claude model answering: 115 requests, no collapse, thirst at most 0.45, 15 plans refused for their length, 13 of 251 steps failed, some for reasons that misled). With the AI off nothing changes.
