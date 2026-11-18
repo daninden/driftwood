@@ -193,6 +193,14 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Trace (0.38.1)
+
+After the user's Gemini game on 0.37.10 (wood picked up, laid down and picked up again). Only the request of full AI play changes; facts, no advice.
+- **Records:** `game/actor` `runPlan` takes `carries()` and the piles' sizes before a "pickup" or "lay" step; when it is done, `carryNote` writes what it took or laid and what he carries after it into the record's reason (shown in *what he did lately*), with the id of the pile it went on.
+- **NOW:** `ai/actPrompt` `armText(carries)` ("Under his arm: n of CARRY_MAX."), passed to `ai/prompt` `stateText(s, { arm })` after the carrying line.
+- **Piles:** `game/game` `lay` stamps every pile that is new or grew with `pile.laid = clock.total`; `game/wood` saves and restores it; `game/actor` `pileWhat` says "his pile of ... (laid hh:mm)", with the day when it was another day.
+- **Ids:** `game/actor` `placeId(kind, ref)`: a number per kind, given the first time a thing is on the menu and kept as long as it exists (keyed by the thing's own id where it has one: loose pieces, coconuts, driftwood, logs; by the tree's id; by the colony for crabs; by the object for piles, water points, fires and lean-tos; spear and axe one each). In the actor's memory only: a reload starts the numbers again.
+
 ### Body (0.37.10)
 
 After the user's Gemini game on 0.37.9 (day 1 spent on walls and bed, no drink and no fire, the notes a diary of building). Only the request of full AI play changes; facts, no advice.

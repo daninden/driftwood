@@ -18,10 +18,12 @@
  *   lightText(light) -> string                        0.37.2: dusk or dawn, the torch in his hand, the torches in the ground near him (game/actor `menu().light`)
  *   actRecentText(recent) -> string                   game/actor's records as lines
  *   buildActMessages({ name, state, menu, ask, recent, notes, lessons }) -> [{ role: 'system', content }, { role: 'user', content }]
+ *   armText(carries) -> string                       0.38.1 "Trace": "Under his arm: 2 of 3." (in NOW, after what he carries)
  *   bodyText(state) -> string (0.37.10: thirst, hunger, awake), fireText(fires) -> string (0.37.10: his fires, or that none burns)
  *   parseActPlan(text, old?) -> { ok, steps, say, notes, error }   the first JSON object of the text (code fences allowed); `steps` as given (checked later), `notes` [text] | null
  *                                (0.37.8: a whole number n in `notes` keeps note n of `old`, his notes before)
  *
+ * 0.38.1 "Trace": NOW says the room left under his arm (`armText`); the records and the menu's piles say what he took and laid (game/actor).
  * 0.37.10 "Body": the NOW block says where thirst and hunger stand and what they do to him now, what comes next and in how many hours (`bodyText`: thirsty and slower,
  * very thirsty at VERY_AT (rest runs out DRAIN times as fast), the collapse at COLLAPSE_AT; hungry and slower, the fire drill dearer, starving at STARVING_AT), and his fires,
  * also when none burns (`fireText`, from game/actor `menu().fires`); the fixed part tells the very-thirsty and hunger effects and what the notes are for (the request
@@ -91,7 +93,7 @@ export function actFixed(name) {
     'HOW TO PLAN',
     `- A plan is a short list of steps of about ${PLAN_MINUTES} game minutes: add up the minutes of every step (an action's minutes are in the list below; a walk's minutes on the menu count from where he stands now, so a second walk in the same plan counts from the place before: he walks about ${Math.round(METRES_PER_MINUTE * 10) / 10} m in a game minute, a little more on a winding way; a sleep counts 0, a fishing its minutes) and give your sum as "minutes". A plan of several steps is refused only when your count or the game's is over ${PLAN_GRACE} minutes; you are told when your count was off. Bundle small things that belong together ("go to the river, drink, fill the shells"). A walk or a wander longer than that is a plan of its own. At most ${PLAN_STEPS} steps.`,
     `- Kinds of step:`,
-    '  {"go": "<place id>"}: walk to a place of the menu. Only ids that are on the menu now.',
+    '  {"go": "<place id>"}: walk to a place of the menu. Only ids that are on the menu now. A place keeps its id as long as it exists (branch4 is the same branch in every request).',
     `  {"wander": "<direction>", "minutes": n}: walk out that way for 1 to ${WANDER_MAX} minutes. Directions: ${DIRS.join(', ')}.`,
     '  {"do": "<action>"}: one action of the action button where he stands then (after a "go", what that place offers). Actions:',
     actionLines(),
@@ -191,13 +193,20 @@ export function fireText(fires) {
   return `Fire: none of his burns (${list.length === 1 ? 'one cold fire place' : `${list.length} cold fire places`}).`;
 }
 
+/** 0.38.1 "Trace": the room under his arm ("Under his arm: 2 of 3."; a log on his shoulder takes everything). */
+export function armText(c) {
+  const k = c || {};
+  if (k.log) return 'Under his arm: nothing (a log on his shoulder: he carries it alone).';
+  return `Under his arm: ${(k.driftwood || 0) + (k.branches || 0) + (k.fronds || 0)} of ${CARRY_MAX}.`;
+}
+
 export function buildActMessages({ name, state, menu, ask, recent, notes, lessons }) {
   const cl = countLine(menu && menu.count);
   const user = [
     askLine(ask) + (cl ? ' ' + cl : ''),
     '',
     'NOW',
-    stateText(actState(state, menu), { body: bodyText(state || {}), fire: fireText(menu && menu.fires) }),
+    stateText(actState(state, menu), { body: bodyText(state || {}), fire: fireText(menu && menu.fires), arm: armText(actState(state, menu).carries) }),
     '',
     'WHAT HE DID LATELY',
     actRecentText(recent),

@@ -10,7 +10,7 @@ import { WAIT } from '../src/game/actions.js';
 import { checkPlan, stepMinutes, stepText, gameMinutes, realSecs, dirOf, DIRS, DO, USE, PLAN_MINUTES, PLAN_STEPS, PLAN_GRACE, legMinutes, METRES_PER_MINUTE, NEARBY, FISH_MIN, FISH_MAX } from '../src/game/actions.js';
 import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, FIRE_LIGHT, TORCH_LIGHT } from '../src/game/dark.js';
 import { DUSK, DAWN } from '../src/game/sleep.js';
-import { lightText, menuText, buildActMessages, actState } from '../src/ai/actPrompt.js';
+import { lightText, menuText, buildActMessages, actState, armText } from '../src/ai/actPrompt.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { walkFirstDay } from './helpers/scene.js';
 import { terrainAt, canStand } from '../src/game/movement.js';
@@ -202,7 +202,7 @@ describe('following a plan (game/actor)', () => {
     logs[1].t = undefined; logs[2].t = undefined;   // dry
     g.wood.piles.push({ x: g.player.x + 3, z: g.player.z, kind: 'driftwood', logs });
     const q = createActor(w, g, {}).menu().places.find(p => p.kind === 'pile' && /driftwood/.test(p.what));
-    expect(q && q.what).toBe('a pile of 3 driftwood (2 dry, 1 wet)');
+    expect(q && q.what).toBe('his pile of 3 driftwood (2 dry, 1 wet)');   // 0.38.1: his pile (no lay time: not laid by him in this test)
   });
   it('the menu says how big the island is and how much of it he has seen (0.37.9 "Far")', () => {
     const g = fresh(), m = createActor(w, g, {}).menu();
@@ -429,4 +429,35 @@ describe('a life with a fixed fake chooser (tests/helpers/actorSim)', () => {
     expect(done).toContain(DO.drink.what); expect(done).toContain(DO.husk.what); expect(done).toContain(DO.sleep.what); expect(done).toContain(DO.pickup.what);
     expect(r.actor.recent.length).toBeLessThanOrEqual(20);
   }, 120000);
+});
+
+describe('0.38.1 "Trace": what he did, facts only', () => {
+  it('a place keeps its id across requests, also when the order on the menu changes', () => {
+    const g = fresh(), a = createActor(w, g, {}), m1 = a.menu();
+    run(g, a, 0.2); g.player.x += 8;
+    const m2 = a.menu();
+    const same = m2.places.filter(q => m1.places.some(o => o.kind === q.kind && o.ref === q.ref));
+    expect(same.length).toBeGreaterThan(3);
+    for (const q of same) expect(q.id).toBe(m1.places.find(o => o.kind === q.kind && o.ref === q.ref).id);
+    expect(new Set(m2.places.map(q => q.id)).size).toBe(m2.places.length);
+  });
+  it('a pick-up and a lay-down say what they took and laid and what he carries after; his new pile says when he laid it', () => {
+    const g = fresh(); let n = 0;
+    const a = createActor(w, g, { chooser: m => { if (n++) return null; const b = m.places.find(q => q.kind === 'branch'); return [{ go: b.id }, { do: 'pickup' }, { do: 'lay' }]; } });
+    run(g, a, 90);
+    const notes = a.recent.filter(r => r.kind === 'step' && r.outcome === 'done').map(r => r.reason);
+    expect(notes).toContain('picked up 1 branch; now under his arm: 1 branch (1 of 3)');
+    const laid = notes.find(x => /^laid/.test(x || ''));
+    expect(laid).toMatch(/^laid 1 piece down: a branch on a new pile here \(pile\d+\)$/);
+    const id = laid.match(/\((pile\d+)\)/)[1], q = a.menu().places.find(x => x.id === id);
+    expect(q).toBeTruthy(); expect(q.what).toMatch(/^his pile of 1 branches \(laid \d\d:\d\d\)$/);
+    expect(g.wood.state().piles.some(x => Number.isFinite(x.laid))).toBe(true);
+  }, 60000);
+  it('NOW says the room left under his arm', () => {
+    expect(armText({ branches: 1, fronds: 1 })).toBe('Under his arm: 2 of 3.');
+    expect(armText({})).toBe('Under his arm: 0 of 3.');
+    expect(armText({ log: true })).toMatch(/log on his shoulder/);
+    const m = buildActMessages({ state: { carries: {} }, menu: { places: [], here: [], uses: [], carries: { driftwood: 2 } }, ask: { why: 'done' }, recent: [], notes: [], lessons: [] });
+    expect(m[1].content).toContain('Under his arm: 2 of 3.');
+  });
 });

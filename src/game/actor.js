@@ -35,6 +35,10 @@
  * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
  * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
  * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * 0.38.1 "Trace": a place keeps its id as long as it exists (`placeId`: the n-th thing of its kind he came to know, by the thing's own id where it has one; fires and lean-tos too), so branch4
+ * is the same branch in every request (not kept across a reload); his piles say "his pile of ..." with when he last laid on it (pile.laid, set by game/game: "laid 08:44", "laid day 2 08:44" on
+ * another day); a done "pickup" or "lay" step's record says what it took or laid and what he carries after it ("picked up 1 branch; now under his arm: 1 driftwood, 1 branch, 1 frond (3 of 3)",
+ * "laid 3 pieces down: 2 branches on a new pile here (pile7); a frond on his pile of fronds here (pile2, now 4)"), in the record's reason.
  * 0.37.9 "Far": the menu's `island` { across (metres), seen (% of the island's land cells of game/known) }; a pile of driftwood says how many pieces are dry and how many wet.
  * 0.37.8 "Firelight": no walk in the dark without light again (game/dark; the half pace of 0.37.6 is gone); a walk's minutes are at the pace he has now (`paceNow`: his load,
  * tired, thirsty, hungry, as game/game; WALK_SLACK 1.1, was 1.25 for the load); his fires and lean-tos stay on the menu when no route to them is found (the straight line x LEG_DETOUR);
@@ -48,8 +52,7 @@
  * and whether it has room; `use` waits until he stands still and says a torch or water stands in the way.
  * 0.37.4 "Lessons": a failed action says why in plain words where the game knows (`whyNot`: the lack of the fire or the spear only for 'light' and 'fish'; for 'pickup' the
  * spear or axe in hand, a log, a torch with other wood, taking from a pile with something under his arm, full arms; for 'buildIn' / 'upgrade' the kind the lean-to needs next).
- * 'light' is done only when a fire burns within 3 m afterwards (the drill uses the fibre either way). Fires and lean-tos keep their number on the menu (fire<n>, leanto<n>: their
- * place in the game's lists); a fire says its pieces and hours left, a lean-to its parts and what it needs next. The menu's `count` is { claimed, minutes } of the last plan
+ * 'light' is done only when a fire burns within 3 m afterwards (the drill uses the fibre either way). Fires and lean-tos keep their number on the menu (fire<n>, leanto<n>; since 0.38.1 every place keeps its id); a fire says its pieces and hours left, a lean-to its parts and what it needs next. The menu's `count` is { claimed, minutes } of the last plan
  * followed when the chooser counted it itself.
  * The menu also has `light`: { dark, hours (until dusk by day, until dawn in the dark), torch: { minutes left } | null, planted: [{ dist, dir, minutes }] (torches in the ground within 40 m), lit (he stands in firelight) }.
  *
@@ -62,7 +65,7 @@ import { canStand, terrainAt, WALK_SPEED } from './movement.js';
 import { fishableAt, FISH_DEPTH } from './fish.js';
 import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
 import { freshWater } from './water.js';
-import { dryness, LOG_WALK, CARRY_SLOW } from './wood.js';
+import { dryness, LOG_WALK, CARRY_SLOW, CARRY_MAX, STONE_MAX } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
 import { CELL as KNOWN_CELL, NC as KNOWN_NC } from './known.js';
 import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, RING_NOFIRE } from './leanto.js';
@@ -143,7 +146,9 @@ export function createActor(world, game, opts = {}) {
     berries:   { list: t => game.berries.bearingIn(t), what: () => 'a berry bush with berries' },
     bananas:   { list: t => game.bananas.bearingIn(t), what: () => 'a banana plant with a bunch' },
   };
-  const pileWhat = q => `a pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : q.logs.every(wet) ? 'wet driftwood' : `driftwood (${q.logs.filter(l => !wet(l)).length} dry, ${q.logs.filter(wet).length} wet)`) : q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : 'logs'}`;
+  const clockText = t => { const m = Math.floor(((t % 1) + 1) % 1 * 1440 + 1e-9) % 1440, pad = n => String(n).padStart(2, '0'); return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; };
+  const laidText = q => (Number.isFinite(q.laid) ? ` (laid ${Math.floor(q.laid) === clock.day ? '' : `day ${Math.floor(q.laid)} `}${clockText(q.laid)})` : '');   // 0.38.1 "Trace": when he last laid on it
+  const pileWhat = q => `his pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : q.logs.every(wet) ? 'wet driftwood' : `driftwood (${q.logs.filter(l => !wet(l)).length} dry, ${q.logs.filter(wet).length} wet)`) : q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : 'logs'}${laidText(q)}`;
   const fireWhat = f => {   // 0.37.4: how long it still burns
     const ring = !!game.leantos.ring(f.x, f.z), burning = game.fire.strength(f) > 0;
     const o = burning ? fireOutlook({ fuel: f.fuel, ring }) : null;
@@ -191,6 +196,15 @@ export function createActor(world, game, opts = {}) {
     }
     return out;
   }
+  // 0.38.1 "Trace": a place keeps its id as long as it exists (the n-th thing of its kind he came to know): the same branch is branch4 in every request
+  const idByKey = new Map(), idByRef = new WeakMap(), idNext = {};
+  const placeKey = (kind, ref) => (kind === 'tree' ? 'tree:' + ref.id : kind === 'crabs' ? ref.col : kind === 'spear' || kind === 'axe' ? kind : ref && ref.id !== undefined && ref.id !== null ? kind + ':' + ref.id : ref);
+  function placeId(kind, ref) {
+    const k = placeKey(kind, ref), obj = typeof k === 'object' && k !== null;
+    let n = obj ? idByRef.get(k) : idByKey.get(k);
+    if (!n) { n = idNext[kind] = (idNext[kind] || 0) + 1; if (obj) idByRef.set(k, n); else idByKey.set(k, n); }
+    return kind + n;
+  }
   const spaced = (list, apart) => { const out = []; for (const c of list) if (!out.some(o => dist(o, c) < apart)) out.push(c); return out; };
 
   // ---------- the menu ----------
@@ -199,7 +213,7 @@ export function createActor(world, game, opts = {}) {
     if (menuMemo && menuMemo.t === now) return menuMemo.m;
     const byKind = new Map();
     for (const c of candidates()) { c.dist = dist(c, p); if (!byKind.has(c.kind)) byKind.set(c.kind, []); byKind.get(c.kind).push(c); }
-    const places = [], count = {};
+    const places = [];
     for (const [kind, list] of byKind) {
       list.sort((a, b) => a.dist - b.dist);
       const pool = kind === 'water' ? spaced(list, 20) : list;   // river points lie every few metres: a few spread out
@@ -210,11 +224,9 @@ export function createActor(world, game, opts = {}) {
         const always = kind === 'fire' || kind === 'leanto';   // 0.37.8 "Firelight": his fires and lean-tos are always on the menu; a route to the middle of a fire in the ring by the hut can fail (a fire vanished from the menu while it burned), then the straight line counts, as a later walk of a plan
         if (c.dist >= 1.5 && !r && !always) continue;
         let len = 0, q0 = p; if (r) for (const q of r.pts) { len += Math.hypot(q.x - q0.x, q.z - q0.z); q0 = q; } else if (c.dist >= 1.5) len = c.dist * LEG_DETOUR;
-        count[kind] = (count[kind] || 0) + 1;
         const offers = [...new Set(game.offersAt(c.x, c.z).map(o => o.kind))].filter(k => DO[k]);
-        const sid = kind === 'fire' ? game.fire.fires.indexOf(c.ref) + 1 : kind === 'leanto' ? game.leantos.list.indexOf(c.ref) + 1 : 0;   // 0.37.4: fires and lean-tos keep their number
         const mins = walkMinutes(len / paceNow());   // 0.37.8: at the pace he walks with now (his load, tired, thirsty, hungry), as game/game
-        places.push({ id: kind + (sid > 0 ? sid : count[kind]), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
+        places.push({ id: placeId(kind, c.ref), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
           minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers });
       }
     }
@@ -526,12 +538,35 @@ export function createActor(world, game, opts = {}) {
     if (k === 'wait') return yield* rest(s.wait);
     return { ok: false, reason: 'not a step' };
   }
+  // 0.38.1 "Trace": what a pick-up took and a lay-down laid, with what he carries after it (facts for the records of what he did lately)
+  const ARM = [['driftwood', 'driftwood'], ['branches', 'branch'], ['fronds', 'frond']];
+  const armNow = c => { const parts = ARM.filter(([k]) => c[k] > 0).map(([k, w]) => `${c[k]} ${c[k] === 1 ? w : k}`), n = ARM.reduce((s, [k]) => s + c[k], 0); return `${parts.length ? parts.join(', ') : 'nothing'} (${n} of ${CARRY_MAX})`; };
+  function carryNote(kind, c0, piles0) {
+    const c1 = carries();
+    if (kind === 'pickup') {
+      if (c1.log && !c0.log) return 'picked up a log: it is on his shoulder';
+      const got = [...ARM, ['stones', 'stone']].filter(([k]) => c1[k] > c0[k]).map(([k, w]) => (c1[k] - c0[k] === 1 ? `1 ${w}` : `${c1[k] - c0[k]} ${k}`));
+      if (!got.length) return null;
+      return c1.stones > c0.stones && !(c1.driftwood + c1.branches + c1.fronds) ? `picked up ${got.join(', ')}; now in his hands: ${c1.stones} stone${c1.stones === 1 ? '' : 's'} (${c1.stones} of ${STONE_MAX})` : `picked up ${got.join(', ')}; now under his arm: ${armNow(c1)}`;
+    }
+    const laid = c0.driftwood + c0.branches + c0.fronds + c0.stones + (c0.log ? 1 : 0) - (c1.driftwood + c1.branches + c1.fronds + c1.stones + (c1.log ? 1 : 0));
+    if (laid <= 0) return null;
+    const where = W.piles.filter(q => !piles0.has(q) || q.logs.length > piles0.get(q)).map(q => {
+      const n = piles0.has(q) ? q.logs.length - piles0.get(q) : q.logs.length, d = dist(q, p), at = d < 3 ? 'here' : `${Math.round(d)} m ${dirOf(q.x - p.x, q.z - p.z)}`;
+      return piles0.has(q) ? `${kindPlural(pileKind(q), n)} on his pile of ${pileNoun(q)} ${at} (${placeId('pile', q)}, now ${q.logs.length})` : `${kindPlural(pileKind(q), n)} on a new pile ${at} (${placeId('pile', q)})`;
+    });
+    return `laid ${laid === 1 ? '1 piece' : `${laid} pieces`} down${where.length ? ': ' + where.join('; ') : ''}`;
+  }
+  const pileKind = q => (q.kind === 'driftwood' ? 'driftwood' : q.kind);
+  const pileNoun = q => (q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : q.kind === 'log' ? 'logs' : 'driftwood');
   function* runPlan(plan) {
     for (let i = 0; i < plan.steps.length; i++) {
       const s = plan.steps[i], what = stepText(s, plan.menu.places);
       actor.stepIndex = i;
       emit('step', { i, what });
+      const tracked = s.do === 'pickup' || s.do === 'lay', c0 = tracked ? carries() : null, piles0 = tracked ? new Map(W.piles.map(q => [q, q.logs.length])) : null;
       const r = yield* runStep(s, plan.menu.places);
+      if (r.ok && tracked) { const n = carryNote(s.do, c0, piles0); if (n) r.note = n; }
       stats.steps++;
       if (r.ok && s.do === 'sleep') { stats.done++; last = remember('step', what, 'done'); emit('step-end', { i, what, outcome: 'done' }); return 'woke'; }
       if (r.ok) { stats.done++; last = remember('step', what, 'done', r.note || null); emit('step-end', { i, what, outcome: 'done' }); }

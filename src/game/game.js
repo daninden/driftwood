@@ -281,7 +281,12 @@ export function createGame(world, spawn, opts = {}) {
     return leantos.list.some(l => keepFree(l).touches(x, z, rr)) || !gapFree(movement.obstacles.camp, x, z, rr, sameFirePlace(x, z));   // 0.30.3 rule (a): the inside of a lean-to and the area in front of its opening stay free of wood
   };
   function canPileAt(x, z, rs) { return !wet(hereAt(x, z)) && !blockedAt(x, z, rs); }   // 0.33.1: may a new pile (walk-blocking radius rs, default a driftwood pile's) be laid with its middle at (x, z)? Pure; the check `lay` makes
-  const lay = heading => wood.drop(player.x, player.z, heading, wet(here()), (x, z) => wet(terrainAt(world, x, z, game.sea)), blockedAt, leantos.ringMiddle);   // a pile never goes in the water; 0.36.2: a new fuel pile in a finished ring lies in the ring's exact middle
+  const lay = heading => {   // a pile never goes in the water; 0.36.2: a new fuel pile in a finished ring lies in the ring's exact middle
+    const before = new Map(wood.piles.map(q => [q, q.logs.length]));
+    const ok = wood.drop(player.x, player.z, heading, wet(here()), (x, z) => wet(terrainAt(world, x, z, game.sea)), blockedAt, leantos.ringMiddle);
+    if (ok) for (const q of wood.piles) if (!before.has(q) || q.logs.length > before.get(q)) q.laid = clock.total;   // 0.38.1 "Trace": when he last laid something on it
+    return ok;
+  };
   const meanDry = logs => logs.reduce((s, l) => s + dryness(l, clock.total), 0) / Math.max(1, logs.length);
   const face = th => { player.heading = Math.atan2(th.x - player.x, th.z - player.z) || player.heading; };
   const fuel = l => !l.frond && dryness(l, clock.total) >= TORCH_DRY;   // a frond never burns

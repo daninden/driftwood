@@ -69,7 +69,7 @@ export const hoursTo = (time, to) => (((to - time) % 1 + 1) % 1) * 24;
 const h1 = v => { const r = Math.round(v * 2) / 2; return Number.isInteger(r) ? String(r) : r.toFixed(1); };   // hours to the nearest half
 const d1 = v => (Math.round((+v || 0) * 10) / 10).toFixed(1);
 
-/** The state as lines of text. o.body replaces the thirst, hunger and awake line (ai/actPrompt `bodyText`), o.fire comes after the home line (`fireText`). */
+/** The state as lines of text. o.body replaces the thirst, hunger and awake line (ai/actPrompt `bodyText`), o.fire comes after the home line (`fireText`), o.arm after what he carries (0.38.1, `armText`). */
 export function stateText(s, o = {}) {
   const c = s.carries || {}, has = [];
   for (const [k, label] of [['driftwood', 'driftwood'], ['branches', 'branches'], ['fronds', 'fronds'], ['stones', 'stones'], ['fibre', 'fibre'], ['nuts', 'coconuts'], ['emptyShells', 'empty half shells'], ['fullShells', 'full half shells'], ['crabs', 'crabs'], ['fish', 'fish'], ['berries', 'handfuls of berries'], ['bananas', 'banana bunches']]) if (c[k] > 0) has.push(`${c[k]} ${label}`);
@@ -80,6 +80,7 @@ export function stateText(s, o = {}) {
     `Day ${s.day}, ${hhmm(s.time)}. Weather: ${s.raining ? 'raining' : 'dry'}. ${s.daylight > 0 ? `About ${d1(s.daylight)} hours of daylight left (dusk about ${hhmm(DUSK)}).` : 'It is dark.'}`,
     ...(o.body ? [o.body] : [`Thirst: ${d1(s.thirst)} days. Hunger: ${d1(s.hunger)} days. Awake for ${d1(s.awake)} days.`]),
     `Carrying: ${has.length ? has.join(', ') : 'nothing'}.`,
+    ...(o.arm ? [o.arm] : []),
     `Home: ${home}.`,
     ...(o.fire ? [o.fire] : []),
     ...(t ? [`Tide: ${t.name === 'low' ? 'low' : t.name === 'high' ? 'high' : 'half tide'}, ${t.falling ? 'falling, low water' : 'rising, high water'} about ${hhmm(t.turn)}.`] : []),

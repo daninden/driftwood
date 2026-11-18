@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.38.1 "Trace" — 2026-11-18
+
+Agreed with the user 2026-11-18, after their Gemini game on 0.37.10 where he picked wood up, laid it down and picked it up again: he did not see what he did. Only the request of full AI play changes; facts, no advice.
+
+- **What a pick-up took and a lay-down laid:** a done "pickup" or "lay" step's record (in *what he did lately*) says so, with what he carries after it: "picked up 1 branch; now under his arm: 1 driftwood, 1 branch, 1 frond (3 of 3)", "laid 3 pieces down: 2 branches on a new pile here (pile7); a frond on his pile of fronds here (pile2, now 4)" (`game/actor`).
+- **The room under his arm:** NOW says "Under his arm: 2 of 3." after what he carries (`ai/actPrompt` `armText`; a log on his shoulder takes everything).
+- **His piles:** a pile on the menu is "his pile of 2 branches (laid 08:44)" ("laid day 2 08:44" on another day): `game/game` stamps a pile with the time he last laid on it (`pile.laid`, saved with the island by `game/wood`).
+- **Ids that hold:** a place keeps its id as long as it exists (`game/actor` `placeId`: the n-th thing of its kind he came to know; fires and lean-tos too), so branch4 is the same branch in every request; the rules say so. Ids are not kept across a reload.
+- No check of "too many pick-ups" in the plan: a failed step already says why.
+- **Tests:** `tests/actor.test.js` (*0.38.1 "Trace"*).
+
 ## 0.38.0 "Only him" — 2026-11-18
 
 Agreed with the user 2026-11-18 (the proposal of the handover). The language model is the only way to play: the old rules mind goes, and the player only watches.
