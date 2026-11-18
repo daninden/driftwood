@@ -258,6 +258,14 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Body (0.37.10)
+
+After the user's Gemini game on 0.37.9 (day 1 spent on walls and bed, no drink and no fire, the notes a diary of building). Only the request of full AI play changes; facts, no advice.
+- **The body:** `ai/actPrompt` `bodyText(state)` replaces the thirst, hunger and awake line of NOW (`ai/prompt` `stateText(s, { body, fire })`; the old mind's request keeps its own line): where thirst and hunger stand (not, thirsty, very thirsty, at collapse; not, hungry, starving), what that does now (the walking loss from `THIRST_SLOW` / `HUNGER_SLOW` and the level, `DRAIN`, `DRILL_COST` of `game/hunger`, `STARVE_DRAIN`) and in how many hours the next point and the collapse come.
+- **The fire:** `game/actor` `menu().fires` `[{ id, state: 'burning' | 'embers' | 'cold', hours, ring, dist, dir }]` (every fire place on the menu); `ai/actPrompt` `fireText` puts it after the home line, also as "Fire: he has no fire." or "none of his burns".
+- **The rules** (`actFixed`): the very-thirsty and hunger effects in numbers; what the notes are for: the request already carries the last `RECENT_SHOWN` (12, `ai/config`, used by `ai/planner`) records, the home and the fires, the menu shows only the nearest `PER_KIND` of a kind and those within `NEARBY` within `SCAN_R`; the game never updates a note.
+- **Tests:** `tests/planner.test.js`.
+
 ### Far (0.37.9)
 
 After the AI test game on 0.37.8 and the user's own game (the hut on day 2, no exploring).

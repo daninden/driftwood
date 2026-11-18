@@ -32,7 +32,7 @@
  */
 import { buildActMessages, parseActPlan, buildLessonMessages, parseLessons } from './actPrompt.js';
 import { clipLine } from './prompt.js';
-import { AI_LOG_MAX, NOTES_MAX, NOTE_LEN, LESSONS_MAX, LESSON_LEN } from './config.js';
+import { AI_LOG_MAX, RECENT_SHOWN, NOTES_MAX, NOTE_LEN, LESSONS_MAX, LESSON_LEN } from './config.js';
 import { WAIT } from '../game/intent.js';
 import { DUSK } from '../game/sleep.js';
 
@@ -47,7 +47,7 @@ export function createPlanner(o = {}) {
   const items = [];
   const bump = () => { version++; };
   const push = e => { items.unshift(e); if (items.length > AI_LOG_MAX) items.pop(); bump(); try { log(e); } catch (x) { /* the log never disturbs the game */ } };
-  const recentNow = () => { try { return (recent() || []).slice(-12); } catch (e) { return []; } };
+  const recentNow = () => { try { return (recent() || []).slice(-RECENT_SHOWN); } catch (e) { return []; } };
   const sendNow = messages => { try { return Promise.resolve(ask(messages)); } catch (e) { return Promise.reject(e); } };   // sent at once (a throw is a failed request)
 
   function fail(entry, message) {

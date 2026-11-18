@@ -22,7 +22,7 @@
  *   hhmm(time) -> 'HH:MM'              a time of day 0..1 as the island's clock
  *   (0.37.5: stateText tells a log on his shoulder among what he carries.)
  *   snapshotOf(game, mind) -> state    a plain description of the situation: { day, time, raining, daylight (hours to dusk, 0 at night), fromHome (metres from his camp), thirst, hunger, awake, carries, home, journey, doing } (doing in words, e.g. 'free time, work on his home')
- *   stateText(state) -> string         the state as lines of text
+ *   stateText(state, { body, fire }?) -> string   the state as lines of text (0.37.10 "Body": `body` replaces the thirst, hunger and awake line, `fire` follows the home line; both from ai/actPrompt)
  *   0.36.6: the situation also tells, when the game knows it (a missing part is left out, never guessed): `camp` (mind.camp: the fire, 'none' / 'out' / 'embers' / 'low' / 'well', and the store of his own piles: dry and wet driftwood, branches, fronds, stones, logs), `tide` (tideNow: high, half or low water now, rising or falling, when it turns),
  *   `lastNight` (mind.lastNight: hours slept, cold, collapse), `strip` (mind.stripWood: wet driftwood on the tide strip he knows). The weather forecast is NOT told: he cannot know it. Water at the camp is not told either: the game keeps shells only in his arms (`Carrying` has them).
  *   tideNow(total) -> { level, name: 'high' | 'half' | 'low', falling, turn (the time of day of the next turn) }   pure, from game/tide
@@ -325,7 +325,7 @@ function situationLines(s) {
 }
 
 const NEXT_HOME = { leanto: 'the lean-to', walls: 'the walls', ring: 'the stone ring', bed: 'the bed', hut: 'the hut' };
-export function stateText(s) {
+export function stateText(s, o = {}) {   // 0.37.10 "Body": o.body replaces the thirst, hunger and awake line, o.fire comes after the home line (full AI play, ai/actPrompt)
   const c = s.carries || {}, has = [];
   for (const [k, label] of [['driftwood', 'driftwood'], ['branches', 'branches'], ['fronds', 'fronds'], ['stones', 'stones'], ['fibre', 'fibre'], ['nuts', 'coconuts'], ['emptyShells', 'empty half shells'], ['fullShells', 'full half shells'], ['crabs', 'crabs'], ['fish', 'fish'], ['berries', 'handfuls of berries'], ['bananas', 'banana bunches']]) if (c[k] > 0) has.push(`${c[k]} ${label}`);
   for (const [k, label] of [['spear', 'a spear'], ['axe', 'an axe'], ['torch', 'a torch'], ['log', 'a log on his shoulder']]) if (c[k]) has.push(label);   // 0.37.5: the log too
@@ -333,9 +333,10 @@ export function stateText(s) {
   const home = !h ? 'no shelter yet' : `lean-to ${h.leanto}%, walls ${h.walls}%, bed ${h.bed}%, stone ring ${h.ring}%, hut ${h.hut}%`;
   return [
     `Day ${s.day}, ${hhmm(s.time)}. Weather: ${s.raining ? 'raining' : 'dry'}. ${s.daylight > 0 ? `About ${d1(s.daylight)} hours of daylight left (dusk about ${hhmm(DUSK)}).` : 'It is dark.'}`,
-    `Thirst: ${d1(s.thirst)} days${s.thirst >= THIRST_GO ? ` (he can drink now, at any hour; slower from ${THIRSTY_AT})` : ''}. Hunger: ${d1(s.hunger)} days${s.hunger >= HUNGER_GO ? ` (he can eat now, at any hour; slower from ${HUNGRY_AT})` : ''}. Awake for ${d1(s.awake)} days.`,
+    ...(o.body ? [o.body] : [`Thirst: ${d1(s.thirst)} days${s.thirst >= THIRST_GO ? ` (he can drink now, at any hour; slower from ${THIRSTY_AT})` : ''}. Hunger: ${d1(s.hunger)} days${s.hunger >= HUNGER_GO ? ` (he can eat now, at any hour; slower from ${HUNGRY_AT})` : ''}. Awake for ${d1(s.awake)} days.`]),
     `Carrying: ${has.length ? has.join(', ') : 'nothing'}.`,
     `Home: ${home}.${s.nextHome ? ` Next part of the home: ${NEXT_HOME[s.nextHome] || s.nextHome}.` : ''}`,
+    ...(o.fire ? [o.fire] : []),
     ...situationLines(s),
     `Now: ${s.doing || 'unknown'}${s.journey ? ' (a journey is on)' : ''}${s.fromHome != null ? `, ${Math.round(s.fromHome)} m from his camp` : ''}.`,
   ].join('\n');

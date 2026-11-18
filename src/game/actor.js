@@ -15,7 +15,8 @@
  *   actor.input                                   the input object for game.update
  *   actor.step(dt)                                one step of the hands (call before game.update(actor.input, dt))
  *   actor.menu() -> menu                          what he could do now (pure but for the path searches; no state changes):
- *                                                   { here: [{ id, what }], uses: [{ id, what }], places: [place], dirs, carries, light, minutes: PLAN_MINUTES }
+ *                                                   { here: [{ id, what }], uses: [{ id, what }], places: [place], fires: [fire], dirs, carries, light, minutes: PLAN_MINUTES }
+ *                                                   fire (0.37.10 "Body"): { id, state: 'burning' | 'embers' | 'cold', hours (left while burning), ring, dist, dir }: every fire of his on the menu
  *                                                   place: { id, kind, what, x, z, dist, dir, minutes, nearby, offers: [kind] } (offers: what the action button would offer standing there, with what he holds now)
  *   actor.plan -> { steps, minutes, at, menu, say, why } | null      the plan being followed (menu: the menu it was chosen from; its place ids hold for the whole plan; say: the chooser's thought for it)
  *   actor.stepIndex, actor.waiting, actor.why             the running step, whether he waits for a plan, why the next plan is (or was last) asked
@@ -149,6 +150,10 @@ export function createActor(world, game, opts = {}) {
     const o = burning ? fireOutlook({ fuel: f.fuel, ring }) : null;
     return (burning ? `his fire, burning, about ${Math.max(1, Math.round(o.pieces))} piece${Math.round(o.pieces) === 1 ? '' : 's'} on it, about ${Math.round(o.hoursLeft * 2) / 2} hours left` : f.embers > 0.005 ? 'his fire, embers only' : 'his fire place, cold') + (ring ? ' (in the stone ring)' : '');
   };
+  const fireInfo = q => {   // 0.37.10 "Body": a fire on the menu for the request's NOW: { id, state: 'burning' | 'embers' | 'cold', hours (left while burning), ring, dist, dir }
+    const f = q.ref, ring = !!game.leantos.ring(f.x, f.z), burning = game.fire.strength(f) > 0;
+    return { id: q.id, state: burning ? 'burning' : f.embers > 0.005 ? 'embers' : 'cold', hours: burning ? Math.round(fireOutlook({ fuel: f.fuel, ring }).hoursLeft * 2) / 2 : 0, ring, dist: q.dist, dir: q.dir };
+  };
   const kindWord = k => (k === 'branch' ? 'a branch' : k === 'frond' ? 'a frond' : k === 'stone' ? 'a stone' : k === 'log' ? 'a log' : 'a piece of driftwood');
   const kindPlural = (k, n) => (n === 1 ? kindWord(k) : `${n} ${k === 'branch' ? 'branches' : k === 'frond' ? 'fronds' : k === 'stone' ? 'stones' : k === 'log' ? 'logs' : 'pieces of driftwood'}`);
   const stillNeeds = (l, w) => {   // 0.37.6 "Free hands": what a part still needs, in order, the runs of one kind counted: "3 branches, then 5 fronds"
@@ -223,7 +228,8 @@ export function createActor(world, game, opts = {}) {
     if (game.berries.carried.length) uses.push('berries');
     if (game.bananas.carried.length) uses.push('banana');
     if (game.crabs.carried.length || game.fish.carried.length) uses.push('crab');
-    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, dirs: DIRS.slice(), carries: carries(), light: lightInfo(), island: islandInfo(), minutes: PLAN_MINUTES, count: lastCount };
+    const fires = places.filter(q => q.kind === 'fire').map(q => fireInfo(q));   // 0.37.10 "Body": every fire of his, also when none burns (the request says so)
+    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, fires, dirs: DIRS.slice(), carries: carries(), light: lightInfo(), island: islandInfo(), minutes: PLAN_MINUTES, count: lastCount };
     menuMemo = { t: now, m };
     return m;
   }

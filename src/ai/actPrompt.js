@@ -18,9 +18,14 @@
  *   lightText(light) -> string                        0.37.2: dusk or dawn, the torch in his hand, the torches in the ground near him (game/actor `menu().light`)
  *   actRecentText(recent) -> string                   game/actor's records as lines
  *   buildActMessages({ name, state, menu, ask, recent, notes, lessons }) -> [{ role: 'system', content }, { role: 'user', content }]
+ *   bodyText(state) -> string (0.37.10: thirst, hunger, awake), fireText(fires) -> string (0.37.10: his fires, or that none burns)
  *   parseActPlan(text, old?) -> { ok, steps, say, notes, error }   the first JSON object of the text (code fences allowed); `steps` as given (checked later), `notes` [text] | null
  *                                (0.37.8: a whole number n in `notes` keeps note n of `old`, his notes before)
  *
+ * 0.37.10 "Body": the NOW block says where thirst and hunger stand and what they do to him now, what comes next and in how many hours (`bodyText`: thirsty and slower,
+ * very thirsty at VERY_AT (rest runs out DRAIN times as fast), the collapse at COLLAPSE_AT; hungry and slower, the fire drill dearer, starving at STARVING_AT), and his fires,
+ * also when none burns (`fireText`, from game/actor `menu().fires`); the fixed part tells the very-thirsty and hunger effects and what the notes are for (the request
+ * already carries what he did lately, his home and his fires; the game never updates a note).
  * 0.37.9 "Far": the fixed part tells what each part of the home gives (game/sleep, game/weather, game/leanto numbers), what a nap takes off, that he can sleep, drink and make a fire
  * anywhere far from home, and that the request says how much of the island he has seen; `menuText` has the island line (menu.island).
  * 0.37.8 "Firelight": the fixed part says a walk in the dark needs light, a plan is about PLAN_MINUTES and refused only over PLAN_GRACE (by either count), a load slows him (CARRY_SLOW,
@@ -41,14 +46,15 @@
  * 0.37.3 "Branches": the fixed part says what goes with a torch in his hand (branches only; with only branches in his arms a torch can be taken).
  * 0.37.2 "Torch": the fixed part tells the dark rule (game/dark) and the torch, that a sleep and a fishing are plans of their own and that fishing takes the minutes the model chooses; the menu has the light line.
  *
- * Depends on: game/actions (the words of the actions, the limits), game/dark (the light ranges), game/fibre, game/leanto, game/wood, game/sleep, ai/prompt (stateText, hhmm, notesText, journalLines, clipLine, whoName), ai/config, and the numbers of game/thirst, game/hunger, game/sleep (DUSK, DAWN), game/fire (torch), game/leanto, game/wood, game/shells
+ * Depends on: game/actions (the words of the actions, the limits, PER_KIND), game/actor (SCAN_R, 0.37.10), game/dark (the light ranges), game/fibre, game/leanto, game/wood, game/sleep, ai/prompt (stateText, hhmm, notesText, journalLines, clipLine, whoName), ai/config, and the numbers of game/thirst, game/hunger, game/sleep (DUSK, DAWN), game/fire (torch), game/leanto, game/wood, game/shells
  */
-import { DO, USE, DIRS, PLAN_MINUTES, PLAN_STEPS, PLAN_GRACE, METRES_PER_MINUTE, NEARBY, WANDER_MAX, WAIT_MAX, FISH_MIN, FISH_MAX, gameMinutes } from '../game/actions.js';
+import { DO, USE, DIRS, PER_KIND, PLAN_MINUTES, PLAN_STEPS, PLAN_GRACE, METRES_PER_MINUTE, NEARBY, WANDER_MAX, WAIT_MAX, FISH_MIN, FISH_MAX, gameMinutes } from '../game/actions.js';
+import { SCAN_R } from '../game/actor.js';
 import { FIRE_LIGHT, TORCH_LIGHT } from '../game/dark.js';
 import { stateText, hhmm, notesText, clipLine, whoName } from './prompt.js';
-import { NOTES_MAX, NOTE_LEN, SAID_LEN, LESSONS_MAX, LESSON_LEN } from './config.js';
-import { THIRSTY_AT, COLLAPSE_AT } from '../game/thirst.js';
-import { HUNGRY_AT, STARVING_AT } from '../game/hunger.js';
+import { NOTES_MAX, NOTE_LEN, SAID_LEN, LESSONS_MAX, LESSON_LEN, RECENT_SHOWN } from './config.js';
+import { THIRSTY_AT, VERY_AT, COLLAPSE_AT, THIRST_SLOW, DRAIN } from '../game/thirst.js';
+import { HUNGRY_AT, STARVING_AT, HUNGER_SLOW, DRILL_COST as HUNGER_DRILL, STARVE_DRAIN } from '../game/hunger.js';
 import { AWAKE_MAX, TIRED_AT, DUSK, DAWN, NAP_DAYS, NAP_REST, REST_RATE, NIGHT_AFTER, COLD_SLEEP, SHELTER_SLEEP, WALLS_SLEEP, SHELTER_REST, BED_REST } from '../game/sleep.js';
 import { WOOD_SHELTER, FIRE_SHELTER } from '../game/weather.js';
 import { FIBRE_MAX } from '../game/fibre.js';
@@ -68,7 +74,7 @@ export function actFixed(name) {
     `You are the mind of ${who}, a castaway alone on a small island. You decide everything he does, one single action at a time. The game walks him and does the work; afterwards it tells you whether each step worked, and why not.`,
     '',
     'HOW THE ISLAND WORKS',
-    `- Thirst and hunger count in days since he last drank or ate. Thirsty from ${THIRSTY_AT} (he slows down); at ${COLLAPSE_AT} days of thirst he collapses. Hungry from ${HUNGRY_AT}; starving at ${STARVING_AT}. Fresh water is in the rivers ("drink" there); a full half shell can be carried and drunk anywhere.`,
+    `- Thirst and hunger count in days since he last drank or ate, also while he sleeps. Thirsty from ${THIRSTY_AT}: he walks slower, down to ${Math.round(THIRST_SLOW * 100)}% of his pace at ${COLLAPSE_AT}; very thirsty from ${VERY_AT}: his rest runs out ${times(DRAIN)} as fast; at ${COLLAPSE_AT} days of thirst he collapses (he wakes still very thirsty). Hungry from ${HUNGRY_AT}: he walks slower, down to ${Math.round(HUNGER_SLOW * 100)}% at ${STARVING_AT}, and the fire drill tires him ${HUNGER_DRILL} times as much; starving from ${STARVING_AT}: his rest runs out ${STARVE_DRAIN} times as fast (hunger has no collapse of its own). The request says where both stand and in how many hours the next point comes. Fresh water is in the rivers ("drink" there); a full half shell can be carried and drunk anywhere.`,
     `- A coconut on the ground is husked where it lies ("husk"): it gives a tuft of fibre (to light fires and make an axe; he carries at most ${FIBRE_MAX} tufts, a husk with ${FIBRE_MAX} gives none) and the nut, eaten at once when his hunger is above ${(Math.round(EAT_AT * 100) / 100)} day, else carried (at most ${NUT_MAX}); eating a nut also keeps its half shell (at most ${SHELL_MAX}), which he can fill at a river ("fill", with an empty shell). He can drink at a river whenever he likes, thirsty or not. Drinking or filling at the river, he first lays down what he carries (a torch goes into the ground): it stays there on the bank. Berries and bananas are picked from bearing plants: eaten at once when he is hungry or has no room to carry them, else carried. Crabs come out of their holes at low water and hide in a hole when he comes near: walk to the holes, then "dig" at a hole a crab just hid in (about half the time he catches one; a colony empties, crabs he caught are gone); a crab or fish is roasted at a fire with flames.`,
     `- Tiredness: awake counts in days; tired from ${(Math.round(TIRED_AT * 100) / 100)}, at ${AWAKE_MAX} he falls asleep where he stands. He can lie down to sleep ("sleep") from dusk on once he has been awake about ${Math.round(NIGHT_AFTER * 24 * 2) / 2} hours (so not again soon after waking in the night), or by day after half a day awake; a sleep begun before dusk (${hhmm(DUSK)}) is a nap: he wakes after ${Math.round(NAP_DAYS * 24)} hours, and it takes only about ${Math.round(NAP_DAYS * REST_RATE * NAP_REST * 10) / 10} day off his awake count; a whole night of sleep by a fire takes it to 0. A night without a burning fire within about 3 m is cold: he wakes after about 3 hours (a lean-to makes it longer); with a fire close by he sleeps the night.`,
     `- Fire: a pile of at least ${FIRE_MIN} pieces of dry driftwood (or branches) beside him, then "light" (the fire drill, it uses a tuft of fibre whether it catches or not; the more tired he is, the less often it catches; a step "light" that did not catch fails). Dry wood in his arms is put on a burning fire (or its glowing embers) with "feed", standing right at it; within ${RING_NOFIRE} m of a finished stone ring only the fire in the ring can be fed. One piece of dry driftwood burns about ${Math.round(BURN * 24 * 10) / 10} hours, a branch about ${Math.round(BURN * 24 * BRANCH_BURN * 10) / 10}; in a stone ring ${RING_BURN} times as long; faster in rain. Wet driftwood dries over a day where it lies above the tide.`,
@@ -79,7 +85,8 @@ export function actFixed(name) {
     `- Walking in the dark (from dusk, about ${hhmm(DUSK)}, to dawn, about ${hhmm(DAWN)}): a "go" in the dark needs light: he holds a burning torch, or he stands in the light of a burning fire (about ${FIRE_LIGHT} m) or of a torch stuck in the ground (about ${TORCH_LIGHT} m) and the place he walks to is in such light too. Without light he does not walk in the dark: the step fails. A "wander" in the dark needs a torch in his hand. A walk that would end after dusk counts as a walk in the dark; by day, a walk that ends before dusk is free. A step that is not allowed fails with the reason. A torch ("torch", at a burning fire) takes half a piece of wood's worth out of that fire, burns about ${Math.round(TORCH_DAYS * 24)} hours (${TORCH_RAIN} times as fast in rain), and can be stuck in the ground with "plant"; he can hold one torch.`,
     '- He knows only the ground he has walked; he learns what he walks past (about 40 m round him). The menu shows only places he knows; the request says how much of the island he has seen. "wander" takes him out into ground he may not know. He can sleep, drink at any river and make a fire anywhere, far from home too.',
     `- Every fire he knows is on the menu with how long it still burns, every lean-to with what it still needs, every pile with what lies on it.`,
-    `- His lessons (below the notes) are what he has learned on this island: one is written at sunset. The notes are yours for facts and intentions.`,
+    `- His lessons (below the notes) are what he has learned on this island: one is written at sunset.`,
+    `- Your notes are the only memory the game does not keep for you. Every request already tells what he did lately (his last ${RECENT_SHOWN} steps and plans, with how they went), his home part by part, his fires, and the places on the menu (only the nearest ${PER_KIND} of each kind, and those within ${NEARBY} m, within about ${SCAN_R} m). The game never updates a note: a count in a note ("2 left") is wrong as soon as he works on. What only the notes keep: places that are not on the menu now, what did not work and where, and what he means to do and why. At most ${NOTES_MAX} lines: a line that repeats what the request tells takes the room of one he may need.`,
     '',
     'HOW TO PLAN',
     `- A plan is a short list of steps of about ${PLAN_MINUTES} game minutes: add up the minutes of every step (an action's minutes are in the list below; a walk's minutes on the menu count from where he stands now, so a second walk in the same plan counts from the place before: he walks about ${Math.round(METRES_PER_MINUTE * 10) / 10} m in a game minute, a little more on a winding way; a sleep counts 0, a fishing its minutes) and give your sum as "minutes". A plan of several steps is refused only when your count or the game's is over ${PLAN_GRACE} minutes; you are told when your count was off. Bundle small things that belong together ("go to the river, drink, fill the shells"). A walk or a wander longer than that is a plan of its own. At most ${PLAN_STEPS} steps.`,
@@ -154,13 +161,44 @@ export const actState = (state, menu) => ({ ...(state || {}), camp: null, fromHo
 
 const countLine = c => (c && Number.isFinite(c.claimed) && Number.isFinite(c.minutes) && Math.abs(c.claimed - c.minutes) >= 3 ? `Your last plan: you counted ${c.claimed} minutes, the game counted about ${Math.round(c.minutes)}.` : null);   // 0.37.4
 
+const times = n => (n === 2 ? 'twice' : `${n} times`);
+const d1b = v => (Math.round((+v || 0) * 10) / 10);
+const inHours = days => { const h = Math.max(0, days) * 24; return h < 1 ? `in about ${Math.max(1, Math.round(h * 60))} minutes` : `in about ${Math.round(h)} hour${Math.round(h) === 1 ? '' : 's'}`; };
+const slower = (level, slow) => Math.round((1 - slow) * Math.min(1, Math.max(0, level)) * 100);
+/** 0.37.10 "Body": where thirst and hunger stand, what they do to him now, and when the next point comes (game/thirst, game/hunger); then how long he has been awake. */
+export function bodyText(s) {
+  const th = +s.thirst || 0, hu = +s.hunger || 0;
+  const tSlow = slower((th - THIRSTY_AT) / (COLLAPSE_AT - THIRSTY_AT), THIRST_SLOW), hSlow = slower((hu - HUNGRY_AT) / (STARVING_AT - HUNGRY_AT), HUNGER_SLOW);
+  const collapse = `he collapses at ${COLLAPSE_AT} days, ${inHours(COLLAPSE_AT - th)}`;
+  const thirst = th >= COLLAPSE_AT ? `Thirst: ${d1b(th)} days since he drank: he is at the point of collapse.`
+    : th >= VERY_AT ? `Thirst: ${d1b(th)} days since he drank: very thirsty (he walks about ${tSlow}% slower, his rest runs out ${times(DRAIN)} as fast); ${collapse}.`
+    : th >= THIRSTY_AT ? `Thirst: ${d1b(th)} days since he drank: thirsty (he walks about ${tSlow}% slower). Very thirsty at ${VERY_AT} day (his rest runs out ${times(DRAIN)} as fast), ${inHours(VERY_AT - th)}; ${collapse}.`
+    : `Thirst: ${d1b(th)} days since he drank: not thirsty. Thirsty at ${THIRSTY_AT} (he walks slower), ${inHours(THIRSTY_AT - th)}; ${collapse}.`;
+  const starving = `starving at ${STARVING_AT} days (his rest runs out ${STARVE_DRAIN} times as fast), ${inHours(STARVING_AT - hu)}`;
+  const hunger = hu >= STARVING_AT ? `Hunger: ${d1b(hu)} days since he ate: starving (he walks about ${hSlow}% slower, his rest runs out ${STARVE_DRAIN} times as fast).`
+    : hu >= HUNGRY_AT ? `Hunger: ${d1b(hu)} days since he ate: hungry (he walks about ${hSlow}% slower, the fire drill tires him ${HUNGER_DRILL} times as much); ${starving}.`
+    : `Hunger: ${d1b(hu)} days since he ate: not hungry. Hungry at ${HUNGRY_AT} (he walks slower), ${inHours(HUNGRY_AT - hu)}; ${starving}.`;
+  return `${thirst}\n${hunger}\nAwake for ${d1b(s.awake)} days.`;
+}
+
+/** 0.37.10 "Body": his fires (game/actor `menu().fires`), also when none burns. */
+export function fireText(fires) {
+  const list = Array.isArray(fires) ? fires : [];
+  if (!list.length) return 'Fire: he has no fire.';
+  const burning = list.filter(f => f.state === 'burning'), embers = list.filter(f => f.state === 'embers');
+  const where = f => `${f.id}${f.ring ? ' in the stone ring' : ''}, ${f.dist} m ${f.dir}`;
+  if (burning.length) return `Fire: ${burning.map(f => `${where(f)}, burns about ${f.hours} more hours`).join('; ')}.`;
+  if (embers.length) return `Fire: none of his burns; embers only at ${embers.map(where).join('; ')}.`;
+  return `Fire: none of his burns (${list.length === 1 ? 'one cold fire place' : `${list.length} cold fire places`}).`;
+}
+
 export function buildActMessages({ name, state, menu, ask, recent, notes, lessons }) {
   const cl = countLine(menu && menu.count);
   const user = [
     askLine(ask) + (cl ? ' ' + cl : ''),
     '',
     'NOW',
-    stateText(actState(state, menu)),
+    stateText(actState(state, menu), { body: bodyText(state || {}), fire: fireText(menu && menu.fires) }),
     '',
     'WHAT HE DID LATELY',
     actRecentText(recent),

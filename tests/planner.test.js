@@ -7,7 +7,7 @@ import { createGame } from '../src/game/game.js';
 import { createActor } from '../src/game/actor.js';
 import { WAIT } from '../src/game/intent.js';
 import { DO, DIRS, PLAN_MINUTES } from '../src/game/actions.js';
-import { actFixed, buildActMessages, parseActPlan, parseLessons, menuText, WHY_ASKED } from '../src/ai/actPrompt.js';
+import { actFixed, buildActMessages, parseActPlan, parseLessons, menuText, WHY_ASKED, bodyText, fireText } from '../src/ai/actPrompt.js';
 import { createPlanner, RETRY_SECS, REJECTS_MAX } from '../src/ai/planner.js';
 import { snapshotOf } from '../src/ai/prompt.js';
 import { thinkingText } from '../src/render/thinkingMark.js';
@@ -50,6 +50,31 @@ describe('the request and the answer (ai/actPrompt)', () => {
     expect(f).toMatch(/it takes only about 0.2 day off his awake count; a whole night of sleep by a fire takes it to 0/);
     expect(f).toContain('He can sleep, drink at any river and make a fire anywhere, far from home too.');
     expect(menuText({ island: { across: 500, seen: 7 } })).toContain('The island is about 500 m across; he has seen about 7% of it.');
+  });
+  it('NOW says where thirst and hunger stand, what they do now and when the next point comes, and his fires also when none burns (0.37.10 "Body")', () => {
+    const b = bodyText({ thirst: 0.8, hunger: 0.8, awake: 0.3 });   // the user's Gemini game: day 2 04:04, never drunk on day 1
+    expect(b).toContain('Thirst: 0.8 days since he drank: thirsty (he walks about 11% slower). Very thirsty at 1 day (his rest runs out twice as fast), in about 5 hours; he collapses at 1.5 days, in about 17 hours.');
+    expect(b).toContain('Hunger: 0.8 days since he ate: hungry (he walks about 3% slower, the fire drill tires him 1.5 times as much); starving at 3 days');
+    expect(b).toContain('Awake for 0.3 days.');
+    expect(bodyText({ thirst: 0.2, hunger: 0.1, awake: 0 })).toMatch(/not thirsty\. Thirsty at 0\.5 \(he walks slower\), in about 7 hours; he collapses at 1\.5 days, in about 31 hours/);
+    expect(bodyText({ thirst: 1.2, hunger: 0, awake: 0 })).toMatch(/very thirsty \(he walks about 24% slower, his rest runs out twice as fast\); he collapses at 1\.5 days, in about 7 hours/);
+    expect(bodyText({ thirst: 1.5, hunger: 3, awake: 0 })).toMatch(/at the point of collapse[\s\S]*starving \(he walks about 25% slower/);
+    expect(fireText([])).toBe('Fire: he has no fire.');
+    expect(fireText([{ id: 'fire1', state: 'cold', dist: 4, dir: 'south' }])).toBe('Fire: none of his burns (one cold fire place).');
+    expect(fireText([{ id: 'fire1', state: 'embers', ring: false, dist: 4, dir: 'south' }])).toBe('Fire: none of his burns; embers only at fire1, 4 m south.');
+    expect(fireText([{ id: 'fire2', state: 'burning', hours: 3, ring: true, dist: 4, dir: 'south' }, { id: 'fire1', state: 'cold', dist: 9, dir: 'east' }])).toBe('Fire: fire2 in the stone ring, 4 m south, burns about 3 more hours.');
+    const u = buildActMessages({ name: '', state: { day: 2, time: 0.17, thirst: 0.8, hunger: 0.8, awake: 0, carries: {}, home: { leanto: 100, walls: 100, bed: 100, ring: 0, hut: 0 } }, menu: { ...MENU, fires: [] }, ask: { why: 'done' }, recent: [], notes: [] })[1].content;
+    expect(u).toContain('Very thirsty at 1 day'); expect(u).not.toContain('he can drink now');
+    expect(u).toMatch(/Home: lean-to 100%.*\nFire: he has no fire\./);
+    const f = actFixed('');
+    expect(f).toContain('very thirsty from 1: his rest runs out twice as fast'); expect(f).toContain('the fire drill tires him 1.5 times as much'); expect(f).toContain('hunger has no collapse of its own');
+  });
+  it('the rules say what the notes are for: the request already tells what he did, his home and his fires; the game never updates a note (0.37.10 "Body")', () => {
+    const f = actFixed('');
+    expect(f).toContain('Your notes are the only memory the game does not keep for you.');
+    expect(f).toContain('his last 12 steps and plans'); expect(f).toContain('The game never updates a note');
+    expect(f).toContain('What only the notes keep: places that are not on the menu now, what did not work and where, and what he means to do and why.');
+    expect(f).not.toContain('The notes are yours for facts and intentions');
   });
   it('a number n in the notes keeps his old note n (0.37.8 "Firelight": a model wrote [1, ..., 9, "new"] and lost nine notes)', () => {
     const old = ['the river is north', 'fire1 is in the ring', 'logs by the lean-to'];

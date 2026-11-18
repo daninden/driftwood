@@ -13,6 +13,7 @@
  * AI_AWAKE_MARGIN   how far before AWAKE_MAX (days) the loose leash overrules for tiredness
  * AI_REPLAN_GAP   real seconds between two requests (a new plan is not asked again sooner: a step that is not possible is then skipped, any other reason waits, the rules decide meanwhile)
  * LESSONS_MAX (10), LESSON_LEN (140)   (0.37.4 "Lessons") the lessons of full AI play: at most 10 kept, the model may merge or drop them when the list is full
+ * RECENT_SHOWN (0.37.10) the records of what he did lately in a plan request (12)
  * NOTES_MAX, NOTE_LEN, JOURNAL_LEN, JOURNAL_DAYS, JOURNAL_MAX   (0.36.7 "Memory") his own notes (at most 20 lines of 80 characters), the sunset journal line (140 characters), how many days of the journal go into a plan request (3), and the most lines kept
  * SAID_LEN      (0.36.9 "Voice") the longest step reason the request asks for, 140 characters (the same as render/voice SAID_MAX)
  * AI_LOG_MAX      decisions kept in the panel's log (memory only)
@@ -38,6 +39,7 @@ export const AI_PLAN_MIN = 3;
 export const AI_PLAN_MAX = 8;
 export const AI_REPLAN_GAP = 20;
 export const AI_AWAKE_MARGIN = 0.25;   // the loose leash steps in when he has been awake this much (days) less than AWAKE_MAX: 6 hours before he falls asleep where he stands (measured: 0.1 was too late, he still collapsed twice in six days under a plan that never sleeps)
+export const RECENT_SHOWN = 12;   // 0.37.10 "Body": the last records of game/actor `recent` a plan request shows (ai/planner; the rules say the number)
 export const NOTES_MAX = 20;   // 0.36.7 "Memory": his own notes: at most this many lines of at most NOTE_LEN characters, written only by the model
 export const NOTE_LEN = 80;
 export const SAID_LEN = 140;   // 0.36.9 "Voice": the longest step reason shown above Dave (render/voice SAID_MAX is the same number); the request asks for one or two short sentences within it

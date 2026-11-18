@@ -2,6 +2,16 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.10 "Body" — 2026-11-18
+
+Agreed with the user after their Gemini game on 0.37.9: he built walls and bed all afternoon, did not drink all day (thirst 0.8 the next morning), made no fire, and his notes were a diary of building. Only the request of full AI play changes; facts, no advice.
+
+- **His body in numbers:** NOW says where thirst and hunger stand, what they do to him now and in how many hours the next point comes ("thirsty (he walks about 11% slower). Very thirsty at 1 day (his rest runs out twice as fast), in about 5 hours; he collapses at 1.5 days, in about 17 hours"). Before, it said "slower from 0.5" while he was already past it. The rules add the very-thirsty and hunger effects.
+- **His fire in NOW,** next to the home, also when there is none ("Fire: he has no fire.", "none of his burns", or which fire burns and for how long).
+- **What the notes are for:** the request already tells what he did lately (the last 12), his home and his fires; the game never updates a note, so a count in it goes stale; the notes keep places not on the menu, what did not work and where, and what he means to do and why.
+- **Tests:** `tests/planner.test.js`.
+- **Choices made while building (not discussed with the user):** the hours are rounded to whole hours (minutes under one hour); a fire with embers only is not counted as burning; the old mind's request keeps its own thirst line until 0.38.0.
+
 ## 0.37.9 "Far" — 2026-11-18
 
 Agreed with the user: in the user's own game Gemini finished the hut on day 2 and never went exploring. Nothing in the request steers, but the home was the only thing with a to-do list, and nothing told a reason to go out. Built after a five-day AI test game on 0.37.8 (seed 1337, Claude Haiku models answering, 134 requests: no collapse from thirst or hunger, at most 0.49 and 0.52; the hut finished on day 5 after two exhausted sleeps; 2 plans refused, 14 of 602 steps failed; plans a median 35 game minutes; the game's walk minutes 0.94 of the real walks).
