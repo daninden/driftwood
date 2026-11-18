@@ -485,7 +485,9 @@ An optional language-model mind for Dave, **smarter than the rules**: better cho
 - **Tests.** Local tests and smokes never use AI: a fixed fake mind, no network, no credits.
 - **Proof.** Measured against the rules on the same islands: ground known, home finished, repeated failures and stalls, and thirst, hunger and collapses within the bounds. If it is not measurably better, it only adds atmosphere.
 
-## Full AI play (the redesign; agreed in outline with the user on 2026-11-17; being built: 0.37.0 "Actions", 0.37.1 "Half hour", 0.37.2 "Torch" and 0.37.3 "Branches" built)
+## Full AI play (the redesign; agreed in outline with the user on 2026-11-17; being built: 0.37.0 "Actions" to 0.37.5 "Ways" built, 0.37.6 "Only him" next)
+
+**Rules, not advice (decided by the user 2026-11-17):** the request tells the rules of the island plainly (what is possible, what it costs, the limits, the consequences in numbers), and never advice or an order of work ("make a fire before night"): that would bring the old rules mind back by the back door. What works on this island the model learns itself: its notes (facts, intentions) and its lessons (one a day at sunset, see 0.37.4). A test game that shows a failure because a rule is missing or unclear adds the rule; one that shows the request steering the choice takes that out.
 
 What the user decided (2026-11-17); the details marked open are still to be agreed before building.
 

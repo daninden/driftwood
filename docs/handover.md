@@ -75,6 +75,8 @@ Discussed with the user, but not approved for implementation. Do not start any o
 
 ## Notes
 
+- **How to play an AI test game** (used for 0.37.4 and 0.37.5): start the game detached so it outlives a tool timeout, e.g. `setsid nohup node scripts/ai-playtest.js run <dir> --seed 1337 --days 3 > <dir>.log 2>&1 < /dev/null &` (the dir in the scratchpad); then let Claude Haiku subagents play it one after another, each told to use only Bash, to answer exactly 25 to 30 requests with `node scripts/ai-playtest.js next <dir> --wait 600` and `node scripts/ai-playtest.js answer <dir> <n> - <<'EOF' ... EOF` (only the JSON the system message asks for, its own sum as "minutes"), and to report what in the requests was unclear, quoting it; start the next one when one reports, until `next` prints END. Then read `<dir>/summary.json` and `<dir>/events.jsonl` (failed steps with reasons, rejected plans, snapshots of thirst, hunger and fires; real against estimated walk times). One game day takes about 80 to 115 requests and 15 to 30 minutes.
+
 - The user writes in Dutch; everything in the repository stays in English.
 - Developer helpers (`window.__driftwood`, `?spawn=`, `?time=`, `?quality=`, the smoke and playtest scripts) are described in `docs/architecture.md`.
 - A cross-fade between two shadow lights was tried live and rejected: the shadows looked doubled during the fade.
