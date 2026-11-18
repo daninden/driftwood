@@ -8,6 +8,8 @@
  * Pacific-time date changes, as Google's free quota does) and its own pause. A request goes to the first model that is not dead, not paused and within its budget. HTTP 429 pauses that model until Retry-After (else 60 s);
  * 404 (model not found) marks it dead for the rest of the session; either way the SAME request is retried once on the next available model; 0.37.1: so is every other error (a 5xx, a timeout, the network), except a refused key (401, 403). Every attempt that is sent counts for its model, whatever the answer.
  *
+ * 0.38.3 "Steady": the count of the day is kept in memory too (the daily budget holds when storage fails, within the session); listModels is bounded by the timeout; an error text is
+ * scrubbed of the key its request was sent with as well (a key changed meanwhile); `blocked()` says why nothing can be sent.
  * 0.38.0 "Only him": the AI is no longer switched on or off and has no leash: it is the only way to play, so `on`, `setOn`, `mode` and `setMode` are gone.
  *
  * Exports:
@@ -18,6 +20,7 @@
  *     client.canSend() -> bool       the key is set, nothing is in flight and some model is available
  *     client.send(messages) -> Promise<{ text, ms, model }>   rejects with an Error (message scrubbed; .code 'nokey' | 'busy' | 'budget' | 'http' | 'timeout' | 'bad' | 'net')
  *     client.listModels(key?) -> Promise<string[]>    the model names the key can use (not counted in the budget); 0.38.0: with `key`, that key instead of the saved one (the start screen checks a key before it is saved; a refused key rejects with .status 400, 401 or 403)
+ *     client.blocked() -> null | { kind: 'nokey' | 'dead' } | { kind: 'paused', secs } | { kind: 'spent', at: 'HH:MM' }   0.38.3: why nothing can be sent now (the "thinking…" line says so)
  *     client.status() -> { hasKey, models: [{ model, today, perDay, lastMinute, perMin, pausedUntil, dead, lastError }], today (all models), perDay (all), lastError, pausedUntil (0, or when the first model is back if none is available), inFlight, url }
  *
  * Depends on: ai/config
@@ -49,14 +52,15 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
   const set = (k, v) => { try { if (storage) { if (v === null) storage.removeItem(k); else storage.setItem(k, v); } } catch (e) { /* storage may be blocked: then nothing is remembered */ } };
   let inFlight = false, lastError = null;
   let memKey = null;   // used when storage is not available
-  const M = new Map(models.map(m => [m, { recent: [], pausedUntil: 0, dead: false, lastError: null, mem: 0 }]));
+  const M = new Map(models.map(m => [m, { recent: [], pausedUntil: 0, dead: false, lastError: null, mem: null }]));
 
   const key = () => { const k = get(KEY_NAME); return k || memKey || ''; };
-  const scrub = s => { const k = key(); let t = String(s == null ? '' : s); if (k) t = t.split(k).join('***'); return t.slice(0, 400); };
-  const counter = m => {
-    const today = pacificDay(now());
-    try { const c = JSON.parse(get(COUNT_NAME + '.' + m) || 'null'); if (c && c.day === today && Number.isFinite(c.n)) return { day: today, n: c.n }; } catch (e) { /* a bad counter starts over */ }
-    return { day: today, n: 0 };
+  const scrub = (s, used = null) => { let t = String(s == null ? '' : s); for (const k of [used, key()]) if (k) t = t.split(k).join('***'); return t.slice(0, 400); };   // 0.38.3: also the key the request was sent with (a key changed meanwhile)
+  const counter = m => {   // 0.38.3 "Steady": the count of the day is also kept in memory, so the budget holds when storage fails (across reloads it needs storage)
+    const today = pacificDay(now()), mem = M.get(m).mem;
+    let n = mem && mem.day === today ? mem.n : 0;
+    try { const c = JSON.parse(get(COUNT_NAME + '.' + m) || 'null'); if (c && c.day === today && Number.isFinite(c.n)) n = Math.max(n, c.n); } catch (e) { /* a bad counter starts over */ }
+    return { day: today, n };
   };
   const windowCount = m => { const t = now(), st = M.get(m); st.recent = st.recent.filter(x => t - x < 60000); return st.recent.length; };
   const paused = m => now() < M.get(m).pausedUntil;
@@ -67,7 +71,7 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
 
   async function attempt(model, messages) {
     const k = key(), t0 = now(), c = counter(model), st = M.get(model);
-    set(COUNT_NAME + '.' + model, JSON.stringify({ day: c.day, n: c.n + 1 })); st.recent.push(t0);
+    st.mem = { day: c.day, n: c.n + 1 }; set(COUNT_NAME + '.' + model, JSON.stringify(st.mem)); st.recent.push(t0);
     const ctl = typeof AbortController === 'function' ? new AbortController() : null;
     let timer = null, timedOut = false;
     try {
@@ -92,7 +96,7 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
       st.lastError = null;
       return out;
     } catch (e) {
-      const err = fail(e && e.code || (timedOut ? 'timeout' : 'net'), scrub(model + ': ' + (e && e.message || e)));
+      const err = fail(e && e.code || (timedOut ? 'timeout' : 'net'), scrub(model + ': ' + (e && e.message || e), k));
       err.status = e && e.status;
       st.lastError = err.message;
       throw err;
@@ -120,14 +124,22 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
 
   async function listModels(given = null) {   // 0.38.0: with `given` a key that is not saved yet is checked (the start screen); its text is scrubbed from errors too
     const k = given ? String(given).trim() : key(); if (!k) throw fail('nokey', 'no key');
-    const clean = t => scrub(String(t).split(k).join('***'));
-    try {
-      const res = await doFetch(modelsUrl, { method: 'GET', headers: { Authorization: 'Bearer ' + k } });
-      if (!res.ok) { const err = fail('http', 'HTTP ' + res.status); err.status = res.status; throw err; }
-      const data = await res.json();
-      const list = (data && (data.data || data.models)) || [];
-      return list.map(m => String(m.id || m.name || '')).filter(Boolean).map(s => s.replace(/^models\//, ''));
+    const clean = t => scrub(t, k);
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    let timer = null;
+    try {   // 0.38.3 "Steady": bounded like a request (a check that never answered kept the start screen waiting)
+      const guard = new Promise((_, rej) => { timer = setTimeout(() => { if (ctl) ctl.abort(); rej(fail('timeout', 'no answer in ' + Math.round(timeout / 1000) + ' s')); }, timeout); });
+      const call = (async () => {
+        const res = await doFetch(modelsUrl, { method: 'GET', headers: { Authorization: 'Bearer ' + k }, signal: ctl ? ctl.signal : undefined });
+        if (!res.ok) { const err = fail('http', 'HTTP ' + res.status); err.status = res.status; throw err; }
+        const data = await res.json();
+        const list = (data && (data.data || data.models)) || [];
+        return list.map(m => String(m.id || m.name || '')).filter(Boolean).map(s => s.replace(/^models\//, ''));
+      })();
+      call.catch(() => {});
+      return await Promise.race([call, guard]);
     } catch (e) { const err = fail(e && e.code || 'net', clean(e && e.message || e)); if (e && e.status) err.status = e.status; throw err; }
+    finally { clearTimeout(timer); }
   }
 
   function status() {
@@ -136,10 +148,26 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
     return { hasKey: !!key(), models: rows, today: rows.reduce((a, r) => a + r.today, 0), perDay: rows.reduce((a, r) => a + r.perDay, 0), lastError, pausedUntil: none && waits.length ? Math.min(...waits) : 0, inFlight, url };
   }
 
+  /** 0.38.3 "Steady": why no request can be sent now: null (one can, or one is running), { kind: 'nokey' }, { kind: 'dead' } (every model was not found), { kind: 'paused', secs }
+   *  (a model is paused: the next one free in secs), { kind: 'spent', at: 'HH:MM' } (every model has used its day; the budgets start again at that local time). */
+  function blocked() {
+    if (!key()) return { kind: 'nokey' };
+    if (inFlight || next([]) !== null) return null;
+    const live = models.filter(m => !M.get(m).dead);
+    if (!live.length) return { kind: 'dead' };
+    const t = now(), soon = live.map(m => { const st = M.get(m); if (counter(m).n >= limits(m).perDay) return Infinity; const w = paused(m) ? st.pausedUntil : t; const r = windowCount(m) >= limits(m).perMin ? Math.min(...st.recent) + 60000 : t; return Math.max(w, r); });
+    const first = Math.min(...soon);
+    if (Number.isFinite(first)) return { kind: 'paused', secs: Math.max(1, Math.ceil((first - t) / 1000)) };
+    const day = pacificDay(t); let at = t; while (pacificDay(at) === day && at - t < 2 * 86400000) at += 3600000; at -= 3600000; while (pacificDay(at) === day && at - t < 2 * 86400000) at += 60000;   // the next Pacific midnight, to the minute (by hours, then minutes)
+    const d = new Date(at), pad = v => String(v).padStart(2, '0');
+    return { kind: 'spent', at: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
+  }
+
   return {
+    blocked,
     hasKey: () => !!key(),
     setKey(s) { const v = String(s || '').trim(); if (v) { set(KEY_NAME, v); memKey = v; } },
     clearKey() { set(KEY_NAME, null); memKey = null; lastError = null; },
-    canSend, send, listModels, status,
+    canSend, send, listModels, status,   // blocked (0.38.3) above
   };
 }

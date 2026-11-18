@@ -108,7 +108,7 @@ describe('the request and the answer (ai/actPrompt)', () => {
 const makePlanner = (o = {}) => {
   const t = { s: 100 }, calls = [], answers = o.answers || [];
   const ask = m => { calls.push(m); const a = answers.length ? answers.shift() : { text: '{"say":"ok","steps":[{"wait":5}]}' }; return a instanceof Error ? Promise.reject(a) : Promise.resolve({ model: 'fake', ms: 10, ...a }); };
-  const pl = createPlanner({ ask, enabled: () => o.enabled !== false, now: () => t.s, state: () => ({ day: 1, time: o.time ?? 0.4, carries: {} }), clock: () => ({ day: 1, time: o.time ?? 0.4 }), recent: () => [] });
+  const pl = createPlanner({ ask, enabled: () => o.enabled !== false, ...(o.canSend ? { canSend: o.canSend, blocked: o.blocked } : {}), now: () => t.s, state: () => ({ day: 1, time: o.time ?? 0.4, carries: {} }), clock: () => ({ day: 1, time: o.time ?? 0.4 }), recent: () => [] });
   return { pl, t, calls };
 };
 
@@ -142,12 +142,13 @@ describe('asking for plans (ai/planner)', () => {
     t.s += 1000; expect(pl.chooser(MENU, {})).toBe(WAIT); expect(calls).toHaveLength(5);
     pl.retry(); pl.chooser(MENU, {}); expect(calls).toHaveLength(6);
   });
-  it('an unusable answer counts as an error; a good one clears the errors', async () => {
+  it('an unusable answer counts as an error; a good plan that is followed clears the errors', async () => {
     const { pl, t } = makePlanner({ answers: [{ text: 'I think he should rest.' }, { text: '{"steps":[{"wait":2}]}' }] });
     pl.chooser(MENU, {}); await tick();
     expect(pl.status().state).toBe('retrying'); expect(pl.entries()[0].error).toMatch(/could not be used/);
     t.s += 2; pl.chooser(MENU, {}); await tick();
-    expect(pl.chooser(MENU, {})).toEqual({ steps: [{ wait: 2 }], say: '' }); expect(pl.status().errors).toBe(0);
+    expect(pl.chooser(MENU, {})).toEqual({ steps: [{ wait: 2 }], say: '' }); expect(pl.status().errors).toBe(1);
+    pl.chooser(MENU, { why: 'done' }); expect(pl.status().errors).toBe(0);   // 0.38.3: cleared once the game followed the plan
   });
   it(`${REJECTS_MAX} rejected plans in a row count as an error`, async () => {
     const { pl } = makePlanner();
@@ -157,6 +158,33 @@ describe('asking for plans (ai/planner)', () => {
     }
     pl.chooser(MENU, { why: 'rejected', last: { kind: 'rejected', reason: 'too long ' + REJECTS_MAX } });   // the third plan is refused too
     expect(pl.status().state).toBe('retrying'); expect(pl.status().error).toMatch(/could not be followed/);
+  });
+  it('0.38.3: plans that parse but are refused again and again end in "failed"; a followed plan clears the count', async () => {
+    const { pl, t, calls } = makePlanner();
+    let why = 'start', last = null, i = 0;
+    for (; i < 200 && pl.status().state !== 'failed'; i++) {
+      const c = pl.chooser(MENU, { why, last });
+      if (c && c !== WAIT && c.steps) { why = 'rejected'; last = { kind: 'rejected', reason: 'step 1: no place "x" on the menu ' + i }; }
+      else { await tick(); t.s += 60; }
+    }
+    expect(pl.status().state).toBe('failed'); expect(calls.length).toBe((RETRY_SECS.length + 1) * REJECTS_MAX);
+    pl.retry();
+    const b = makePlanner(); b.pl.chooser(MENU, { why: 'start' }); await tick();
+    b.pl.chooser(MENU, { why: 'start' });   // handed over
+    b.pl.chooser(MENU, { why: 'rejected', last: { kind: 'rejected', reason: 'r1' } }); await tick();
+    b.pl.chooser(MENU, { why: 'rejected', last: { kind: 'rejected', reason: 'r1b' } });   // the second plan, handed over
+    b.pl.chooser(MENU, { why: 'done' });   // followed: the count starts over
+    expect(b.pl.status().errors).toBe(0);
+  });
+  it('0.38.3: with no model to ask the status is "blocked" with the reason, and the line says it', () => {
+    const spent = makePlanner({ canSend: () => false, blocked: () => ({ kind: 'spent', at: '09:00' }) }).pl;
+    expect(spent.chooser(MENU, { why: 'start' })).toBe(WAIT);
+    expect(spent.status()).toMatchObject({ state: 'blocked', wait: { kind: 'spent', at: '09:00' }, error: 'every model is spent for today' });
+    expect(thinkingText(true, spent.status())).toEqual({ text: 'He cannot think: every model is spent for today (it resets at 09:00).', retry: false });
+    const paused = makePlanner({ canSend: () => false, blocked: () => ({ kind: 'paused', secs: 12 }) }).pl; paused.chooser(MENU, { why: 'start' });
+    expect(thinkingText(true, paused.status())).toEqual({ text: 'thinking… (a model is paused, trying again in 12 s)', retry: false });
+    const dead = makePlanner({ canSend: () => false, blocked: () => ({ kind: 'dead' }) }).pl; dead.chooser(MENU, { why: 'start' });
+    expect(thinkingText(true, dead.status()).text).toMatch(/no model answers/);
   });
   it('notes from the answer are kept, saved and restored', async () => {
     const { pl } = makePlanner({ answers: [{ text: '{"steps":[{"wait":2}],"notes":["palms east"]}' }] });

@@ -15,13 +15,15 @@
  * the full new list of his lessons, at most LESSONS_MAX), in place of the journal line of 0.36.7; never while a plan request runs; the day is marked asked before the answer.
  * The plan's `minutes` (the model's own count, when it gives one) travels with it to game/actor `checkPlan`.
  *
- * createPlanner({ ask, enabled, canSend?, now, state, name?, clock, recent, log? }) -> planner
+ * 0.38.3 "Steady": the error count starts over only when the game follows a plan (an answer that parses but is refused no longer resets it, so a model that keeps writing
+ * plans that cannot be followed reaches `failed`); with no model to ask the status is 'blocked' with ai/client's reason (`blocked` option).
+ * createPlanner({ ask, enabled, canSend?, blocked?, now, state, name?, clock, recent, log? }) -> planner
  *   ask(messages) -> Promise<{ text, model, ms }>     the client's send
  *   enabled() -> bool, canSend() -> bool              the AI is on with a key; a model is within its budget
  *   now() -> seconds (real), state() -> ai/prompt state, clock() -> { day (the player's), time }, recent() -> game/actor `recent`
  *   log(entry)                                        each request and its outcome: { n, real, day, time, why, ok, steps, say, error, reason, model, ms, messages, raw }
  *   planner.chooser(menu, ask)                        (above)
- *   planner.status() -> { state: 'off' | 'idle' | 'thinking' | 'retrying' | 'failed', errors, retryIn, error, model }
+ *   planner.status() -> { state: 'off' | 'idle' | 'thinking' | 'retrying' | 'blocked' | 'failed', errors, retryIn, error, model, wait? }   (blocked, 0.38.3: no model can be asked now; wait: ai/client `blocked()`)
  *   planner.retry()                                   after `failed`: start again (and at once)
  *   planner.tick()                                    the sunset lesson
  *   planner.entries() -> [entry]                      the log, newest first (at most AI_LOG_MAX)
@@ -38,11 +40,12 @@ import { DUSK } from '../game/sleep.js';
 
 export const RETRY_SECS = [2, 5, 10, 30];
 export const REJECTS_MAX = 3;
+const WAIT_TEXT = { nokey: 'no key', dead: 'no model answers (every model was not found)', paused: 'a model is paused', spent: 'every model is spent for today' };
 
 export function createPlanner(o = {}) {
-  const ask = o.ask, enabled = o.enabled || (() => false), canSend = o.canSend || (() => true), now = o.now || (() => 0);
+  const ask = o.ask, enabled = o.enabled || (() => false), canSend = o.canSend || (() => true), now = o.now || (() => 0), blocked = o.blocked || (() => null);
   const stateNow = o.state || (() => ({})), name = o.name || (() => ''), clock = o.clock || (() => ({ day: 0, time: 0 })), recent = o.recent || (() => []), log = o.log || (() => {});
-  let call = null, ready = null, lastRej = null, errors = 0, retryAt = 0, failed = false, lastError = null, lastModel = null, rejects = 0, n = 0, version = 0;
+  let call = null, ready = null, handed = false, wait = null, lastRej = null, errors = 0, retryAt = 0, failed = false, lastError = null, lastModel = null, rejects = 0, n = 0, version = 0;
   let notes = [], lessons = [], asked = null, lessonCall = false, memVer = 0;
   const items = [];
   const bump = () => { version++; };
@@ -70,7 +73,7 @@ export function createPlanner(o = {}) {
       const p = parseActPlan(text, notes), done = { ...entry, model: r && r.model || null, ms: r && Number.isFinite(r.ms) ? r.ms : Math.round((now() - t0) * 1000), raw: text };
       if (!p.ok) { fail(done, 'the answer could not be used: ' + p.error); return; }
       if (p.notes) { notes = p.notes.slice(); memVer++; }
-      errors = 0; lastError = null; retryAt = 0;
+      lastError = null; retryAt = 0;   // 0.38.3 "Steady": the error count starts over only when the game follows the plan (chooser), not when an answer parses
       ready = { steps: p.steps, say: p.say, ...(p.minutes !== null ? { minutes: p.minutes } : {}) };
       push({ ...done, ok: true, steps: p.steps, say: p.say, minutes: p.minutes });
     }, e => { fail(entry, 'the request failed: ' + (e && e.message || String(e))); })
@@ -81,8 +84,9 @@ export function createPlanner(o = {}) {
   function chooser(menu, a = {}) {
     if (!enabled()) return null;
     const why = a.why || 'start', last = a.last || null;
+    if (handed) { handed = false; if (why !== 'rejected') { errors = 0; rejects = 0; } }   // 0.38.3: the plan handed over last time was followed
     if (ready) {
-      const plan = ready; ready = null; bump();
+      const plan = ready; ready = null; handed = true; bump();
       return plan;
     }
     if (why === 'rejected') {   // the plan just handed over was refused by game/actor checkPlan
@@ -95,17 +99,19 @@ export function createPlanner(o = {}) {
     } else rejects = 0;
     if (call || lessonCall || failed) return WAIT;
     if (retryAt && now() < retryAt) return WAIT;
-    if (!canSend()) { lastError = 'every model is spent or paused'; return WAIT; }
+    if (!canSend()) { let b = null; try { b = blocked(); } catch (e) { b = null; } wait = b; lastError = WAIT_TEXT[b && b.kind] || 'every model is spent or paused'; bump(); return WAIT; }
+    wait = null;
     send(menu, why, last);
     return WAIT;
   }
 
-  function retry() { failed = false; errors = 0; retryAt = 0; lastError = null; bump(); }
+  function retry() { failed = false; errors = 0; rejects = 0; retryAt = 0; lastError = null; bump(); }
 
   function status() {
     const t = now();
     if (!enabled()) return { state: 'off', errors, retryIn: 0, error: lastError, model: lastModel };
-    return { state: failed ? 'failed' : call ? 'thinking' : retryAt > t ? 'retrying' : 'idle', errors, retryIn: retryAt > t ? Math.ceil(retryAt - t) : 0, error: lastError, model: lastModel };
+    const state = failed ? 'failed' : call ? 'thinking' : retryAt > t ? 'retrying' : wait ? 'blocked' : 'idle';
+    return { state, errors, retryIn: retryAt > t ? Math.ceil(retryAt - t) : 0, error: lastError, model: lastModel, ...(state === 'blocked' ? { wait } : {}) };
   }
 
   function tick() {   // 0.37.4 "Lessons": at sunset one request for the lesson of the day (the full new list of his lessons), in place of the journal line

@@ -12,7 +12,7 @@
  *
  * KEY_LABEL, KEY_NOTE, CHECKING, KEY_BAD, KEY_FAIL   the texts
  * keyError(err) -> string   the note for a failed check (pure)
- * createStartScreen(root, { askKey, askName, check, save }) -> { done, dispose }
+ * createStartScreen(root, { askKey, askName, refused?, check, save }) -> { done, dispose }   (refused, 0.38.3: the saved key was refused while playing: the note is KEY_REFUSED)
  *   root: the #ask element (a .label, an <input>, a <button>, a .note); askKey / askName: which questions to ask; check(key) -> Promise (resolves when the key works);
  *   save(key): keep the key. `done`: a Promise of { name } (the cleaned name, or null when it was not asked), resolved once. Nothing asked: `done` resolves at once and the
  *   screen stays hidden.
@@ -26,9 +26,10 @@ export const KEY_NOTE = 'A free Google AI Studio key (aistudio.google.com/apikey
 export const CHECKING = 'Checking the key…';
 export const KEY_BAD = 'That key is not accepted. Try another.';
 export const KEY_FAIL = 'The key could not be checked';
+export const KEY_REFUSED = 'The saved key is no longer accepted. Paste a new one (aistudio.google.com/apikey).';   // 0.38.3
 export const keyError = err => (err && (err.status === 400 || err.status === 401 || err.status === 403) ? KEY_BAD : `${KEY_FAIL}${err && err.message ? ': ' + String(err.message).slice(0, 80) : ''}. Try again.`);
 
-export function createStartScreen(root, { askKey = false, askName = false, check = () => Promise.resolve(), save = () => {} } = {}) {
+export function createStartScreen(root, { askKey = false, askName = false, refused = false, check = () => Promise.resolve(), save = () => {} } = {}) {
   const label = root.querySelector('.label'), field = root.querySelector('input'), go = root.querySelector('button'), note = root.querySelector('.note');
   let resolve, step = null, busy = false, finished = false;
   const done = new Promise(r => { resolve = r; });
@@ -39,7 +40,7 @@ export function createStartScreen(root, { askKey = false, askName = false, check
     if (field.focus) field.focus();
   };
   const askKeyNow = () => {
-    step = 'key'; label.textContent = KEY_LABEL; field.type = 'password'; field.value = ''; field.removeAttribute('maxLength'); field.setAttribute('aria-label', 'Your key'); field.setAttribute('autocapitalize', 'off'); say(KEY_NOTE);
+    step = 'key'; label.textContent = KEY_LABEL; field.type = 'password'; field.value = ''; field.removeAttribute('maxLength'); field.setAttribute('aria-label', 'Your key'); field.setAttribute('autocapitalize', 'off'); say(refused ? KEY_REFUSED : KEY_NOTE);
     if (field.focus) field.focus();
   };
   const confirm = () => {

@@ -109,6 +109,7 @@ import { openLogStore } from './ai/logStore.js';
 import { KEY_NAME } from './ai/config.js';
 import { createAiPanel, isAiPanelEvent } from './render/aiPanel.js';
 import { createThinkingMark } from './render/thinkingMark.js';
+const REFUSED_FLAG = 'driftwood.keyRefused';   // 0.38.3: set for one reload when the saved key was refused
 import { createRestMark } from './render/restMark.js';
 import { createThirstMark } from './render/thirstMark.js';
 import { createHungerMark } from './render/hungerMark.js';
@@ -143,14 +144,15 @@ const breathe = (label, f) => { loading.report(label, f); return new Promise(r =
 async function boot() {
   const { seed, fresh } = parseAddress(location.search);
   const store = createSaveStore(seed);
-  if (fresh) { store.clear(); try { history.replaceState(null, '', location.pathname + withoutNew(location.search) + location.hash); } catch (e) { /* keep the address */ } }
   const qs = new URLSearchParams(location.search), q = qs.get('spawn'), qt = qs.get('time'), qa = qs.get('awake');
   const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no start screen, no loading, no saving
+  if (fresh) { if (!testing) store.clear(); try { history.replaceState(null, '', location.pathname + withoutNew(location.search) + location.hash); } catch (e) { /* keep the address */ } }   // 0.38.3: with test parameters ?new does not clear the save either
   const saved = testing ? null : store.load();
   const store0 = (() => { try { return window.localStorage; } catch (e) { return null; } })();
   const aiClient = createClient({ fetch: (...a) => window.fetch(...a), storage: store0 });   // the language model that plays him, with the player's own key
+  const refused = (() => { try { const v = window.sessionStorage.getItem(REFUSED_FLAG); window.sessionStorage.removeItem(REFUSED_FLAG); return v === '1'; } catch (e) { return false; } })();   // 0.38.3: the saved key was refused in the last page
   const askName = shouldAsk({ testing, saved }), askKey = !testing && !aiClient.hasKey();
-  const asking = askKey || askName ? createStartScreen(document.getElementById('ask'), { askKey, askName, check: k => aiClient.listModels(k), save: k => aiClient.setKey(k) }) : null;   // asked while the island loads
+  const asking = askKey || askName ? createStartScreen(document.getElementById('ask'), { askKey, askName, refused, check: k => aiClient.listModels(k), save: k => aiClient.setKey(k) }) : null;   // asked while the island loads
   const container = document.getElementById('island');
   const logStoreAsked = testing ? Promise.resolve(null) : openLogStore().catch(() => null);   // 0.36.8: the logbook's IndexedDB opens while the island loads (none in tests, and none if the browser has none: then the log is kept in memory only)
   const cores = (navigator.hardwareConcurrency || 4), parallel = createParallelHeights(() => new HeightWorker(), Math.max(2, Math.min(8, cores - 1)));
@@ -220,7 +222,19 @@ async function boot() {
   await logbook.open({ clear: fresh || !saved });   // a new game (?new, a new seed, no save) starts a new log; otherwise it runs on
   const quiet0 = f => { try { f(); } catch (e) { /* the logbook never disturbs the game */ } };
   const camp = createCamp(world, game);   // 0.38.0: the plain facts of his home and camp (they were read from the old mind)
-  const askLogged = m => { let id = null; quiet0(() => { id = logbook.request(m); }); const p = aiClient.send(m); p.then(r => quiet0(() => logbook.answer(id, r)), e => quiet0(() => logbook.answer(id, e))); return p; };
+  // 0.38.3 "Steady": a refused key (HTTP 400, 401, 403 on a request, confirmed by a check of the key) takes the game back to the start screen's key question (no key, no game; on a phone the AI panel cannot be opened)
+  let refusing = false;
+  const refusedStatus = e => !!e && (e.status === 400 || e.status === 401 || e.status === 403);
+  const keyRefused = e => {
+    if (testing || refusing || !refusedStatus(e)) return;
+    refusing = true;
+    aiClient.listModels().then(() => { refusing = false; }, e2 => {
+      if (!refusedStatus(e2)) { refusing = false; return; }
+      try { window.sessionStorage.setItem(REFUSED_FLAG, '1'); } catch (x) { /* the screen then shows its usual note */ }
+      save(); stopSaving = true; aiClient.clearKey(); location.reload();
+    });
+  };
+  const askLogged = m => { let id = null; quiet0(() => { id = logbook.request(m); }); const p = aiClient.send(m); p.then(r => quiet0(() => logbook.answer(id, r)), e => { quiet0(() => logbook.answer(id, e)); keyRefused(e); }); return p; };
   const doing = () => { const pl = actor && actor.plan; return pl && actor.stepIndex >= 0 ? stepText(pl.steps[actor.stepIndex], pl.menu.places) : 'between plans'; };
   const actState = () => {
     const st = snapshotOf(game, camp);
@@ -228,7 +242,7 @@ async function boot() {
     st.day = dayNumber(game.clock.day, startDay);
     return st;
   };
-  planner = createPlanner({ ask: askLogged, enabled: () => aiClient.hasKey(), canSend: aiClient.canSend, now: () => performance.now() / 1000, state: actState, name: () => name,
+  planner = createPlanner({ ask: askLogged, enabled: () => aiClient.hasKey(), canSend: aiClient.canSend, blocked: aiClient.blocked, now: () => performance.now() / 1000, state: actState, name: () => name,
     clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time }), recent: () => (actor ? actor.recent.map(r => ({ ...r, day: dayNumber(r.day, startDay) })) : []) });
   actor = createActor(world, game, { chooser: planner.chooser, dayNo: d => dayNumber(d, startDay), onEvent: e => {
     quiet0(() => logbook.event(e));

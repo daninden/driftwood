@@ -193,6 +193,15 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Steady (0.38.3)
+
+The failures of the external review (`docs/review.md` I1 to I5, G4 and two small ones).
+- **ai/planner:** `handed` marks a plan given to the actor; the next chooser call that is not 'rejected' sets `errors` and `rejects` to 0 (a parsed answer no longer does). With `canSend()` false the status is 'blocked' with `wait` from the `blocked` option (main: `aiClient.blocked`).
+- **ai/client:** `blocked()` (null, nokey, dead, paused with secs, spent with the local HH:MM of the next Pacific midnight); the day count per model also in memory (`mem`, the higher of memory and storage); `listModels` raced against the timeout with an abort; `scrub(text, used)` removes the request's own key too.
+- **ai/logStore:** every store call raced against `callTimeout` (10 s).
+- **main:** `keyRefused(e)`: a send refused with 400, 401 or 403, then `listModels()` refused the same way: the save is written, the key cleared, `sessionStorage` `driftwood.keyRefused` set and the page reloaded; the start screen (`refused`) shows KEY_REFUSED. With test parameters `?new` does not clear the save.
+- **game/game + game/actor:** `input.stopWork` cancels `work` and `queued` like a wish to move; game/actor sets it for one frame when rain interrupts, and the interrupt's record says what stopped.
+
 ### True (0.38.2)
 
 After the five-day AI test game on 0.38.1 and the external review (`docs/review.md`). Facts only.

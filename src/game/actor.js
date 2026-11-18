@@ -35,6 +35,8 @@
  * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
  * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
  * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * 0.38.3 "Steady": when rain stops a plan, the work he is doing stops too (input.stopWork for one frame, as walking off stops it): the interrupt's record says what stopped
+ * ("stopped felling the tree: the chopping done so far is kept", else "nothing was used up; it would start over").
  * 0.38.2 "True": a step is done only when the action itself changed something (`changed`: thirst and hunger only when they went down, a fire only with more fuel or a new
  * fire burning; time alone changed them, so a dig that caught nothing was "done"); the lay-downs the game makes on its own (before a drink, a fill, a fell or a torch, when he lies down
  * to sleep, when he collapses) are told in that step's record ("he laid down what he carried first: ..."); "crab" roasts a carried fish when he has no crab, and says so when he carries
@@ -97,7 +99,7 @@ export function createActor(world, game, opts = {}) {
   let now = 0, gen = null, why = 'start', last = null, rainWas = game.rain > 0, sleeping = false, pressed = null, choice = null;
   const actor = { input: null, plan: null, stepIndex: -1, waiting: false, recent: [], stats, step, menu, get why() { return why; } };
   const inp = actor.input = {
-    up: false, down: false, left: false, right: false, run: false, stick: null, target: null, yaw: undefined, pace: 1, sit: false,
+    up: false, down: false, left: false, right: false, run: false, stick: null, target: null, yaw: undefined, pace: 1, sit: false, stopWork: false,
     takeWake: () => false, takeLight: () => false, pressing: () => false, cancelAction() { pressed = null; }, clearTarget() { inp.target = null; },
     takeAction: () => { const k = pressed; pressed = null; return k; }, takeChoice: () => { const k = choice; choice = null; return k; }, takeSleep: () => false,
   };
@@ -598,11 +600,20 @@ export function createActor(world, game, opts = {}) {
     return 'done';
   }
   function end(reason) { gen = null; actor.plan = null; actor.stepIndex = -1; why = reason; idle(); inp.sit = false; }
-  function interrupt(reason) { stats.interrupts++; last = remember('interrupt', reason, 'interrupted', autoLaid(mark && mark.piles0)); mark = null; emit('interrupt', { reason }); end(reason); }
+  // 0.38.3 "Steady": rain stops the work he is doing (as walking off does), and the record says so
+  const WORK_WORDS = { husk: 'husking the coconut', sip: 'drinking from a shell', roast: 'roasting', build: 'building', upgrade: 'building', drill: 'drilling a fire', fell: 'felling the tree', dig: 'digging', fish: 'fishing', make: 'making the tool', drink: 'going to drink', fill: 'going to fill a shell' };
+  function stopWork() {
+    const k = p.work ? p.work.kind : p.queued ? String(p.queued) : null;
+    if (!k) return null;
+    inp.stopWork = true;
+    return `stopped ${WORK_WORDS[k] || k}: ${k === 'fell' ? 'the chopping done so far is kept' : 'nothing was used up; it would start over'}`;
+  }
+  function interrupt(reason) { stats.interrupts++; const stopped = reason === 'rain' ? stopWork() : null; last = remember('interrupt', reason, 'interrupted', join(stopped, autoLaid(mark && mark.piles0))); mark = null; emit('interrupt', { reason, ...(stopped ? { stopped } : {}) }); end(reason); }
 
   // ---------- one step ----------
   function step(dt) {
     now += dt;
+    inp.stopWork = false;   // (one frame: game.update reads it right after the step that set it)
     const raining = game.rain > 0, started = raining && !rainWas; rainWas = raining;
     if (game.sleep.asleep || p.lie > 0) {   // never acts in his sleep
       if (gen && !sleeping) interrupt('collapsed');   // asleep without a sleep step: he collapsed

@@ -2,6 +2,19 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.38.3 "Steady" — 2026-11-18
+
+Agreed with the user 2026-11-18: the rest of the external review (`docs/review.md`) that concerns failures, in its own release; the user chose the key question for a refused key and cancelling the work in the rain.
+
+- **Refused plans end (I2):** `ai/planner` starts its error count over only when the game follows a plan (an answer that parses no longer resets it), so a model that keeps writing plans that cannot be followed reaches "He cannot think … / try again" (after 15 refused plans: 3 count as one error, then the retries of 2, 5, 10, 30 s).
+- **Why he waits (I3):** `ai/client` `blocked()` says why nothing can be sent (no key, a model paused and for how long, every model spent for today and the local time the budgets start again, every model not found); `ai/planner` status 'blocked' with it; `render/thinkingMark`: "thinking… (a model is paused, trying again in N s)", "He cannot think: every model is spent for today (it resets at HH:MM).", "He cannot think: no model answers (reload the page to try them again).".
+- **No hanging start (I4):** the key check (`listModels`) stops after the request timeout ("no answer in N s"); every call of the log store rejects after 10 s (`callTimeout`), and the logbook goes on in memory.
+- **The daily budget without storage (I5):** the client also counts the day in memory (within the session; across reloads it needs storage).
+- **A refused key on a phone (I1):** a request refused with HTTP 400, 401 or 403, confirmed by a check of the key, clears the key and reloads to the start screen's key question with the note "The saved key is no longer accepted. Paste a new one".
+- **Rain stops the work (G4):** when rain breaks off a plan, the work he is doing stops as well (`input.stopWork`, as walking off stops it); the record says what stopped ("stopped felling the tree: the chopping done so far is kept"; else "nothing was used up; it would start over").
+- **Small:** an error text is scrubbed of the key its request was sent with (a key changed meanwhile); with test parameters `?new` no longer clears the save.
+- **Tests:** `tests/client.test.js`, `tests/planner.test.js`, `tests/logbook.test.js`, `tests/name.test.js`, `tests/actor.test.js` (*0.38.3*).
+
 ## 0.38.2 "True" — 2026-11-18
 
 Agreed with the user 2026-11-18, after the five-day AI test game on 0.38.1 and the external review (`docs/review.md`, G1, G2, G3, G5). Facts only, no advice: what the model is told is what really happened.

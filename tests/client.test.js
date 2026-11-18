@@ -122,7 +122,41 @@ describe('client', () => {
   });
   it('works without storage (the key is then kept in memory only)', async () => {
     const c = createClient({ fetch: async () => okResponse('ok'), storage: null, now: () => T0 });
-    c.setKey(KEY); expect(c.hasKey()).toBe(true); await c.send([]); expect(c.status().today).toBe(0);
+    c.setKey(KEY); expect(c.hasKey()).toBe(true); await c.send([]); expect(c.status().today).toBe(1);   // 0.38.3: counted in memory
+  });
+});
+
+describe('0.38.3 "Steady": the client when things fail', () => {
+  const T0 = Date.UTC(2026, 10, 12, 20, 0, 0);
+  it('the daily budget holds without storage, and when writing fails', async () => {
+    const t = { ms: T0 }, c = createClient({ fetch: async () => okResponse('ok'), storage: null, now: () => t.ms, models: ['m1'], perDay: 2, perMin: 100 });
+    c.setKey(KEY); await c.send([]); t.ms += 61000; await c.send([]); t.ms += 61000;
+    expect(c.canSend()).toBe(false); await expect(c.send([])).rejects.toMatchObject({ code: 'budget' });
+    expect(c.blocked()).toMatchObject({ kind: 'spent' }); expect(c.blocked().at).toMatch(/^\d\d:\d\d$/);
+    t.ms += 86400000; expect(c.canSend()).toBe(true); expect(c.blocked()).toBe(null);   // the next day
+    const broken = { getItem: k => (k === KEY_NAME ? KEY : null), setItem: () => { throw new Error('full'); }, removeItem: () => {} };
+    const b = createClient({ fetch: async () => okResponse('ok'), storage: broken, now: () => T0, models: ['m1'], perDay: 1, perMin: 100 });
+    await b.send([]); expect(b.canSend()).toBe(false);
+  });
+  it('blocked() says a model is paused and for how long, and no key', async () => {
+    const t = { ms: T0 }, c = createClient({ fetch: async () => errResponse(429, { 'Retry-After': '30' }), storage: fakeStorage({ [KEY_NAME]: KEY }), now: () => t.ms, models: ['m1'] });
+    await c.send([]).catch(() => {});
+    expect(c.blocked()).toEqual({ kind: 'paused', secs: 30 });
+    t.ms += 31000; expect(c.blocked()).toBe(null);
+    expect(createClient({ fetch: async () => okResponse(''), storage: null, now: () => T0 }).blocked()).toEqual({ kind: 'nokey' });
+    const d = createClient({ fetch: async () => errResponse(404), storage: fakeStorage({ [KEY_NAME]: KEY }), now: () => T0, models: ['m1'] });
+    await d.send([]).catch(() => {}); expect(d.blocked()).toEqual({ kind: 'dead' });
+  });
+  it('the key check gives up after the timeout', async () => {
+    const c = createClient({ fetch: () => new Promise(() => {}), storage: null, now: () => T0, timeout: 30 });
+    await expect(c.listModels(KEY)).rejects.toMatchObject({ code: 'timeout' });
+  });
+  it('an error is scrubbed of the key its request was sent with, also after the key changed', async () => {
+    let release; const gate = new Promise(r => { release = r; });
+    const st = fakeStorage({ [KEY_NAME]: KEY }), c = createClient({ fetch: async () => { await gate; throw new Error('bad key ' + KEY); }, storage: st, now: () => T0, models: ['m1'] });
+    const p = c.send([]).catch(e => e);
+    c.setKey('ANOTHER-KEY-999'); release();
+    const e = await p; expect(e.message).not.toContain(KEY); expect(e.message).toContain('***');
   });
 });
 

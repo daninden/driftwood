@@ -750,8 +750,8 @@ export function createGame(world, spawn, opts = {}) {
     const gameDt = sleep.update(dt, !wet(here()), fire.warm(player.x, player.z), { drain: thirst.drain() * hunger.drain(), faint: thirst.faint() }, (lt => lt ? { walls: leantos.has(lt, 'walls'), bed: leantos.has(lt, 'bed'), hut: hutDone(lt) } : false)(leantos.home(player.x, player.z)));
     settle();
     player.lie = sleep.lie; player.tired = sleep.tired(); player.thirsty = thirst.level(); player.hungry = hunger.level();
-    if (work && (sleep.asleep || wantsToMove(input))) work = null;   // stopped early
-    if (queued && (sleep.asleep || wantsToMove(input))) queued = null;
+    if (work && (sleep.asleep || wantsToMove(input) || input.stopWork)) work = null;   // stopped early (0.38.3: input.stopWork, game/actor when rain stops a plan)
+    if (queued && (sleep.asleep || wantsToMove(input) || input.stopWork)) queued = null;
 
     // 0.29.2 "Amble": sitting on the ground, only when the mind asks (input.sit); anything he does or the player asks for gets him up
     const sitWant = !!input.sit && !sleep.asleep && !(sleep.lie > 0) && !work && !queued && !(player.stoop > 0) && !fire.torch && !spear.hand && !axe.hand && !wood.load() && !wantsToMove(input) && !pick && !light && !wantSleep && sitOk();

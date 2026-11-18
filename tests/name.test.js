@@ -10,7 +10,7 @@ import { inkStep, inkColor, inkBack, inkGlow, createInk, STEPS, SWITCH, INK_DAY,
 import { skyAt } from '../src/render/sky.js';
 import { wakeOpacity, createDayLine, createWakeLine, WAKE_TIME, WAKE_PEAK, DAY_REST, DAY_PEAK } from '../src/render/nameLines.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
-import { createStartScreen, KEY_LABEL, KEY_NOTE, CHECKING, KEY_BAD, KEY_FAIL, keyError } from '../src/render/startScreen.js';
+import { createStartScreen, KEY_LABEL, KEY_NOTE, CHECKING, KEY_BAD, KEY_FAIL, KEY_REFUSED, keyError } from '../src/render/startScreen.js';
 import { createInput } from '../src/game/input.js';
 import { createDevPanel } from '../src/render/devPanel.js';
 
@@ -230,6 +230,10 @@ describe('the start screen: the key, then the name (0.38.0 "Only him")', () => {
   it('asks the key first, in a password field with the note where a key comes from', () => {
     const t = setup(); createStartScreen(t.root, { askKey: true, askName: true });
     expect(t.root.hidden).toBe(false); expect(t.label.textContent).toBe(KEY_LABEL); expect(t.field.type).toBe('password'); expect(t.note.textContent).toBe(KEY_NOTE);
+  });
+  it('0.38.3: after the saved key was refused while playing, the key question says so', () => {
+    const t = setup(); createStartScreen(t.root, { askKey: true, refused: true });
+    expect(t.label.textContent).toBe(KEY_LABEL); expect(t.note.textContent).toBe(KEY_REFUSED);
   });
   it('checks the key once, says so meanwhile, saves only a key that works, then asks the name', async () => {
     const t = setup(), checked = [], kept = [];

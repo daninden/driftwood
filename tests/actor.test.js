@@ -281,6 +281,19 @@ describe('following a plan (game/actor)', () => {
     expect(asks[1].why).toBe('rain');
     expect(a.recent.some(r => r.kind === 'interrupt' && r.what === 'rain')).toBe(true);
   });
+  it('0.38.3: rain stops the work he is doing too, and the record says so', () => {
+    const g = fresh(), asks = [];
+    let n = 0, rain = 0, raised = false;
+    g.weather.intensity = () => rain;
+    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); if (n++) return null; const k = m.places.find(q => q.kind === 'coconut'); return [{ go: k.id }, { do: 'husk' }]; } });
+    const fibre0 = g.fibre.carried, nuts0 = g.shells.nuts;
+    run(g, a, 120, 0.1, () => { if (!raised && g.player.work && g.player.work.kind === 'husk' && g.player.work.f > 0.2) { rain = 0.6; raised = true; } });
+    expect(raised).toBe(true);
+    const r = a.recent.find(x => x.kind === 'interrupt');
+    expect(r && r.what).toBe('rain'); expect(r.reason).toBe('stopped husking the coconut: nothing was used up; it would start over');
+    expect(g.player.work).toBe(null);
+    expect(g.fibre.carried + g.shells.nuts).toBe(fibre0 + nuts0);   // the husk never finished
+  }, 60000);
   it('a wander walks out that way and learns new ground', () => {
     const g = fresh(), cells0 = g.known.count;
     let given = false;

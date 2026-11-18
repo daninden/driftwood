@@ -169,6 +169,13 @@ describe('keeping it in the store', () => {
     await expect(openLogStore({ open: () => { throw new Error('denied'); } })).rejects.toThrow('denied');
     expect(LOG_DB).toBe('driftwood-log');
   });
+  it('0.38.3: a store that opens but never answers a call rejects that call (the logbook goes on in memory)', async () => {
+    const never = () => ({});   // a request whose onsuccess never comes
+    const db = { objectStoreNames: { contains: () => true }, transaction: () => ({ objectStore: () => ({ getAll: never, get: never, put: () => {}, delete: () => {}, clear: () => {} }) }), close: () => {} };
+    const idb = { open: () => { const req = {}; setTimeout(() => { req.result = db; req.onsuccess(); }, 0); return req; } };
+    const store = await openLogStore(idb, { timeout: 200, callTimeout: 30 });
+    await expect(store.load()).rejects.toThrow('did not answer');
+  });
 });
 
 
