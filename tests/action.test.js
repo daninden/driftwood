@@ -248,7 +248,7 @@ describe('what the big actions do (light, sleep)', () => {
     const g = scene(); press(g, 'big', 1); expect(g.sleep.asleep).toBe(true);
   });
   it('lays down what he carries before he sleeps', () => {
-    const g = scene({ carried: 2 }); press(g, 'big', 1);
+    const g = scene({ carried: 2 }); run(g, makeInput({ sleep: true }), 1);   // 0.39.0: with driftwood in his arms the big action here is starting a home, so he is asked to sleep directly
     expect(g.sleep.asleep).toBe(true); expect(g.wood.carried.length).toBe(0); expect(g.wood.piles.length).toBe(1);
   });
   it('cannot lie down in the water, nor on a climbing route', () => {

@@ -59,6 +59,9 @@
  *   game.siteFits(c)            0.32: does a lean-to fit at c = { x, z, heading } (dry ground, no other site within SITE_APART, nothing in its walls or in the region that stays free); game.yaw(y?) reads (and with a number sets) the camera yaw a new lean-to opens towards (update reads input.yaw into it)
  *   game.hutFits(l)             0.33 "Hut": does a hut fit round finished lean-to l (`hutReady`): dry, standable, level (HUT_SLOPE 0.5 m) ground at its corners, door and middle, no other site within HUT_APART 4.8 m, no trunk, boulder, pile, fire place or burnt place touching its walls or inside it (the stone ring and the lean-to are no hindrance); pure. Not asked once the first part is built
  * 0.37.9 "Far": a part of the hut takes HUT_PIECE_TIME (three times PIECE_TIME) of kneeling, and a piece's rest cost is spread over the work's own time (work.dur).
+ *   game.homeFits(c), game.homeBlock(c), game.hutTrees(c)   0.39.0 "Landfall": may a new lean-to start at site c = { x, z, heading } (siteFits and the whole home can stand: no ground wet at high water,
+ *                               too steep or not standable, no other lean-to, no boulder in the hut's room; trees, piles and fires are not counted); what keeps it, or null; the trees in the hut's way (pure).
+ *                               A new lean-to ('buildHere') starts only where homeFits: the way input.siteYaw asks first, then the camera's, then the eight ways round.
  *   game.hutBlock(l)            0.37.7 "Reasons": what keeps the hut from fitting round l (the first thing `hutFits` finds): { what: 'ground'|'leanto'|'tree'|'rock'|'pile'|'fire'|'burnt', x, z, steep? } or null (pure)
  *   game.lackAt(x?, z?)         0.30.20: what is missing for an action that is almost possible there (default: where he stands): 'needSpear' | 'spearAway' | 'needFibre' | 'needMoreWood' | null (pure, game/lack; the voice says it)
  *   game.onAction(listener)     optional presentation notification when a deliberate action is accepted; listeners receive { kind, x, z }, alter no game state and are not saved
@@ -255,7 +258,7 @@ export function createGame(world, spawn, opts = {}) {
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.queued = null; player.torch = !!fire.torch; player.spear = spear.hand; player.axe = axe.hand; player.thirsty = thirst.level(); player.hungry = hunger.level();
   const voiceListeners = new Set();
   const notifyAction = kind => { for (const listener of voiceListeners) listener({ kind, x: player.x, z: player.z }); };
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, ground, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, hutFits, hutBlock, canPileAt, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, ground, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, hutFits, hutBlock, homeFits, homeBlock, hutTrees, canPileAt, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
   const stand = game.stand = createStand(game, world, { BESIDE });   // 0.30.3 "Routes": standing points (game/stand), asked by the click on a pile or fire and by the walk to the spot of a light, a build or an upgrade
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
@@ -359,6 +362,7 @@ export function createGame(world, spawn, opts = {}) {
   }
   // 0.32 "Piece by piece": a site is built piece by piece with what he carries (game/leanto). The kinds he has: driftwood, branches and fronds under his arm, stones in his hands.
   let viewYaw = YAW;   // the camera's yaw at the last update (input.yaw): the way the open side of a new lean-to faces; the mind may write it before it presses
+  let siteYaw = null;   // 0.39.0: input.siteYaw, the way game/actor asks a new lean-to to open (at a place for a home of the menu); tried before the camera's
   const piecesHeld = () => { const ks = new Set(wood.carried.map(kindOf)); if (wood.stones.length) ks.add('stone'); if (wood.log) ks.add('log'); return ks; };
   const handsFree = () => !fire.torch && !spear.hand && !axe.hand;
   /** 0.37.6 "Free hands": his two hands. One hand holds the spear or the axe (the right), one a torch; under the other arm he carries wood (driftwood, branches, fronds); stones take both hands,
@@ -409,6 +413,25 @@ export function createGame(world, spawn, opts = {}) {
     for (const o of movement.obstacles.camp.near(l.x, l.z, 4.5)) if (o.g.kind !== 'leanto' && inBox(o.x, o.z, o.r)) return { what: o.g.kind, x: o.g.x, z: o.g.z };
     return null;
   }
+  /** 0.39.0 "Landfall": what keeps a whole home (the lean-to, and later the hut round it) from ever standing at site c = { x, z, heading }: 'ground' (wet at high water, not standable,
+   *  or steeper than HUT_SLOPE across the hut), 'leanto' (another site within HUT_APART) or 'rock' (a boulder or crag in the hut's walls or inside), with where; null when it can (pure).
+   *  Trees, piles and fire places are not counted: a tree can be felled, a pile carried away, ashes fade (`hutBlock` names them when the hut is begun). */
+  function homeBlock(c) {
+    const dryHigh = (x, z) => !wet(terrainAt(world, x, z, 0)) && canStand(world, x, z, 0);   // 0: the sea at high water (game/tide)
+    let lo = Infinity, hi = -Infinity;
+    for (const [f, r] of [[0, 0], [HUT.back, -HUT.half], [HUT.back, HUT.half], [HUT.front, -HUT.half], [HUT.front, HUT.half], [(HUT.back + HUT.front) / 2, -HUT.half], [(HUT.back + HUT.front) / 2, HUT.half], [HUT.back, 0], [HUT.front, -HUT.door], [HUT.front, HUT.door]]) {
+      const q = leantoPoint(c, f, r); if (!dryHigh(q.x, q.z)) return { what: 'ground', x: q.x, z: q.z };
+      const y = world.H(q.x, q.z); if (y < lo) lo = y; if (y > hi) hi = y;
+    }
+    if (hi - lo > HUT_SLOPE) return { what: 'ground', x: c.x, z: c.z, steep: true };
+    const other = leantos.list.find(o => o !== c && Math.hypot(o.x - c.x, o.z - c.z) < HUT_APART);
+    if (other) return { what: 'leanto', x: other.x, z: other.z };
+    for (const o of naturalNear(c.x, c.z)) if (o.tree === undefined && inHutBox(c, o.x, o.z, -(HUT_R + o.r))) return { what: 'rock', x: o.x, z: o.z };
+    return null;
+  }
+  function homeFits(c) { return siteFits(c) && !homeBlock(c); }   // 0.39.0: a new lean-to starts only where the whole home can stand
+  /** 0.39.0: the standing trees whose trunks touch the hut's walls or inside round site c (felled for the hut) (pure). */
+  function hutTrees(c) { return naturalNear(c.x, c.z).filter(o => o.tree !== undefined && inHutBox(c, o.x, o.z, -(HUT_R + o.r))).length; }
   // the kind of hut piece he could build into finished lean-to l with what he holds (the first part also needs the footprint to fit)
   // 0.36.2 "Ground": the first piece of a lean-to, and the first part of a hut, clear the ground under the building (game/ground): the bushes, grass, ferns and small rocks there are gone for good (berries and bananas too), and
   // the loose pieces lying there (stones, driftwood, branches, fronds, coconuts, felled logs; not piles) are moved to the nearest free, dry spot just outside the region, with the camp's walking room kept where there is one
@@ -448,9 +471,17 @@ export function createGame(world, spawn, opts = {}) {
   }
   function siteHere(px, pz) {   // a new lean-to he could start now: driftwood under his arm and a place where one fits, the middle a step behind him, the open side to the camera
     if (wet(hereAt(px, pz)) || !handsFree() || !piecesHeld().has(PARTS.leanto[0])) return null;
-    const c = siteAt(px, pz, viewYaw);
-    return siteFits(c) ? { kind: 'buildHere', what: 'leanto', piece: PARTS.leanto[0], site: c, x: c.x, z: c.z } : null;
+    const key = `${px.toFixed(2)},${pz.toFixed(2)},${viewYaw.toFixed(3)},${siteYaw},${leantos.version},${felled.list.length},${Math.round(game.sea * 100)},${wood.version},${spear.at ? 1 : 0}${axe.at ? 1 : 0}`;
+    if (hereMemo && hereMemo.key === key) return hereMemo.v;
+    let v = null;   // 0.39.0 "Landfall": the way asked for (input.siteYaw, game/actor at a place for a home), the camera's, then the eight ways round: the first where the whole home fits
+    for (const h of [...(siteYaw === null ? [] : [siteYaw]), viewYaw, ...Array.from({ length: 7 }, (_, i) => viewYaw + (i + 1) * Math.PI / 4)]) {
+      const c = siteAt(px, pz, h);
+      if (homeFits(c)) { v = { kind: 'buildHere', what: 'leanto', piece: PARTS.leanto[0], site: c, x: c.x, z: c.z }; break; }
+    }
+    hereMemo = { key, v };
+    return v;
   }
+  let hereMemo = null;
   const sleepable = (px = player.x, pz = player.z) => { const t = hereAt(px, pz); return !wet(t) && t.climb <= 0.25; };
   const sitOk = () => { const t = here(); return !wet(t) && t.depth <= 0.05 && t.climb <= 0.25 && t.s < SIT_SLOPE; };   // 0.29.2: level dry ground, no climbing route
 
@@ -654,7 +685,7 @@ export function createGame(world, spawn, opts = {}) {
     if (a.kind === 'buildHere' || a.kind === 'buildIn' || a.kind === 'upgrade') {   // 0.32: kneel PIECE_TIME seconds, then the piece is built in (finish)
       const lt = a.leanto && leantos.list.includes(a.leanto) ? a.leanto : null;
       const have = piecesHeld(); let what = null;
-      if (a.kind === 'buildHere') what = siteFits(a.site) && have.has(PARTS.leanto[0]) ? 'leanto' : null;
+      if (a.kind === 'buildHere') what = homeFits(a.site) && have.has(PARTS.leanto[0]) ? 'leanto' : null;
       else if (lt && a.kind === 'buildIn') what = lt.progress < 1 && have.has(nextKind(lt)) ? 'leanto' : null;
       else if (lt && lt.progress >= 1) what = UP_ORDER.find(k => have.has(nextKind(lt, k))) || (hutPiece(lt, have) ? 'hut' : null);
       if (what && !wet(here())) { work = { kind: a.kind === 'upgrade' ? 'upgrade' : 'build', t: 0, dur: what === 'hut' ? HUT_PIECE_TIME : PIECE_TIME, thing: lt, site: a.kind === 'buildHere' ? a.site : null, what }; face(a); notifyAction(a.kind === 'upgrade' ? 'upgrade' : 'build'); }
@@ -674,7 +705,7 @@ export function createGame(world, spawn, opts = {}) {
     if (wk.kind === 'upgrade' || wk.kind === 'build') {   // 0.32: the next part of the site is built in with the piece that fits (a new site: started first, if the lean-to still fits)
       let lt = wk.thing;
       if (wk.site) {
-        if (wet(here()) || !siteFits(wk.site) || !piecesHeld().has(PARTS.leanto[0])) return;
+        if (wet(here()) || !homeFits(wk.site) || !piecesHeld().has(PARTS.leanto[0])) return;
         lt = leantos.start(wk.site.x, wk.site.z, wk.site.heading);
       } else if (!leantos.list.includes(lt)) return;
       const kind = wk.what === 'leanto' ? nextKind(lt) : nextKind(lt, wk.what);
@@ -730,6 +761,7 @@ export function createGame(world, spawn, opts = {}) {
 
   function update(input, dt) {
     if (Number.isFinite(input.yaw)) viewYaw = input.yaw;   // 0.32: the way a new lean-to opens, read before anything is offered or pressed
+    siteYaw = Number.isFinite(input.siteYaw) ? input.siteYaw : null;
     const wantWake = input.takeWake ? input.takeWake() : false, light = input.takeLight ? input.takeLight() : false;
     const pressed = input.takeAction ? input.takeAction() : null, idx = input.takeChoice ? input.takeChoice() : null;
     let pick = null;   // what the button, a key 1 to 3, an icon of the arc or act() chose, looked at before anything changes

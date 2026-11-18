@@ -267,12 +267,13 @@ describe('a lean-to site with two berry bushes, and a banana plant', () => {
     for (const p of ps) { expect(g.berries.bearing(p)).toBe(false); expect(g.berries.pick(p, 1)).toBe(false); }
     for (const p of out.filter(q => !g.ground.bushGone(q.bush))) expect(g.berries.bearing(p)).toBe(true);
   });
-  it('banana plants: the plant is gone for good (not even a bare one is drawn), its bunch lost', () => {
+  it('banana plants (0.39.0 "Landfall"): the banana site is too steep for a whole home, so no lean-to starts there and the plant stays', () => {
     const { g, input } = siteGame(BANANA_SITE), ps = tilesAround(BANANA_SITE.x, BANANA_SITE.z).flatMap(t => g.bananas.plantsIn(t)).filter(p => keepFree(BANANA_SITE).touches(p.x, p.z, p.r));
     expect(ps.length).toBe(1); expect(g.bananas.bearing(ps[0])).toBe(true); expect(g.bananas.gone(ps[0])).toBe(false);
-    give(g, 'driftwood'); buildNext(g, input);
-    expect(g.bananas.gone(ps[0])).toBe(true); expect(g.bananas.bearing(ps[0])).toBe(false); expect(g.bananas.find(ps[0].x, ps[0].z, 0.5)).toBeNull();
-    const h = createGame(w, spawn, parseSave(serialise(g.state()), 1337)); expect(h.bananas.gone(ps[0])).toBe(true);
+    expect(g.siteFits(BANANA_SITE)).toBe(true); expect(g.homeBlock(BANANA_SITE)).toMatchObject({ what: 'ground', steep: true }); expect(g.homeFits(BANANA_SITE)).toBe(false);
+    give(g, 'driftwood'); input.siteYaw = BANANA_SITE.heading; run(g, input, 0.1);
+    const o = bigOf(g); if (o && o.kind === 'buildHere') expect(keepFree(o.site).touches(ps[0].x, ps[0].z, ps[0].r)).toBe(false);
+    expect(g.bananas.gone(ps[0])).toBe(false);
   });
 });
 

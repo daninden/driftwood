@@ -60,7 +60,7 @@ const args = process.argv.slice(2), full = args.includes('--full');
 const spawnArg = args.find(a => !a.startsWith('--'));
 const qualityArg = args.find(a => a.startsWith('--quality='));   // --quality=N forces a quality level (?quality=N)
 const qualityQuery = qualityArg ? 'quality=' + qualityArg.slice(10) : '';
-const query = [spawnArg ? 'spawn=' + spawnArg : '', qualityQuery].filter(Boolean).join('&').replace(/^(?=.)/, '?');
+const query = ['seed=1337', spawnArg ? 'spawn=' + spawnArg : '', qualityQuery].filter(Boolean).join('&').replace(/^(?=.)/, '?');   // 0.39.0: the island named (a new game draws a random one)
 const SMALL = { width: 640, height: 400 }, BIG = { width: 1280, height: 800 };
 
 // Prefer the real graphics card: the full Chromium in new headless mode (on Windows it picks ANGLE on

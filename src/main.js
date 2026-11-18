@@ -132,7 +132,7 @@ import { parseSpeed, subSteps } from './game/steps.js';
 import { VERSION, NAME } from './version.js';
 import { zoomMax } from './core/view.js';
 import { settingsFor, parseQuality, pickStart, loadPreference, savePreference, cyclePreference, isQualityKey, createGovernor } from './render/quality.js';
-import { createSaveStore, parseAddress, withoutNew, isResetKey, createMomentWatcher, createViewSaver, SAVE_EVERY } from './save.js';
+import { createSaveStore, addressSeed, pickIsland, forgetIsland, withoutNew, isResetKey, createMomentWatcher, createViewSaver, SAVE_EVERY } from './save.js';
 import { createLoading } from './core/loading.js';
 import { createParallelHeights } from './parallelHeights.js';
 import HeightWorker from './heightWorker.js?worker&inline';
@@ -142,10 +142,11 @@ const loading = createLoading(v => { if (fill) fill.style.transform = `scaleX(${
 const breathe = (label, f) => { loading.report(label, f); return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); };
 
 async function boot() {
-  const { seed, fresh } = parseAddress(location.search);
-  const store = createSaveStore(seed);
   const qs = new URLSearchParams(location.search), q = qs.get('spawn'), qt = qs.get('time'), qa = qs.get('awake');
   const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no start screen, no loading, no saving
+  const local = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+  const { seed, fresh } = pickIsland({ search: location.search, testing, storage: local });   // 0.39.0 "Landfall": a new game draws a random island; otherwise the last one goes on
+  const store = createSaveStore(seed);
   if (fresh) { if (!testing) store.clear(); try { history.replaceState(null, '', location.pathname + withoutNew(location.search) + location.hash); } catch (e) { /* keep the address */ } }   // 0.38.3: with test parameters ?new does not clear the save either
   const saved = testing ? null : store.load();
   const store0 = (() => { try { return window.localStorage; } catch (e) { return null; } })();
@@ -254,7 +255,7 @@ async function boot() {
   const moments = createMomentWatcher(game);   // looks for something worth saving twice a second, not every frame
   const save0 = () => store.save({ ...game.state(), name, startDay, memory: planner.memory(), view: view.pose });
   const save = () => { if (!stopSaving) { save0(); sinceSave = 0; } };
-  const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, play: { actor, planner }, logbook, onKeyRemoved: () => { save(); stopSaving = true; location.reload(); } });   // no key, no game: back to the start screen
+  const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, play: { actor, planner }, logbook, seed, onKeyRemoved: () => { save(); stopSaving = true; location.reload(); } });   // no key, no game: back to the start screen
   const thinking = createThinkingMark(document.getElementById('thinking'), { retry: () => planner.retry() });
   let memSeen = planner.memoryVersion;
   const viewSaver = createViewSaver();
@@ -264,7 +265,8 @@ async function boot() {
   setInterval(() => { logbook.flush(); }, 1000);   // 0.36.8: the logbook is written in small batches, once a second, and when the page is hidden or closed
   window.addEventListener('pagehide', () => { logbook.flush(); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') logbook.flush(); });
-  window.addEventListener('keydown', e => { if (isResetKey(e)) { stopSaving = true; store.clear(); Promise.race([logbook.clear(), new Promise(r => setTimeout(r, 600))]).then(() => location.reload(), () => location.reload()); } });
+  window.addEventListener('keydown', e => { if (isResetKey(e)) { stopSaving = true; store.clear(); if (addressSeed(location.search) === null) forgetIsland(local);   // 0.39.0: a new random island, unless the address names one
+ Promise.race([logbook.clear(), new Promise(r => setTimeout(r, 600))]).then(() => location.reload(), () => location.reload()); } });
   let last = performance.now(), paused = false, frames = 0;
   const cap = touch ? FRAME_CAP_TOUCH : 0;   // 0: no cap
   const quiet = createIdleTracker(undefined, last);

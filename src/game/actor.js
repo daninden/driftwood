@@ -35,6 +35,10 @@
  * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
  * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
  * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * 0.39.0 "Landfall": until he has begun a lean-to, the menu has the places for a home he has seen (kind 'homespot': a point of a HOME_GRID m grid on known ground within HOME_R where
+ * game `homeFits` for one of the eight ways, spaced HOME_APART apart, nearest first; `what` says the fresh water he knows nearest, the shore, the trees within 20 m and those where the hut will go;
+ * cached until a lean-to or a felled tree changes the ground); a `go` to one stands where its lean-to would be started and sets input.siteYaw (its way) until the next walk or the plan's end,
+ * so "buildHere" opens it that way; a refused "buildHere" says why ("no home fits here: ...").
  * 0.38.3 "Steady": when rain stops a plan, the work he is doing stops too (input.stopWork for one frame, as walking off stops it): the interrupt's record says what stopped
  * ("stopped felling the tree: the chopping done so far is kept", else "nothing was used up; it would start over").
  * 0.38.2 "True": a step is done only when the action itself changed something (`changed`: thirst and hunger only when they went down, a fire only with more fuel or a new
@@ -183,6 +187,45 @@ export function createActor(world, game, opts = {}) {
     if (!hk) return 'his lean-to, finished with walls, bed and ring';
     return `his lean-to with walls, bed and ring; the hut: ${built(l, 'hut')} of ${partsOf('hut').length} parts, it still needs ${stillNeeds(l, 'hut')}${hk === 'log' ? ' (each log carried alone on his shoulder)' : ''}${!hutBegun(l) && !game.hutFits(l) ? ` (but ${hutWay(l)})` : ''}`;
   };
+  // ---------- 0.39.0 "Landfall": the places for a home he has seen (until he has begun one) ----------
+  const HOME_GRID = 6, HOME_APART = 15, HOME_R = 120;
+  const homeCache = new Map(); let homeVer = '';
+  function homeAt(ix, iz) {   // the place for a home at grid point (ix, iz): { id, site, heading, x, z (where he stands to start it) } or null; cached until a lean-to or a felled tree changes the ground
+    const key = ix + ',' + iz;
+    if (homeCache.has(key)) return homeCache.get(key);
+    const x = ix * HOME_GRID, z = iz * HOME_GRID;
+    let v = null;
+    if (world.H(x, z) > 0.3 && canStand(world, x, z, 0)) for (let i = 0; i < 8 && !v; i++) {
+      const site = { x, z, heading: i * Math.PI / 4 };
+      if (!game.homeFits(site)) continue;
+      const s = standFor(site);
+      if (canStand(world, s.x, s.z, 0) && inside(s.x, s.z)) v = { id: 'home:' + key, site, heading: site.heading, x: s.x, z: s.z };
+    }
+    homeCache.set(key, v);
+    return v;
+  }
+  function homeSpots() {
+    if (game.leantos.list.length) return [];
+    const ver = game.leantos.version + ':' + game.felled.list.length;
+    if (ver !== homeVer) { homeCache.clear(); homeVer = ver; }
+    const out = [], i0 = Math.ceil((p.x - HOME_R) / HOME_GRID), i1 = Math.floor((p.x + HOME_R) / HOME_GRID), j0 = Math.ceil((p.z - HOME_R) / HOME_GRID), j1 = Math.floor((p.z + HOME_R) / HOME_GRID);
+    for (let iz = j0; iz <= j1; iz++) for (let ix = i0; ix <= i1; ix++) {
+      const x = ix * HOME_GRID, z = iz * HOME_GRID;
+      if (Math.hypot(x - p.x, z - p.z) > HOME_R || !known.has(x, z)) continue;
+      const h = homeAt(ix, iz); if (h) out.push(h);
+    }
+    out.sort((a, b) => dist(a, p) - dist(b, p));
+    return spaced(out, HOME_APART);
+  }
+  function homeWhat(h) {   // the facts of a place for a home: fresh water, the shore, the trees round it and in the hut's way
+    const c = h.site, water = waterAll.filter(q => known.has(q.x, q.z)).reduce((m, q) => Math.min(m, dist(q, c)), Infinity);
+    let shore = Infinity;
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; for (let d = 3; d <= 240 && d < shore; d += 3) if (world.H(c.x + Math.sin(a) * d, c.z + Math.cos(a) * d) < 0) { shore = d; break; } }
+    let trees = 0;
+    for (const t of tilesNear(c.x, c.z, 20)) for (const list of LISTS) t[list].forEach((tree, index) => { if (!game.felled.has(treeId(t, list, index)) && Math.hypot(tree.x - c.x, tree.z - c.z) <= 20) trees++; });
+    const ht = game.hutTrees(c), m = v => `${Math.round(v)} m`;
+    return `a place for a home (the lean-to and later the hut fit here): ${Number.isFinite(water) ? `fresh water ${m(water)} away` : 'no fresh water he knows near'}, ${Number.isFinite(shore) ? `the shore ${m(shore)}` : 'the shore far'}, ${trees} tree${trees === 1 ? '' : 's'} within 20 m; ${ht ? `${ht} tree${ht === 1 ? ' stands' : 's stand'} where the hut will go (fell ${ht === 1 ? 'it' : 'them'} for the hut)` : "the hut's ground is clear of trees"}`;
+  }
   function candidates() {   // every thing he knows within SCAN_R, by kind: [{ kind, ref, x, z, what }]
     const out = [], R = SCAN_R, near = q => Math.hypot(q.x - p.x, q.z - p.z) <= R && known.has(q.x, q.z), anywhere = q => known.has(q.x, q.z);   // water, fires and lean-tos he knows are on the menu however far
     for (const q of waterAll) if (anywhere(q)) out.push({ kind: 'water', ref: q, x: q.x, z: q.z, what: 'fresh river water' });
@@ -197,6 +240,7 @@ export function createActor(world, game, opts = {}) {
       const id = treeId(t, list, index); if (game.felled.has(id) || !near(tree) || Math.hypot(tree.x - p.x, tree.z - p.z) > 60) return;
       const k = sizeKind(list, tree); out.push({ kind: 'tree', ref: { id, x: tree.x, z: tree.z, r: trunkRadius(tree, k) }, x: tree.x, z: tree.z, what: `a standing ${k === 'palm' ? 'palm' : k === 'pine' ? 'pine' : 'tree'}` });
     });
+    for (const h of homeSpots()) out.push({ kind: 'homespot', ref: h, x: h.x, z: h.z, what: homeWhat(h) });   // 0.39.0
     for (const col of game.wildlife.coloniesNear(p.x, p.z, 120)) {
       if (!col.crabs.some(q => !game.crabs.isGone(q.id))) continue;
       const hole = col.holes.filter(h => known.has(h.x, h.z) && canStand(world, h.x, h.z, 0)).sort((a, b) => dist(a, p) - dist(b, p))[0];
@@ -343,12 +387,13 @@ export function createActor(world, game, opts = {}) {
     if (pl.kind === 'spear') return !!game.spear.at && dist(game.spear.at, r) < 0.05;
     if (pl.kind === 'axe') return !!game.axe.at && dist(game.axe.at, r) < 0.05;
     if (pl.kind === 'tree') return !game.felled.has(r.id);
+    if (pl.kind === 'homespot') return !game.leantos.list.length && game.homeFits(r.site);
     if (pl.kind === 'log') return game.logs.near(r.x, r.z, 0.5).includes(r);
     if (LOOSE[pl.kind]) return tilesNear(r.x, r.z, 1).some(t => LOOSE[pl.kind].list(t).includes(r));
     return true;
   }
   function* goTo(pl) {
-    if (!stillThere(pl)) return { ok: false, reason: `${pl.what} is gone` };
+    if (!stillThere(pl)) return { ok: false, reason: pl.kind === 'homespot' ? (game.leantos.list.length ? 'he has begun a home already' : 'that place no longer fits a home (something now stands in the way)') : `${pl.what} is gone` };
     const r = pl.ref, limit = realSecs(pl.minutes) * 3 + 30;
     if (pl.kind === 'pile') {
       const kind = W.load() === 0 ? 'take' : 'add';
@@ -370,6 +415,7 @@ export function createActor(world, game, opts = {}) {
       return w.ok && !offeredHere(pl) ? { ok: true, note: 'drinking is not offered here' } : w;
     }
     if (pl.kind === 'crabs') return yield* walk(r.hole.x, r.hole.z, { stop: 1.0, maxSecs: limit });
+    if (pl.kind === 'homespot') { const w = yield* walk(r.x, r.z, { stop: 0.3, maxSecs: limit }); if (w.ok) inp.siteYaw = r.heading; return w; }   // 0.39.0: a "buildHere" there opens the lean-to that way
     let w = yield* walk(r.x, r.z, { tap: true, stop: 0.4, until: () => offeredHere(pl), maxSecs: limit });   // a loose thing: until the action button offers it
     if (w.ok && !offeredHere(pl)) w = yield* walk(r.x, r.z, { stop: 0.2, maxSecs: 20 });
     if (!w.ok) return w;
@@ -451,6 +497,10 @@ export function createActor(world, game, opts = {}) {
     if (kind === 'torch' && game.axe.hand) return 'the axe is in his hand: felling takes both hands, so no torch with it';   // 0.37.6
     if (kind === 'torch' && game.spear.hand && W.carried.length) return 'the spear and the wood under his arm fill his hands';
     if ((kind === 'buildIn' || kind === 'upgrade' || kind === 'buildHere' || kind === 'makeSpear' || kind === 'makeAxe') && (game.spear.hand || game.axe.hand || game.fire.torch)) return `that needs both hands: the ${game.spear.hand ? 'spear' : game.axe.hand ? 'axe' : 'torch'} is in one ("${game.spear.hand ? 'laySpear' : game.axe.hand ? 'layAxe' : 'plant'}" first)`;
+    if (kind === 'buildHere') {   // 0.39.0 "Landfall"
+      if (!W.carried.some(l => !l.branch && !l.frond)) return 'he needs driftwood under his arm to start a lean-to';
+      if (!(game.spear.hand || game.axe.hand || game.fire.torch) && !terrainAt(world, p.x, p.z, game.sea).depth) return 'no home fits here: the lean-to and later the hut round it need level ground that stays dry at high water, with no boulder or other lean-to in the hut\'s room and nothing touching the lean-to\'s walls; the menu lists the places for a home he has seen';
+    }
     if (kind === 'laySpear' || kind === 'layAxe') { if (!(kind === 'laySpear' ? game.spear.hand : game.axe.hand)) return `the ${kind === 'laySpear' ? 'spear' : 'axe'} is not in his hand`; }
     if (kind === 'buildIn' || kind === 'upgrade') {
       const l = game.leantos.list.filter(q => dist(q, p) < 4).sort((a, b) => dist(a, p) - dist(b, p))[0];
@@ -541,6 +591,7 @@ export function createActor(world, game, opts = {}) {
   }
   function* runStep(s, places) {
     const k = stepKind(s);
+    if (k === 'go' || k === 'wander') inp.siteYaw = undefined;   // 0.39.0: the way of a place for a home holds only where he stands at it
     if (k === 'go') {
       const pl = places.find(q => q.id === s.go);
       if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, stepMinutes(s, places)); if (!ok.ok) return { ok: false, reason: ok.reason }; }   // 0.37.2: the dark rule, when the walk starts (0.37.8: no walk without light)
@@ -599,7 +650,7 @@ export function createActor(world, game, opts = {}) {
     }
     return 'done';
   }
-  function end(reason) { gen = null; actor.plan = null; actor.stepIndex = -1; why = reason; idle(); inp.sit = false; }
+  function end(reason) { inp.siteYaw = undefined; gen = null; actor.plan = null; actor.stepIndex = -1; why = reason; idle(); inp.sit = false; }
   // 0.38.3 "Steady": rain stops the work he is doing (as walking off does), and the record says so
   const WORK_WORDS = { husk: 'husking the coconut', sip: 'drinking from a shell', roast: 'roasting', build: 'building', upgrade: 'building', drill: 'drilling a fire', fell: 'felling the tree', dig: 'digging', fish: 'fishing', make: 'making the tool', drink: 'going to drink', fill: 'going to fill a shell' };
   function stopWork() {

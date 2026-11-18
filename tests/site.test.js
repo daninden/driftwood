@@ -124,12 +124,13 @@ describe('starting a site with driftwood in the arms', () => {
   it('builds the first piece at once: the site appears after PIECE_TIME, with the open side to the camera and the middle SITE_AT behind him; the piece is used up', () => {
     const { g, input } = FLAT(1.0); give(g, 'driftwood', 2);
     const px = g.player.x, pz = g.player.z;
+    const H = [0, 1, 2, 3, 4, 5, 6, 7].map(i => 1.0 + i * Math.PI / 4).find(h => g.homeFits(siteAt(px, pz, h)));   // 0.39.0: the camera's way, else the first of the eight where the whole home fits
     input.big = true; run(g, input, 1);
     expect(g.player.work).toMatchObject({ kind: 'build' }); expect(g.leantos.list.length).toBe(0); expect(g.wood.carried.length).toBe(2);   // kneeling: nothing yet
     run(g, input, PIECE_TIME);
     expect(g.player.work).toBeNull(); expect(g.wood.carried.length).toBe(1); expect(g.leantos.list.length).toBe(1);
     const l = g.leantos.list[0];
-    expect(l.heading).toBe(1.0); expect(l.x).toBeCloseTo(px - Math.sin(1.0) * SITE_AT, 5); expect(l.z).toBeCloseTo(pz - Math.cos(1.0) * SITE_AT, 5);
+    expect(H).toBeDefined(); expect(l.heading).toBeCloseTo(H, 9); expect(l.x).toBeCloseTo(px - Math.sin(H) * SITE_AT, 5); expect(l.z).toBeCloseTo(pz - Math.cos(H) * SITE_AT, 5);
     expect(built(l)).toBe(1); expect(l.progress).toBeCloseTo(1 / 15, 9);
   });
   it('takes the heading from the starting view when the input has none', () => {
@@ -146,7 +147,7 @@ describe('starting a site with driftwood in the arms', () => {
     const c = siteAt(g.player.x, g.player.z, 0.8);
     g.wood.piles.push({ x: c.x + 0.2, z: c.z, kind: 'driftwood', logs: [{ ...drift[5] }] });   // a pile of firewood in the walls
     expect(g.siteFits(c)).toBe(false);
-    expect(bigOf(g) && bigOf(g).kind).not.toBe('buildHere');
+    const o = bigOf(g); expect(!o || o.kind !== 'buildHere' || Math.abs(o.site.heading - 0.8) > 1e-9).toBe(true);   // 0.39.0: not that way (another way round may fit)
     g.wood.piles.length = 0; expect(g.siteFits(c)).toBe(true);
     g.leantos.start(c.x + SITE_APART - 0.1, c.z, 0); expect(g.siteFits(c)).toBe(false);
     const sea = createGame(w, { x: spawn.x - 400, z: spawn.z, y: 0 }); expect(sea.siteFits({ x: spawn.x - 400, z: spawn.z, heading: 0 })).toBe(false);

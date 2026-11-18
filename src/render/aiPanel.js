@@ -23,7 +23,7 @@
  *   actPlanLines(plan, index, recent), actEntryParts(entry)   (pure) the plan as marked lines; one request as { n, head, lines, ok }
  *   playLogText({ entries, model, days }) -> string   (pure) the "copy log" text
  *   saveTextFile(name, text, { doc?, url? })   gives a text to the browser as a file (a Blob and a link with `download`)
- *   createAiPanel(el, { client, play: { actor, planner }, now?, logbook?, onKeyRemoved? }) -> { toggle(), visible(), update() }   el: the #ai element (index.html); update() is called every frame and touches the DOM only when something changed; listens for I on window
+ *   createAiPanel(el, { client, play: { actor, planner }, now?, logbook?, onKeyRemoved?, seed? })   (seed, 0.39.0: shown as "Island <seed>." before the status) -> { toggle(), visible(), update() }   el: the #ai element (index.html); update() is called every frame and touches the DOM only when something changed; listens for I on window
  *
  * Depends on: game/actions (stepText), ai/actPrompt (WHY_ASKED), ai/prompt (hhmm), src/version
  */
@@ -151,7 +151,7 @@ export function playLogText({ entries = [], model = null, days = 2 } = {}) {
   return out.join('\n');
 }
 
-export function createAiPanel(el, { client, play, now = () => Date.now(), logbook = null, onKeyRemoved = null } = {}) {
+export function createAiPanel(el, { client, play, now = () => Date.now(), logbook = null, onKeyRemoved = null, seed = null } = {}) {
   let shown = false, seen = -1, lastStatus = '', lastModels = null;
   const open = new Set();
   const mk = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
@@ -247,7 +247,8 @@ export function createAiPanel(el, { client, play, now = () => Date.now(), logboo
     if (t !== lastNow) { lastNow = t; nowEl.textContent = t; }
     const sm = summaryLine(cs, { waiting: ac.waiting, inFlight: play.planner.status().state === 'thinking' }, now()), key2 = sm.text + '|' + sm.problem;
     if (key2 !== lastSummary) { lastSummary = key2; sumText.textContent = sm.text; sumBad.textContent = sm.problem; sum.classList.toggle('bad', !!sm.problem); }
-    if (s !== lastStatus) { lastStatus = s; status.textContent = s; }
+    const st = seed === null ? s : `Island ${seed}. ${s}`;   // 0.39.0: the island's seed (a new game draws a random one)
+    if (st !== lastStatus) { lastStatus = st; status.textContent = st; }
     const mt = ml.join('\n'); if (mt !== lastModels) { lastModels = mt; perModel.textContent = mt; }
     const memV = play.planner.memoryVersion; if (memV !== lastMem) { lastMem = memV; renderMemory(); }
     const ver = play.planner.version * 1000 + (ac.stepIndex + 1) + ac.stats.steps * 7 + ac.stats.plans * 13; if (ver !== seen) { seen = ver; renderLog(); }

@@ -71,6 +71,8 @@
  *   happens: wood laid down or taken from a pile, a lean-to started or finished, a fire lit or gone out, a
  *   torch stuck in the ground or taken up, falling asleep or waking up, a crab caught or eaten or gone bad, a fish caught or eaten or gone bad, the spear made, taken up or laid down, the axe made, taken up or laid down, a tree felled, a log shouldered or laid down, a shell kept, filled or drunk, a coconut picked up or eaten, berries or a banana bunch picked, eaten or gone bad
  * MOMENT_EVERY (0.5), createMomentWatcher(game, every?) -> { update(dt) -> bool }   true when momentKey changed since the last look; it only looks every `every` seconds (0.27.7), not every frame
+ * addressSeed(search) -> seed | null; pickIsland({ search, testing, storage, random? }) -> { seed, fresh }; forgetIsland(storage); ISLAND_KEY, SEED_MAX   0.39.0 "Landfall":
+ *   a new game draws a random island; without a seed in the address the island played last goes on (see pickIsland)
  * parseAddress(search) -> { seed, fresh }  from the address query (0.30.15 "Address": `?seed=<n>` and/or `new`,
  *   joined with `&`: `?new`, `?seed=2024`, `?seed=2024&new`); seed defaults to 1337
  * withoutNew(search) -> string        the query with `new` removed (the other options stay; '' when nothing is left)
@@ -197,6 +199,33 @@ export function createMomentWatcher(game, every = MOMENT_EVERY) {
   let key = momentKey(game), t = 0;
   return { update(dt) { t += dt; if (t < every) return false; t = 0; const k = momentKey(game); if (k === key) return false; key = k; return true; } };
 }
+
+/** 0.39.0 "Landfall": the seed named in the address (`seed=<n>`), or null. */
+export function addressSeed(search) {
+  const m = String(search || '').replace(/^\?/, '').split('&').map(p => p.match(/^seed=(\d+)$/)).find(Boolean);
+  return m ? parseInt(m[1], 10) : null;
+}
+export const ISLAND_KEY = 'driftwood-island';   // the seed of the island played last
+export const SEED_MAX = 99999;
+/** 0.39.0 "Landfall": which island this page plays. A seed in the address wins (and is remembered); with test parameters and none, DEFAULT_SEED; else the island played last,
+ *  unless `new` asks for a new game or there is none: then a random seed from 1 to SEED_MAX (another than the last one), the last island's save removed, the new seed remembered.
+ *  -> { seed, fresh } (fresh: a new game; the caller clears this seed's save and log). Never throws (no storage: a random island each time). */
+export function pickIsland({ search, testing = false, storage = null, random = Math.random } = {}) {
+  const { fresh } = parseAddress(search), named = addressSeed(search);
+  const get = () => { try { const v = storage ? storage.getItem(ISLAND_KEY) : null; return v !== null && /^\d+$/.test(v) ? parseInt(v, 10) : null; } catch (e) { return null; } };
+  const keep = s => { try { if (storage) storage.setItem(ISLAND_KEY, String(s)); } catch (e) { /* not remembered */ } };
+  if (named !== null) { if (!testing) keep(named); return { seed: named, fresh }; }
+  if (testing) return { seed: DEFAULT_SEED, fresh };
+  const last = get();
+  if (last !== null && !fresh) return { seed: last, fresh: false };
+  let seed = 1 + Math.floor(random() * SEED_MAX);
+  if (seed === last) seed = seed % SEED_MAX + 1;
+  if (last !== null) { try { storage.removeItem(saveKey(last)); } catch (e) { /* left behind */ } }
+  keep(seed);
+  return { seed, fresh: true };
+}
+/** 0.39.0: forget the island played last, so the next page starts a new random one (the reset key, without a seed in the address). */
+export const forgetIsland = storage => { try { if (storage) storage.removeItem(ISLAND_KEY); } catch (e) { /* nothing */ } };
 
 export function parseAddress(search) {
   const parts = String(search || '').replace(/^\?/, '').split('&');

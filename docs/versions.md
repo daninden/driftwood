@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.39.0 "Landfall" — 2026-11-18
+
+Agreed with the user 2026-11-18 (option 1a: the rule and the facts). In place of 0.38.4 "Proof": no new test scenarios, the documents updated.
+
+- **A place for a home:** a lean-to ("buildHere") starts only where the whole home can stand, the lean-to and later the hut round it (dry at high water, standable, at most 0.5 m of slope across the hut, no other lean-to within 4.8 m, no boulder in the hut's room; trees, piles and fires not counted). The lean-to opens the way the model chose (a place of the menu), else the camera's, else the first of the eight ways that fits. Until he has begun one, the menu lists the places for a home he has seen (`homespot<n>`, on a 6 m grid within 120 m, 15 m apart) with the fresh water he knows nearest, the shore, the trees within 20 m and the trees where the hut will go; the rules say so. A refused "buildHere" says what a home needs.
+- **A random island for every new game:** the first start, `?new` and the reset key draw a random seed (1 to 99999); without a seed in the address the island played last goes on (`driftwood-island` in localStorage); the last island's save is removed when a new one starts; `?seed=<n>` opens that island; test parameters without a seed keep 1337, and the smoke test opens `?seed=1337`. The AI panel shows "Island <seed>.".
+- **Documents:** a note at the top of `docs/design.md` on reading its older sections (the player's controls and the old mind are history); the voice and gathering sections say what holds now; `docs/architecture.md`: the layers, the marks on screen, the test commands and the smoke test made current, the voice marked as history.
+- **Tests:** no new tests (the user's choice); the existing ones that assumed a lean-to always faces the camera follow the new rule (`tests/site.test.js`), and the banana plant under a new lean-to (`tests/ground.test.js`) now checks that no home starts on that steep spot.
+
 ## 0.38.3 "Steady" — 2026-11-18
 
 Agreed with the user 2026-11-18: the rest of the external review (`docs/review.md`) that concerns failures, in its own release; the user chose the key question for a refused key and cancelling the work in the rain.
