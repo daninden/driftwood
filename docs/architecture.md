@@ -193,6 +193,16 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### True (0.38.2)
+
+After the five-day AI test game on 0.38.1 and the external review (`docs/review.md`). Facts only.
+- **Done means done:** `game/actor` `snapshot()` is `{ fixed, thirst, hunger, fuel, burning }`; `changed(a, b)`: the fixed part (what he carries, the lean-tos and the hut, the piles, the felled trees, the spear and axe lying, the torches in the ground) differs, thirst or hunger went down, a fire got more fuel or a new fire burns. Used by `doAction` and `useThing`.
+- **Lay-downs of the game:** `runPlan` keeps the piles' sizes at each step's start (`mark`); a step other than "pickup" or "lay" whose piles grew gets "he laid down what he carried first: ..." (`layWhere`) in its note, or after its reason when it failed; `interrupt` (a collapse, rain) the same.
+- **Fuel:** `game/game` `fuelPile` takes only piles of kind 'driftwood' or 'branch' (lighting and the lack of a fire).
+- **Fish:** `useThing('crab')` passes 'fish' to game `use` when no crab is carried; neither: "he carries no crab or fish".
+- **Wet:** `game/actor` `wet(l)` is `dryness < TORCH_DRY`.
+- **Days:** `createActor(world, game, { dayNo })` (main: `dayNumber(d, startDay)`, the playtest script its own `dayNo`); `ai/prompt` `snapshotOf` reads `spear.hand` and `axe.hand`.
+
 ### Trace (0.38.1)
 
 After the user's Gemini game on 0.37.10 (wood picked up, laid down and picked up again). Only the request of full AI play changes; facts, no advice.

@@ -343,7 +343,7 @@ export function createGame(world, spawn, opts = {}) {
   const plantTorch = () => { const s = plantSpot(); return !!s && fire.plant(s.x, s.z); };
   const plantBeside = () => { const s = plantBesideSpot(); return !!s && fire.plant(s.x, s.z); };
 
-  const fuelPile = (px, pz) => wood.findAll(px, pz, BESIDE, 'pile').find(c => c.pile.kind !== 'log') || null;   // 0.31: a pile of logs is timber for later: never lit, never counted for lack
+  const fuelPile = (px, pz) => wood.findAll(px, pz, BESIDE, 'pile').find(c => c.pile.kind === 'driftwood' || c.pile.kind === 'branch') || null;   // 0.31: a pile of logs is timber for later: never lit, never counted for lack; 0.38.2 "True": only driftwood and branches burn (a pile of stones or fronds was lit)
   function lightable(px, pz) {   // the pile beside him he could light now, with the torch or with fibre
     if (wet(hereAt(px, pz)) || (!fire.torch && !fibre.carried)) return null;
     const p = fuelPile(px, pz);

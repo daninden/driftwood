@@ -11,6 +11,9 @@ import { checkPlan, stepMinutes, stepText, gameMinutes, realSecs, dirOf, DIRS, D
 import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, FIRE_LIGHT, TORCH_LIGHT } from '../src/game/dark.js';
 import { DUSK, DAWN } from '../src/game/sleep.js';
 import { lightText, menuText, buildActMessages, actState, armText } from '../src/ai/actPrompt.js';
+import { dryness } from '../src/game/wood.js';
+import { snapshotOf } from '../src/ai/prompt.js';
+import { TORCH_DRY } from '../src/game/fire.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { walkFirstDay } from './helpers/scene.js';
 import { terrainAt, canStand } from '../src/game/movement.js';
@@ -459,5 +462,41 @@ describe('0.38.1 "Trace": what he did, facts only', () => {
     expect(armText({ log: true })).toMatch(/log on his shoulder/);
     const m = buildActMessages({ state: { carries: {} }, menu: { places: [], here: [], uses: [], carries: { driftwood: 2 } }, ask: { why: 'done' }, recent: [], notes: [], lessons: [] });
     expect(m[1].content).toContain('Under his arm: 2 of 3.');
+  });
+});
+
+describe('0.38.2 "True": facts that hold', () => {
+  const pileOf = (g, kind, n, extra = {}) => { const logs = w.tiles.flatMap(t => t.drift).slice(0, n).map((l, i) => ({ ...l, id: 900000 + i, t: undefined, ...(kind === 'driftwood' ? {} : { [kind]: true }), ...extra })); const q = { x: g.player.x + 0.6, z: g.player.z, kind, logs }; g.wood.piles.push(q); return q; };
+  it('only driftwood and branches can be lit: a pile of stones or fronds beside him offers no "light"', () => {
+    for (const kind of ['stone', 'frond']) { const g = fresh(); g.fibre.carried = 2; pileOf(g, kind, 4); expect(g.offersAt(g.player.x, g.player.z).some(o => o.kind === 'light')).toBe(false); }
+    const g = fresh(); g.fibre.carried = 2; pileOf(g, 'driftwood', 4);
+    expect(g.offersAt(g.player.x, g.player.z).some(o => o.kind === 'light')).toBe(true);
+  });
+  it('driftwood that burns is not called wet (wet is under TORCH_DRY)', () => {
+    const g = fresh(), now = g.clock.total;
+    let t = now; while (dryness({ t }, now) < (TORCH_DRY + 0.95) / 2 && t > now - 5) t -= 0.01;
+    const q = pileOf(g, 'driftwood', 3, { t });
+    expect(dryness(q.logs[0], now)).toBeGreaterThanOrEqual(TORCH_DRY); expect(dryness(q.logs[0], now)).toBeLessThan(0.95);
+    const m = createActor(w, g, {}).menu().places.find(x => x.ref === q);
+    expect(m.what).toBe('his pile of 3 dry driftwood');
+  });
+  it('a lay-down the game makes on its own is told in that step: drinking with a branch under his arm', () => {
+    const g = fresh(); let n = 0;
+    const a = createActor(w, g, { chooser: m => { if (n++) return null; const b = m.places.find(q => q.kind === 'branch'), r = m.places.find(q => q.kind === 'water'); return [{ go: b.id }, { do: 'pickup' }, { go: r.id }, { do: 'drink' }]; } });
+    run(g, a, 240);
+    const d = a.recent.find(r => r.kind === 'step' && /drink/.test(r.what));
+    expect(d && d.outcome).toBe('done');
+    expect(d.reason).toMatch(/^he laid down what he carried first: a branch on a new pile (here|\d+ m [a-z-]+) \(pile\d+\)$/);
+  }, 90000);
+  it('the sunset request says the spear and the axe only when in his hand', () => {
+    const g = fresh();
+    expect(snapshotOf(g, null).carries.spear).toBe(false); expect(snapshotOf(g, null).carries.axe).toBe(false);
+    g.spear.hand = true; g.axe.hand = true;
+    expect(snapshotOf(g, null).carries.spear).toBe(true); expect(snapshotOf(g, null).carries.axe).toBe(true);
+  });
+  it('the lay day of a pile is counted as the request counts days (dayNo)', () => {
+    const g = fresh(), q = pileOf(g, 'branch', 2); q.laid = g.clock.total - 1;
+    const m = createActor(w, g, { dayNo: d => d + 1 }).menu().places.find(x => x.ref === q);
+    expect(m.what).toMatch(new RegExp(`laid day ${g.clock.day} \\d\\d:\\d\\d\\)$`));
   });
 });

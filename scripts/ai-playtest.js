@@ -88,7 +88,7 @@ const state = () => {
 const planner = createPlanner({ ask, enabled: () => true, now: () => performance.now() / 1000, state, name: () => name,
   clock: () => ({ day: dayNo(game.clock.day), time: game.clock.time }), recent: () => (actor ? actor.recent.map(r => ({ ...r, day: dayNo(r.day) })) : []),
   log: e => log({ type: 'request', n: e.n, why: e.why, ok: e.ok, say: e.say, steps: e.steps, error: e.error, reason: e.reason, raw: e.raw }) });
-actor = createActor(world, game, { chooser: planner.chooser, onEvent: e => log({ ...e, type: 'actor:' + e.type }) });
+actor = createActor(world, game, { chooser: planner.chooser, dayNo, onEvent: e => log({ ...e, type: 'actor:' + e.type }) });
 
 const r = { seed, days, maxThirst: 0, maxHunger: 0, collapses: 0, errors: [] };
 const dt = 0.1, end = game.clock.total + days;

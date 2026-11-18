@@ -2,6 +2,19 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.38.2 "True" — 2026-11-18
+
+Agreed with the user 2026-11-18, after the five-day AI test game on 0.38.1 and the external review (`docs/review.md`, G1, G2, G3, G5). Facts only, no advice: what the model is told is what really happened.
+
+- **A step is done only when its action did something** (`game/actor` `changed`; review G2): thirst and hunger count only when they went down, a fire only when it got more fuel or a new fire burns. Time alone raised thirst and hunger and burnt fuel, so a dig that caught nothing was "done".
+- **Lay-downs the game makes on its own are told** in that step's record: before a drink, a fill, a fell or a torch, when he lies down to sleep, and when he collapses ("he laid down what he carried first: a branch on a new pile here (pile5)"). In the test game a branch moved into a pile with no record.
+- **Only driftwood and branches can be lit** (`game/game` `fuelPile`; review G1): a pile of stones or fronds was lit with the torch or the drill.
+- **Fish:** "crab" (use) roasts a carried fish when he has no crab, and says "he carries no crab or fish" when he has neither (review G3; in the test game a failed roast blamed the fire).
+- **Wet means too wet to burn:** driftwood is "wet" on the menu under `TORCH_DRY` (0.75), as feeding and lighting take it (was 0.95; review G5).
+- **The hut's way:** a pile in the hut's way is named with its id.
+- **Found in the test game:** a pile's lay day is counted as the request counts days (`createActor(..., { dayNo })`: it said "laid day 0" on day 1); the sunset request says the spear and the axe only when in his hand (`ai/prompt` `snapshotOf`: it said "a spear" whenever he had made one).
+- **Tests:** `tests/actor.test.js` (*0.38.2 "True"*), `tests/crab.test.js` (the dig and the fish through the actor).
+
 ## 0.38.1 "Trace" — 2026-11-18
 
 Agreed with the user 2026-11-18, after their Gemini game on 0.37.10 where he picked wood up, laid it down and picked it up again: he did not see what he did. Only the request of full AI play changes; facts, no advice.

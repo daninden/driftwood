@@ -6,7 +6,7 @@
  * row, sitting) and so can do only what a player could do. Walks to a place stay on ground he knows (game/known); a wander may go into ground he does not know.
  * Everything he walks past is learned (the input never says `learns: false`).
  *
- * createActor(world, game, { chooser, onEvent? }) -> actor
+ * createActor(world, game, { chooser, onEvent?, dayNo? }) -> actor   (dayNo(clock day) -> the day as the request counts it, 0.38.2; default as the clock)
  *   chooser(menu, ask) -> plan | null | WAIT     asked when there is no plan: at the start, when a plan is done, when a step failed, on an interruption (rain begins, he
  *                                                 collapsed) and after he wakes. ask = { why: 'start' | 'done' | 'failed' | 'rejected' | 'rain' | 'collapsed' | 'woke', last }
  *                                                 (last: the last step's record, or the reason a plan was rejected). null or WAIT: no plan yet; he stands still
@@ -35,6 +35,10 @@
  * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
  * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
  * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * 0.38.2 "True": a step is done only when the action itself changed something (`changed`: thirst and hunger only when they went down, a fire only with more fuel or a new
+ * fire burning; time alone changed them, so a dig that caught nothing was "done"); the lay-downs the game makes on its own (before a drink, a fill, a fell or a torch, when he lies down
+ * to sleep, when he collapses) are told in that step's record ("he laid down what he carried first: ..."); "crab" roasts a carried fish when he has no crab, and says so when he carries
+ * neither; a pile in the hut's way is named by its id; driftwood is "wet" only when too wet to burn (under TORCH_DRY, was 0.95); a pile's lay day is the request's (`dayNo`).
  * 0.38.1 "Trace": a place keeps its id as long as it exists (`placeId`: the n-th thing of its kind he came to know, by the thing's own id where it has one; fires and lean-tos too), so branch4
  * is the same branch in every request (not kept across a reload); his piles say "his pile of ..." with when he last laid on it (pile.laid, set by game/game: "laid 08:44", "laid day 2 08:44" on
  * another day); a done "pickup" or "lay" step's record says what it took or laid and what he carries after it ("picked up 1 branch; now under his arm: 1 driftwood, 1 branch, 1 frond (3 of 3)",
@@ -83,6 +87,7 @@ const STOP = 0.12, SETTLE = 3, WALK_SLACK = 1.1, SETTLE_TICKS = 12, ASIDE = 3;  
 export function createActor(world, game, opts = {}) {
   const chooser = typeof opts.chooser === 'function' ? opts.chooser : () => null;
   const onEvent = typeof opts.onEvent === 'function' ? opts.onEvent : null;
+  const dayNo = typeof opts.dayNo === 'function' ? opts.dayNo : d => d;   // 0.38.2: the clock's day as the player counts it (main: day 1 is the day the game started), for the lay time of a pile
   const p = game.player, clock = game.clock, W = game.wood, known = game.known;
   const MARGIN = 1.5, DIAG = MARGIN * 0.75;
   const inside = (x, z) => known.hasAround(x, z, MARGIN, DIAG);
@@ -125,8 +130,9 @@ export function createActor(world, game, opts = {}) {
     if (!b) return 'the hut has no room here';
     if (b.what === 'ground') return `the hut has no room here: ${b.steep ? 'the ground round the lean-to is not level enough' : 'the ground round the lean-to is wet or will not bear him on one side'}; it can never stand at this lean-to`;
     const d = Math.round(dist(b, l)), where = d < 1 ? 'at the lean-to' : `${d} m ${dirOf(b.x - l.x, b.z - l.z)} of the lean-to`;
+    const pile = b.what === 'pile' ? W.piles.filter(q => dist(q, b) < 1).sort((u, v) => dist(u, b) - dist(v, b))[0] : null;   // 0.38.2: which pile, by its id
     const fixed = b.what === 'tree' ? 'fell it' : b.what === 'rock' || b.what === 'leanto' ? 'it cannot be moved' : b.what === 'pile' ? 'carry it away' : b.what === 'burnt' ? 'the ashes fade within two days' : 'once the fire has burnt out, its ashes fade within two days';
-    return `the hut has no room here: ${HUT_IN_WAY[b.what] || 'something'} ${where} stands in its way; ${fixed}`;
+    return `the hut has no room here: ${pile ? `his ${pileWhat(pile).replace(/^his /, '')} (${placeId('pile', pile)})` : HUT_IN_WAY[b.what] || 'something'} ${where} stands in its way; ${fixed}`;
   }
 
   // ---------- what he knows round him ----------
@@ -136,7 +142,7 @@ export function createActor(world, game, opts = {}) {
     return out;
   };
   const waterAll = (() => { const out = []; for (const rv of world.rivers) for (let i = 0; i < rv.pts.length; i += 2) { const q = rv.pts[i]; if (freshWater(world, q.x, q.z, 0) && canStand(world, q.x, q.z, 0)) out.push({ x: q.x, z: q.z }); } return out; })();
-  const wet = l => dryness(l, clock.total) < 0.95;
+  const wet = l => dryness(l, clock.total) < TORCH_DRY;   // 0.38.2 "True": wet is too wet to burn (feeding and the torch take wood from TORCH_DRY on; it was 0.95)
   const LOOSE = {   // kind -> (tile) -> things lying there, and the words for one
     coconut:   { list: t => game.fibre.groundCocos(t), what: () => 'a coconut on the ground' },
     driftwood: { list: t => W.beachLogs(t).filter(l => l.y === undefined || l.y > game.sea - 0.05), what: l => wet(l) ? 'a piece of wet driftwood' : 'a piece of dry driftwood' },
@@ -147,7 +153,7 @@ export function createActor(world, game, opts = {}) {
     bananas:   { list: t => game.bananas.bearingIn(t), what: () => 'a banana plant with a bunch' },
   };
   const clockText = t => { const m = Math.floor(((t % 1) + 1) % 1 * 1440 + 1e-9) % 1440, pad = n => String(n).padStart(2, '0'); return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; };
-  const laidText = q => (Number.isFinite(q.laid) ? ` (laid ${Math.floor(q.laid) === clock.day ? '' : `day ${Math.floor(q.laid)} `}${clockText(q.laid)})` : '');   // 0.38.1 "Trace": when he last laid on it
+  const laidText = q => (Number.isFinite(q.laid) ? ` (laid ${Math.floor(q.laid) === clock.day ? '' : `day ${dayNo(Math.floor(q.laid))} `}${clockText(q.laid)})` : '');   // 0.38.1 "Trace": when he last laid on it
   const pileWhat = q => `his pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : q.logs.every(wet) ? 'wet driftwood' : `driftwood (${q.logs.filter(l => !wet(l)).length} dry, ${q.logs.filter(wet).length} wet)`) : q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : 'logs'}${laidText(q)}`;
   const fireWhat = f => {   // 0.37.4: how long it still burns
     const ring = !!game.leantos.ring(f.x, f.z), burning = game.fire.strength(f) > 0;
@@ -389,8 +395,13 @@ export function createActor(world, game, opts = {}) {
     }
     return null;
   }
-  const snapshot = () => JSON.stringify([carries(), +game.thirst.days.toFixed(4), +game.hunger.days.toFixed(4), game.fire.fires.map(f => +f.fuel.toFixed(4)), game.leantos.list.map(l => l.progress + ':' + JSON.stringify(l.parts || l.up || null)),
-    W.piles.length, W.piles.reduce((n, q) => n + q.logs.length, 0), game.felled.list.length, p.work ? p.work.kind : null, !!game.spear.at, !!game.axe.at, game.sleep.asleep]);
+  // 0.38.2 "True": whether an action did anything, from what only an action changes; thirst and hunger count only when they went down, a fire only when it got more fuel or a new fire
+  // burns (time alone raises thirst and hunger and burns fuel: a dig that caught nothing was "done" before)
+  const snapshot = () => ({ fixed: JSON.stringify([carries(), game.leantos.list.map(l => l.progress + ':' + JSON.stringify(l.parts || l.up || null) + ':' + (l.hut || 0)),
+    W.piles.length, W.piles.reduce((n, q) => n + q.logs.length, 0), game.felled.list.length, !!game.spear.at, !!game.axe.at, game.fire.torches.length]),
+    thirst: game.thirst.days, hunger: game.hunger.days, fuel: new Map(game.fire.fires.map(f => [f, f.fuel])), burning: game.fire.fires.filter(f => game.fire.strength(f) > 0).length });
+  const changed = (a, b) => a.fixed !== b.fixed || b.thirst < a.thirst - 1e-6 || b.hunger < a.hunger - 1e-6 || b.burning > a.burning
+    || game.fire.fires.some(f => !a.fuel.has(f) || f.fuel > a.fuel.get(f) + 1e-6);
   // 0.37.4 "Lessons": why an action is not offered where he stands, in plain words (null when the game does not say); a lack belongs only to its own action
   function whyNot(kind) {
     const lack = game.lackAt();
@@ -474,7 +485,7 @@ export function createActor(world, game, opts = {}) {
     }
     yield* waitActs(); yield* waitIdle();
     if (kind === 'light' && !game.fire.fires.some(f => game.fire.strength(f) > 0 && dist(f, p) <= 3)) return { ok: false, reason: 'the fire did not catch' + (game.sleep.awake >= TIRED_AT ? ' (he is tired: the drill seldom catches)' : '') };   // 0.37.4: the fibre is used up either way; done only with a fire
-    if (snapshot() === before) return { ok: false, reason: kind === 'dig' ? 'the crab got away' : kind === 'light' ? 'the fire did not catch' : kind === 'fish' ? 'he missed the fish' : 'nothing came of it' };
+    if (!changed(before, snapshot())) return { ok: false, reason: kind === 'dig' ? 'the crab got away' : kind === 'light' ? 'the fire did not catch' : kind === 'fish' ? 'he missed the fish' : 'nothing came of it' };
     return { ok: true };
   }
   const isFish = x => x.kind === 'fish';
@@ -510,13 +521,14 @@ export function createActor(world, game, opts = {}) {
     return { ok: true, note: `no fish in ${minutes} minutes` };
   }
   function* useThing(kind) {
-    const before = snapshot(), row = kind === 'crab' ? 'crab' : kind;
+    const before = snapshot(), row = kind === 'crab' ? (game.crabs.carried.length || !game.fish.carried.length ? 'crab' : 'fish') : kind;   // 0.38.2: "crab" eats a carried crab, or a fish when he has no crab (game `use` roasts either)
+    if (kind === 'crab' && !game.crabs.carried.length && !game.fish.carried.length) return { ok: false, reason: 'he carries no crab or fish' };
     idle(); inp.sit = false;
     for (let t = 0; t < 60 && busy(); t++) yield;   // 0.37.5: he finishes a bend or gets up first (a use while he still stooped failed)
-    if (!game.use(row, inp)) return { ok: false, reason: kind === 'crab' ? 'he needs a fire with flames beside him' : game.fire.torch ? 'a torch is in his hand: plant it first' : terrainAt(world, p.x, p.z, game.sea).depth > 0.05 ? 'he stands in water' : 'he cannot do that now' };
+    if (!game.use(row, inp)) return { ok: false, reason: kind === 'crab' ? 'he needs a fire with flames beside him (within about a metre of its edge)' : game.fire.torch ? 'a torch is in his hand: plant it first' : terrainAt(world, p.x, p.z, game.sea).depth > 0.05 ? 'he stands in water' : 'he cannot do that now' };
     emit('act', { kind: 'use:' + kind });
     yield; yield* waitIdle();
-    return snapshot() === before ? { ok: false, reason: 'nothing came of it' } : { ok: true };
+    return changed(before, snapshot()) ? { ok: true } : { ok: false, reason: 'nothing came of it' };
   }
   function* rest(minutes) {
     const t0 = clock.total;
@@ -551,12 +563,20 @@ export function createActor(world, game, opts = {}) {
     }
     const laid = c0.driftwood + c0.branches + c0.fronds + c0.stones + (c0.log ? 1 : 0) - (c1.driftwood + c1.branches + c1.fronds + c1.stones + (c1.log ? 1 : 0));
     if (laid <= 0) return null;
-    const where = W.piles.filter(q => !piles0.has(q) || q.logs.length > piles0.get(q)).map(q => {
+    const where = layWhere(piles0);
+    return `laid ${laid === 1 ? '1 piece' : `${laid} pieces`} down${where.length ? ': ' + where.join('; ') : ''}`;
+  }
+  function layWhere(piles0) {   // the piles that are new or grew since piles0 (a Map pile -> pieces), in words
+    return W.piles.filter(q => !piles0.has(q) || q.logs.length > piles0.get(q)).map(q => {
       const n = piles0.has(q) ? q.logs.length - piles0.get(q) : q.logs.length, d = dist(q, p), at = d < 3 ? 'here' : `${Math.round(d)} m ${dirOf(q.x - p.x, q.z - p.z)}`;
       return piles0.has(q) ? `${kindPlural(pileKind(q), n)} on his pile of ${pileNoun(q)} ${at} (${placeId('pile', q)}, now ${q.logs.length})` : `${kindPlural(pileKind(q), n)} on a new pile ${at} (${placeId('pile', q)})`;
     });
-    return `laid ${laid === 1 ? '1 piece' : `${laid} pieces`} down${where.length ? ': ' + where.join('; ') : ''}`;
   }
+  // 0.38.2 "True": the lay-downs the game makes on its own (before drinking, filling, felling or a torch, when he lies down to sleep or collapses), in the record of that step
+  let mark = null;   // { piles0 } at the start of the running step
+  const pilesNow = () => new Map(W.piles.map(q => [q, q.logs.length]));
+  const autoLaid = piles0 => { const w = piles0 ? layWhere(piles0) : []; return w.length ? `he laid down what he carried first: ${w.join('; ')}` : null; };
+  const join = (a, b) => (a && b ? `${a}; ${b}` : a || b || null);
   const pileKind = q => (q.kind === 'driftwood' ? 'driftwood' : q.kind);
   const pileNoun = q => (q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : q.kind === 'log' ? 'logs' : 'driftwood');
   function* runPlan(plan) {
@@ -564,18 +584,21 @@ export function createActor(world, game, opts = {}) {
       const s = plan.steps[i], what = stepText(s, plan.menu.places);
       actor.stepIndex = i;
       emit('step', { i, what });
-      const tracked = s.do === 'pickup' || s.do === 'lay', c0 = tracked ? carries() : null, piles0 = tracked ? new Map(W.piles.map(q => [q, q.logs.length])) : null;
+      const tracked = s.do === 'pickup' || s.do === 'lay', c0 = carries(), piles0 = pilesNow();
+      mark = { piles0 };
       const r = yield* runStep(s, plan.menu.places);
+      mark = null;
       if (r.ok && tracked) { const n = carryNote(s.do, c0, piles0); if (n) r.note = n; }
+      if (!tracked) { const a = autoLaid(piles0); if (a) { if (r.ok) r.note = join(a, r.note); else r.reason = join(r.reason, a); } }
       stats.steps++;
-      if (r.ok && s.do === 'sleep') { stats.done++; last = remember('step', what, 'done'); emit('step-end', { i, what, outcome: 'done' }); return 'woke'; }
+      if (r.ok && s.do === 'sleep') { stats.done++; last = remember('step', what, 'done', r.note || null); emit('step-end', { i, what, outcome: 'done' }); return 'woke'; }
       if (r.ok) { stats.done++; last = remember('step', what, 'done', r.note || null); emit('step-end', { i, what, outcome: 'done' }); }
       else { stats.failed++; last = remember('step', what, 'failed', r.reason); emit('step-end', { i, what, outcome: 'failed', reason: r.reason }); idle(); inp.sit = false; return 'failed'; }
     }
     return 'done';
   }
   function end(reason) { gen = null; actor.plan = null; actor.stepIndex = -1; why = reason; idle(); inp.sit = false; }
-  function interrupt(reason) { stats.interrupts++; last = remember('interrupt', reason, 'interrupted'); emit('interrupt', { reason }); end(reason); }
+  function interrupt(reason) { stats.interrupts++; last = remember('interrupt', reason, 'interrupted', autoLaid(mark && mark.piles0)); mark = null; emit('interrupt', { reason }); end(reason); }
 
   // ---------- one step ----------
   function step(dt) {

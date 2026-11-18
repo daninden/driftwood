@@ -230,7 +230,7 @@ async function boot() {
   };
   planner = createPlanner({ ask: askLogged, enabled: () => aiClient.hasKey(), canSend: aiClient.canSend, now: () => performance.now() / 1000, state: actState, name: () => name,
     clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time }), recent: () => (actor ? actor.recent.map(r => ({ ...r, day: dayNumber(r.day, startDay) })) : []) });
-  actor = createActor(world, game, { chooser: planner.chooser, onEvent: e => {
+  actor = createActor(world, game, { chooser: planner.chooser, dayNo: d => dayNumber(d, startDay), onEvent: e => {
     quiet0(() => logbook.event(e));
     if (e.type === 'plan' && e.say) voice.announceStep(game.clock.time, e.say, null);   // his one thought for the plan, said when it starts
   } });

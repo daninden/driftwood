@@ -15,6 +15,7 @@ import { BURN, EMBERS } from '../src/game/fire.js';
 import { terrainAt } from '../src/game/movement.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
 import { carryItems, carryChanged, DRAWINGS, ITEMS } from '../src/render/carryMark.js';
+import { createActor } from '../src/game/actor.js';
 
 let w, spawn, col, E;
 beforeAll(async () => {
@@ -274,5 +275,28 @@ describe('the marks', () => {
     expect(ITEMS).toContain('crab'); expect(DRAWINGS.crab).toContain('<ellipse');
     expect(carryItems({ fibre: 1, crab: 2 })).toEqual(['fibre', 'crab', 'crab']);
     expect(carryChanged({ crab: 1 }, { crab: 0 })).toBe(true);
+  });
+});
+
+describe('0.38.2 "True": the hands report what really happened (game/actor)', () => {
+  const play = (g, steps, secs) => { let n = 0; const asks = []; const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return n++ ? null : steps; } }); for (let i = 0; i < secs * 10; i++) { a.step(0.1); g.update(a.input, 0.1); } return { a, asks }; };
+  it('a dig is done only when it caught a crab: thirst, hunger and time passing do not count', () => {
+    for (let k = 0; k < 4; k++) {
+      const { g, hole } = crabScene({ crabs: { carried: [], gone: [], digs: k } });
+      expect(hole).toBeTruthy();
+      const c0 = g.crabs.carried.length, { a } = play(g, [{ do: 'dig' }], 20);
+      const rec = a.recent.find(r => r.kind === 'step');
+      expect(rec).toBeTruthy();
+      if (g.crabs.carried.length > c0) expect(rec.outcome).toBe('done');
+      else { expect(rec.outcome).toBe('failed'); expect(rec.reason).toMatch(/the crab got away|not offered/); }
+    }
+  });
+  it('"crab" roasts a carried fish when he has no crab; with neither it says so', () => {
+    const g = fireScene({ crabs: 0 }); g.fish.carried.push(g.clock.total);
+    const h0 = g.hunger.days, { a } = play(g, [{ use: 'crab' }], 30);
+    expect(a.recent.find(r => r.kind === 'step').outcome).toBe('done');
+    expect(g.fish.carried.length).toBe(0); expect(g.hunger.days).toBeLessThan(h0);
+    const none = fireScene({ crabs: 0 }), r = play(none, [{ use: 'crab' }], 5).a.recent.find(x => x.kind === 'step');
+    expect(r.outcome).toBe('failed'); expect(r.reason).toBe('he carries no crab or fish');
   });
 });

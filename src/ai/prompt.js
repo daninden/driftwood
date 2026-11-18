@@ -44,7 +44,8 @@ export function snapshotOf(game, camp = null) {
   const carries = {
     driftwood: carriedWood, branches: branch, fronds: frond, stones: n(() => g.wood.stones.length), fibre: n(() => g.fibre.carried), nuts: n(() => g.shells.nuts),
     emptyShells: n(() => g.shells.empty()), fullShells: n(() => g.shells.full()), crabs: n(() => g.crabs.carried.length), fish: n(() => g.fish.carried.length),
-    berries: n(() => g.berries.carried.length), bananas: n(() => g.bananas.carried.length), spear: !!n(() => g.spear.has(), false), axe: !!n(() => g.player.axe, false), torch: !!n(() => g.fire.torch, false),
+    berries: n(() => g.berries.carried.length), bananas: n(() => g.bananas.carried.length), spear: !!n(() => g.spear.hand, false), axe: !!n(() => g.axe.hand, false),   // 0.38.2: in his hand (it said a spear whenever he had made one, also lying; the axe from a stale field)
+    torch: !!n(() => g.fire.torch, false),
   };
   const lts = n(() => g.leantos.list, []);
   const l = lts.reduce((a, b) => (!a || (b.progress || 0) + (b.hut || 0) > (a.progress || 0) + (a.hut || 0) ? b : a), null);

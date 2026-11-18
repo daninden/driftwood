@@ -134,7 +134,7 @@ describe('when a hut can start', () => {
     const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return n++ ? null : [{ do: 'upgrade' }]; } });
     for (let i = 0; i < 30; i++) { a.step(0.1); g.update(a.input, 0.1); }
     expect(asks[1] && asks[1].last.outcome).toBe('failed');
-    expect(asks[1].last.reason).toMatch(/the hut has no room here: a pile \d m [a-z-]+ of the lean-to stands in its way; carry it away/);
+    expect(asks[1].last.reason).toMatch(/the hut has no room here: his pile of 1 dry driftwood \(pile\d+\) \d m [a-z-]+ of the lean-to stands in its way; carry it away/);
     g.wood.piles.length = 0; expect(g.hutBlock(l)).toBeNull();
     const far = leantoPoint(l, 1, 4.5); g.leantos.start(far.x, far.z, 0); expect(g.hutBlock(l).what).toBe('leanto');
   });
