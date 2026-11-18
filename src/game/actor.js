@@ -34,6 +34,9 @@
  * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
  * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
  * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * 0.37.7 "Reasons": a `do` waits while the game has an action queued (player.queued: the bend that lays the wood down before a fell, a drink or a fill), so a "fell" with wood
+ * under his arm lasts the whole felling (it ended after the bend before); a hut with no room says what is in its way and where (`hutWay`, game `hutBlock`); a refused "feed" says
+ * why (no wood, no fire beside him, the wood too wet, the fire full, a fire within RING_NOFIRE of his stone ring).
  * 0.37.5 "Ways": a place's minutes come from the length of the route (`walkMinutes`: metres / WALK_SPEED with WALK_SLACK; the path's paced cost was about four times the real walk);
  * more reasons (`whyNot`: dig, drink when not thirsty, lay, the tool not in hand, the hut's next part or no room for it); a lean-to with walls, bed and ring tells the hut's parts
  * and whether it has room; `use` waits until he stands still and says a torch or water stands in the way.
@@ -55,12 +58,13 @@ import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, DARK_PACE } from '.
 import { freshWater } from './water.js';
 import { dryness } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
-import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone } from './leanto.js';
-import { fireOutlook, BURN } from './fire.js';
+import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, RING_NOFIRE } from './leanto.js';
+import { fireOutlook, full as fireFull, BURN, TORCH_DRY } from './fire.js';
 import { TIRED_AT } from './sleep.js';
 import { WAIT } from './intent.js';
 import { PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
 
+const BESIDE_FIRE = 1.2;          // game BESIDE: a fire this close (from its edge) is beside him
 export const RECENT_MAX = 20;
 export const SCAN_R = 150;          // metres round him in which the menu looks for places he knows
 export const FISH_WALK = 40;        // metres: how far from where he stands a fishing looks for the shallows (known ground only)
@@ -90,8 +94,17 @@ export function createActor(world, game, opts = {}) {
     return r;
   };
   const idle = () => { inp.target = null; inp.run = false; };
-  const busy = () => game.sleep.asleep || p.lie > 0 || !!p.work || p.stoop > 0 || (p.sitting > 0 && !inp.sit);
+  const busy = () => game.sleep.asleep || p.lie > 0 || !!p.work || !!p.queued || p.stoop > 0 || (p.sitting > 0 && !inp.sit);
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  const HUT_IN_WAY = { leanto: 'another lean-to', tree: 'a tree trunk', rock: 'a boulder', pile: 'a pile', fire: 'a fire place', burnt: 'a burnt place (old ashes)' };
+  function hutWay(l) {   // 0.37.7 "Reasons": what keeps the hut from fitting round finished lean-to l, in words (game `hutBlock`)
+    const b = game.hutBlock(l);
+    if (!b) return 'the hut has no room here';
+    if (b.what === 'ground') return `the hut has no room here: ${b.steep ? 'the ground round the lean-to is not level enough' : 'the ground round the lean-to is wet or will not bear him on one side'}; it can never stand at this lean-to`;
+    const d = Math.round(dist(b, l)), where = d < 1 ? 'at the lean-to' : `${d} m ${dirOf(b.x - l.x, b.z - l.z)} of the lean-to`;
+    const fixed = b.what === 'tree' ? 'fell it' : b.what === 'rock' || b.what === 'leanto' ? 'it cannot be moved' : b.what === 'pile' ? 'carry it away' : b.what === 'burnt' ? 'the ashes fade within two days' : 'once the fire has burnt out, its ashes fade within two days';
+    return `the hut has no room here: ${HUT_IN_WAY[b.what] || 'something'} ${where} stands in its way; ${fixed}`;
+  }
 
   // ---------- what he knows round him ----------
   const tilesNear = (x, z, r) => {
@@ -131,7 +144,7 @@ export function createActor(world, game, opts = {}) {
     if (hutDone(l)) return 'his hut, finished';   // 0.37.5: the hut too
     const hk = hutKind(l);
     if (!hk) return 'his lean-to, finished with walls, bed and ring';
-    return `his lean-to with walls, bed and ring; the hut: ${built(l, 'hut')} of ${partsOf('hut').length} parts, it still needs ${stillNeeds(l, 'hut')}${hk === 'log' ? ' (each log carried alone on his shoulder)' : ''}${!hutBegun(l) && !game.hutFits(l) ? ' (but the hut has no room here: something stands in its way)' : ''}`;
+    return `his lean-to with walls, bed and ring; the hut: ${built(l, 'hut')} of ${partsOf('hut').length} parts, it still needs ${stillNeeds(l, 'hut')}${hk === 'log' ? ' (each log carried alone on his shoulder)' : ''}${!hutBegun(l) && !game.hutFits(l) ? ` (but ${hutWay(l)})` : ''}`;
   };
   function candidates() {   // every thing he knows within SCAN_R, by kind: [{ kind, ref, x, z, what }]
     const out = [], R = SCAN_R, near = q => Math.hypot(q.x - p.x, q.z - p.z) <= R && known.has(q.x, q.z), anywhere = q => known.has(q.x, q.z);   // water, fires and lean-tos he knows are on the menu however far
@@ -353,6 +366,14 @@ export function createActor(world, game, opts = {}) {
       if ((tool || torch || W.load() > 0) && k === 'log') return 'a log is carried alone, with nothing else in his arms or hands';
       if (W.carried.length >= 3) return 'his arms are full';
     }
+    if (kind === 'feed') {   // 0.37.7 "Reasons": the very tests of game `actionsAt` for 'feed', in words
+      if (!W.load()) return 'he has no wood under his arm';
+      const b = game.fire.find(p.x, p.z, BESIDE_FIRE, 'fire');
+      if (!b) return 'no burning fire beside him: he must stand right at it (within about a metre of its edge)';
+      if (!W.carried.some(l => !l.frond && dryness(l, game.clock.total) >= TORCH_DRY)) return W.carried.every(l => l.frond) ? 'fronds do not burn' : 'the wood under his arm is too wet to burn';
+      if (fireFull(b.fire)) return 'the fire holds as much as it can';
+      if (game.leantos.noFire(b.fire.x, b.fire.z)) return `this fire lies within ${RING_NOFIRE} m of his stone ring: there only the fire in the ring is fed`;
+    }
     if (kind === 'dig') {   // 0.37.5
       if (game.fire.torch) return 'a torch is in his hand';
       if (game.crabs.full()) return 'he carries as many crabs as he can';
@@ -366,7 +387,7 @@ export function createActor(world, game, opts = {}) {
     if (kind === 'laySpear' || kind === 'layAxe') { if (!(kind === 'laySpear' ? game.spear.hand : game.axe.hand)) return `the ${kind === 'laySpear' ? 'spear' : 'axe'} is not in his hand`; }
     if (kind === 'buildIn' || kind === 'upgrade') {
       const l = game.leantos.list.filter(q => dist(q, p) < 4).sort((a, b) => dist(a, p) - dist(b, p))[0];
-      if (l && hutReady(l) && !hutDone(l)) { const hk = hutKind(l); if (hk === 'log' && !hutBegun(l) && !game.hutFits(l)) return 'the hut has no room here: something stands in its way'; if (hk) return `the hut needs ${hk === 'log' ? 'a log on his shoulder' : kindWord(hk)} next`; }
+      if (l && hutReady(l) && !hutDone(l)) { const hk = hutKind(l); if (hk === 'log' && !hutBegun(l) && !game.hutFits(l)) return hutWay(l); if (hk) return `the hut needs ${hk === 'log' ? 'a log on his shoulder' : kindWord(hk)} next`; }
       if (l) {
         const need = nextKind(l, 'leanto') || UP_ORDER.map(w => nextKind(l, w)).find(Boolean);
         if (need) return `it needs ${need === 'branch' ? 'a branch' : need === 'frond' ? 'a frond' : need === 'stone' ? 'a stone' : need === 'log' ? 'a log' : 'a piece of driftwood'} next`;

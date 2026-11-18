@@ -19,6 +19,7 @@ import { terrainAt, canStand, canOccupy, obstaclesNear } from '../src/game/movem
 import { createPath } from '../src/game/path.js';
 import { BUILD_COST } from '../src/game/leanto.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
+import { createActor } from '../src/game/actor.js';
 
 let w, spawn, stone, sea0;
 const spots = {};   // kind -> { tree info, spot } for a lone tree of each sort
@@ -123,6 +124,18 @@ describe('the hand: one of spear, axe, torch', () => {
     expect(kinds(g)).toContain('fell');
     doKind(g, 'fell'); run(g, makeInput(), 2);
     expect(g.wood.carried.length).toBe(0); expect(g.player.work && g.player.work.kind).toBe('fell');
+  });
+  it('a "fell" step with wood under his arm lasts the whole felling: the bend to lay the wood down does not end it (0.37.7 "Reasons")', () => {
+    const { g, id } = treeScene('tree');
+    g.wood.take({ kind: 'log', log: aBranch(g) }, g.clock.total);
+    let given = false; const ends = [];
+    const a = createActor(w, g, { chooser: () => { if (given) return null; given = true; return [{ do: 'fell' }]; }, onEvent: e => { if (e.type === 'step-end') ends.push(e); } });
+    const step = (secs, dt = 0.1) => { for (let i = 0; i < Math.round(secs / dt); i++) { a.step(dt); g.update(a.input, dt); } };
+    step(10);
+    expect(ends).toHaveLength(0); expect(g.player.work && g.player.work.kind).toBe('fell');   // still chopping, the step not ended
+    step(FELL_TIME + 5);
+    expect(g.felled.has(id)).toBe(true);
+    expect(ends).toHaveLength(1); expect(ends[0].outcome).toBe('done');
   });
   it('lays the axe down at his feet and takes it up again; the spear cannot be taken meanwhile', () => {
     const { g } = treeScene('tree');

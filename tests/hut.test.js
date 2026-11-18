@@ -13,6 +13,7 @@ import { PARTS, PIECE_TIME, BUILD_COST, HUT, HUT_COST, HUT_KEEP, HUT_POSTS, HUT_
 import { hutCircles, leantoCircles, HUT_R, leantoPoint } from '../src/game/obstacles.js';
 import { SHELTER_SLEEP, WALLS_SLEEP, HUT_REST, createSleep, SLEEP_DAYS, REST_RATE } from '../src/game/sleep.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
+import { createActor } from '../src/game/actor.js';
 import { buttonIcons, ICONS, LABEL_OF } from '../src/render/actionButton.js';
 import { hutFrame, hutPosts, hutWalls, hutRoofFrame, hutFronds, hutInside, HUT_POST_H, HUT_ROW_Y, HUT_LOG_R, HUT_DOOR_Y, HUT_DOOR_R, hutCeiling, hutRoofBegun, underHutRoof, leantoParts } from '../src/render/leanto.js';
 import { createPath } from '../src/game/path.js';
@@ -124,6 +125,20 @@ describe('when a hut can start', () => {
     expect(g.hutFits(l)).toBe(false); expect(bigOf(g)).toBeNull();
     g.wood.piles.length = 0; expect(g.hutFits(l)).toBe(true);
     const far = leantoPoint(l, 1, 4.5); g.leantos.start(far.x, far.z, 0); expect(g.hutFits(l)).toBe(false);
+  });
+  it('game.hutBlock names what is in the way, and the actor says it in words (0.37.7 "Reasons")', () => {
+    const { g, l } = homeGame(); give(g, 'log');
+    expect(g.hutBlock(l)).toBeNull();
+    const c = leantoPoint(l, -1.2, 1.0);
+    g.wood.piles.push({ x: c.x, z: c.z, kind: 'driftwood', logs: [{ id: 1, x: c.x, z: c.z, y: 0, len: 1, a: 0, rad: 0.1 }] });
+    const b = g.hutBlock(l); expect(b && b.what).toBe('pile'); expect(Math.hypot(b.x - c.x, b.z - c.z)).toBeLessThan(0.5);
+    const asks = []; let n = 0;
+    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return n++ ? null : [{ do: 'upgrade' }]; } });
+    for (let i = 0; i < 30; i++) { a.step(0.1); g.update(a.input, 0.1); }
+    expect(asks[1] && asks[1].last.outcome).toBe('failed');
+    expect(asks[1].last.reason).toMatch(/the hut has no room here: a pile \d m [a-z-]+ of the lean-to stands in its way; carry it away/);
+    g.wood.piles.length = 0; expect(g.hutBlock(l)).toBeNull();
+    const far = leantoPoint(l, 1, 4.5); g.leantos.start(far.x, far.z, 0); expect(g.hutBlock(l).what).toBe('leanto');
   });
   it('the stone ring in front of the door and a pile of firewood in the ring are no hindrance', () => {
     const { g, l } = homeGame(); const c = leantoPoint(l, 2.2, 0);

@@ -58,6 +58,7 @@
  *   game.canPileAt(x, z, rs?)   0.33.1 "Hearth": may a new pile (walk-blocking radius rs, default a driftwood pile's) be laid with its middle at (x, z)? The `blockedAt` check of `lay` as a pure question (wet ground included); the middle of a finished stone ring is always free but for a solid that really overlaps it
  *   game.siteFits(c)            0.32: does a lean-to fit at c = { x, z, heading } (dry ground, no other site within SITE_APART, nothing in its walls or in the region that stays free); game.yaw(y?) reads (and with a number sets) the camera yaw a new lean-to opens towards (update reads input.yaw into it)
  *   game.hutFits(l)             0.33 "Hut": does a hut fit round finished lean-to l (`hutReady`): dry, standable, level (HUT_SLOPE 0.5 m) ground at its corners, door and middle, no other site within HUT_APART 4.8 m, no trunk, boulder, pile, fire place or burnt place touching its walls or inside it (the stone ring and the lean-to are no hindrance); pure. Not asked once the first part is built
+ *   game.hutBlock(l)            0.37.7 "Reasons": what keeps the hut from fitting round l (the first thing `hutFits` finds): { what: 'ground'|'leanto'|'tree'|'rock'|'pile'|'fire'|'burnt', x, z, steep? } or null (pure)
  *   game.lackAt(x?, z?)         0.30.20: what is missing for an action that is almost possible there (default: where he stands): 'needSpear' | 'spearAway' | 'needFibre' | 'needMoreWood' | null (pure, game/lack; the voice says it)
  *   game.onAction(listener)     optional presentation notification when a deliberate action is accepted; listeners receive { kind, x, z }, alter no game state and are not saved
  *   game.weather                the schedule of showers (game/weather); game.rain: the intensity of the rain now, 0..1 (0.21:
@@ -250,10 +251,10 @@ export function createGame(world, spawn, opts = {}) {
   if (!known.count) known.visit(player.x, player.z);   // no memory saved (a new game, an older save): the ground round him is known
   if (saved && Number.isFinite(opts.player.heading)) player.heading = opts.player.heading;
   if (!Number.isFinite(wood.tide)) wood.tide = highWaters(clock.total);
-  player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.torch = !!fire.torch; player.spear = spear.hand; player.axe = axe.hand; player.thirsty = thirst.level(); player.hungry = hunger.level();
+  player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.queued = null; player.torch = !!fire.torch; player.spear = spear.hand; player.axe = axe.hand; player.thirsty = thirst.level(); player.hungry = hunger.level();
   const voiceListeners = new Set();
   const notifyAction = kind => { for (const listener of voiceListeners) listener({ kind, x: player.x, z: player.z }); };
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, ground, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, hutFits, canPileAt, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, ground, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, hutFits, hutBlock, canPileAt, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
   const stand = game.stand = createStand(game, world, { BESIDE });   // 0.30.3 "Routes": standing points (game/stand), asked by the click on a pile or fire and by the walk to the spot of a light, a build or an upgrade
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
@@ -384,20 +385,23 @@ export function createGame(world, spawn, opts = {}) {
   /** 0.33 "Hut": does the hut fit round lean-to l? Its corners and middle are dry, standable ground within HUT_SLOPE of one another in height, no other site within HUT_APART, and no trunk, boulder, pile, fire place or burnt place
    *  touches its walls or its inside (the region of `inHutBox` grown by the clearance of a wall circle); the stone ring and the lean-to itself are no hindrance (pure). */
   const HUT_SLOPE = 0.5, HUT_APART = 4.8;
-  function hutFits(l) {
-    if (!hutReady(l)) return false;
+  function hutFits(l) { return hutReady(l) && !hutBlock(l); }
+  /** 0.37.7 "Reasons": what keeps the hut from fitting round finished lean-to l, the first thing found (the very test of `hutFits`), or null when it fits:
+   *  { what: 'ground' (wet, too steep or not standable at a corner, door or middle) | 'leanto' (another site within HUT_APART) | 'tree' | 'rock' | 'pile' | 'fire' | 'burnt', x, z } (pure). */
+  function hutBlock(l) {
     const dry = (x, z) => !wet(terrainAt(world, x, z, game.sea)) && canStand(world, x, z, game.sea);
     let lo = Infinity, hi = -Infinity;
     for (const [f, r] of [[0, 0], [HUT.back, -HUT.half], [HUT.back, HUT.half], [HUT.front, -HUT.half], [HUT.front, HUT.half], [(HUT.back + HUT.front) / 2, -HUT.half], [(HUT.back + HUT.front) / 2, HUT.half], [HUT.back, 0], [HUT.front, -HUT.door], [HUT.front, HUT.door]]) {
-      const q = leantoPoint(l, f, r); if (!dry(q.x, q.z)) return false;
+      const q = leantoPoint(l, f, r); if (!dry(q.x, q.z)) return { what: 'ground', x: q.x, z: q.z };
       const y = world.H(q.x, q.z); if (y < lo) lo = y; if (y > hi) hi = y;
     }
-    if (hi - lo > HUT_SLOPE) return false;
-    if (leantos.list.some(o => o !== l && Math.hypot(o.x - l.x, o.z - l.z) < HUT_APART)) return false;
+    if (hi - lo > HUT_SLOPE) return { what: 'ground', x: l.x, z: l.z, steep: true };
+    const other = leantos.list.find(o => o !== l && Math.hypot(o.x - l.x, o.z - l.z) < HUT_APART);
+    if (other) return { what: 'leanto', x: other.x, z: other.z };
     const inBox = (x, z, r) => { const m = -(HUT_R + r); return inHutBox(l, x, z, m); };   // the disc of radius r at (x, z) touches the walls or the inside
-    for (const o of naturalNear(l.x, l.z)) if (inBox(o.x, o.z, o.r)) return false;
-    for (const o of movement.obstacles.camp.near(l.x, l.z, 4.5)) if (o.g.kind !== 'leanto' && inBox(o.x, o.z, o.r)) return false;
-    return true;
+    for (const o of naturalNear(l.x, l.z)) if (inBox(o.x, o.z, o.r)) return { what: o.tree !== undefined ? 'tree' : 'rock', x: o.x, z: o.z };
+    for (const o of movement.obstacles.camp.near(l.x, l.z, 4.5)) if (o.g.kind !== 'leanto' && inBox(o.x, o.z, o.r)) return { what: o.g.kind, x: o.g.x, z: o.g.z };
+    return null;
   }
   // the kind of hut piece he could build into finished lean-to l with what he holds (the first part also needs the footprint to fit)
   // 0.36.2 "Ground": the first piece of a lean-to, and the first part of a hut, clear the ground under the building (game/ground): the bushes, grass, ferns and small rocks there are gone for good (berries and bananas too), and
@@ -802,6 +806,7 @@ export function createGame(world, spawn, opts = {}) {
     if (res.moved) known.visit(player.x, player.z, input.learns === false ? 0 : undefined);   // what he walks past he knows (only when he moved: a frame of standing, or a reload, teaches nothing; the mind learns no new ground)
     breath.update(dt, ran, res.moved, strain); player.running = ran; player.winded = breath.winded;
     player.work = work ? { kind: work.kind, f: Math.min(1, work.t / work.dur), ...(work.food ? { food: work.food } : {}) } : null;   // food: 'crab' | 'fish' while roasting (0.34, for the gesture icon)
+    player.queued = queued;   // 0.37.7: 'drink' | 'fill' | 'fell' while his hands are being freed for it (the actor counts it as busy)
     if (fire.torch && here().depth > DOUSE_DEPTH) fire.douse();   // wading too deep puts the torch out
     player.torch = !!fire.torch; player.spear = spear.hand; player.axe = axe.hand;
 

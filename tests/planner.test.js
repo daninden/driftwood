@@ -27,6 +27,12 @@ describe('the request and the answer (ai/actPrompt)', () => {
     expect(f).toContain(`${PLAN_MINUTES} game minutes`); expect(f).toMatch(/"say"/); expect(f).toMatch(/"sleep" is a plan of its own/);
     expect(f).toMatch(/Walking in the dark/); expect(f).toMatch(/burning torch/); expect(f).toMatch(/"plant"/); expect(f).toMatch(/Fishing is a plan of its own/); expect(f).toMatch(/"minutes": n/);
   });
+  it('the rules name what the AI test game of 0.37.6 found missing (0.37.7 "Reasons"): the fibre cap, the nap, where a fire is fed, the hut\'s room', () => {
+    const f = actFixed('');
+    expect(f).toContain('he carries at most 3 tufts'); expect(f).toMatch(/a sleep begun before dusk \(19:5\d\) is a nap: he wakes after 2 hours/);
+    expect(f).toContain('(or its glowing embers) with "feed", standing right at it; within 8 m of a finished stone ring only the fire in the ring can be fed');
+    expect(f).toContain('about 3 m wide and 2.5 m deep'); expect(f).toContain('the menu names what is in the way');
+  });
   it('the user part says why it is asked, how the last step went, and the menu with ids and minutes', () => {
     const m = buildActMessages({ name: 'Robin', state: { day: 2, time: 0.4, thirst: 0.2, hunger: 0.1, awake: 0.3, carries: {} }, menu: MENU, ask: { why: 'failed', last: { what: 'husk the coconut here', reason: 'the coconut is gone' } }, recent: [{ day: 2, time: 0.39, kind: 'step', what: 'walk to a coconut', outcome: 'done' }], notes: ['the river is north'], journal: [] });
     expect(m).toHaveLength(2); expect(m[0].role).toBe('system'); expect(m[1].role).toBe('user');

@@ -258,6 +258,15 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Reasons (0.37.7)
+
+After a five-day AI test game on 0.37.6 (185 requests, 24 of 705 steps failed, the hut refused all game long with no reason). Only full AI play changes.
+- **Queued actions are busy:** `game/game` sets `player.queued` ('drink' | 'fill' | 'fell' while his hands are freed for it: a torch planted, wood laid down); `game/actor` `busy()` counts it, so `waitIdle` and `useThing` wait for the queued work instead of ending in the one idle frame between the bend and the work.
+- **The hut's blocker:** `game/game` `hutBlock(l)` (pure) is the test of `hutFits` returning the first thing found, `{ what: 'ground' | 'leanto' | 'tree' | 'rock' | 'pile' | 'fire' | 'burnt', x, z, steep? }` or null; `hutFits(l)` is `hutReady(l) && !hutBlock(l)`. `game/actor` `hutWay(l)` says it in words with metres and direction from the lean-to (the lean-to's menu text and `whyNot` for buildIn / upgrade).
+- **Feed:** `whyNot('feed')` repeats the tests of `actionsAt` for 'feed' (load, a fire within BESIDE, a dry piece of `TORCH_DRY`, `fire.full`, `leantos.noFire`).
+- **The fixed part** (`ai/actPrompt`): FIBRE_MAX, the nap (NAP_DAYS before DUSK), feed on embers and only the ring's fire within RING_NOFIRE, the hut's size.
+- **Tests:** `tests/axe.test.js`, `tests/hut.test.js`, `tests/oneHearth.test.js`, `tests/planner.test.js`.
+
 ### Free hands (0.37.6)
 
 As few rules as possible, only what the real world would not allow (agreed with the user 2026-11-18). For the player and for Dave alike: everything is in `game/game` `actionsAt`, so `game/stand`, `game/actor` and the arc follow by themselves.
@@ -275,7 +284,7 @@ After a three-day AI test game on 0.37.4 (234 requests, 7 plans refused, 20 of 5
 - **Walk minutes:** `game/actor` `walkMinutes(metres)` from the found route's length (`path.find` points) instead of `path.cost`; `game/actions` `legMinutes(a, b)` (straight line x `LEG_DETOUR` 1.3, `LEG_SLACK` 1.25) for a `go` after a `go` in `checkPlan` / `stepMinutes(step, places, from)`; `METRES_PER_MINUTE` for the request.
 - **The situation:** `ai/actPrompt` `actState(state, menu)` takes `carries` from the actor's menu (hand, not `spear.has()`; the log) and drops the old mind's `camp`, `fromHome`, `nextHome`, `lastNight`, `crab`.
 - **The arc:** `game/game` `actionAt` keeps `laySpear` / `layAxe` among the options.
-- **Reasons and menu:** `whyNot` for dig, drink, lay, laySpear / layAxe, the hut (`hutKind`, `hutFits`); the lean-to's text tells the hut; `useThing` waits while `busy()`.
+- **Reasons and menu:** `whyNot` for dig, drink, lay, laySpear / layAxe, the hut (`hutKind`, `hutFits`; 0.37.7 `hutBlock`); the lean-to's text tells the hut; `useThing` waits while `busy()`.
 - **Tests:** `tests/actor.test.js` (a later walk, the menu's minutes against a real walk, the situation, the dig reason); `tests/helpers/actorSim.js` asks `lay` directly (the actor steps aside).
 
 ### Lessons (0.37.4)

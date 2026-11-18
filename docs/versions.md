@@ -2,6 +2,19 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.7 "Reasons" — 2026-11-18
+
+Agreed with the user after a five-day AI test game on 0.37.6 (seed 1337, Claude Haiku models answering, 185 requests, about 37 a game day against 80 to 115 before: no collapse, thirst at most 0.63, hunger 0.54; lean-to with walls, bed and ring by day 2, the axe on day 3, 12 logs felled and stacked by the lean-to, but the hut was refused all game long with "something stands in its way"; 9 plans refused, 24 of 705 steps failed). Plans ran a median 21 game minutes (only 12 of about 160 reached the hour): no change for that, the rules give no advice. The walk minutes were right (a real walk 0.87 to 0.9 of the menu's). Only full AI play changes; the player and the old mind are untouched.
+
+- **A "fell" with wood under his arm lasts the whole felling:** the game lays the wood down first and queues the chopping; the actor did not count the queued action as busy, so the step ended "done" after the bend (2 minutes, the tree still standing; four times in the test game). The same held for drinking and filling with wood or a torch, and for a coconut eaten right after (it failed with "he cannot do that now"). Now `player.queued` is busy.
+- **The hut says what is in its way:** a tree trunk, a boulder, a pile, a fire place, a burnt place, another lean-to, or ground that is wet or not level, with how far and which way from the lean-to, and what helps (fell it, carry it away, the ashes fade within two days, it cannot be moved). The request's rule also says how big the hut is (about 3 m by 2.5 m over the lean-to) and that its own stone ring is no hindrance.
+- **A refused "feed" says why:** no wood, no fire beside him, the wood too wet, the fire full, or a fire within 8 m of his stone ring (there only the fire in the ring is fed; that rule was never told and refused five feeds in the test game). The rule says embers can be fed too.
+- **Rules that were missing:** he carries at most 3 tufts of fibre (a husk with 3 gives none); a sleep begun before dusk is a nap of 2 hours, resting half as much.
+- **Checked, not changed:** wet driftwood "drying in 20 minutes" was a piece just under the menu's "dry" (95%); a fire's id is its place in the game's list, so it shifts when an older fire is gone (fire2 became fire1), and pile ids follow the menu's order: left as they are for now.
+- **Tests:** `tests/axe.test.js` (a fell step with wood under his arm, through the actor), `tests/hut.test.js` (`hutBlock` and the reason in words), `tests/oneHearth.test.js` (the feed reason), `tests/planner.test.js` (the new rules).
+- **Still red:** `tests/mindLife7.fresh.test.js` (the old mind, 3 ticks on a climbing route), as in 0.37.6; it goes with the old mind in "Only him".
+- **Choices made while building (not discussed with the user):** 0.37.7 rather than 0.37.6.1 (package.json takes three numbers), so "Only him" becomes 0.37.8; the hut's blocker is the first one found, not all of them.
+
 ## 0.37.6 "Free hands" — 2026-11-18
 
 Agreed with the user: as few rules as possible, only what the real world would not allow. For the player and for Dave alike.

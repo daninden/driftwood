@@ -4,7 +4,8 @@
 // Covers: the geometry of Dave's site (the old fire always inside the zone), the player's arc (feed refused for a fire 5 m and 7.5 m from a finished ring, offered for a fire in the ring, for a fire
 // beyond the zone and for any fire when the ring is not finished; light refused), and a scripted evening of Dave with an old fire burning 5.5 m from his finished ring: he never feeds it, it burns out,
 // and he lights and keeps the fire in the ring.
-// Depends on: world/world, world/spots, game/game, game/leanto, game/mind, game/fire, tests/helpers/mindCamp.
+// 0.37.7: a "feed" step of full AI play refused in the zone says why (game/actor).
+// Depends on: world/world, world/spots, game/game, game/actor, game/leanto, game/mind, game/fire, tests/helpers/mindCamp.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
@@ -13,6 +14,7 @@ import { ringCentre, RING_R, RING_NOFIRE, RING_AT } from '../src/game/leanto.js'
 import { SITE_RINGS, createMind } from '../src/game/mind.js';
 import { FUEL_MAX } from '../src/game/fire.js';
 import { campGame } from './helpers/mindCamp.js';
+import { createActor } from '../src/game/actor.js';
 
 let w, spawn, logs;
 beforeAll(async () => {
@@ -46,6 +48,10 @@ describe('the arc beside a finished ring (the player)', () => {
     for (const d of [1.5, 5, 7.5]) expect(feeds(scene(d)), 'd ' + d).toBe(false);
     expect(feeds(scene(8.5))).toBe(true);                                  // beyond the zone: as ever
     expect(feeds(scene(5, {}))).toBe(true);                                // no ring built: as before
+  });
+  it('a "feed" step refused there says why (0.37.7 "Reasons"): only the fire in the ring is fed', () => {
+    const reasonOf = g => { const asks = []; let n = 0; const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return n++ ? null : [{ do: 'feed' }]; } }); for (let i = 0; i < 20; i++) { a.step(0.1); g.update(a.input, 0.1); } return asks[1] && asks[1].last.reason; };
+    expect(reasonOf(scene(5))).toMatch(new RegExp(`within ${RING_NOFIRE} m of his stone ring: there only the fire in the ring is fed`));
   });
   it('has no feed in the arc at all for a fire 5 m from the ring', () => {
     const g = scene(5), f = g.fire.fires[0];
