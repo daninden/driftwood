@@ -258,6 +258,15 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Far (0.37.9)
+
+After the AI test game on 0.37.8 and the user's own game (the hut on day 2, no exploring).
+- **The hut:** `game/leanto` `HUT_PIECE_TIME` (3 x `PIECE_TIME`) and `HUT_COST` 4 x `BUILD_COST` (was 2 x); `game/game` kneels `HUT_PIECE_TIME` for a hut part and spreads a piece's rest cost over `work.dur` (it was divided by `PIECE_TIME`).
+- **The island:** `game/actor` `islandInfo()` counts the land cells of `game/known` once (the world above 0.2 m at a cell's middle) and the known ones each menu: `menu.island` { across, seen }; `ai/actPrompt` `menuText` says it.
+- **The rules** (`ai/actPrompt` `actFixed`): what each part of the home gives, from `game/sleep` (`COLD_SLEEP`, `SHELTER_SLEEP`, `WALLS_SLEEP`, `SHELTER_REST`, `BED_REST`), `game/weather` (`WOOD_SHELTER`, `FIRE_SHELTER`), `game/leanto` (`WALLS_WOOD`, `WALLS_FIRE`) and `game/fire` (`RING_BURN`); a nap's share (`NAP_DAYS` x `REST_RATE` x `NAP_REST`); sleeping and fires anywhere.
+- **Piles:** a pile of driftwood says "(n dry, m wet)".
+- **Tests:** `tests/hut.test.js`, `tests/actor.test.js`, `tests/planner.test.js`.
+
 ### Firelight (0.37.8)
 
 After the AI test game on 0.37.7 and a Gemini game of the user's. Only full AI play changes.

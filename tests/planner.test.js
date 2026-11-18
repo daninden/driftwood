@@ -43,6 +43,14 @@ describe('the request and the answer (ai/actPrompt)', () => {
     expect(u).toContain('Where he stands he can: drink.');
     expect(menuText({})).toContain('(none)');
   });
+  it('the rules tell what the home gives, that a hut part takes about 15 minutes, the nap\'s share and that he can go far (0.37.9 "Far")', () => {
+    const f = actFixed('');
+    expect(f).toMatch(/What his home gives.*the lean-to: a night without a fire close by lasts 6 hours instead of 3.*the bed: he rests 1.25 times as fast; the ring: a fire in it burns 1.5 times as long.*the hut: he sleeps the whole night even without a fire/);
+    expect(f).toContain('a part of the hut takes three times as long, about 15 min');
+    expect(f).toMatch(/it takes only about 0.2 day off his awake count; a whole night of sleep by a fire takes it to 0/);
+    expect(f).toContain('He can sleep, drink at any river and make a fire anywhere, far from home too.');
+    expect(menuText({ island: { across: 500, seen: 7 } })).toContain('The island is about 500 m across; he has seen about 7% of it.');
+  });
   it('a number n in the notes keeps his old note n (0.37.8 "Firelight": a model wrote [1, ..., 9, "new"] and lost nine notes)', () => {
     const old = ['the river is north', 'fire1 is in the ring', 'logs by the lean-to'];
     const p = parseActPlan('{"steps": [{"wait": 5}], "notes": [1, 3, "Day 2: the hut is begun", 7, 2.5]}', old);

@@ -2,6 +2,18 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.37.9 "Far" — 2026-11-18
+
+Agreed with the user: in the user's own game Gemini finished the hut on day 2 and never went exploring. Nothing in the request steers, but the home was the only thing with a to-do list, and nothing told a reason to go out. Built after a five-day AI test game on 0.37.8 (seed 1337, Claude Haiku models answering, 134 requests: no collapse from thirst or hunger, at most 0.49 and 0.52; the hut finished on day 5 after two exhausted sleeps; 2 plans refused, 14 of 602 steps failed; plans a median 35 game minutes; the game's walk minutes 0.94 of the real walks).
+
+- **What the home gives, in the rules:** the lean-to (a night without a fire lasts 6 hours instead of 3, wood and fire dry in rain nearby, by a fire under it he rests 1.25 times as fast), the walls (7 hours, a wider dry spot), the bed (he rests 1.25 times as fast), the ring (a fire 1.5 times as long, safe from rain), the hut (the whole night even without a fire, wood inside dry). So the home is a means, not a goal.
+- **The hut takes a few days:** a part of the hut takes three times as long (12 s, about 15 game minutes) and the whole hut tires him four times what a lean-to does (twice before). For the player too. With 12 logs to fell (an hour each) this is about 3 to 4 days of work beside his needs.
+- **Exploring, as facts:** the request says how big the island is and how much of it he has seen ("about 500 m across; he has seen about 2% of it"), that the menu shows only places he knows, and that he can sleep, drink at any river and make a fire anywhere, far from home too. No advice to go.
+- **Smaller:** a pile of driftwood says how many pieces are dry and how many wet; the rules say a nap takes only about 0.2 day off the awake count and a night by a fire takes it to 0.
+- **Tests:** `tests/hut.test.js` (the dearer, slower hut), `tests/actor.test.js` (the island line, the pile), `tests/planner.test.js` (the rules).
+- **Still red:** `tests/mindLife7.fresh.test.js` (the old mind), as since 0.37.6.
+- **Choices made while building (not discussed with the user):** the rest cost of a building piece is now spread over the work's own time (it was divided by `PIECE_TIME`, which would have made a hut part three times as tiring again); the island's size is its widest extent rounded to 50 m, the share of its land cells seen; the old mind's "Tide strip" line still stands in the situation.
+
 ## 0.37.8 "Firelight" — 2026-11-18
 
 Agreed with the user after a five-day AI test game on 0.37.7 (seed 1337, Claude Haiku models answering, 159 requests: no collapse, thirst and hunger at most 0.57; lean-to complete on day 2, the hut begun on day 2 and finished on day 3, after a trunk and a pile in its way were named and cleared; 3 plans refused, 9 of 638 steps failed; plans a median 29 game minutes) and a Gemini game of the user's (day 1 to day 2 08:51: 73 answers, all usable, but one plan of a walk and an hour of felling refused 16 times in a row). Only full AI play changes.

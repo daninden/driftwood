@@ -70,7 +70,7 @@ export const DO = Object.freeze({
   sleep:     { what: 'lie down to sleep until he wakes (a plan of its own, the only step)', secs: null },
   buildHere: { what: 'start a lean-to here with the driftwood he carries', secs: PIECE_TIME },
   buildIn:   { what: 'build a piece he carries into the lean-to', secs: PIECE_TIME },
-  upgrade:   { what: 'build a piece he carries into his home (walls, bed, ring, hut)', secs: PIECE_TIME },
+  upgrade:   { what: 'build a piece he carries into his home (walls, bed, ring, hut; a part of the hut takes three times as long, about 15 min)', secs: PIECE_TIME },
   makeSpear: { what: 'make a spear (the branch he carries, a stone beside him)', secs: SPEAR_TIME },
   takeSpear: { what: 'take up the spear', secs: STOOP },
   laySpear:  { what: 'lay the spear down', secs: STOOP },

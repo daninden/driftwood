@@ -10,7 +10,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createGround, findSpot, groundOf, groundStamp } from '../src/game/ground.js';
-import { keepFree, standFor, ringCentre, built, hutBegun, PIECE_TIME, RING_R } from '../src/game/leanto.js';
+import { keepFree, standFor, ringCentre, built, hutBegun, PIECE_TIME, HUT_PIECE_TIME, RING_R } from '../src/game/leanto.js';
 import { bushFactor } from '../src/game/movement.js';
 import { createForage, BERRIES, BANANAS } from '../src/game/forage.js';
 import { createBranches, EXTRA_ID0 as BRANCH_X, branchesOfTile } from '../src/game/branches.js';
@@ -45,7 +45,7 @@ const makeInput = (o = {}) => {
 };
 const bigOf = g => g.action().options.find(o => o.big) || null;
 const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
-const buildNext = (g, input) => { const o = bigOf(g); expect(o).not.toBeNull(); g.act(o); run(g, input, PIECE_TIME + 0.5); return o; };
+const buildNext = (g, input) => { const o = bigOf(g); expect(o).not.toBeNull(); g.act(o); run(g, input, (o.what === 'hut' ? HUT_PIECE_TIME : PIECE_TIME) + 0.5); return o; };   // 0.37.9: a hut part kneels longer
 const piece = (n, o = {}) => ({ id: 800000 + n, x: spawn.x, y: 1, z: spawn.z, len: 1.5, a: 0, rad: 0.08, ...o });
 const give = (g, kind, n = 1) => { for (let i = 0; i < n; i++) (kind === 'stone' ? g.wood.stones : g.wood.carried).push(piece(900 + i + g.wood.carried.length * 7, kind === 'branch' ? { branch: true } : kind === 'frond' ? { frond: true } : kind === 'stone' ? { stone: true, len: 0.26 } : {})); };
 const siteGame = (c, opts = {}) => { const s = standFor(c), g = createGame(w, spawn, { sleep: { awake: 0.1 }, player: { x: s.x, z: s.z, heading: c.heading }, ...opts }); return { g, input: makeInput({ yaw: c.heading }) }; };

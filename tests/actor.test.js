@@ -196,6 +196,20 @@ describe('following a plan (game/actor)', () => {
     const q = empty[0], r = loaded.find(x => x.x === q.x && x.z === q.z);
     expect(q && r).toBeTruthy(); expect(r.minutes).toBeGreaterThanOrEqual(Math.floor(q.minutes * 1.4));
   });
+  it('a pile of driftwood on the menu says how many pieces are dry and how many wet (0.37.9)', () => {
+    const g = fresh(), logs = w.tiles.flatMap(t => t.drift).slice(0, 3).map(l => ({ ...l }));
+    logs[0].t = g.clock.total;   // just washed up: wet
+    logs[1].t = undefined; logs[2].t = undefined;   // dry
+    g.wood.piles.push({ x: g.player.x + 3, z: g.player.z, kind: 'driftwood', logs });
+    const q = createActor(w, g, {}).menu().places.find(p => p.kind === 'pile' && /driftwood/.test(p.what));
+    expect(q && q.what).toBe('a pile of 3 driftwood (2 dry, 1 wet)');
+  });
+  it('the menu says how big the island is and how much of it he has seen (0.37.9 "Far")', () => {
+    const g = fresh(), m = createActor(w, g, {}).menu();
+    expect(m.island.across).toBeGreaterThan(200); expect(m.island.seen).toBeGreaterThan(0); expect(m.island.seen).toBeLessThan(50);
+    for (let x = -200; x <= 200; x += 40) for (let z = -200; z <= 200; z += 40) g.known.visit(x, z);
+    expect(createActor(w, g, {}).menu().island.seen).toBeGreaterThan(m.island.seen);
+  });
   it('a fire he knows stays on the menu when no route to it is found (0.37.8: a fire vanished from the menu while it burned)', () => {
     const g = fresh(); let sea = null;
     for (let d = 5; d < 40 && !sea; d++) for (let a = 0; a < 6.3 && !sea; a += 0.2) { const x = spawn.x + Math.cos(a) * d, z = spawn.z + Math.sin(a) * d; if (w.H(x, z) < -0.5) sea = { x, z }; }

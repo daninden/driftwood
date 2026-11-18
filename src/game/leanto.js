@@ -35,12 +35,12 @@
  *     `hutFits`); once it is begun nothing more is checked. The posts and walls are solid as they rise, the opening stays open (game/obstacles `hutCircles`). While the hut is being built the lean-to keeps its parts and its
  *     effects; when the last frond is laid (`hutDone(l)`) the lean-to's parts, walls and collision disappear and the hut's effects apply: a cold sleep inside lasts the whole night and rests him HUT_REST (game/sleep),
  *     wood inside stays dry, no fire or torch inside (`noFire`, `inHut`); the ring outside keeps its effects. The keep-free region is the hut's footprint from the first part of the hut on (before it the lean-to's own region holds). The rest cost of a
- *     hut is HUT_COST (twice a lean-to's) over its 32 parts.
+ *     hut is HUT_COST (four times a lean-to's since 0.37.9 "Far", twice before) over its 32 parts, each HUT_PIECE_TIME (three times PIECE_TIME) of kneeling.
  *
  * Pure data on a world; no DOM, no Three.js.
  *
  * PARTS { leanto, walls, bed, ring, hut }   the ordered kinds of the parts of a site ('driftwood' | 'branch' | 'frond' | 'stone' | 'log' for the hut's posts and walls)
- * HUT, HUT_KEEP, HUT_POSTS, HUT_WALL_LOGS, HUT_FRAME_N, HUT_FRONDS_N, HUT_COST, HUT_REACH   the hut's measures, its parts' places (shared by game/obstacles and render/leanto)
+ * HUT, HUT_KEEP, HUT_POSTS, HUT_WALL_LOGS, HUT_FRAME_N, HUT_FRONDS_N, HUT_COST, HUT_PIECE_TIME, HUT_REACH   the hut's measures, its parts' places (shared by game/obstacles and render/leanto)
  * hutReady(l), hutDone(l), hutBegun(l), hutKind(l)   a finished lean-to with all three upgrades; its hut finished; begun; the kind of the hut's next part (null unless hutReady and not done)
  * inHutBox(l, x, z, m = 0) -> true when (x, z) lies within the hut's walls (shrunk by m; negative m grows the box)
  * PIECE_TIME, BUILD_COST, UP_COST, SLEEP_R, REACH, SITE_AT, SITE_APART
@@ -91,7 +91,8 @@ export const PARTS = {
 };
 export const PIECE_TIME = 4;
 export const BUILD_COST = 2 * DRILL_COST;
-export const HUT_COST = 2 * BUILD_COST;   // 0.33: a hut costs twice a lean-to in rest, over its 32 parts
+export const HUT_COST = 4 * BUILD_COST;   // 0.33: a hut costs twice a lean-to in rest, over its 32 parts; 0.37.9 "Far" (the user, 2026-11-18): four times (the hut takes a few days)
+export const HUT_PIECE_TIME = 3 * PIECE_TIME;   // 0.37.9 "Far": a part of the hut takes three times as long as a piece of the lean-to (about 15 game minutes)
 export const SLEEP_R = 1;
 export const REACH = 1.7;
 export const SITE_AT = 1.4, SITE_APART = 3.2;   // the middle of a new site lies this far behind him; no two sites closer than SITE_APART

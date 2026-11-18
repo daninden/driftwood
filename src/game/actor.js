@@ -34,6 +34,7 @@
  * It is checked when the step starts; a torch that burns out on the way does not stop the walk. A walk of under 1.5 m (the place he stands at) is no walk. A sleep and a fishing are plans
  * of their own (game/actions `checkPlan`): `do: 'fish'` with minutes strikes at fish again and again (a step into the shallows first when he does not stand in them, within FISH_WALK m
  * on ground he knows) until a fish is caught (done) or the minutes run out (done, with the note "no fish in N minutes": a normal end, the next plan is asked).
+ * 0.37.9 "Far": the menu's `island` { across (metres), seen (% of the island's land cells of game/known) }; a pile of driftwood says how many pieces are dry and how many wet.
  * 0.37.8 "Firelight": no walk in the dark without light again (game/dark; the half pace of 0.37.6 is gone); a walk's minutes are at the pace he has now (`paceNow`: his load,
  * tired, thirsty, hungry, as game/game; WALK_SLACK 1.1, was 1.25 for the load); his fires and lean-tos stay on the menu when no route to them is found (the straight line x LEG_DETOUR);
  * reasons for a refused sleep (in water, too soon after waking at night, by day before half a day awake) and take up the axe or spear (already in hand, none lying, a log, stones, the
@@ -62,6 +63,7 @@ import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
 import { freshWater } from './water.js';
 import { dryness, LOG_WALK, CARRY_SLOW } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
+import { CELL as KNOWN_CELL, NC as KNOWN_NC } from './known.js';
 import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, RING_NOFIRE } from './leanto.js';
 import { fireOutlook, full as fireFull, BURN, TORCH_DRY } from './fire.js';
 import { TIRED_AT, SLEEP_AFTER, NIGHT_AFTER } from './sleep.js';
@@ -100,6 +102,19 @@ export function createActor(world, game, opts = {}) {
   const idle = () => { inp.target = null; inp.run = false; };
   const busy = () => game.sleep.asleep || p.lie > 0 || !!p.work || !!p.queued || p.stoop > 0 || (p.sitting > 0 && !inp.sit);
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  let landCells = null;   // 0.37.9 "Far": the island's land cells of game/known (dry ground at the cell's middle), counted once
+  const islandInfo = () => {
+    if (!landCells) {
+      landCells = []; let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let iz = 0; iz < KNOWN_NC; iz++) for (let ix = 0; ix < KNOWN_NC; ix++) {
+        const x = (ix + 0.5) * KNOWN_CELL - HALF, z = (iz + 0.5) * KNOWN_CELL - HALF;
+        if (world.H(x, z) > 0.2) { landCells.push(iz * KNOWN_NC + ix); if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+      }
+      landCells.across = Math.round(Math.max(x1 - x0, z1 - z0) / 50) * 50;
+    }
+    let seen = 0; for (const k of landCells) if (known.hasCell(k)) seen++;
+    return { across: landCells.across, seen: Math.round(100 * seen / Math.max(1, landCells.length)) };
+  };
   const paceNow = () => Math.max(0.2, (W.log ? LOG_WALK : 1 - CARRY_SLOW * W.load()) * game.sleep.speed() * game.thirst.speed() * game.hunger.speed());   // 0.37.8 "Firelight": the share of his full pace (game/game update)
   const HUT_IN_WAY = { leanto: 'another lean-to', tree: 'a tree trunk', rock: 'a boulder', pile: 'a pile', fire: 'a fire place', burnt: 'a burnt place (old ashes)' };
   function hutWay(l) {   // 0.37.7 "Reasons": what keeps the hut from fitting round finished lean-to l, in words (game `hutBlock`)
@@ -128,7 +143,7 @@ export function createActor(world, game, opts = {}) {
     berries:   { list: t => game.berries.bearingIn(t), what: () => 'a berry bush with berries' },
     bananas:   { list: t => game.bananas.bearingIn(t), what: () => 'a banana plant with a bunch' },
   };
-  const pileWhat = q => `a pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : 'driftwood (some wet)') : q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : 'logs'}`;
+  const pileWhat = q => `a pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : q.logs.every(wet) ? 'wet driftwood' : `driftwood (${q.logs.filter(l => !wet(l)).length} dry, ${q.logs.filter(wet).length} wet)`) : q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : 'logs'}`;
   const fireWhat = f => {   // 0.37.4: how long it still burns
     const ring = !!game.leantos.ring(f.x, f.z), burning = game.fire.strength(f) > 0;
     const o = burning ? fireOutlook({ fuel: f.fuel, ring }) : null;
@@ -208,7 +223,7 @@ export function createActor(world, game, opts = {}) {
     if (game.berries.carried.length) uses.push('berries');
     if (game.bananas.carried.length) uses.push('banana');
     if (game.crabs.carried.length || game.fish.carried.length) uses.push('crab');
-    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, dirs: DIRS.slice(), carries: carries(), light: lightInfo(), minutes: PLAN_MINUTES, count: lastCount };
+    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, dirs: DIRS.slice(), carries: carries(), light: lightInfo(), island: islandInfo(), minutes: PLAN_MINUTES, count: lastCount };
     menuMemo = { t: now, m };
     return m;
   }

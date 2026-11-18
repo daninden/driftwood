@@ -58,6 +58,7 @@
  *   game.canPileAt(x, z, rs?)   0.33.1 "Hearth": may a new pile (walk-blocking radius rs, default a driftwood pile's) be laid with its middle at (x, z)? The `blockedAt` check of `lay` as a pure question (wet ground included); the middle of a finished stone ring is always free but for a solid that really overlaps it
  *   game.siteFits(c)            0.32: does a lean-to fit at c = { x, z, heading } (dry ground, no other site within SITE_APART, nothing in its walls or in the region that stays free); game.yaw(y?) reads (and with a number sets) the camera yaw a new lean-to opens towards (update reads input.yaw into it)
  *   game.hutFits(l)             0.33 "Hut": does a hut fit round finished lean-to l (`hutReady`): dry, standable, level (HUT_SLOPE 0.5 m) ground at its corners, door and middle, no other site within HUT_APART 4.8 m, no trunk, boulder, pile, fire place or burnt place touching its walls or inside it (the stone ring and the lean-to are no hindrance); pure. Not asked once the first part is built
+ * 0.37.9 "Far": a part of the hut takes HUT_PIECE_TIME (three times PIECE_TIME) of kneeling, and a piece's rest cost is spread over the work's own time (work.dur).
  *   game.hutBlock(l)            0.37.7 "Reasons": what keeps the hut from fitting round l (the first thing `hutFits` finds): { what: 'ground'|'leanto'|'tree'|'rock'|'pile'|'fire'|'burnt', x, z, steep? } or null (pure)
  *   game.lackAt(x?, z?)         0.30.20: what is missing for an action that is almost possible there (default: where he stands): 'needSpear' | 'spearAway' | 'needFibre' | 'needMoreWood' | null (pure, game/lack; the voice says it)
  *   game.onAction(listener)     optional presentation notification when a deliberate action is accepted; listeners receive { kind, x, z }, alter no game state and are not saved
@@ -198,7 +199,7 @@ import { createFronds } from './fronds.js';
 import { createStones } from './stones.js';
 import { createGround, findSpot, MOVE_FAR } from './ground.js';
 import { createForage, BERRIES, BANANAS, BERRY_FOOD, BANANA_FOOD } from './forage.js';
-import { createLeantos, keepFree, built, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH, hutReady, hutDone, hutBegun, hutKind, inHutBox, HUT, HUT_REACH } from './leanto.js';
+import { createLeantos, keepFree, built, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, PIECE_TIME, HUT_PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH, hutReady, hutDone, hutBegun, hutKind, inHutBox, HUT, HUT_REACH } from './leanto.js';
 import { YAW } from '../core/view.js';
 import { createThirst } from './thirst.js';
 import { createHunger } from './hunger.js';
@@ -651,7 +652,7 @@ export function createGame(world, spawn, opts = {}) {
       if (a.kind === 'buildHere') what = siteFits(a.site) && have.has(PARTS.leanto[0]) ? 'leanto' : null;
       else if (lt && a.kind === 'buildIn') what = lt.progress < 1 && have.has(nextKind(lt)) ? 'leanto' : null;
       else if (lt && lt.progress >= 1) what = UP_ORDER.find(k => have.has(nextKind(lt, k))) || (hutPiece(lt, have) ? 'hut' : null);
-      if (what && !wet(here())) { work = { kind: a.kind === 'upgrade' ? 'upgrade' : 'build', t: 0, dur: PIECE_TIME, thing: lt, site: a.kind === 'buildHere' ? a.site : null, what }; face(a); notifyAction(a.kind === 'upgrade' ? 'upgrade' : 'build'); }
+      if (what && !wet(here())) { work = { kind: a.kind === 'upgrade' ? 'upgrade' : 'build', t: 0, dur: what === 'hut' ? HUT_PIECE_TIME : PIECE_TIME, thing: lt, site: a.kind === 'buildHere' ? a.site : null, what }; face(a); notifyAction(a.kind === 'upgrade' ? 'upgrade' : 'build'); }
       else stoop();
       return;
     }
@@ -764,7 +765,7 @@ export function createGame(world, spawn, opts = {}) {
       if (work.kind === 'drill') sleep.tire(DRILL_COST * hunger.drillCost() * dt / DRILL_TIME);
       else if (work.kind === 'build' || work.kind === 'upgrade') {
         if (work.thing && !leantos.list.includes(work.thing)) work = null;   // the flood took it
-        else sleep.tire(pieceCost(work.what) * dt / PIECE_TIME);
+        else sleep.tire(pieceCost(work.what) * dt / work.dur);   // 0.37.9: over the work's own time (a part of the hut takes HUT_PIECE_TIME)
       } else if (work.kind === 'fell') {   // standing work: the chopping tires him like building and its progress is kept in the overlay
         if (felled.has(work.thing)) work = null;
         else { sleep.tire(FELL_COST * dt / FELL_TIME); felled.setChopped(work.thing, Math.min(1, work.p0 + work.t / FELL_TIME)); }

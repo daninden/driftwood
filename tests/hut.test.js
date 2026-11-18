@@ -9,7 +9,7 @@ import { canOccupy } from '../src/game/movement.js';
 import { branchesOfTile } from '../src/game/branches.js';
 import { frondsOfTile } from '../src/game/fronds.js';
 import { stonesOfTile } from '../src/game/stones.js';
-import { PARTS, PIECE_TIME, BUILD_COST, HUT, HUT_COST, HUT_KEEP, HUT_POSTS, HUT_WALL_LOGS, HUT_REACH, UP_ORDER, createLeantos, built, nextKind, pieceFor, hutReady, hutDone, hutBegun, hutKind, inHutBox, keepFree, pieceCost, solid } from '../src/game/leanto.js';
+import { PARTS, PIECE_TIME, HUT_PIECE_TIME, BUILD_COST, HUT, HUT_COST, HUT_KEEP, HUT_POSTS, HUT_WALL_LOGS, HUT_REACH, UP_ORDER, createLeantos, built, nextKind, pieceFor, hutReady, hutDone, hutBegun, hutKind, inHutBox, keepFree, pieceCost, solid } from '../src/game/leanto.js';
 import { hutCircles, leantoCircles, HUT_R, leantoPoint } from '../src/game/obstacles.js';
 import { SHELTER_SLEEP, WALLS_SLEEP, HUT_REST, createSleep, SLEEP_DAYS, REST_RATE } from '../src/game/sleep.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
@@ -44,7 +44,7 @@ const makeInput = (o = {}) => {
   i.pressing = () => false;
   return i;
 };
-const bigOf = g => g.action().options.find(o => o.big) || null;
+const bigOf = g => g.action().options.find(o => o.big && o.kind !== 'sleep') || null;   // the building option (0.37.9: the hut tires him more, so a sleep may be offered too)
 const run = (g, input, s, dt = 1 / 30) => { for (let t = 0; t < s; t += dt) g.update(input, dt); };
 let used = 0;
 const LOGS = [];   // a stock of timber for the tests: ids from game/logs
@@ -78,7 +78,7 @@ function homeGame(extra = {}, o = {}) {
   return { g, input: makeInput({ yaw: 0.8 }), l: g.leantos.list[0] };
 }
 const kneel = (g, input) => { for (let t = 0; t < 8 && !g.player.work; t += 1 / 30) g.update(input, 1 / 30); };   // wait until he has walked to his spot and kneels
-const buildNext = (g, input) => { const o = bigOf(g); expect(o).not.toBeNull(); g.act(o); kneel(g, input); run(g, input, PIECE_TIME + 0.5); return o; };
+const buildNext = (g, input) => { const o = bigOf(g); expect(o).not.toBeNull(); g.act(o); kneel(g, input); run(g, input, HUT_PIECE_TIME + 0.5); return o; };
 const hutDoneGame = () => { const r = homeGame(); for (let k = 0; k < 32; k++) { give(r.g, PARTS.hut[k]); r.g.leantos.build(r.l, 'hut'); r.g.wood.log = null; r.g.wood.carried.length = 0; } return r; };
 
 describe('the recipe', () => {
@@ -86,8 +86,8 @@ describe('the recipe', () => {
     expect(PARTS.hut).toEqual([...Array(12).fill('log'), ...Array(8).fill('branch'), ...Array(12).fill('frond')]);
     expect(HUT_POSTS.length).toBe(4); expect(HUT_WALL_LOGS.length).toBe(8);
   });
-  it('costs twice what a lean-to costs in rest, over its 32 pieces', () => {
-    expect(HUT_COST).toBeCloseTo(2 * BUILD_COST, 9); expect(pieceCost('hut') * 32).toBeCloseTo(HUT_COST, 9);
+  it('costs four times what a lean-to costs in rest (0.37.9 "Far"; twice before), over its 32 pieces, each HUT_PIECE_TIME (three times PIECE_TIME)', () => {
+    expect(HUT_COST).toBeCloseTo(4 * BUILD_COST, 9); expect(HUT_PIECE_TIME).toBe(3 * PIECE_TIME); expect(pieceCost('hut') * 32).toBeCloseTo(HUT_COST, 9);
   });
   it('is about 3 by 2.5 m with the opening in the front wall towards the ring, and the lean-to stands inside its walls', () => {
     expect(HUT.half * 2).toBe(3); expect(HUT.front - HUT.back).toBeCloseTo(2.5, 9); expect(HUT.door).toBeLessThan(HUT.half);
@@ -155,20 +155,23 @@ describe('when a hut can start', () => {
 });
 
 describe('building the hut piece by piece', () => {
-  it('builds all 32 parts in order: logs, then branches, then fronds; one press and PIECE_TIME a piece; the rest cost is twice a lean-to\'s', () => {
-    const { g, input, l } = homeGame(); const t0 = g.clock.total, a0 = g.sleep.awake;
+  it('builds all 32 parts in order: logs, then branches, then fronds; one press and HUT_PIECE_TIME a piece; the rest cost is four times a lean-to\'s', () => {
+    const { g, input, l } = homeGame(); const t0 = g.clock.total; let tired = 0;
     for (let k = 0; k < 32; k++) {
+      g.sleep.awake = 0; g.thirst.days = 0; g.hunger.days = 0;   // 0.37.9: rested and fed before each part (the dearer hut would exhaust him over 32 parts in a row); the cost is summed part by part
       const kind = PARTS.hut[k]; give(g, kind);
       expect(nextKind(l, 'hut')).toBe(kind);
-      const o = buildNext(g, input);
+      const c0 = g.clock.total, o = buildNext(g, input);
+      tired += g.sleep.awake - (g.clock.total - c0);
       expect(o).toMatchObject({ kind: 'upgrade', what: 'hut', piece: kind, start: k === 0 });
       expect(built(l, 'hut')).toBe(k + 1); expect(hutBegun(l)).toBe(true); expect(hutDone(l)).toBe(k === 31);
       expect(g.wood.log).toBeNull(); expect(g.wood.carried.length).toBe(0);
     }
     expect(l.hut).toBe(1); expect(g.action().options.some(o => o.kind === 'upgrade')).toBe(false);
-    const days = g.clock.total - t0, tired = g.sleep.awake - a0 - days;
-    expect(tired).toBeCloseTo(HUT_COST, 1); expect(days * 86400).toBeGreaterThan(31 * PIECE_TIME);
+    const days = g.clock.total - t0;
+    expect(tired).toBeCloseTo(HUT_COST, 1); expect(days * 86400).toBeGreaterThan(31 * HUT_PIECE_TIME);
   });
+
   it('takes only the kind the next part needs: no branch at the log stage, no log at the branch stage', () => {
     const { g, input, l } = homeGame(); give(g, 'log'); buildNext(g, input);
     g.wood.log = null; give(g, 'branch'); expect(bigOf(g)).toBeNull();
@@ -186,7 +189,7 @@ describe('building the hut piece by piece', () => {
   it('the first part is refused if the footprint no longer fits when the kneeling ends', () => {
     const { g, input, l } = homeGame(); give(g, 'log'); g.act(bigOf(g)); kneel(g, input); run(g, input, 1);
     const c = leantoPoint(l, -1.2, 1.0); g.wood.piles.push({ x: c.x, z: c.z, kind: 'driftwood', logs: [{ id: 5, x: c.x, z: c.z, y: 0, len: 1, a: 0, rad: 0.1 }] });
-    run(g, input, PIECE_TIME); expect(built(l, 'hut')).toBe(0); expect(g.wood.log).not.toBeNull();
+    run(g, input, HUT_PIECE_TIME - 0.5); expect(built(l, 'hut')).toBe(0); expect(g.wood.log).not.toBeNull();
   });
   it('a begun hut does not ask for the footprint again', () => {
     const { g, input, l } = homeGame(); give(g, 'log'); buildNext(g, input);
