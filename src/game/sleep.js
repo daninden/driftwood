@@ -43,7 +43,7 @@
  * createSleep(saved?) -> sleep
  *   sleep.awake          days since rested (0 = fully rested)
  *   sleep.asleep         true while sleeping
- *   sleep.wakes          how many times he has woken since this game object was made (0.36.5: not saved; ai/chooser reads it: waking is a reason for a new plan)
+ *   sleep.wakes          how many times he has woken since this game object was made (0.36.5: not saved; the old ai/chooser read it, gone in 0.38.0: waking was a reason for a new plan)
  *   sleep.nap            true while the sleep is a nap (a short one by day)
  *   sleep.lie            0 standing .. 1 lying (eased, in real seconds)
  *   sleep.rest()         1 fully rested .. 0 has to sleep now

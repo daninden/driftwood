@@ -11,7 +11,6 @@ import { EAT_AT, NUT_MAX } from '../src/game/shells.js';
 import { terrainAt } from '../src/game/movement.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
 import { carryItems, carryChanged, ITEMS, DRAWINGS } from '../src/render/carryMark.js';
-import { buttonIcons, ICONS, ICON_OF } from '../src/render/actionButton.js';
 import { berryParts } from '../src/render/berries.js';
 import { bananaParts } from '../src/render/bananas.js';
 import { BERRY, BANANA } from '../src/render/palette.js';
@@ -220,11 +219,6 @@ describe('drawings', () => {
     for (const k of ['berries', 'banana']) expect(DRAWINGS[k]).toBeTruthy();
     expect(carryItems({ berries: 2, banana: 1 })).toEqual(['berries', 'berries', 'banana']);
     expect(carryChanged({ berries: 1 }, { berries: 2 })).toBe(true);
-  });
-  it('the button has an icon for each new action', () => {
-    for (const k of ['berries', 'bananas', 'eatBerries', 'eatBanana']) { expect(ICON_OF[k]).toBeTruthy(); expect(ICONS[ICON_OF[k]]).toBeTruthy(); }
-    expect(buttonIcons({ tap: { kind: 'berries' }, options: [] })).toEqual({ main: 'berries', options: [] });
-    expect(buttonIcons({ tap: { kind: 'bananas' }, options: [{ kind: 'sleep', big: true }] })).toEqual({ main: 'bananas', options: [{ key: 'moon', label: 'Sleep' }] });
   });
   it('the berries and the banana plant are fixed by the plant and use the palette', () => {
     const a = berryParts(B0), b = berryParts(B0);

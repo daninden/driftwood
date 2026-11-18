@@ -11,7 +11,6 @@ import { createWood, dryness, DRY_DAYS } from '../src/game/wood.js';
 import { createFibre, FIBRE_MAX, REGROW, REGROW_SPREAD, NUT_SHARE, nutsOfTile } from '../src/game/fibre.js';
 import { createFire, catchChance, FIRE_MIN, DRILL_TIME, DRILL_COST, CATCH, CATCH_TOP, BURN, EMBERS, WARM_EMBERS, FUEL_MAX, TORCH_DAYS, TORCH_COST, WARM_R, RAIN_OUT, RING_BURN } from '../src/game/fire.js';
 import { COLD_SLEEP, SLEEP_DAYS } from '../src/game/sleep.js';
-import { createInput } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { FIRST_HIGH, PERIOD } from '../src/game/tide.js';
 
@@ -267,17 +266,6 @@ describe('a burning fire', () => {
   });
 });
 
-describe('fire input', () => {
-  beforeAll(() => { if (!globalThis.window) globalThis.window = new EventTarget(); });
-  const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
-  const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t); return { el, input, later: ms => { t += ms; } }; };
-  it('lights with F', () => {
-    const { input } = setup();
-    fire(window, 'keydown', { code: 'KeyF' });
-    expect(input.takeLight()).toBe(true); expect(input.takeLight()).toBe(false);
-    input.dispose();
-  });
-});
 
 describe('sleeping by the fire', () => {
   const sleepFor = (g, s) => { g.sleep.start(); run(g, makeInput(), s); };

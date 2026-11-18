@@ -15,7 +15,6 @@ import { Batch } from '../src/render/batch.js';
 import { outlineMat } from '../src/render/materials.js';
 import { makeAxe } from '../src/render/axe.js';
 import { TIMBER } from '../src/render/palette.js';
-import { buttonIcons, ICONS, ICON_OF, LABEL_OF } from '../src/render/actionButton.js';
 import { leavesNear } from '../src/audio/mix.js';
 import { pileTally } from '../src/render/tallyMarks.js';
 
@@ -153,21 +152,6 @@ describe('the axe', () => {
   });
 });
 
-describe('the action button for the axe and the logs', () => {
-  it('has an icon and plain words for making, taking up, laying down and felling', () => {
-    for (const [kind, key] of [['makeAxe', 'axe'], ['takeAxe', 'takeAxe'], ['layAxe', 'layAxe'], ['fell', 'fell']]) { expect(ICON_OF[kind]).toBe(key); expect(ICONS[key]).toBeTruthy(); expect(LABEL_OF[kind]).toBeTruthy(); }
-    expect(buttonIcons({ tap: { kind: 'fell', tree: {} }, options: [{ kind: 'layAxe' }, { kind: 'makeAxe' }] })).toEqual({ main: 'fell', options: [{ key: 'layAxe', label: 'Lay the axe down' }, { key: 'axe', label: 'Make an axe' }] });
-  });
-  it('draws picking up a log (or a pile of logs) and laying one down as a log with its cut end showing', () => {
-    expect(buttonIcons({ tap: { kind: 'pickup', thing: { kind: 'log', log: { timber: true } } }, options: [] }).main).toBe('pickupLog');
-    expect(buttonIcons({ tap: { kind: 'pickup', thing: { kind: 'pile', pile: { kind: 'log', logs: [] } } }, options: [] }).main).toBe('pickupLog');
-    expect(buttonIcons({ tap: { kind: 'pickup', thing: { kind: 'log', log: {} } }, options: [] }).main).toBe('pickup');   // driftwood keeps its own drawing
-    expect(buttonIcons({ tap: { kind: 'lay' }, options: [] }).main).toBe('lay');
-    expect(buttonIcons({ tap: { kind: 'lay' }, options: [] }, true).main).toBe('layLog');   // with a log on his shoulder
-    expect(buttonIcons({ tap: null, options: [{ kind: 'lay' }] }, true).options).toEqual([{ key: 'layLog', label: 'Lay the log on the pile' }]);
-    for (const k of ['pickupLog', 'layLog']) { expect(ICONS[k]).toBeTruthy(); expect(LABEL_OF[k]).toBeTruthy(); }
-  });
-});
 
 describe('sound under felled trees', () => {
   it('counts no rustle and no cricket cover from a tree that is gone', () => {

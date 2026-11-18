@@ -40,7 +40,7 @@ describe('subSteps', () => {
 describe('dev panel speed', () => {
   it('shows x N only above 1, after the zoom and quality', () => {
     expect(devLabel('1', 'A', 30)).not.toContain('×');
-    expect(devLabel('1', 'A', 30, 9, false, 0, null, null, false, 1)).not.toContain('×');
-    expect(devLabel('1', 'A', 30, 9, false, 0, null, null, false, 8)).toContain('30 fps · 9 ms · ×8');
+    expect(devLabel('1', 'A', 30, 9, false, 0, null, 1)).not.toContain('×');
+    expect(devLabel('1', 'A', 30, 9, false, 0, null, 8)).toContain('30 fps · 9 ms · ×8');
   });
 });

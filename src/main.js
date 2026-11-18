@@ -1,5 +1,5 @@
 /**
- * main — boots the game: world, view, game state, input, loop.
+ * main — boots the game: world, view, game state, the language model that plays him, the loop.
  *
  * Address (0.30.15 "Address"): every option is `name=value` after `?`, joined with `&`.
  * Seed: from `?seed=<n>`, otherwise 1337 (the fixed demo).
@@ -19,69 +19,53 @@
  * For tests and development only: `?spawn=x,z` starts somewhere else, and
  * `?time=t` starts at another time of day (0 midnight, 0.5 noon), and
  * `?awake=d` as if the castaway had been awake d days, and `?speed=N` (0.30.11 "Hurry", 1 to 16, game/steps) runs the game N times as fast: each frame
- * game.update and the mind get N * dt in steps of at most 0.1 s, the takeover's quiet wait runs on that faster clock too; drawing, sound, wind, UI fades, the
+ * game.update and the actor get N * dt in steps of at most 0.1 s; drawing, sound, wind, UI fades, the
  * save timers and the camera stay on real time. Not saved; the dev panel shows `×N`.
  *
- * The name (0.9): at the first start of an island (no test parameters, no save
- * with a name) the loading screen asks "What is your name?" (render/namePrompt,
- * texts in game/castaway). Loading goes on meanwhile; the island fades in once
- * the answer is in. The name and the day the game started (`startDay`) are
- * saved with the island (src/save, optional fields; since 0.31.1 also the mind's habits, `habit: mind.state()`, handed back to createMind as `saved`). Since 0.36.7 "Memory" also `memory: ai.memory()` (the short-term list, his notes and the journal), handed back with `ai.restore(saved.memory)` after `ai.attach`; the frame loop calls `ai.tick()` (the sunset journal line) and saves at once when `ai.memoryVersion` changes. With the test parameters
- * the question is skipped and he is "the castaway". Top left #who always shows
- * `Dave, day 3` (render/nameLines), and each time a sleep ends #wake shows
- * `Dave wakes. Day 3.` for a few seconds. Day 1 is the day the game started.
+ * The start screen (0.38.0 "Only him", render/startScreen): on the loading screen one question at a time: first the key of the language model that plays him (only
+ * while no key is saved: checked with one request for the list of models, ai/client listModels; once a key works it is not asked again, the AI panel can change or remove
+ * it, and removing it reloads the page to this screen), then his name (only at the first start of an island: no save with a name, game/castaway shouldAsk). Loading goes on
+ * meanwhile; the island fades in once the answers are in. With the test parameters (`?spawn`, `?time`, `?awake`) the screen is skipped and he is "the castaway"; without a
+ * key the game then waits for a plan (the smoke tests save a key and answer the model's requests themselves, in Playwright, never in the game). The name and the day the game
+ * started (`startDay`) are saved with the island (src/save), with `memory: planner.memory()` (his notes and lessons). Top left #who always shows `Dave, day 3`
+ * (render/nameLines), and each time a sleep ends #wake shows `Dave wakes. Day 3.` for a few seconds. Day 1 is the day the game started.
+ *
+ * The language model plays him (0.37.1 "Half hour"; since 0.38.0 "Only him" the only way to play: the old rules mind, the leash, the habit, the takeover and the player's own
+ * controls are gone): game/actor follows the plans of ai/planner, which asks the model through ai/client (the player's own key, kept in localStorage under its own name, never
+ * in the save). While the actor waits for a plan the frame calls game.update(actor.input, 0) only (the game pauses) and render/thinkingMark shows "thinking…" (with "try
+ * again" when the model does not answer); the plan's thought is said above him (voice.announceStep); planner.tick() asks the lesson of the day at sunset. game/camp keeps the
+ * plain facts of his home, his camp, the last night and the tide strip (`camp.tick` after each step) for the request and the logbook. The player watches: zoom, turn and tilt
+ * (game/input), sound (M), quality (G), the dev panel (backtick) and the AI panel (I).
  *
  * The moon mark #rest (render/restMark) shows how rested the castaway is;
  * next to it the drop #thirst (render/thirstMark, in #needs) shows how thirsty
- * he is and the half coconut #hunger (render/hungerMark) how hungry, and the row #carry (render/carryMark) what he carries loose (its nut, full shell, berries, banana and crab drawings can be clicked to use them, game.use, 0.27.2).
+ * he is and the half coconut #hunger (render/hungerMark) how hungry, and the row #carry (render/carryMark) what he carries loose (only shown).
  * Each time one of those marks changes, its drawing is shown for a moment above the castaway (render/gestureMark, 0.34 "Gestures"; fed after the frame is drawn, with the camera).
  * All ink marks take their colour from `--ink` on <html>, which render/ink
  * turns pale at night (from sky.day).
  *
- * On touch-only devices the thumb stick #stick (render/thumbStick) bottom right
- * walks and runs through the same input object. The action button #action
- * (render/actionButton; Space does the same) sits above the stick there and in
- * the bottom right corner on a desktop: each frame it is given what game.action()
- * offers (the ring does `tap`; up to three `options` are icons in an arc above it, #arc,
- * clicked or tapped, or keys 1 to 3, through input.choose).
- *
  * Sound (0.20, audio/): audio/mix (pure) decides what should be heard from the world and the game state,
  * audio/sound builds the Web Audio graph and follows it. Sound starts with the first key or tap (the browser rule;
- * answering the name counts); M turns it on or off, and the speaker mark #sound
+ * answering the start screen counts); M turns it on or off, and the speaker mark #sound
  * (render/soundMark) above the moon does the same; the choice is kept in localStorage (audio/pref). The fade-out
  * when the tab is hidden is in audio/sound.
  *
- * The dev panel #dev (render/devPanel, src/version; 0.36.4: events from inside it are ignored by the takeover and the idle tracker, isDevPanelEvent, like those of the AI panel) shows version, name, fps,
+ * The dev panel #dev (render/devPanel, src/version; events from inside it are ignored by the idle tracker, isDevPanelEvent, like those of the AI panel) shows version, name, fps,
  * the work time per frame and `idle` top right; the backtick key toggles it.
  * It is fed the real time between drawn frames and the ms update + render took.
  * While it is visible the furthest zoom is 25 (core/view zoomMax), else 10; the
  * panel then shows `zoom N` when the zoom is beyond 10.
  *
- * Voice and AI (0.36.5): when the AI takes a plan step, the chooser's onStep gives voice.announceStep(time, reason, fallbackKind) the step's reason at once (every step kind); the mind's onIntent then says nothing for the fixed intent phrases that only restate that step (ai.restates(goal, kind)); with the AI off nothing changes.
+ * The AI panel #ai (render/aiPanel, developer only), toggled with I: what the model does (the running step, the plan, every request), his notes and lessons, the key (change or remove).
  *
- * Habit and Hands (game/mind, game/input, game/hands): Auto hands the game to
- * the mind after QUIET (30) seconds; Self never does, and Computer does at
- * once. H cycles the browser-only saved mode, never an island save. A real
- * walk or action releases the mind; it changes Computer to saved Self while
- * Auto remains saved. View, quality and developer controls are passive. Each
- * driven frame hands game.update the mind's input object and steps it first.
- * The developer panel shows both the selected mode and `habit`; headless
- * step/draw hooks use the player's input only.
+ * The logbook (0.36.8 "Logbook", ai/logbook, ai/logStore): a long record for the AI panel's "download log" button: game/actor's own events (`onEvent`), what he is doing when it changes and a snapshot every half game hour (`logbook.tick` each frame) and every request to the model with its answer. It reads only, changes nothing in the game or the save, and is kept in IndexedDB (written once a second and when the page is hidden) so that it runs on across reloads; it is cleared when a new game starts (`?new`, Shift + backtick, a new seed, no save). With the test parameters it is in memory only.
  *
- * The AI panel #ai (render/aiPanel, 0.36 "Mind", developer only), toggled with I: an optional language-model chooser that makes plans of goals and pastimes for Dave (src/ai; 0.36.3 "Plans", with a leash chosen in the panel). Off by default; with it off the rules choose exactly as before.
- * The client (ai/client) and the chooser (ai/chooser) are made here, the chooser is handed to createMind and `ai.attach(mind, game)` gives it the state to describe. At a goal or pastime decision the chooser asks the model and Dave waits up to AI_WAIT seconds (0.36.1). The player's own key is kept in localStorage under its own name, never in the save.
- *
- * The logbook (0.36.8 "Logbook", ai/logbook, ai/logStore): a long record for the AI panel's "download log" button: the mind's own events (`onEvent`), the "Now" changes and a snapshot every half game hour (`logbook.tick` each frame), the chooser's decisions and plans (`log`, `planState`), the rules' decisions while the AI is off (`wrapChooser`) and every request to the model with its answer (`ask`). It reads only, changes nothing in the game or the save, and is kept in IndexedDB (written once a second and when the page is hidden) so that it runs on across reloads; it is cleared when a new game starts (`?new`, Shift + backtick, a new seed, no save). With the test parameters it is in memory only.
- *
- * Voice and AI (0.36.9 "Voice"): with the AI on the mind's fixed intent phrases go through ai/said `intentVoice` (`onIntent`): nearly all silent, a lack goes into the short-term list (`mind.remember`), an emergency keeps its short phrase; with the AI off `voice.announce(kind)` as ever. The castaway's name is handed to the AI chooser as a getter (`name: () => name`) and goes into the request's fixed part.
- * Voice (render/voice): only reasons speak (0.30.20): the mind's intents, and what the player
- * lacks (game.lackAt, once per still period of about 1.5 s); never actions. One short fixed thought above Dave. L opens the
- * in-memory session log with island HH:mm timestamps (no dates); its own
- * capture guard keeps all log interaction passive to Hands and the camera.
+ * Voice (render/voice): only his thoughts speak (the plan's thought); never actions. L opens the
+ * in-memory session log with island HH:mm timestamps (no dates); its own capture guard keeps all log interaction away from the camera.
  *
  * Frame pacing (render/framePacer): the loop runs at the screen's rate but
  * only updates and draws a frame when it is due: at most 30 a second on
- * touch-only devices (same test as the thumb stick), and at most 15 a second
+ * touch-only devices (render/framePacer touchOnly), and at most 15 a second
  * when nothing has happened for 3 s (the castaway still, the camera settled,
  * no input, awake). Input of any kind ends that at once. The game's dt is the
  * time since the last drawn frame.
@@ -99,33 +83,28 @@
  * While loading, the bar in #loader (index.html) shows how far it is
  * (core/loading); it fades out with the class `ready` on <body>.
  *
- * Full AI play (0.37.1 "Half hour"): with the AI on (aiOn) the language model plays him through game/actor and ai/planner instead of the mind; the player's walking input is not used; while the actor
- * waits for a plan the frame calls game.update(input, 0) only (the game pauses) and render/thinkingMark shows "thinking…"; the plan's thought is said above him (voice.announceStep); planner.tick() writes the journal; the save's memory merges the old chooser's and the planner's.
- * window.__driftwood exposes { world, game, view, input, mind, actor, planner, takeover, hands, ready, quality, sound, soundSwitch, ai, aiClient, aiPanel, logbook } for the smoke
+ * window.__driftwood exposes { world, game, view, input, actor, planner, camp, ready, quality, sound, soundSwitch, aiClient, aiPanel, logbook } for the smoke
  * test (and `frames`, a read-only count of drawn frames, for checking the pacing), plus three hooks so it does not have to play in real time (a
  * headless browser without a GPU draws only a few frames per second):
- *   pause(on)              stop or restart drawing in the frame loop
- *   step(seconds, until?)  run the game in fixed steps of 1/60 s without
- *                          drawing, until the time is up or until() is true;
- *                          returns the simulated seconds
- *   draw()                 draw one settled frame (camera and figure caught up)
+ *   pause(on)                     stop or restart drawing in the frame loop
+ *   step(seconds, until?, hands?) run the game in fixed steps of 1/60 s without drawing, until the time is up or until() is true; returns the simulated seconds.
+ *                                 Without `hands` the actor plays (and the game pauses while he waits for a plan); with `hands` (an input object of the smoke
+ *                                 test's own, the shape of game/actor's) the test plays him instead (a test hook only)
+ *   draw(hands?)                  draw one settled frame (camera and figure caught up; with `hands`, the test's own, as step)
  * Footprints are only laid while drawing, so stepped walks leave none.
  */
 import { generateWorld } from './world/world.js';
 import { startSpot } from './world/spots.js';
 import { createIslandView } from './render/islandView.js';
-import { createGame, wantsToMove } from './game/game.js';
-import { createInput, createTakeover, createActing, QUIET } from './game/input.js';
-import { createHands, loadHands, saveHands, isHandsKey } from './game/hands.js';
-import { createMind } from './game/mind.js';
-import { rulesChooser } from './game/intent.js';
+import { createGame } from './game/game.js';
+import { createInput } from './game/input.js';
 import { createClient } from './ai/client.js';
-import { createAiChooser } from './ai/chooser.js';
 import { createPlanner } from './ai/planner.js';
 import { snapshotOf } from './ai/prompt.js';
 import { createActor } from './game/actor.js';
+import { createCamp } from './game/camp.js';
 import { stepText } from './game/actions.js';
-import { createLogbook, wrapChooser, snapshotEntry } from './ai/logbook.js';
+import { createLogbook, snapshotEntry } from './ai/logbook.js';
 import { openLogStore } from './ai/logStore.js';
 import { KEY_NAME } from './ai/config.js';
 import { createAiPanel, isAiPanelEvent } from './render/aiPanel.js';
@@ -135,22 +114,19 @@ import { createThirstMark } from './render/thirstMark.js';
 import { createHungerMark } from './render/hungerMark.js';
 import { createCarryMark, carryState } from './render/carryMark.js';
 import { createGestureMark, gestureState } from './render/gestureMark.js';
-import { createThumbStick, touchOnly } from './render/thumbStick.js';
-import { createActionButton } from './render/actionButton.js';
 import { createDevPanel, DEV_PANEL_VISIBLE, isDevPanelEvent } from './render/devPanel.js';
-import { createNamePrompt } from './render/namePrompt.js';
+import { createStartScreen } from './render/startScreen.js';
 import { createDayLine, createWakeLine, WAKE_TIME } from './render/nameLines.js';
 import { createInk } from './render/ink.js';
 import { createSoundMark } from './render/soundMark.js';
 import { createVoice } from './render/voice.js';
-import { intentVoice } from './ai/said.js';
 import { createSound } from './audio/sound.js';
 import { createMixer } from './audio/mix.js';
 import { createSoundSwitch, isSoundKey } from './audio/pref.js';
 import { windState } from './render/wind.js';
 import { skyAt } from './render/sky.js';
 import { shouldAsk, dayNumber, dayLine, wakeLine } from './game/castaway.js';
-import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt } from './render/framePacer.js';
+import { FRAME_CAP_TOUCH, targetFps, nextFrame, createIdleTracker, isBusy, maxDt, touchOnly } from './render/framePacer.js';
 import { parseSpeed, subSteps } from './game/steps.js';
 import { VERSION, NAME } from './version.js';
 import { zoomMax } from './core/view.js';
@@ -169,9 +145,12 @@ async function boot() {
   const store = createSaveStore(seed);
   if (fresh) { store.clear(); try { history.replaceState(null, '', location.pathname + withoutNew(location.search) + location.hash); } catch (e) { /* keep the address */ } }
   const qs = new URLSearchParams(location.search), q = qs.get('spawn'), qt = qs.get('time'), qa = qs.get('awake');
-  const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no question, no loading, no saving
+  const testing = qs.has('spawn') || qt !== null || qa !== null;   // test parameters: no start screen, no loading, no saving
   const saved = testing ? null : store.load();
-  const asking = shouldAsk({ testing, saved }) ? createNamePrompt(document.getElementById('ask')) : null;   // asked while the island loads
+  const store0 = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+  const aiClient = createClient({ fetch: (...a) => window.fetch(...a), storage: store0 });   // the language model that plays him, with the player's own key
+  const askName = shouldAsk({ testing, saved }), askKey = !testing && !aiClient.hasKey();
+  const asking = askKey || askName ? createStartScreen(document.getElementById('ask'), { askKey, askName, check: k => aiClient.listModels(k), save: k => aiClient.setKey(k) }) : null;   // asked while the island loads
   const container = document.getElementById('island');
   const logStoreAsked = testing ? Promise.resolve(null) : openLogStore().catch(() => null);   // 0.36.8: the logbook's IndexedDB opens while the island loads (none in tests, and none if the browser has none: then the log is kept in memory only)
   const cores = (navigator.hardwareConcurrency || 4), parallel = createParallelHeights(() => new HeightWorker(), Math.max(2, Math.min(8, cores - 1)));
@@ -179,7 +158,7 @@ async function boot() {
   const world = await generateWorld(seed, { progress: breathe, heightfield: parallel }).catch(err => { console.warn('height workers unavailable, building on the main thread', err); return generateWorld(seed, { progress: breathe }); });
   const spawn = q ? (([x, z]) => ({ x, z, y: world.H(x, z) }))(q.split(',').map(Number)) : startSpot(world);
   const at = saved ? { x: saved.player.x, z: saved.player.z, y: world.H(saved.player.x, saved.player.z) } : spawn;   // where the view opens
-  const touch = touchOnly(window.matchMedia ? q => window.matchMedia(q) : null), dpr = window.devicePixelRatio || 1;
+  const touch = touchOnly(window.matchMedia ? m => window.matchMedia(m) : null), dpr = window.devicePixelRatio || 1;
   const forcedQuality = parseQuality(location.search);
   let qualityPreference = loadPreference() || { auto: 0, fixed: null };
   const start = pickStart({ param: forcedQuality, preference: qualityPreference, touch });   // forced by ?quality=N, else fixed desktop or remembered automatic level
@@ -193,18 +172,15 @@ async function boot() {
   const mark = createRestMark(document.getElementById('rest'));
   const drop = createThirstMark(document.getElementById('thirst'));
   const half = createHungerMark(document.getElementById('hunger'));
-  const carry = createCarryMark(document.getElementById('carry'), kind => game.use(kind, input));   // a click on a drawing uses it (0.27.2)
+  const carry = createCarryMark(document.getElementById('carry'));   // 0.38.0: only shown (the player no longer uses what he carries)
   const voice = createVoice(container);
   const gesture = createGestureMark(container), gestureSt = {};   // 0.34 Gestures: the marks' drawings above his head
   const dev = createDevPanel(document.getElementById('dev'), VERSION, NAME);
   const speed = parseSpeed(location.search);   // 0.30.11 ?speed=N: game time N times as fast (tests only, never saved)
   dev.setSpeed(speed);
   dev.setQuality({ level: start.level, adapt: start.adapt });
-  const hands = createHands(loadHands() || 'auto');
-  dev.setHands(hands.mode);
   const who = createDayLine(document.getElementById('who')), wakes = createWakeLine(document.getElementById('wake'));
   const ink = createInk(document.documentElement);
-  const store0 = (() => { try { return window.localStorage; } catch (e) { return null; } })();
   const soundSwitch = createSoundSwitch(store0), sound = createSound({ enabled: soundSwitch.on }), mixer = createMixer(world);
   const soundEl = document.getElementById('sound'), toggleSound = () => { sound.gesture(); sound.setEnabled(soundSwitch.toggle()); mixer.reset(); soundMark.update(soundSwitch.on); };
   const soundMark = createSoundMark(soundEl, toggleSound);
@@ -216,14 +192,13 @@ async function boot() {
     const day = skyAt(info.time).day, p = game.player;
     sound.update(mixer.update({ player: p, terrain: info.terrain, sea: info.sea, day, wind: windState(world.seed, view.windTime, game.clock.total, day), waterTime: view.waterTime, fire: game.fire, birds: game.wildlife.birds(), carried: game.wood.load(), rain: game.rain, covered: game.leantos.dry(p.x, p.z, 'wood'), hut: !!game.leantos.inHut(p.x, p.z) }, dt), dt);
   };
-  let name = saved && typeof saved.name === 'string' ? saved.name : '';   // set from the prompt below when asked
+  let name = saved && typeof saved.name === 'string' ? saved.name : '';   // set from the start screen below when asked
   const startDay = saved && Number.isInteger(saved.startDay) ? saved.startDay : (saved ? 0 : game.clock.day);   // day 1 is the day the game started
-  let wasAsleep = game.sleep.asleep, button = null;
+  let wasAsleep = game.sleep.asleep;
   const carrySt = {};   // the counts of what he carries, filled in place each frame
   const show = info => {
     const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
     mark.update(info.rest, game.sleep.asleep); drop.update(game.thirst.days, now); half.update(game.hunger.days, now); carry.update(carryState(game, carrySt), now);
-    if (button) button.update(game.action(), !!game.wood.log);
     ink.update(skyAt(info.time).day, now);
     who.update(dayLine(name, day), now);
     if (wasAsleep && !game.sleep.asleep) { wakes.show(wakeLine(name, day), now); voice.hold(now + WAKE_TIME); }   // any end of a sleep
@@ -232,67 +207,42 @@ async function boot() {
     return info;
   };
   view.setGame(game);
-  const input = createInput(view.canvas, view.pickGround);
+  const input = createInput(view.canvas);   // 0.38.0: the player only watches: zoom, turn and tilt
   input.yaw = view.yaw;
-  const aiClient = createClient({ fetch: (...a) => window.fetch(...a), storage: store0 });   // 0.36: the optional language-model chooser; off until the player switches it on and enters a key
-  const aiOn = () => aiClient.on() && aiClient.hasKey();
-  // 0.36.8 "Logbook": a long record of what he really does, for the "download log" button; it only reads (the mind's event stream, the game, the chooser's log), so nothing in his life changes
+  let actor = null, planner = null;
+  // 0.36.8 "Logbook": a long record of what he really does, for the "download log" button; it only reads, so nothing in his life changes
   const logbook = createLogbook({
     store: await logStoreAsked, version: VERSION, name: NAME, seed,
     clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }),
-    info: () => { const pl = ai.plan(); return { ai: aiOn(), model: pl && pl.model || null, models: aiClient.status().models.map(m => m.model), leash: aiClient.mode() }; },
+    info: () => { const e = planner && planner.entries().find(x => x.model); return { model: e ? e.model : null, models: aiClient.status().models.map(m => m.model) }; },
     secrets: () => { try { return [store0 && store0.getItem(KEY_NAME)]; } catch (e) { return []; } },
   });
   await logbook.open({ clear: fresh || !saved });   // a new game (?new, a new seed, no save) starts a new log; otherwise it runs on
   const quiet0 = f => { try { f(); } catch (e) { /* the logbook never disturbs the game */ } };
-  const ai = createAiChooser({ rulesChooser, log: e => quiet0(() => logbook.decision(e)), ask: m => { let id = null; quiet0(() => { id = logbook.request(m); }); const p = aiClient.send(m); p.then(r => quiet0(() => logbook.answer(id, r)), e => quiet0(() => logbook.answer(id, e))); return p; }, onStep: st => voice.announceStep(game.clock.time, st.reason, st.fallback), now: () => performance.now() / 1000, canSend: aiClient.canSend, enabled: () => aiClient.on() && aiClient.hasKey(), mode: aiClient.mode, name: () => name, clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time, total: game.clock.total }) });
-  const play = {};   // 0.37.1: the actor and the planner, filled in below (the panel reads them only once it is shown)
-  const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, ai, logbook, play });
-  const mind = createMind(world, game, { chooser: wrapChooser(ai.chooser, { on: aiOn, record: (point, menu, c) => quiet0(() => logbook.rulesDecision(point, menu, c)) }), saved: saved && saved.habit, onEvent: e => quiet0(() => logbook.event(e)), onIntent: ({ kind, goal }) => {   // 0.36.9: with the AI on nearly nothing fixed is said (ai/said): a restating phrase, an intent of the rules and every lack stay silent, a lack goes into the short-term list, an emergency has its short phrase; with the AI off as ever
-    const v = intentVoice({ on: aiOn(), kind, restated: ai.restates(goal, kind), vitals: { thirst: game.thirst.days, hunger: game.hunger.days, awake: game.sleep.awake } });
-    if (v.remember) quiet0(() => mind.remember('lack', v.remember, 'seen'));
-    if (v.say) voice.announce(v.say, game.clock.time);
-  } }), takeover = createTakeover(QUIET, performance.now() / 1000);
-  ai.attach(mind, game);   // 0.36.1: the chooser reads the state and the short-term memory of a request from them
-  // 0.37.1 "Half hour": with the AI on, the language model plays him with single actions (game/actor, ai/planner); the old mind (above) plays only with the AI off
+  const camp = createCamp(world, game);   // 0.38.0: the plain facts of his home and camp (they were read from the old mind)
   const askLogged = m => { let id = null; quiet0(() => { id = logbook.request(m); }); const p = aiClient.send(m); p.then(r => quiet0(() => logbook.answer(id, r)), e => quiet0(() => logbook.answer(id, e))); return p; };
-  let actor = null;
+  const doing = () => { const pl = actor && actor.plan; return pl && actor.stepIndex >= 0 ? stepText(pl.steps[actor.stepIndex], pl.menu.places) : 'between plans'; };
   const actState = () => {
-    const st = snapshotOf(game, { home: () => mind.home(), camp: () => mind.camp(), stripWood: () => mind.stripWood() });
-    const pl = actor && actor.plan;
-    st.doing = pl && actor.stepIndex >= 0 ? stepText(pl.steps[actor.stepIndex], pl.menu.places) : 'between plans';
+    const st = snapshotOf(game, camp);
+    st.doing = doing();
     st.day = dayNumber(game.clock.day, startDay);
     return st;
   };
-  const planner = createPlanner({ ask: askLogged, enabled: aiOn, canSend: aiClient.canSend, now: () => performance.now() / 1000, state: actState, name: () => name,
+  planner = createPlanner({ ask: askLogged, enabled: () => aiClient.hasKey(), canSend: aiClient.canSend, now: () => performance.now() / 1000, state: actState, name: () => name,
     clock: () => ({ day: dayNumber(game.clock.day, startDay), time: game.clock.time }), recent: () => (actor ? actor.recent.map(r => ({ ...r, day: dayNumber(r.day, startDay) })) : []) });
   actor = createActor(world, game, { chooser: planner.chooser, onEvent: e => {
     quiet0(() => logbook.event(e));
     if (e.type === 'plan' && e.say) voice.announceStep(game.clock.time, e.say, null);   // his one thought for the plan, said when it starts
   } });
   planner.restore(saved && saved.memory);
-  play.actor = actor; play.planner = planner;
-  const thinking = createThinkingMark(document.getElementById('thinking'), { retry: () => planner.retry() });
-  ai.restore(saved && saved.memory);   // 0.36.7 "Memory": the short-term list, his notes and the journal come back with the island (with the AI off they are only kept and saved)
-  let hurried = 0;   // seconds the game clock is ahead of the real one (?speed): the takeover's quiet wait runs on game time
-  const tnow = () => performance.now() / 1000 + hurried;   // 0.28 "Habit"
-  // 0.30.20: actions never speak, only reasons do (the mind's intents above, and what the player lacks below)
-  let still = 0, stillSaid = false, lastX = game.player.x, lastZ = game.player.z;   // seconds the player has stood still; whether this still period was asked about
-  const acting = createActing();   // 0.29.1: only what acts on the castaway takes the game back; turning, tilting and zooming the view do not
-  const poke = e => {
-    if (isAiPanelEvent(e) || isDevPanelEvent(e)) return;
-    if (!acting.event(e)) return;
-    hands.playerAction(); saveHands(hands.mode); dev.setHands(hands.mode);
-    takeover.poke(tnow()); mind.release(); dev.setHabit(false);
-  };   // a walk or action takes the castaway back
-  for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'keydown', 'keyup', 'visibilitychange', 'focus']) window.addEventListener(type, poke, { capture: true, passive: true });
-
-  createThumbStick(document.getElementById('stick'), input);
-  button = createActionButton(document.getElementById('action'), input, document.getElementById('arc'), touch);
+  const chosenSleep = () => { const pl = actor.plan, st = pl && actor.stepIndex >= 0 ? pl.steps[actor.stepIndex] : null; return !!(st && st.do === 'sleep'); };   // for game/camp's last night: he lay down himself
   let stopSaving = testing || !!asking, sinceSave = 0;
   const moments = createMomentWatcher(game);   // looks for something worth saving twice a second, not every frame
-  const save = () => { if (!stopSaving) { store.save({ ...game.state(), name, startDay, habit: mind.state(), memory: { ...ai.memory(), ...planner.memory() }, view: view.pose }); sinceSave = 0; } };
-  let memSeen = ai.memoryVersion + planner.memoryVersion, planSeen = -1;
+  const save0 = () => store.save({ ...game.state(), name, startDay, memory: planner.memory(), view: view.pose });
+  const save = () => { if (!stopSaving) { save0(); sinceSave = 0; } };
+  const aiPanel = createAiPanel(document.getElementById('ai'), { client: aiClient, play: { actor, planner }, logbook, onKeyRemoved: () => { save(); stopSaving = true; location.reload(); } });   // no key, no game: back to the start screen
+  const thinking = createThinkingMark(document.getElementById('thinking'), { retry: () => planner.retry() });
+  let memSeen = planner.memoryVersion;
   const viewSaver = createViewSaver();
   const autosave = dt => { sinceSave += dt; if (viewSaver.update(view.pose, dt)) save(); if (moments.update(dt) || sinceSave >= SAVE_EVERY) save(); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
@@ -308,16 +258,27 @@ async function boot() {
   const woken = e => { if (isAiPanelEvent(e) || isDevPanelEvent(e)) return; const t = performance.now(); if (quiet.idle(t)) anchor = -Infinity; quiet.poke(t); };   // input ends idling on the spot
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'keydown', 'keyup', 'wheel', 'touchstart', 'touchmove']) window.addEventListener(type, woken, { capture: true, passive: true });
   const STEP = 1 / 60;
-  const step = (seconds, until) => { let t = 0; while (t < seconds && !(until && until())) { game.update(input, STEP); t += STEP; } return t; };
+  const step = (seconds, until, hands = null) => {   // a smoke test's own hands play him instead of the actor (a test hook only)
+    let t = 0;
+    while (t < seconds && !(until && until())) {
+      if (hands) game.update(hands, STEP);
+      else { actor.input.yaw = view.yaw; actor.step(actor.waiting ? 0 : STEP); game.update(actor.input, actor.waiting ? 0 : STEP); }
+      camp.tick(hands ? true : chosenSleep());
+      t += STEP;
+    }
+    return t;
+  };
   const showGesture = () => gesture.update(gestureState(game, gestureSt), game.player.work, game.sleep.asleep || game.player.lie > 0, performance.now() / 1000, game.player, view.camera);   // 0.34: after the frame is drawn, with its camera
-  const draw = () => { view.settle(game.player); view.setWindTime(20);   // the wind at the same moment in every shot
-    for (let i = 0; i < 4; i++) view.render(game.player, show(game.update(input, 0)), 0.5);
+  const draw = (hands = null) => { view.settle(game.player); view.setWindTime(20);   // the wind at the same moment in every shot
+    for (let i = 0; i < 4; i++) view.render(game.player, show(game.update(hands || actor.input, 0)), 0.5);
     showGesture(); };
-  view.render(game.player, show(game.update(input, 0)), 0);
+  view.render(game.player, show(game.update(actor.input, 0)), 0);
   loading.done();
-  if (asking) {   // the island waits quietly for the answer; until then nothing is saved (a save without a name would count as an answer)
-    name = await asking.done; asking.dispose(); stopSaving = false; save();
-    view.render(game.player, show(game.update(input, 0)), 0);   // once more, with the name
+  if (asking) {   // the island waits quietly for the answers; until then nothing is saved (a save without a name would count as an answer)
+    const got = await asking.done; asking.dispose();
+    if (got.name !== null) name = got.name;
+    stopSaving = testing; save();
+    view.render(game.player, show(game.update(actor.input, 0)), 0);   // once more, with the name
   }
   document.body.classList.add('ready');
   let governor = createGovernor({ level: start.level, adapt: start.adapt, touch, dpr });   // starts measuring now, the island has faded in
@@ -330,12 +291,7 @@ async function boot() {
     dev.setQuality({ level: next.level, adapt: next.adapt });
     savePreference(qualityPreference);
   });
-  window.addEventListener('keydown', e => {
-    if (!isHandsKey(e)) return;
-    hands.cycle(); saveHands(hands.mode); dev.setHands(hands.mode);
-  });
-  if (hands.mode === 'computer') { mind.engage(); dev.setHabit(true); }   // Computer has no quiet wait, even on the ready frame
-  window.__driftwood = { world, game, view, input, mind, actor, planner, takeover, hands, ai, aiClient, aiPanel, logbook, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
+  window.__driftwood = { world, game, view, input, actor, planner, camp, aiClient, aiPanel, logbook, ready: true, sound, soundSwitch, get frames() { return frames; }, get quality() { return governor.level; }, pause: on => { paused = on; }, step, draw };
   requestAnimationFrame(function frame(now) {
     requestAnimationFrame(frame);
     if (paused) { last = now; return; }
@@ -349,46 +305,34 @@ async function boot() {
     view.zoomBy(zoomed);
     view.turn(turned);
     input.yaw = view.yaw;
-    if (wantsToMove(input) || input.pressing()) takeover.poke(tnow());   // a held key or a walk still going (not the camera, 0.29.1)
-    takeover.update(tnow());
-    const playing = aiOn();   // 0.37.1: the AI plays him (game/actor); the player's walking keys and clicks do nothing meanwhile (the view still turns and zooms)
-    const driving = !playing && hands.driving(takeover.active());
-    if (driving !== mind.active) { if (driving) mind.engage(); else mind.release(); dev.setHabit(driving); }
-    const use = playing ? actor.input : driving ? mind.input : input;   // whose hands the castaway has this frame
     let info = null, walked = 0;
     for (const h of subSteps(dt, speed)) {   // one step at speed 1; with ?speed=N the frame's game time is N * dt in steps of at most 0.1 s
-      if (playing) {
-        actor.input.yaw = view.yaw;
-        actor.step(actor.waiting ? 0 : h);
-        if (actor.waiting) { info = game.update(use, 0); break; }   // no plan: the game pauses (the world stands still) until the planner has one
-      } else if (driving) { mind.input.yaw = view.yaw; mind.step(h); }
-      info = game.update(use, h); walked += info.distance;
+      actor.input.yaw = view.yaw;
+      actor.step(actor.waiting ? 0 : h);
+      if (actor.waiting) { info = game.update(actor.input, 0); break; }   // no plan: the game pauses (the world stands still) until the planner has one
+      info = game.update(actor.input, h); walked += info.distance;
+      camp.tick(chosenSleep());
     }
-    thinking.update(playing && actor.waiting, planner.status());
+    if (!info) info = game.update(actor.input, 0);
+    thinking.update(actor.waiting, planner.status());
     info.distance = walked;   // the footprints get the whole way walked this frame
     aiPanel.update();
-    quiet0(() => { logbook.tick({ now: mind.now(), snapshot: () => snapshotEntry(game, mind) }); if (ai.version !== planSeen) { planSeen = ai.version; logbook.planState(ai.plans()); } });   // 0.36.8: the "Now" changes, the half-hour snapshot and the plans' states (read only)
-    planner.tick();   // 0.36.7 / 0.37.1: the sunset journal line (one extra request a day, only with the AI on; never waited for)
-    if (ai.memoryVersion + planner.memoryVersion !== memSeen) { memSeen = ai.memoryVersion + planner.memoryVersion; save(); }   // new notes or a journal line are saved at once
+    quiet0(() => logbook.tick({ doing: doing(), snapshot: () => snapshotEntry(game, camp, doing()) }));   // 0.36.8: what he is doing when it changes, and the half-hour snapshot (read only)
+    planner.tick();   // 0.37.4: the lesson of the day at sunset (one extra request a day; never waited for)
+    if (planner.memoryVersion !== memSeen) { memSeen = planner.memoryVersion; save(); }   // new notes or a lesson are saved at once
     show(info);
-    {   // 0.30.20: after about 1.5 s of standing still where something is almost possible, Dave says what is missing, once per still period
-      const p = game.player, moved = Math.hypot(p.x - lastX, p.z - lastZ) > 0.01 || wantsToMove(input) || input.pressing() || game.sleep.asleep || p.work;
-      lastX = p.x; lastZ = p.z;
-      if (moved || mind.active || playing) { still = 0; stillSaid = false; }
-      else { still += dt; if (still >= 1.5 && !stillSaid) { stillSaid = true; const kind = game.lackAt(); if (kind) voice.announce(kind, game.clock.time); } }
-    }
-    hurried += (speed - 1) * dt;
     view.render(game.player, info, dt); voice.update(dt, game.player, view.camera, performance.now() / 1000);
     showGesture();
     if (sound.active) hear(info, dt);
     autosave(dt);
     frames++;
-    if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input: use })) quiet.poke(now);
+    if (isBusy({ player: game.player, asleep: game.sleep.asleep, settling: view.settling, input: actor.input })) quiet.poke(now);
     dev.frame(real, performance.now() - t0, idle, view.zoom);
     const lower = governor.frame(real, idle, view.building);
     if (lower !== null) {
       qualityPreference = { ...qualityPreference, auto: lower };
-      view.setQuality(settingsFor(lower, { touch })); dev.setQuality({ level: lower, adapt: true });
+      view.setQuality(settingsFor(lower, { touch }));
+      dev.setQuality({ level: lower, adapt: true });
       if (!testing) savePreference(qualityPreference);
     }
   });

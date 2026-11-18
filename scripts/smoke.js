@@ -8,17 +8,18 @@
 // without a fire, waits for the next high water to bring wood, husks a coconut, lights a fire with the drill (F), takes a torch
 // out of it, and saves
 // screenshots.
-// The question "What is your name?" is answered with an empty Enter at the start.
+// 0.38.0 "Only him": the start screen is answered with a test key and an empty name; every request to the model is answered here with a fixed plan (scripts/smoke-ai),
+// and once the first plan is followed the test plays him with hands of its own (installHands), never the game.
 // smoke-0.png shows the loader while it is filling (with the question); smoke-5 low water,
 // smoke-6 the castaway asleep, smoke-7 awake with new wood on the beach,
 // smoke-8 husking a coconut, smoke-9 drilling fire, smoke-10 the fire by day,
 // smoke-11 the fire at night, smoke-12 walking away from it with a torch,
 // smoke-13 tally marks beside the fire at night, smoke-14 the same by day,
-// smoke-15 beside a pile of twelve, smoke-16 the action button beside a pile with fibre (by day),
-// smoke-17 beside the fire with dry wood (at night), smoke-18 the arc with three icons beside a brook (0.27.4, also in the quick run; a click on the flame icon lights),
-// smoke-19 and 20 the same on a phone-sized touch screen with the thumb stick (day and night),
+// smoke-15 beside a pile of twelve, smoke-16 beside a pile with fibre (by day),
+// smoke-17 beside the fire with dry wood (at night), smoke-18 beside a brook with a pile and fibre where the game offers pick up, drink, light and sleep (also in the quick run; the second option lights),
+// smoke-19 and 20 the same on a phone-sized touch screen (day and night),
 // smoke-21 branches under a tree, smoke-22 a lean-to half built, smoke-23 finished (by day; in the quick run too),
-// smoke-24 the action button with driftwood in his arms and the lean-to icon (21 to 24 come before the phone shots; 0.32: the lean-to is built piece by piece),
+// smoke-24 driftwood in his arms where a lean-to can start (21 to 24 come before the phone shots; 0.32: the lean-to is built piece by piece),
 // smoke-39 an upgraded lean-to (side walls, bed, stone fire ring) from the default view (also in the quick run), smoke-40 from the side, smoke-41 a dead frond and stones on the ground (also in the quick run), smoke-42 a frond and two stones carried, in the row (0.27 "Home").
 // smoke-30 wood out at low water on the wet strip, smoke-31 the same spot at high water (0.18).
 // smoke-37 beside the berry bush nearest the start, ripe berries on it and the berries icon on the button; after a press (not hungry) the handful in the row and the bush bare (0.26 "Inland", also in the quick run).
@@ -49,6 +50,7 @@
 // runs the game in fixed steps (__driftwood.step) and draws one settled frame
 // per screenshot (__driftwood.draw). See src/main.js.
 import { createRequire } from 'node:module';
+import { aiRoute, installHands, SMOKE_KEY } from './smoke-ai.js';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -86,6 +88,7 @@ if (!browser) { browser = await chromium.launch(); renderer = await rendererOf(b
 console.log('renderer:', renderer);
 const page = await browser.newPage({ viewport: SMALL });
 const errors = [];
+await aiRoute(page);   // 0.38.0: the model's requests are answered here (a fixed plan), never by the game
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 const t0 = Date.now(), secs = () => ((Date.now() - t0) / 1000).toFixed(1) + ' s';
@@ -93,11 +96,13 @@ await page.goto('file://' + file + query, { waitUntil: 'commit', timeout: 0 });
 const barAt = () => page.evaluate(() => { const f = document.querySelector('#loader .fill'); return f ? new DOMMatrix(getComputedStyle(f).transform).a : -1; });
 await page.waitForFunction(() => { const f = document.querySelector('#loader .fill'); return !f || document.body.dataset.error || new DOMMatrix(getComputedStyle(f).transform).a > 0.25; }, null, { timeout: 300000, polling: 100 });
 await page.screenshot({ path: 'smoke-0.png' });   // the loader: only checked, small
-// A real start of an island asks for a name (src/render/namePrompt): leave it empty (the castaway).
-if (!spawnArg) {   // with ?spawn (a test parameter) the question is skipped
-  await page.waitForSelector('#ask:not([hidden]) input', { timeout: 10000 });
+// A real start of an island asks for the key (checked with one request for the list of models, answered here) and then the name (src/render/startScreen): a test key, and an empty name (the castaway).
+if (!spawnArg) {   // with ?spawn (a test parameter) the screen is skipped
+  await page.waitForSelector('#ask:not([hidden]) input[type=password]', { timeout: 10000 });
+  await page.fill('#ask input', SMOKE_KEY); await page.press('#ask input', 'Enter');
+  await page.waitForFunction(() => /name/.test(document.querySelector('#ask .label').textContent), null, { timeout: 10000 });
   await page.press('#ask input', 'Enter');
-}
+} else await page.evaluate(k => localStorage.setItem('driftwood.ai.key', k), SMOKE_KEY);
 await page.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
 // The bar eases to full with a short CSS transition; on the software fallback the first
 // frames are slow, so give it time instead of reading it after a fixed wait.
@@ -122,9 +127,12 @@ const sound2 = await page.evaluate(() => { const d = window.__driftwood; return 
 if (sound2.on !== sound0.on || sound2.enabled !== sound0.enabled) errors.push('M did not flip the sound back: ' + JSON.stringify(sound2));
 console.log('sound: context', sound0.ctx, ', M', sound0.on, '->', sound1.on, '->', sound2.on);
 
+// 0.38.0: the model plays him in the game; after the first plan (answered above) the test plays him with its own hands (scripts/smoke-ai installHands)
+await page.waitForFunction(() => window.__driftwood.planner.entries().some(e => e.ok), null, { timeout: 60000, polling: 200 }).catch(() => errors.push('no plan was asked and followed at the start'));
+await page.evaluate(() => window.__driftwood.pause(true));
+await installHands(page);
 await page.evaluate(() => {
-  window.__driftwood.pause(true);
-  window.__press = () => { const { input } = window.__driftwood; input.actionStart('smoke'); input.actionEnd('smoke'); };   // a short press of the action button
+  window.__press = () => { const { input } = window.__driftwood; input.actionStart('smoke'); input.actionEnd('smoke'); };   // a short press of what the game offers (the action button is gone; the hands still press it)
 });
 await page.waitForTimeout(1200);   // let the loader finish fading out
 // shot(name, opts): draws one settled frame, reads a tiny thumbnail of the canvas (16x10, drawImage into a
@@ -205,7 +213,7 @@ await shot('smoke-5.png');
 // Sleep: Z lies down, time runs fast, the next high water brings wood. Since 0.17.3 he can only choose to
 // sleep after half a day awake, so the walk so far is topped up to 0.6 day first (Z is ignored before that). By day (0.29) it is a nap: two hours, resting half as fast.
 await page.evaluate(() => { window.__driftwood.game.sleep.awake = 0.6; });
-await page.keyboard.press('z');
+await page.evaluate(() => window.__driftwood.input.sleepKey());   // Z (the hands of the test)
 const asleep = await page.evaluate(() => { const { game, step } = window.__driftwood; step(4); return { asleep: game.sleep.asleep, lie: game.player.lie, washes: game.wood.washes }; });
 console.log('asleep', JSON.stringify(asleep));
 if (!asleep.asleep || asleep.lie < 1) errors.push('did not lie down to sleep');
@@ -252,15 +260,14 @@ console.log('shells', JSON.stringify(shells));
 if (shells.kept.length !== 1 || shells.kept[0] !== false) errors.push('did not keep the empty half shell after eating: ' + JSON.stringify(shells.kept));
 if (shells.row !== 3) errors.push('the row shows ' + shells.row + ' drawings for two shells and a nut, expected 3');
 await shot('smoke-36.png', { quick: true, settle: 400 });
-// Row (0.27.2): a real click on the full shell drawing drinks it (thirst down, shell empty) and does not walk him; hover shot of the row.
+// Row (0.27.2; 0.38.0: the row is only shown, nothing in it is clicked): drinking the full shell he carries (game.use, as the actor's `use` step) empties it and does not walk him.
 await page.evaluate(() => { const { game, step } = window.__driftwood; game.thirst.days = 0.8; game.fire.torch = null; step(0.3); window.__driftwood.draw(); window.__rowAt = { x: game.player.x, z: game.player.z, full: game.shells.full(), nuts: game.shells.nuts }; });
-await page.hover('#carry svg[data-kind="nut"]');
 await shot('smoke-36b.png', { quick: true, settle: 400 });
-await page.click('#carry svg[data-kind="water"]');
+await page.evaluate(() => { const d = window.__driftwood; d.game.use('water', d.input); });
 const row = await page.evaluate(() => { const { game, step } = window.__driftwood; step(0.2); const mid = game.player.work && game.player.work.kind; step(2.5); return { mid, full: game.shells.full(), thirst: game.thirst.days, moved: Math.hypot(game.player.x - window.__rowAt.x, game.player.z - window.__rowAt.z), target: !!window.__driftwood.input.target, before: window.__rowAt.full }; });
-console.log('row click', JSON.stringify(row));
-if (row.before !== 1 || row.mid !== 'sip' || row.full !== 0 || row.thirst > 0.55) errors.push('a click on the full shell in the row did not drink it: ' + JSON.stringify(row));
-if (row.moved > 0.05 || row.target) errors.push('a click on the row moved him or set a target: ' + JSON.stringify(row));
+console.log('drinking the carried shell', JSON.stringify(row));
+if (row.before !== 1 || row.mid !== 'sip' || row.full !== 0 || row.thirst > 0.55) errors.push('drinking the full shell he carries did not work: ' + JSON.stringify(row));
+if (row.moved > 0.05 || row.target) errors.push('drinking from the shell moved him or set a target: ' + JSON.stringify(row));
 await page.evaluate(() => { const s = window.__driftwood.game.shells; s.list.length = 0; s.nuts = 0; });
 
 // Inland (0.26): walk (teleport) to the berry bush nearest the start, see the berries icon, press the button (not hungry: the handful is carried, the bush is bare),
@@ -305,7 +312,7 @@ await page.evaluate(() => { const { world, game, step } = window.__driftwood, p 
 // Fire: lay a pile of four dry pieces (the first beach wood) on the dry sand
 // above the tide line, press F beside it and drill (smoke-9); when it does
 // not catch, try again with new fibre until it does (smoke-10).
-const pressF = () => page.evaluate(() => { for (const type of ['keydown', 'keyup']) window.dispatchEvent(new KeyboardEvent(type, { code: 'KeyF' })); });
+const pressF = () => page.evaluate(() => window.__driftwood.input.lightKey());   // F (the hands of the test)
 const drilling = await page.evaluate(() => {
   const { world, game, step } = window.__driftwood, p = game.player, w = game.wood;
   const dry = world.tiles.flatMap(t => t.drift).filter(l => w.onBeach(l)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
@@ -361,12 +368,8 @@ await shot('smoke-15.png');
 // The action button (0.13, the arc of 0.27.4): what it shows beside a pile with fibre by day (the pick-up
 // icon in the ring, the flame in the arc above it), beside a fire with dry wood at night (feed,
 // and the moon), and the arc with three icons (smoke-18): a pile, a brook and fibre, a click on an icon does it.
-const iconOf = () => page.evaluate(() => { const a = document.getElementById('action'); return { opacity: a.style.opacity, main: a.querySelector('.main').innerHTML.length, arc: document.querySelectorAll('#arc .opt').length, on: a.classList.contains('on') }; });
 await page.evaluate(() => { const { game, step } = window.__driftwood; game.clock.time = 0.5; game.fibre.carried = 1; step(0.1); });
 await shot('smoke-16.png', { quick: true, settle: 800 });
-const dayIcon = await iconOf();   // read after the frame is drawn: the button is updated while drawing
-console.log('action button by the pile', JSON.stringify(dayIcon));
-if (!dayIcon.on || !dayIcon.main || !dayIcon.arc) errors.push('the action button shows no pick-up icon in the ring and no light icon in the arc beside a pile with fibre');
 // Three icons in the arc (smoke-18): beside a brook with a pile of 12 and fibre the ring picks up, the arc offers drink, light and sleep.
 // A real click on the flame icon walks to the pile and kneels to drill (the click never reaches the world); then he walks off, the fibre is kept.
 const arcScene = await page.evaluate(() => {
@@ -381,10 +384,7 @@ const arcScene = await page.evaluate(() => {
 console.log('arc scene', JSON.stringify(arcScene));
 if (arcScene.tap !== 'pickup' || arcScene.options.join() !== 'drink,light,sleep') errors.push('beside a brook with a pile and fibre the ring should pick up and the arc offer drink, light, sleep: ' + JSON.stringify(arcScene));
 await shot('smoke-18.png', { quick: true, settle: 800 });
-const arcBoxes = await page.evaluate(() => [...document.querySelectorAll('#arc .opt')].map(o => { const r = o.getBoundingClientRect(), a = document.getElementById('action').getBoundingClientRect(); return { w: r.width, h: r.height, onscreen: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, clear: Math.hypot(r.x + r.width / 2 - a.x - a.width / 2, r.y + r.height / 2 - a.y - a.height / 2) >= 55, label: o.getAttribute('aria-label') }; }));
-console.log('arc icons', JSON.stringify(arcBoxes));
-if (arcBoxes.length !== 3 || arcBoxes.some(b => b.w < 40 || b.h < 40 || !b.onscreen || !b.clear || !b.label)) errors.push('the arc icons are too small, off the screen, on the ring or without a label: ' + JSON.stringify(arcBoxes));
-await page.click('#arc .opt[data-i="1"]');   // the flame
+await page.evaluate(() => window.__driftwood.input.choose(1));   // the flame: the arc's second option, as the actor chooses it
 const arcClick = await page.evaluate(() => {
   const { game, input, step } = window.__driftwood, p = game.player, fibre = game.fibre.carried;
   step(0.1); const tg = input.target ? (input.target.act && input.target.act.kind) || 'walk' : null;
@@ -403,9 +403,9 @@ await page.evaluate(() => {
   const l = world.tiles.flatMap(t => t.drift).find(q => w.onBeach(q)); w.take({ kind: 'log', log: l }); step(0.1);
 });
 await shot('smoke-17.png', { quick: true, settle: 800 });
-const feedIcon = await iconOf();
-console.log('action button by the fire', JSON.stringify(feedIcon));
-if (!feedIcon.on) errors.push('the action button is empty beside a fire with dry wood in his arm');
+const feedOffer = await page.evaluate(() => { const a = window.__driftwood.game.action(); return a.tap && a.tap.kind; });
+console.log('offered by the fire', feedOffer);
+if (feedOffer !== 'feed') errors.push('nothing to feed beside a fire with dry wood in his arm: ' + feedOffer);
 // Branches and the lean-to (0.16): branches under the nearest tree (smoke-21), picked up and
 // carried (the row shows a twig each), driftwood in his arms with the action button's lean-to icon
 // (smoke-24), F builds it piece by piece (smoke-22 half built, smoke-23 finished, by day), and a cold sleep
@@ -476,7 +476,7 @@ const under = await page.evaluate(() => {
   p.x = l.x; p.z = l.z; p.y = world.H(p.x, p.z); game.sleep.awake = 2; step(0.1);
   return { asleep: game.sleep.asleep, sheltered: game.leantos.shelter(p.x, p.z) };
 });
-await page.keyboard.press('z');
+await page.evaluate(() => window.__driftwood.input.sleepKey());   // Z (the hands of the test)
 const slept = await page.evaluate(() => { const { game, step } = window.__driftwood; step(4); const was = game.sleep.asleep; step(60, () => !game.sleep.asleep && game.player.lie === 0); return { was, slept: game.sleep.slept, rest: game.sleep.rest() }; });
 console.log('sleeping under the lean-to', JSON.stringify({ ...under, ...slept }));
 if (!under.sheltered) errors.push('not sheltered at the centre of the lean-to');
@@ -779,9 +779,12 @@ await page.evaluate(() => { window.__driftwood.game.weather.intensity = window._
 // three times the pixel density (the closest zoom), cut to the figure, so that the pose reads.
 const closeup = await browser.newPage({ viewport: { width: 640, height: 400 }, deviceScaleFactor: 3 });
 closeup.on('pageerror', e => errors.push('closeup: ' + e.message));
+await aiRoute(closeup);
+await closeup.addInitScript(k => localStorage.setItem('driftwood.ai.key', k), SMOKE_KEY);
 await closeup.goto('file://' + file + '?spawn=' + start.x.toFixed(1) + ',' + start.z.toFixed(1) + (qualityQuery ? '&' + qualityQuery : ''), { waitUntil: 'commit', timeout: 0 });
 await closeup.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
 await closeup.evaluate(() => window.__driftwood.pause(true));
+await installHands(closeup);
 await closeup.waitForTimeout(1500);
 const sitting = await closeup.evaluate(() => {
   const { world, game, input, step, view } = window.__driftwood, p = game.player, c = game.clock, f = game.fire, out = {};
@@ -824,9 +827,11 @@ if (sitDay.sitting !== 1) errors.push('he did not sit on the beach by day: ' + J
 await portrait('smoke-44.png');
 await closeup.close();
 
-// The same on a phone: a touch-only screen with the thumb stick, the button just above it (day and night).
+// The same on a phone: a touch-only screen (day and night; 0.38.0: no thumb stick or action button any more, nothing of the controls is drawn).
 const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: full ? 2 : 1, hasTouch: true, isMobile: true });
 phone.on('pageerror', e => errors.push('phone: ' + e.message));
+await aiRoute(phone);
+await phone.addInitScript(k => localStorage.setItem('driftwood.ai.key', k), SMOKE_KEY);
 await phone.goto('file://' + file + '?spawn=' + start.x.toFixed(1) + ',' + start.z.toFixed(1) + (qualityQuery ? '&' + qualityQuery : ''), { waitUntil: 'commit', timeout: 0 });
 await phone.waitForFunction(() => (window.__driftwood && window.__driftwood.ready) || document.body.dataset.error, null, { timeout: 300000, polling: 500 });
 await phone.evaluate(() => {
@@ -835,11 +840,9 @@ await phone.evaluate(() => {
   document.head.appendChild(m);
 });
 await phone.waitForTimeout(2000);
-const sticks = await phone.evaluate(() => ({ stick: getComputedStyle(document.getElementById('stick')).display, action: document.getElementById('action').getBoundingClientRect().toJSON(), stickBox: document.getElementById('stick').getBoundingClientRect().toJSON() }));
-console.log('phone', JSON.stringify(sticks));
-if (sticks.stick !== 'block') errors.push('the thumb stick is not shown on the phone');
-if (!(sticks.action.bottom - 12 <= sticks.stickBox.top + 20 &&   // the ring above the stick's ring
-     sticks.action.right <= 390 && sticks.action.left >= 0 && sticks.action.top >= 0)) errors.push('the action button is not just above the thumb stick on the phone');
+await installHands(phone);
+const controls = await phone.evaluate(() => ['stick', 'action', 'arc'].filter(id => document.getElementById(id)));
+if (controls.length) errors.push('the old controls are still on the page: ' + controls.join(', '));
 const phoneShot = async (name, time) => {
   if (!full && name !== 'smoke-19.png') return;
   await phone.evaluate(t => {
@@ -862,19 +865,6 @@ const phoneShot = async (name, time) => {
   await phone.screenshot({ path: name });
 };
 await phoneShot('smoke-19.png', 0.5);
-// The arc on the phone: icons at least 40 px, on the screen, clear of the thumb stick and the ring; a tap on one does it and is no walk tap.
-const phoneArc = await phone.evaluate(() => {
-  const st = document.getElementById('stick').getBoundingClientRect(), ac = document.getElementById('action').getBoundingClientRect();
-  return [...document.querySelectorAll('#arc .opt')].map(o => { const r = o.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height, onscreen: r.left >= 8 && r.top >= 0 && r.right <= innerWidth - 8, clearOfStick: r.bottom <= st.top && r.bottom <= ac.top + 22 }; });
-});
-console.log('phone arc', JSON.stringify(phoneArc));
-if (!phoneArc.length || phoneArc.some(b => b.w < 40 || b.h < 40 || !b.onscreen || !b.clearOfStick)) errors.push('the arc icons on the phone are too small, off the screen or on the stick: ' + JSON.stringify(phoneArc));
-if (phoneArc.length) {
-  await phone.touchscreen.tap(phoneArc[0].x, phoneArc[0].y);
-  const tapped = await phone.evaluate(() => { const { game, input, step } = window.__driftwood; step(0.1); const walk = !!(input.target && !input.target.act); step(6, () => game.player.work); return { work: game.player.work && game.player.work.kind, walk }; });
-  console.log('phone arc tap', JSON.stringify(tapped));
-  if (tapped.work !== 'drill' || tapped.walk) errors.push('a tap on the arc icon on the phone did not light the pile: ' + JSON.stringify(tapped));
-}
 await phoneShot('smoke-20.png', 0.95);
 await phone.close();
 await browser.close();

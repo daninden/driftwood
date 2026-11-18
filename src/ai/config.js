@@ -1,23 +1,19 @@
 /**
- * ai/config — the constants of the optional language-model chooser (0.36 "Mind"). Developer settings: the address and the model are fixed here, only the player's own key is entered (in the AI panel, render/aiPanel).
+ * ai/config — the constants of the language model that plays Dave (0.36 "Mind"; since 0.38.0 "Only him" the only way to play). Developer settings: the address and the models
+ * are fixed here, only the player's own key is entered (on the start screen, render/startScreen, or in the AI panel, render/aiPanel).
  *
  * AI_URL          the chat endpoint (OpenAI-compatible, Google AI Studio)
- * AI_MODELS_URL   the list of models the key can use (for the panel's "list models" button)
+ * AI_MODELS_URL   the list of models the key can use (the start screen checks a key with it; the panel's "list models" button)
  * AI_MODELS       the models in order of preference (two free Gemini models, then Gemma 4; ai/client folds the system message into the first user message for 'gemma-' ids); a request goes to the first whose budget allows and that is not paused
- * AI_BUDGET      the budget PER MODEL { perMin, perDay }, a little under Google's free-tier limits as AI Studio shows them (0.36.4: gemini-3.5-flash-lite and gemini-3.1-flash-lite 14 a minute and 480 a day, gemma-4-31b-it 28 a minute and 14,000 a day; gemini-2.5-flash-lite was dropped: its free tier is only 20 requests a day). The day is the Pacific-time day, as Google counts it. Gemma also has 16K input tokens a minute: a plan request is about 3K tokens and requests are at least AI_REPLAN_GAP apart, so the request count is the limit that matters (no token counting)
+ * AI_BUDGET       the budget PER MODEL { perMin, perDay }, a little under Google's free-tier limits as AI Studio shows them (0.36.4: gemini-3.5-flash-lite and gemini-3.1-flash-lite 14 a minute and 480 a day, gemma-4-31b-it 28 a minute and 14,000 a day). The day is the Pacific-time day, as Google counts it
  * AI_BUDGET_DEFAULT   the budget of a model that is not in AI_BUDGET (tests, a changed list)
  * AI_TIMEOUT      ms before a request is given up
- * AI_WAIT         real seconds Dave stands still at a goal or pastime decision (0.36.3), waiting for the answer (then the rules decide); 0.36.4 "Hindsight": 10 s (was 3), AI_TIMEOUT 12 s (was 4)
- * AI_MODES, AI_MODE_DEFAULT   the three leashes (0.36.3 "Plans"): 'strict' (every override), 'loose' (the default: only the brink of collapse and forced emergencies), 'free' (none)
- * AI_PLAN_MIN, AI_PLAN_MAX   the length of a plan asked for (a longer one is cut, a shorter one used as it is)
- * AI_AWAKE_MARGIN   how far before AWAKE_MAX (days) the loose leash overrules for tiredness
- * AI_REPLAN_GAP   real seconds between two requests (a new plan is not asked again sooner: a step that is not possible is then skipped, any other reason waits, the rules decide meanwhile)
- * LESSONS_MAX (10), LESSON_LEN (140)   (0.37.4 "Lessons") the lessons of full AI play: at most 10 kept, the model may merge or drop them when the list is full
- * RECENT_SHOWN (0.37.10) the records of what he did lately in a plan request (12)
- * NOTES_MAX, NOTE_LEN, JOURNAL_LEN, JOURNAL_DAYS, JOURNAL_MAX   (0.36.7 "Memory") his own notes (at most 20 lines of 80 characters), the sunset journal line (140 characters), how many days of the journal go into a plan request (3), and the most lines kept
- * SAID_LEN      (0.36.9 "Voice") the longest step reason the request asks for, 140 characters (the same as render/voice SAID_MAX)
- * AI_LOG_MAX      decisions kept in the panel's log (memory only)
- * KEY_NAME, ON_NAME, MODE_NAME, COUNT_NAME   the localStorage names: the key (only here, never in the save), whether the AI is on, the leash (0.36.3), the day's counter (COUNT_NAME + '.' + model, one per model)
+ * AI_LOG_MAX      requests kept in the panel's log (memory only)
+ * LESSONS_MAX (10), LESSON_LEN (140)   (0.37.4 "Lessons") his lessons: at most 10 kept, the model may merge or drop them when the list is full
+ * RECENT_SHOWN    (0.37.10) the records of what he did lately in a plan request (12)
+ * NOTES_MAX, NOTE_LEN   (0.36.7 "Memory") his own notes: at most 20 lines of 80 characters
+ * SAID_LEN        (0.36.9 "Voice") the longest thought the request asks for, 140 characters (the same as render/voice SAID_MAX)
+ * KEY_NAME, COUNT_NAME   the localStorage names: the key (only here, never in the save) and the day's counter (COUNT_NAME + '.' + model, one per model)
  *
  * Depends on: nothing
  */
@@ -27,28 +23,16 @@ export const AI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gem
 export const AI_BUDGET = {
   'gemini-3.5-flash-lite': { perMin: 14, perDay: 480 },   // Google's free tier: 15 a minute, 500 a day
   'gemini-3.1-flash-lite': { perMin: 14, perDay: 480 },   // the same
-  'gemma-4-31b-it': { perMin: 28, perDay: 14000 },   // Google: 30 a minute, 14,400 a day (and 16K input tokens a minute: a plan request is about 3K and requests are at least AI_REPLAN_GAP apart, so the request count is the limit that matters)
+  'gemma-4-31b-it': { perMin: 28, perDay: 14000 },   // Google: 30 a minute, 14,400 a day (and 16K input tokens a minute: a plan request is about 4K and requests come a few seconds apart at most, so the request count is the limit that matters)
 };
 export const AI_BUDGET_DEFAULT = { perMin: 12, perDay: 900 };   // a model not listed in AI_BUDGET
-export const AI_TIMEOUT = 12000;   // 0.36.1: just over AI_WAIT, so a request he no longer waits for frees the client before the next decision (0.36.4: 12 s with AI_WAIT 10)
-export const AI_WAIT = 10;
+export const AI_TIMEOUT = 12000;
 export const AI_LOG_MAX = 100;
-export const AI_MODES = ['strict', 'loose', 'free'];
-export const AI_MODE_DEFAULT = 'loose';
-export const AI_PLAN_MIN = 3;
-export const AI_PLAN_MAX = 8;
-export const AI_REPLAN_GAP = 20;
-export const AI_AWAKE_MARGIN = 0.25;   // the loose leash steps in when he has been awake this much (days) less than AWAKE_MAX: 6 hours before he falls asleep where he stands (measured: 0.1 was too late, he still collapsed twice in six days under a plan that never sleeps)
 export const RECENT_SHOWN = 12;   // 0.37.10 "Body": the last records of game/actor `recent` a plan request shows (ai/planner; the rules say the number)
 export const NOTES_MAX = 20;   // 0.36.7 "Memory": his own notes: at most this many lines of at most NOTE_LEN characters, written only by the model
 export const NOTE_LEN = 80;
-export const SAID_LEN = 140;   // 0.36.9 "Voice": the longest step reason shown above Dave (render/voice SAID_MAX is the same number); the request asks for one or two short sentences within it
-export const JOURNAL_LEN = 140;   // the sunset journal line: at most this many characters
-export const JOURNAL_DAYS = 3;   // only the last days of the journal go into a plan request (all are kept)
-export const JOURNAL_MAX = 3650;   // lines kept in all (a safety bound; ten years of days)
-export const LESSONS_MAX = 10;   // 0.37.4 "Lessons": the lessons of the days (one asked at sunset in full AI play, in place of the journal line): at most this many kept, each at most LESSON_LEN characters
+export const SAID_LEN = 140;   // 0.36.9 "Voice": the longest thought shown above Dave (render/voice SAID_MAX is the same number)
+export const LESSONS_MAX = 10;   // 0.37.4 "Lessons": the lessons of the days (one asked at sunset): at most this many kept, each at most LESSON_LEN characters
 export const LESSON_LEN = 140;
-export const MODE_NAME = 'driftwood.ai.mode';
 export const KEY_NAME = 'driftwood.ai.key';
-export const ON_NAME = 'driftwood.ai.on';
 export const COUNT_NAME = 'driftwood.ai.count';

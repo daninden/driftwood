@@ -28,12 +28,12 @@
  *   planner.memory() / restore(m)                     { notes, lessons, asked }: what is saved with the island (`memory` in the save)
  *   planner.notes(), planner.lessons(), planner.memoryVersion, planner.version (changes of the log or the status)
  *
- * Depends on: ai/actPrompt, ai/prompt (clipLine), ai/config, game/intent (WAIT), game/sleep (DUSK)
+ * Depends on: ai/actPrompt, ai/prompt (clipLine), ai/config, game/actions (WAIT), game/sleep (DUSK)
  */
 import { buildActMessages, parseActPlan, buildLessonMessages, parseLessons } from './actPrompt.js';
 import { clipLine } from './prompt.js';
 import { AI_LOG_MAX, RECENT_SHOWN, NOTES_MAX, NOTE_LEN, LESSONS_MAX, LESSON_LEN } from './config.js';
-import { WAIT } from '../game/intent.js';
+import { WAIT } from '../game/actions.js';
 import { DUSK } from '../game/sleep.js';
 
 export const RETRY_SECS = [2, 5, 10, 30];

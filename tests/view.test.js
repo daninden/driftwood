@@ -39,7 +39,7 @@ describe('zoom input', () => {
   const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
 
   it('collects wheel and +/- keys as zoom steps, then resets', () => {
-    const el = new EventTarget(), input = createInput(el, () => null);
+    const el = new EventTarget(), input = createInput(el);
     fire(el, 'wheel', { deltaY: 100, deltaMode: 0 });
     fire(el, 'wheel', { deltaY: 3, deltaMode: 1 });
     fire(window, 'keydown', { code: 'Minus' });
@@ -50,7 +50,7 @@ describe('zoom input', () => {
     input.dispose();
   });
   it('turns while Q or E is held, and with a right-button drag', () => {
-    const el = new EventTarget(), input = createInput(el, () => { throw new Error('a right click must not walk'); });
+    const el = new EventTarget(), input = createInput(el);
     fire(window, 'keydown', { code: 'KeyQ' });
     expect(input.takeTurn(0.5).yaw).toBeGreaterThan(0);
     fire(window, 'keyup', { code: 'KeyQ' }); fire(window, 'keydown', { code: 'KeyE' });
@@ -66,7 +66,7 @@ describe('zoom input', () => {
     input.dispose();
   });
   it('leaves Ctrl/Cmd zoom to the browser', () => {
-    const el = new EventTarget(), input = createInput(el, () => null);
+    const el = new EventTarget(), input = createInput(el);
     const e = fire(el, 'wheel', { deltaY: 100, deltaMode: 0, ctrlKey: true });
     fire(window, 'keydown', { code: 'Minus', metaKey: true });
     expect(input.takeZoom()).toBe(0); expect(e.defaultPrevented).toBe(false);
@@ -78,60 +78,20 @@ describe('touch input', () => {
   beforeAll(() => { if (!globalThis.window) globalThis.window = new EventTarget(); });
   const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
   const touch = (id, x, y) => ({ pointerType: 'touch', pointerId: id, button: 0, clientX: x, clientY: y });
-  const setup = () => { let t = 0; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t); return { el, input, at: ms => { t = ms; } }; };
+  const setup = () => { let t = 0; const el = new EventTarget(), input = createInput(el); return { el, input, at: ms => { t = ms; } }; };
 
-  it('walks on a tap and runs on a double tap', () => {
+  it('zooms with a pinch and turns with a twist; one finger does nothing (0.38.0: the player no longer walks him)', () => {
     const { el, input, at } = setup();
-    fire(el, 'pointerdown', touch(1, 100, 100)); fire(window, 'pointerup', touch(1, 100, 100));
-    expect(input.target).toEqual({ x: 100, z: 100, tap: true, touch: true });
-    at(200); fire(el, 'pointerdown', touch(2, 105, 98));
-    expect(input.target).toEqual({ x: 105, z: 98, run: true, tap: true, touch: true });
-    fire(el, 'pointermove', touch(2, 140, 120));   // hold and drag: keeps running
-    expect(input.target).toEqual({ x: 140, z: 120, run: true });
-    fire(window, 'pointerup', touch(2, 140, 120));
-    at(1000); fire(el, 'pointerdown', touch(3, 300, 300));
-    expect(input.target.run).toBeUndefined();
-    input.dispose();
-  });
-  it('does not take two slow or far apart taps for a double tap', () => {
-    const { el, input, at } = setup();
-    fire(el, 'pointerdown', touch(1, 100, 100)); fire(window, 'pointerup', touch(1, 100, 100));
-    at(500); fire(el, 'pointerdown', touch(2, 100, 100)); fire(window, 'pointerup', touch(2, 100, 100));
-    expect(input.target.run).toBeUndefined();
-    at(600); fire(el, 'pointerdown', touch(3, 300, 100));
-    expect(input.target.run).toBeUndefined();
-    input.dispose();
-  });
-  it('zooms with a pinch, turns with a twist, and stops walking meanwhile', () => {
-    const { el, input, at } = setup();
-    fire(el, 'pointerdown', touch(1, 100, 200)); expect(input.target).not.toBeNull();
+    fire(el, 'pointerdown', touch(1, 100, 200)); expect(input.target).toBeUndefined();
     at(400); fire(el, 'pointerdown', touch(2, 300, 200));
-    expect(input.target).toBeNull();
     fire(el, 'pointermove', touch(2, 500, 200));   // fingers spread: zoom in
     expect(input.takeZoom()).toBeLessThan(0);
-    expect(input.target).toBeNull();
     fire(el, 'pointermove', touch(2, 100, 400));   // straight below: a quarter turn clockwise on screen
     const t = input.takeTurn(0.016); expect(t.yaw).toBeCloseTo(Math.PI / 2); expect(t.pitch).toBe(0);
     expect(input.takeZoom()).toBeGreaterThan(0);   // and closer together: zoom out
     fire(window, 'pointerup', touch(2, 100, 400));
-    fire(el, 'pointermove', touch(1, 150, 250));   // the finger left behind does not walk
-    expect(input.target).toBeNull(); expect(input.takeTurn(0.016)).toEqual({ yaw: 0, pitch: 0 });
-    input.dispose();
-  });
-  it('keeps a tap that wobbles a little, and steers once the finger really moves', () => {
-    const { el, input } = setup();
-    fire(el, 'pointerdown', touch(1, 100, 100));
-    fire(el, 'pointermove', touch(1, 104, 103));   // a finger never stays quite still
-    expect(input.target).toEqual({ x: 100, z: 100, tap: true, touch: true });
-    fire(el, 'pointermove', touch(1, 130, 100));   // steering after the tap is not a tap
-    expect(input.target).toEqual({ x: 130, z: 100 });
-    input.dispose();
-  });
-  it('walks to a tap on the castaway like to any other spot (he is no thing to tap)', () => {
-    const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => 0);
-    fire(el, 'pointerdown', touch(1, 10, 20));
-    expect(input.target).toEqual({ x: 10, z: 20, tap: true, touch: true });
-    fire(window, 'pointerup', touch(1, 10, 20));
+    fire(el, 'pointermove', touch(1, 150, 250));   // the finger left behind does nothing
+    expect(input.takeTurn(0.016)).toEqual({ yaw: 0, pitch: 0 });
     input.dispose();
   });
   it('zooms one step for each 1.1x change in finger distance', () => {

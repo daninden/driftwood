@@ -4,7 +4,7 @@
 // A new fuel pile laid in a finished stone ring lies in the ring's exact middle (game/wood drop, game/game lay).
 // Covers: the overlay (covers, bushGone, rockGone, coversPiece, state, findSpot); the moves of each module (branches, fronds, stones, fibre, wood, logs) and their saves; regrowth never in a cleared region;
 // the player's first lean-to piece and first hut part on island 1337; Dave's lean-to; the ring pile by the player and by Dave. The island itself is untouched (the seed 1337 fixture is tests/world.test.js).
-// Depends on: world/world, world/spots, game/game, game/ground, game/leanto, game/movement, game/forage, game/branches, game/fronds, game/stones, game/fibre, game/wood, game/logs, game/mind, save, tests/helpers/mindCamp.
+// Depends on: world/world, world/spots, game/game, game/ground, game/leanto, game/movement, game/forage, game/branches, game/fronds, game/stones, game/fibre, game/wood, game/logs, save, tests/helpers/scene.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
@@ -19,10 +19,9 @@ import { createStones, EXTRA_ID0 as STONE_X, stonesOfTile, STONE_ID0 } from '../
 import { createFibre, nutsOfTile, EXTRA_ID0 as COCO_X } from '../src/game/fibre.js';
 import { createWood } from '../src/game/wood.js';
 import { createLogs, LOG_ID0 } from '../src/game/logs.js';
-import { createMind } from '../src/game/mind.js';
 import { bushSize } from '../src/world/vegetation.js';
 import { serialise, parseSave } from '../src/save.js';
-import { campGame } from './helpers/mindCamp.js';
+import { campGame } from './helpers/scene.js';
 
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
@@ -296,22 +295,6 @@ describe('the first part of a hut clears its larger region', () => {
   });
 });
 
-describe('Dave builds through the same game: his first piece clears the ground too', () => {
-  it('his lean-to at the site he chose: the region is cleared (bushes gone, a stone and a felled log put there are moved out)', () => {
-    const site0 = createMind(w, campGame(w, spawn, {})).homePlan().site, P = (f, r) => at(site0, f, r);
-    const st = { taken: [], extra: [[STONE_X, P(0, 0.4).x, P(0, 0.4).z, 0.26, 0.3, 0.1]] }, lg = { list: [{ id: LOG_ID0, x: P(0.3, -0.3).x, y: w.H(P(0.3, -0.3).x, P(0.3, -0.3).z), z: P(0.3, -0.3).z, len: 2, a: 0.4, rad: 0.12 }], taken: [] };
-    const g = campGame(w, spawn, { extra: { stones: st, logs: lg } }), m = createMind(w, g); m.engage();
-    const site = m.homePlan().site; expect(Math.hypot(site.x - site0.x, site.z - site0.z)).toBeLessThan(0.3);
-    expect(g.ground.list.length).toBe(0);
-    let t = 0; while (t < 4000 && g.leantos.list.length === 0) { m.step(0.1); g.update(m.input, 0.1); t += 0.1; }
-    expect(g.leantos.list.length).toBe(1); const l = g.leantos.list[0];
-    expect(g.ground.list.length).toBe(1); expect(g.ground.list[0]).toMatchObject({ x: l.x, z: l.z, hut: 0 });
-    for (const b of bushesIn(l)) { expect(g.ground.bushGone(b)).toBe(true); expect(bushFactor(w, b.x, b.z)).toBe(1); }
-    for (const q of allLoose(g, l)) expect(g.ground.coversPiece(q), JSON.stringify(q)).toBe(false);
-    expect(g.ground.last.moved).toBeGreaterThanOrEqual(2);   // the stone and the log (at least)
-    expect(g.logs.piece(LOG_ID0)).toBeTruthy(); expect(g.logs.onGround(g.logs.piece(LOG_ID0))).toBe(true);
-  });
-});
 
 describe('the fire sits in the middle of the stone ring', () => {
   const lt = { id: 0, ...S1, progress: 1, up: { ...UP } }, rc = ringCentre(lt);
@@ -342,20 +325,5 @@ describe('the fire sits in the middle of the stone ring', () => {
     expect(g.wood.piles[0].x).toBeCloseTo(rc.x, 9); expect(g.wood.piles[0].z).toBeCloseTo(rc.z, 9);
     const h = ringGame(rc.x + 0.5, rc.z, Math.PI); carry(h, 'driftwood', 3); h.wood.piles.push({ x: rc.x, z: rc.z, kind: 'driftwood', logs: Array.from({ length: 12 }, (_, i) => piece(300 + i)) }); h.wood.version++;
     lay(h); expect(h.wood.piles.length).toBe(2); expect(h.wood.piles[0].x).toBeCloseTo(rc.x, 9); expect(Math.hypot(h.wood.piles[1].x - rc.x, h.wood.piles[1].z - rc.z)).toBeGreaterThan(0.8);
-  });
-  it('Dave lays his fuel in the middle of the ring: a stray pile of 12 carried to the ring lights a fire exactly there', () => {
-    const g0 = campGame(w, spawn, { day: 2, time: 0.22 }), site = createMind(w, g0).leantoSites({ x: spawn.x, z: spawn.z })[0];
-    const hm = { list: [{ id: 0, x: site.x, z: site.z, heading: site.heading, progress: 1, up: { ...UP } }], nextId: 1 }, c = ringCentre(hm.list[0]);
-    const g = campGame(w, spawn, { day: 4, time: 0.62, leantos: hm, stocked: false, extra: { fibre: { carried: 3 }, shells: { full: [], nuts: 2 }, fire: { fires: [], burnt: [{ id: 0, x: c.x, z: c.z, left: 2, n: 3 }], attempts: 0, nextId: 1 } }, piles: [{ id: 9, kind: 'driftwood', n: 12, x: c.x + 1.5, z: c.z }] });
-    const m = createMind(w, g); m.engage();
-    const t0 = g.clock.total, seen = []; let lit = null;
-    while (g.clock.total < t0 + 0.4) {
-      m.step(0.1); g.update(m.input, 0.1);
-      for (const q of g.wood.piles) if (g.leantos.ring(q.x, q.z) && q.kind === 'driftwood') seen.push(Math.hypot(q.x - c.x, q.z - c.z));
-      const f = g.fire.fires.find(q => Math.hypot(q.x - c.x, q.z - c.z) <= RING_R + 0.3 && q.fuel > 0.005); if (f && !lit) lit = { x: f.x, z: f.z };
-    }
-    expect(lit, 'a fire was lit in the ring').not.toBeNull();
-    expect(Math.hypot(lit.x - c.x, lit.z - c.z)).toBeLessThan(1e-6);   // exactly in the middle
-    for (const d of seen) expect(d === 1.5 || d < 1e-6 || d > 0.5).toBe(true);
   });
 });

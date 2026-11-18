@@ -1,7 +1,7 @@
 /**
  * render/ink — the colour of the ink marks, which turns pale at night.
  *
- * All ink on screen (the moon #rest, the drop #thirst, the row #carry, the thumb stick #stick, the action button #action, the tally marks (render/tallyMarks),
+ * All ink on screen (the moon #rest, the drop #thirst, the row #carry, the tally marks (render/tallyMarks),
  * the dev panel #dev, the name line #who and the waking line #wake) takes its
  * colour from the CSS custom property `--ink`: dark brown by day, pale warm
  * paper at night. At middle dusk or dawn the ink moves over 0.9 seconds while
@@ -9,7 +9,7 @@
  * always remains clear and the two mid tones never meet. The dev panel's faint backing
  * (`--ink-back`) turns the other way, from light sand to dark brown, so its
  * text stays readable. The day line and the waking line, and since 0.13.3 every
- * mark (action button, thumb stick, moon, drop, fibre, tally marks), also get a soft glow
+ * mark (moon, drop, fibre, tally marks), also get a soft glow
  * behind the letters or strokes in the opposite colour (`--ink-glow`: pale paper by day, dark brown
  * at night), no frame. The loading screen keeps its own dark brown.
  * 0.36.7 (legibility, variant "D, a little stronger", chosen by the user from rendered proposals): the Voice line, the name line and the waking line get a

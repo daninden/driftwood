@@ -6,7 +6,6 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createSleep, isNight, AWAKE_MAX, TIRED_AT, TIRED_SLOW, SLEEP_DAYS, SPEED, LIE, SLEEP_AFTER, NIGHT_AFTER, DUSK, DAWN, NAP_DAYS, NAP_REST, REST_RATE, COLD_SLEEP, COLD_DAYS, SHELTER_SLEEP } from '../src/game/sleep.js';
 import { createGame } from '../src/game/game.js';
-import { createInput } from '../src/game/input.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { timeAlpha, TIME_HOLD, TIME_FADE } from '../src/render/footprints.js';
 import { FIRST_HIGH, PERIOD, RANGE } from '../src/game/tide.js';
@@ -221,38 +220,3 @@ describe('a nap by day and a night by night (0.29)', () => {
   });
 });
 
-describe('sleep input', () => {
-  beforeAll(() => { if (!globalThis.window) globalThis.window = new EventTarget(); });
-  const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
-  const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t); return { el, input, later: ms => { t += ms; } }; };
-
-  for (const pointerType of ['touch', 'mouse']) it(`does not lie down after pressing on the castaway or anywhere else (${pointerType}); sleeping is Z or the moon icon of the arc`, () => {
-    const { el, input, later } = setup();
-    fire(el, 'pointerdown', { button: 0, pointerType, pointerId: 1, clientX: 10, clientY: 10 });
-    expect(input.target).toEqual(pointerType === 'touch' ? { x: 10, z: 10, tap: true, touch: true } : { x: 10, z: 10, tap: true });
-    later(1100); expect(input.takeSleep()).toBe(false); expect(input.takeLight()).toBe(false); expect(input.takeAction()).toBeNull();
-    fire(window, 'pointerup', { button: 0, pointerType, pointerId: 1 });
-    input.dispose();
-  });
-  it('lies down with Z, and wakes on any key or tap but not on a key held down', () => {
-    const { el, input } = setup();
-    fire(window, 'keydown', { code: 'KeyZ' });
-    expect(input.takeSleep()).toBe(true); input.takeWake();
-    fire(window, 'keydown', { code: 'KeyZ', repeat: true });
-    expect(input.takeWake()).toBe(false); expect(input.takeSleep()).toBe(false);
-    fire(window, 'keydown', { code: 'KeyW' }); expect(input.takeWake()).toBe(true); expect(input.takeWake()).toBe(false);
-    fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 4, clientX: 200, clientY: 10 });
-    expect(input.takeWake()).toBe(true);
-    input.dispose();
-  });
-  it('is not woken by turning, tilting or zooming the view', () => {
-    const { el, input } = setup();
-    fire(el, 'pointerdown', { button: 2, pointerType: 'mouse', pointerId: 5, clientX: 200, clientY: 10 });
-    fire(window, 'pointerup', { button: 2, pointerType: 'mouse', pointerId: 5 });
-    for (const code of ['KeyQ', 'KeyE', 'Equal', 'Minus', 'ShiftLeft']) fire(window, 'keydown', { code });
-    expect(input.takeWake()).toBe(false);
-    fire(el, 'pointerdown', { button: 0, pointerType: 'mouse', pointerId: 6, clientX: 200, clientY: 10 });
-    expect(input.takeWake()).toBe(true);
-    input.dispose();
-  });
-});

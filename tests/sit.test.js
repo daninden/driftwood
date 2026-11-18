@@ -1,16 +1,14 @@
-// 0.29.2 "Amble": the slower pace of the habit (input.pace, set only by game/mind) and sitting on the ground (input.sit, set only by game/mind; player.sitting 0..1).
-// game/game applies both, render/hero draws the pose (pure helpers sitEase and sitPose), game/mind decides when (sitKind, and a real life of two days).
+// 0.29.2 "Amble": the slower pace (input.pace, which game/actor sets to 1; 0.38.0: the old mind that ambled is gone) and sitting on the ground (input.sit, set by game/actor for a wait);
+// game/game applies both, render/hero draws the pose (pure helpers sitEase and sitPose).
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame, SIT_TIME, SIT_SLOPE } from '../src/game/game.js';
-import { createMind, sitKind, EVENING, BED_FROM, STROLL_FROM, GAZE_FROM, SIT_FIRE } from '../src/game/mind.js';
 import { PACE, PACE_STRIDE, WALK_SPEED, RUN_SPEED, paceOf, paceStride, terrainAt, canStand } from '../src/game/movement.js';
 import { sitEase, sitPose, SIT } from '../src/render/hero.js';
 import { stepsCrossed } from '../src/audio/mix.js';
 import { isBusy } from '../src/render/framePacer.js';
-import { runMind } from './helpers/mindSim.js';
 
 let w, spawn;
 beforeAll(async () => { w = await generateWorld(1337); spawn = startSpot(w); }, 120000);
@@ -118,47 +116,3 @@ describe('the pose (render/hero)', () => {
   });
 });
 
-describe('when the mind sits (game/mind)', () => {
-  it('sits in the gaze, in the evening by a fire, and in the long rests by day, and otherwise stands', () => {
-    const k = (o = {}) => sitKind({ time: 0.5, long: false, fireNear: false, gazing: false, ...o });
-    expect(k({ gazing: true, time: 0.78 })).toBe('gaze');
-    expect(k({ time: EVENING + 0.05, fireNear: true })).toBe('fire'); expect(k({ time: BED_FROM - 0.01, fireNear: true })).toBe('fire');
-    expect(k({ time: EVENING + 0.05 })).toBeNull(); expect(k({ time: BED_FROM + 0.01, fireNear: true })).toBeNull(); expect(k({ time: 0.5, fireNear: true })).toBeNull();   // no fire, or too late, or by day: the fire alone is not a reason
-    expect(k({ time: 0.5, long: true })).toBe('rest'); expect(k({ time: STROLL_FROM, long: true })).toBe('rest');
-    expect(k({ time: 0.5 })).toBeNull();   // the short rests stay standing
-    expect(k({ time: 0.1, long: true })).toBeNull(); expect(k({ time: GAZE_FROM + 0.01, long: true })).toBeNull(); expect(k({ time: 0.95, long: true })).toBeNull();
-    expect(SIT_FIRE).toBeGreaterThan(2);
-  });
-  it('sets pace and sit only through its own input, to full pace and no seat at the start and after release', () => {
-    const g = createGame(w, spawn), m = createMind(w, g);
-    expect(m.input.pace).toBe(1); expect(m.input.sit).toBe(false);
-    m.engage(); m.input.pace = PACE; m.input.sit = true; m.release(); expect(m.input.pace).toBe(1); expect(m.input.sit).toBe(false);
-  });
-  it('walks errands at the normal pace and idles at the amble; sits only where the game allows, in all three situations, over two real days', () => {
-    const seen = { idleMoving: 0, errandMoving: 0, idleMax: 0, errandMax: 0, idleSum: 0, errandSum: 0 }, bad = [], kinds = new Set();
-    let sat = 0, sitTicks = 0, lastSit = 0;
-    const { r, mind } = runMind(w, spawn, { days: 2, know: true, onTick: (g, m) => {
-      const p = g.player, goal = m.goal;
-      if (p.moving && !p.running && goal) {
-        if (goal === 'idle') { seen.idleMoving++; seen.idleMax = Math.max(seen.idleMax, p.speed); seen.idleSum += p.speed; expect(m.input.pace).toBe(PACE); }
-        else if (!['sleep'].includes(goal)) { seen.errandMoving++; seen.errandMax = Math.max(seen.errandMax, p.speed); seen.errandSum += p.speed; expect(m.input.pace).toBe(1); }
-      }
-      if (p.sitting > 0) {
-        sitTicks++;
-        const t = terrainAt(w, p.x, p.z, g.sea);
-        if (g.fire.torch || g.wood.load() || t.depth > 0.05 || t.inRiver || t.s >= SIT_SLOPE || t.climb > 0.25 || p.work || p.stoop > 0 || g.sleep.asleep) bad.push([g.clock.day, +g.clock.time.toFixed(3), !!g.fire.torch, g.wood.load(), +t.depth.toFixed(2), +t.s.toFixed(2), t.climb > 0.25, !!p.work]);
-        if (p.moving) bad.push('moving while seated or getting up');   // the mind gets him up first, then walks
-        if (goal && goal !== 'idle' && p.sitting > lastSit + 1e-9) bad.push('sitting down during ' + goal);   // an errand never starts a sit: he only gets up
-        sat = Math.max(sat, p.sitting);
-      }
-      lastSit = p.sitting;
-    } });
-    expect(r.errors).toEqual([]); expect(bad.slice(0, 5)).toEqual([]);
-    expect(sat).toBe(1); expect(mind.stats.sitSecs).toBeGreaterThan(170);   // 0.29.8: user approved the measured 172.1 s rhythm change
-    expect(seen.idleMoving).toBeGreaterThan(1000); expect(seen.idleMax).toBeLessThan(WALK_SPEED * PACE * 1.1); expect(seen.idleSum / seen.idleMoving).toBeLessThan(WALK_SPEED * PACE);   // the stroll never goes faster than the amble (sliding past a trunk can add a few centimetres to a step; 0.30.3 "Routes": an ejection from inside a pile he has just laid under his feet no longer carries him farther than the step he took, game/movement stepPlayer)
-    expect(seen.errandMoving).toBeGreaterThan(300); expect(seen.errandMax).toBeGreaterThan(WALK_SPEED * 0.95); expect(seen.errandSum / seen.errandMoving).toBeGreaterThan(WALK_SPEED * 0.8); expect(seen.errandMax).toBeLessThanOrEqual(RUN_SPEED);   // errands at the normal walking speed (a very thirsty run is faster)
-    expect(Object.keys(mind.stats.sits).sort()).toEqual(['fire', 'gaze', 'rest']);   // all three: the gaze, the evening by the fire, the long rests
-    expect(mind.stats.sits.gaze).toBeGreaterThanOrEqual(1); expect(mind.stats.sits.fire).toBeGreaterThanOrEqual(1); expect(mind.stats.sits.rest).toBeGreaterThanOrEqual(1);
-    void kinds; void sitTicks;
-  });
-});

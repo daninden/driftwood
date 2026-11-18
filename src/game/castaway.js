@@ -2,7 +2,7 @@
  * game/castaway — who the castaway is and which day it is: the name he is
  * given at the start of an island and the plain lines of text that go with it.
  *
- * The name is asked once per island (render/namePrompt) and saved with it
+ * The name is asked once per island (render/startScreen, after the key) and saved with it
  * (src/save, optional field `name`; the empty string is a valid answer and
  * means "the castaway"). The days are counted from the day the game started:
  * that day is day 1, and the day turns at midnight on the game clock, also

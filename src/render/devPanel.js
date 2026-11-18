@@ -2,8 +2,7 @@
  * render/devPanel — the small developer panel, top right, one line such as
  * `v0.7 · Quiet frames · 30 fps · 9 ms · q1 · idle`: version and name (src/version),
  * the frames per second drawn, the work time per frame in ms (update + render,
- * not the interval), the quality level `qN` (render/quality; only when it is known), `idle` while the frame pacer idles (render/framePacer) and, last,
- * `habit` while the castaway's own habit is in charge (0.28, game/mind; a developer aid only: the game itself shows nothing). Same ink as the moon mark (`--ink`, pale at night, render/ink), faint, with a quiet backing (`--ink-back`) that turns dark at night. It is a
+ * not the interval), the quality level `qN` (render/quality; only when it is known) and, last, `idle` while the frame pacer idles (render/framePacer). Same ink as the moon mark (`--ink`, pale at night, render/ink), faint, with a quiet backing (`--ink-back`) that turns dark at night. It is a
  * developer aid, not part of the game: visible for now, to be hidden later
  * by flipping DEV_PANEL_VISIBLE to false. The backtick key toggles it at any
  * time; the choice is not remembered between sessions. While it is visible the
@@ -19,13 +18,13 @@
  *   first), ms() the latest average work time rounded to a whole ms (null
  *   without any). Frames longer than a second (a hidden tab, a pause) are
  *   not counted.
- * devLabel(version, name, fps, ms?, idle?, zoom?, quality?, hands?, habit?, speed?) -> string   e.g.
+ * devLabel(version, name, fps, ms?, idle?, zoom?, quality?, speed?) -> string   e.g.
  *   'v0.7 · Quiet frames · 30 fps · 9 ms · idle' ('– fps' while there is no
- *   value yet; ' · N ms' only with ms, ' · ×8' only when the test speed (`?speed=N`, game/steps) is above 1, ' · zoom 18' only when zoom is beyond 10, the normal limit; ' · q1 auto' or ' · q1 fixed' only with a quality state, after zoom; the Hands mode (`self`, `computer`, `auto`), ' · idle' only when idle; ' · habit' last, only when habit). Pure.
- * isDevPanelEvent(e) -> bool   the event came from inside the panel (#dev; 0.36.4: main skips those events, so a click on the panel never takes Dave over or ends his habit). Pure.
+ *   value yet; ' · N ms' only with ms, ' · ×8' only when the test speed (`?speed=N`, game/steps) is above 1, ' · zoom 18' only when zoom is beyond 10, the normal limit; ' · q1 auto' or ' · q1 fixed' only with a quality state, after zoom; ' · idle' only when idle, last). Pure.
+ * isDevPanelEvent(e) -> bool   the event came from inside the panel (#dev; a pointer in it never reaches the view). Pure.
  * isToggleKey(e) -> bool       true for the backtick key (code 'Backquote',
  *   not repeating, no Shift/Ctrl/Cmd/Alt: Shift+backtick starts the game over, see src/save). Pure.
- * createDevPanel(el, version, name, visible?) -> { frame(dt, workMs?, idle?, zoom?), setQuality({ level, adapt } | level), setHands(mode), setHabit(on), setSpeed(n), toggle(), visible() }
+ * createDevPanel(el, version, name, visible?) -> { frame(dt, workMs?, idle?, zoom?), setQuality({ level, adapt } | level), setSpeed(n), toggle(), visible() }
  *   el: the #dev element (index.html); frame is called for every drawn frame
  *   with the real time since the previous drawn frame, the ms its update and
  *   render took, and whether the pacer is idling; it touches the DOM only when the text changed;
@@ -54,9 +53,8 @@ export function createFpsMeter(window = FPS_WINDOW) {
   };
 }
 
-export const devLabel = (version, name, fps, ms = null, idle = false, zoom = 0, quality = null, hands = null, habit = false, speed = 1) => {
-  if (typeof hands === 'boolean') { habit = hands; hands = null; }   // pre-Hands pure callers
-  return `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (speed > 1 ? ` \u00b7 \u00d7${Math.round(speed * 100) / 100}` : '') + (zoom > 10.5 ? ` \u00b7 zoom ${Math.round(zoom)}` : '') + (quality === null || quality === undefined ? '' : ` \u00b7 q${typeof quality === 'object' ? quality.level : quality} ${typeof quality === 'object' && !quality.adapt ? 'fixed' : 'auto'}`) + (hands ? ` \u00b7 ${hands}` : '') + (idle ? ' \u00b7 idle' : '') + (habit ? ' \u00b7 habit' : '');
+export const devLabel = (version, name, fps, ms = null, idle = false, zoom = 0, quality = null, speed = 1) => {
+  return `v${version} \u00b7 ${name} \u00b7 ${fps === null || fps === undefined ? '\u2013' : fps} fps` + (ms === null || ms === undefined ? '' : ` \u00b7 ${ms} ms`) + (speed > 1 ? ` \u00b7 \u00d7${Math.round(speed * 100) / 100}` : '') + (zoom > 10.5 ? ` \u00b7 zoom ${Math.round(zoom)}` : '') + (quality === null || quality === undefined ? '' : ` \u00b7 q${typeof quality === 'object' ? quality.level : quality} ${typeof quality === 'object' && !quality.adapt ? 'fixed' : 'auto'}`) + (idle ? ' \u00b7 idle' : '');
 };
 
 export function isDevPanelEvent(e) {
@@ -70,8 +68,8 @@ export const isToggleKey = e => e.code === 'Backquote' && !(e.target && /^(INPUT
 
 export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
   const meter = createFpsMeter();
-  let shown = visible, text = null, idling = false, zoomed = 0, quality = null, hands = null, habit = false, speed = 1;
-  const refresh = () => set(devLabel(version, name, meter.fps(), meter.ms(), idling, zoomed, quality, hands, habit, speed));
+  let shown = visible, text = null, idling = false, zoomed = 0, quality = null, speed = 1;
+  const refresh = () => set(devLabel(version, name, meter.fps(), meter.ms(), idling, zoomed, quality, speed));
   const set = t => { if (t !== text) { text = t; el.textContent = t; } };
   const apply = () => { if (el.hidden === shown) el.hidden = !shown; };
   set(devLabel(version, name, null)); apply();
@@ -84,9 +82,7 @@ export function createDevPanel(el, version, name, visible = DEV_PANEL_VISIBLE) {
       if (f !== null || idle !== idling || z !== zoomed) { idling = idle; zoomed = z; refresh(); }
     },
     setQuality(q) { if (q !== quality) { quality = q; refresh(); } },
-    setHands(mode) { if (mode !== hands) { hands = mode; refresh(); } },
     setSpeed(n) { if (n !== speed) { speed = n; refresh(); } },
-    setHabit(on) { on = !!on; if (on !== habit) { habit = on; refresh(); } },
     toggle,
     visible: () => shown,
   };

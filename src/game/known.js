@@ -3,16 +3,16 @@
  *
  * The island is cut into square cells of CELL (10) metres. A cell is *known* once he has walked within RADIUS (40) metres of its middle
  * (the middle of the cell, not any corner): every few metres of walking marks the cells round him. It is a coarse memory, not a map: nothing
- * of it is drawn. It only says where the castaway's own habit (game/mind) may take him: he goes to places he has been and nowhere else.
+ * of it is drawn. It says where a walk of game/actor may take him: he walks to places he has been and nowhere else (a wander may go further).
  *
- * Only the player's walking teaches him new ground. While game/mind walks him (`input.learns === false`, see game/game) only the cell he stands
+ * Only the player's walking teaches him new ground. With `input.learns === false` (see game/game) only the cell he stands
  * in is marked, which is known already, so his habit can never creep out into unknown land by walking at the edge of what he knows.
  *
  * CELL, RADIUS, STEP, NC (cells per side), MAX_CELLS, cellOf(v) (the cell index along one axis)
  * createKnown(saved?) -> known
  *   known.has(x, z)           true when the cell of (x, z) is known
  *   known.hasAround(x, z, m, d)  0.30.5 "Quicker": exactly has(x, z) && has(x ± m, z) && has(x, z ± m) && has(x ± d, z ± d) (the four diagonals), in one or two
- *                             lookups where those points share cells (m and d >= 0, d <= m); game/mind asks this for its `inside`
+ *                             lookups where those points share cells (m and d >= 0, d <= m); game/actor and game/camp ask this for their `inside`
  *   known.hasCell(i)          true when cell index i (iz * NC + ix) is known
  *   known.near(x, z, r)       true when a known cell's middle is within r of (x, z)
  *   known.visit(x, z, r?)     he is at (x, z): marks the cells whose middle is within r (default RADIUS, 40 m: what he sees; 0: just his own cell). Looks only once he

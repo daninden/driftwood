@@ -14,7 +14,6 @@ import { hutCircles, leantoCircles, HUT_R, leantoPoint } from '../src/game/obsta
 import { SHELTER_SLEEP, WALLS_SLEEP, HUT_REST, createSleep, SLEEP_DAYS, REST_RATE } from '../src/game/sleep.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
 import { createActor } from '../src/game/actor.js';
-import { buttonIcons, ICONS, LABEL_OF } from '../src/render/actionButton.js';
 import { hutFrame, hutPosts, hutWalls, hutRoofFrame, hutFronds, hutInside, HUT_POST_H, HUT_ROW_Y, HUT_LOG_R, HUT_DOOR_Y, HUT_DOOR_R, hutCeiling, hutRoofBegun, underHutRoof, leantoParts } from '../src/render/leanto.js';
 import { createPath } from '../src/game/path.js';
 import { solidObstacles } from '../src/game/obstacles.js';
@@ -108,7 +107,6 @@ describe('when a hut can start', () => {
     expect(bigOf(g)).toBeNull();
     give(g, 'log');
     const o = bigOf(g); expect(o).toMatchObject({ kind: 'upgrade', what: 'hut', piece: 'log', start: true });
-    const ic = buttonIcons(g.action()).options.find(i => i.key === 'hut'); expect(ic).toBeTruthy(); expect(ic.label).toMatch(/hut/i);
   });
   it('is not offered with a branch, a frond, driftwood or a stone, nor beside a lean-to without all its upgrades, nor far away', () => {
     const { g } = homeGame();
@@ -145,7 +143,7 @@ describe('when a hut can start', () => {
     g.wood.piles.push({ x: c.x, z: c.z, kind: 'driftwood', logs: [{ id: 2, x: c.x, z: c.z, y: 0, len: 1, a: 0, rad: 0.1 }, { id: 3, x: c.x, z: c.z, y: 0, len: 1, a: 0, rad: 0.1 }] });
     expect(g.hutFits(l)).toBe(true);
   });
-  it('the keep-free region is the hut\'s footprint from the first part of a hut (not before: Dave carries piles out of it first, game/mind)', () => {
+  it('the keep-free region is the hut\'s footprint from the first part of a hut (not before)', () => {
     const l = { x: 0, z: 0, heading: 0, progress: 1, up: { walls: 1 } }, p = [0, -1.9];   // 1.9 m to the side: the lean-to's footprint ends at 1.25
     expect(keepFree(l).touches(p[0], p[1], 0.3)).toBe(false);
     l.up = { ...HOME }; expect(keepFree(l).touches(p[0], p[1], 0.3)).toBe(false);   // a home that could have a hut keeps the lean-to's region until the hut is begun
@@ -396,13 +394,6 @@ describe('the drawing', () => {
   });
 });
 
-describe('the icons', () => {
-  it('"build a hut" and "build in" have their own ink icons and words', () => {
-    expect(ICONS.hut).toBeTruthy(); expect(ICONS.hutIn).toBeTruthy(); expect(LABEL_OF.hut).toMatch(/hut/i); expect(LABEL_OF.hutIn).toMatch(/hut/i);
-    const a = { tap: null, options: [{ kind: 'upgrade', what: 'hut', start: true, big: true }, { kind: 'upgrade', what: 'hut', start: false, big: true }] };
-    expect(buttonIcons(a).options.map(o => o.key)).toEqual(['hut', 'hutIn']);
-  });
-});
 
 describe('the roof turns see-through while he is inside (render/veil, render/leanto)', () => {
   it('the ordered pattern throws away the share asked for, evenly in every 4 by 4 block, and nothing at 0', () => {

@@ -15,7 +15,6 @@ import { BURN, EMBERS } from '../src/game/fire.js';
 import { terrainAt } from '../src/game/movement.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
 import { carryItems, carryChanged, DRAWINGS, ITEMS } from '../src/render/carryMark.js';
-import { buttonIcons, ICONS, ICON_OF } from '../src/render/actionButton.js';
 
 let w, spawn, col, E;
 beforeAll(async () => {
@@ -275,11 +274,5 @@ describe('the marks', () => {
     expect(ITEMS).toContain('crab'); expect(DRAWINGS.crab).toContain('<ellipse');
     expect(carryItems({ fibre: 1, crab: 2 })).toEqual(['fibre', 'crab', 'crab']);
     expect(carryChanged({ crab: 1 }, { crab: 0 })).toBe(true);
-  });
-  it('has the icons dig and roast for the two actions', () => {
-    expect(ICON_OF.dig).toBe('dig'); expect(ICON_OF.roast).toBe('roast');
-    expect(ICONS.dig).toBeTruthy(); expect(ICONS.roast).toContain('<ellipse');
-    expect(buttonIcons({ tap: { kind: 'dig' }, options: [] })).toEqual({ main: 'dig', options: [] });
-    expect(buttonIcons({ tap: { kind: 'roast' }, options: [{ kind: 'sleep', big: true }] })).toEqual({ main: 'roast', options: [{ key: 'moon', label: 'Sleep' }] });
   });
 });

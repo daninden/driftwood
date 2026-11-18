@@ -5,6 +5,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { aiRoute, saveKey, installHands } from './smoke-ai.js';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -17,9 +18,11 @@ const errors = [];
 try {
   const page = await browser.newPage({ viewport: { width: 640, height: 400 }, deviceScaleFactor: 2 }); page.setDefaultTimeout(240000);
   page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await aiRoute(page); await saveKey(page);   // 0.38.0: the model's requests are answered here; the test plays him with its own hands (scripts/smoke-ai)
   await page.goto('file://' + file + '?spawn=-98,151&time=0.5', { waitUntil: 'commit', timeout: 0 });
   await page.waitForFunction(() => window.__driftwood?.ready || document.body.dataset.error, null, { timeout: 300000 });
   const failed = await page.evaluate(() => document.body.dataset.error); if (failed) throw new Error(failed);
+  await page.evaluate(() => window.__driftwood.pause(true)); await installHands(page);
   await page.evaluate(() => {
     const d = window.__driftwood; d.pause(true);
     let nextId = 7000000;
@@ -34,7 +37,7 @@ try {
       const g = d.game, l = g.leantos.list[0], p = g.player; p.x = l.x + Math.sin(l.heading) * 2.0; p.z = l.z + Math.cos(l.heading) * 2.0; p.y = d.world.H(p.x, p.z); g.update(d.input, 0);   // (he comes back to the front of the opening)
       window.__give(kind);
       const o = g.action().options.find(x => x.big && x.kind === 'upgrade' && x.what === 'hut'); if (!o) return null;
-      g.act(o); d.step(8, () => !!g.player.work); d.step(8, () => !g.player.work); return o.start ? 'start' : 'in';
+      g.act(o); d.step(8, () => !!g.player.work); d.step(20, () => !g.player.work); return o.start ? 'start' : 'in';   // 0.37.9: a hut part takes 12 s
     };
   });
   await page.waitForTimeout(1500);

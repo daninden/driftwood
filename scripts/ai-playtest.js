@@ -11,14 +11,14 @@
 //
 // <dir> holds: request-<n>.json ({ n, kind: 'plan' | 'lesson', day, time, messages }), answer-<n>.txt, events.jsonl (the actor's events, the plans and a snapshot every
 // half game hour), and at the end summary.json (thirst and hunger at most, collapses, plans, steps done and failed, rejected plans, errors, the notes and the lessons).
-// Depends on: world/world, world/spots, game/game, game/actor, game/mind (home and camp for the state), game/actions, ai/planner, ai/prompt
+// Depends on: world/world, world/spots, game/game, game/actor, game/camp (home and camp for the state), game/actions, ai/planner, ai/prompt
 import fs from 'node:fs';
 import path from 'node:path';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createActor } from '../src/game/actor.js';
-import { createMind } from '../src/game/mind.js';
+import { createCamp } from '../src/game/camp.js';
 import { stepText } from '../src/game/actions.js';
 import { createPlanner } from '../src/ai/planner.js';
 import { snapshotOf } from '../src/ai/prompt.js';
@@ -63,7 +63,7 @@ const world = await generateWorld(seed), spawn = startSpot(world);
 const game = createGame(world, spawn, {});
 game.known.visit(spawn.x, spawn.z);
 const startDay = game.clock.day, dayNo = d => d - startDay + 1;
-const mind = createMind(world, game, {});   // never steps: only its home and camp for the state, as main
+const camp = createCamp(world, game);   // the plain facts of his home and camp for the state, as main
 const out = fs.openSync(file('events.jsonl'), 'a');
 const log = o => fs.writeSync(out, JSON.stringify({ ...o, day: dayNo(game.clock.day), time: +game.clock.time.toFixed(4) }) + '\n');
 
@@ -79,7 +79,7 @@ const ask = messages => {   // a request: written to a file, answered when the a
 };
 let actor = null;
 const state = () => {
-  const st = snapshotOf(game, { home: () => mind.home(), camp: () => mind.camp(), stripWood: () => mind.stripWood() });
+  const st = snapshotOf(game, camp);
   const pl = actor && actor.plan;
   st.doing = pl && actor.stepIndex >= 0 ? stepText(pl.steps[actor.stepIndex], pl.menu.places) : 'between plans';
   st.day = dayNo(game.clock.day);

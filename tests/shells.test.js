@@ -12,7 +12,6 @@ import { TORCH_DAYS } from '../src/game/fire.js';
 import { terrainAt } from '../src/game/movement.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
 import { carryItems, carryChanged, ITEMS, DRAWINGS } from '../src/render/carryMark.js';
-import { buttonIcons, ICONS, ICON_OF } from '../src/render/actionButton.js';
 
 let w, spawn, logs, cocos, E;
 const BANK = { x: -75.8, z: 180 };   // seed 1337: a shallow brook (as tests/action.test.js)
@@ -253,12 +252,6 @@ describe('drawings', () => {
     expect(carryItems({ crab: 1, nut: 2, shell: 1, water: 1 })).toEqual(['crab', 'nut', 'nut', 'shell', 'water']);
     expect(carryChanged({ nut: 1 }, { nut: 2 })).toBe(true); expect(carryChanged({ shell: 1, water: 0 }, { shell: 1 })).toBe(false);
     expect(DRAWINGS.water.length).toBeGreaterThan(DRAWINGS.shell.length);   // the same shell with water in it
-  });
-  it('has button icons for fill and sip, and no icon for taking a nut whole any more', () => {
-    expect(ICON_OF.take).toBeUndefined(); expect(ICONS.nut).toBeUndefined();
-    expect(buttonIcons({ tap: { kind: 'fill' }, options: [{ kind: 'sleep', big: true }] })).toEqual({ main: 'fill', options: [{ key: 'moon', label: 'Sleep' }] });
-    expect(buttonIcons({ tap: { kind: 'sip' }, options: [] })).toEqual({ main: 'sip', options: [] });
-    for (const k of ['fill', 'sip']) expect(ICONS[ICON_OF[k]]).toBeTruthy();
   });
 });
 

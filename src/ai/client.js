@@ -8,21 +8,21 @@
  * Pacific-time date changes, as Google's free quota does) and its own pause. A request goes to the first model that is not dead, not paused and within its budget. HTTP 429 pauses that model until Retry-After (else 60 s);
  * 404 (model not found) marks it dead for the rest of the session; either way the SAME request is retried once on the next available model; 0.37.1: so is every other error (a 5xx, a timeout, the network), except a refused key (401, 403). Every attempt that is sent counts for its model, whatever the answer.
  *
+ * 0.38.0 "Only him": the AI is no longer switched on or off and has no leash: it is the only way to play, so `on`, `setOn`, `mode` and `setMode` are gone.
+ *
  * Exports:
  *   pacificDay(ms) -> 'YYYY-MM-DD'     the date in America/Los_Angeles
  *   forModel(model, messages) -> messages   what is sent to that model: unchanged for Gemini, the system message folded into the first user message for a 'gemma-' model (0.36.4)
  *   createClient({ fetch, storage, now?, url?, modelsUrl?, models?, timeout?, budget?, perMin?, perDay? })   (budget: { model: { perMin, perDay } }, default AI_BUDGET; perMin / perDay give every model the same budget) -> client
- *     client.on() / setOn(bool)      whether the AI is switched on (kept in storage)
- *     client.mode() / setMode(m)     the leash 'strict' | 'loose' | 'free' (kept in storage under MODE_NAME; default AI_MODE_DEFAULT; 0.36.3)
  *     client.hasKey() / setKey(s) / clearKey()
  *     client.canSend() -> bool       the key is set, nothing is in flight and some model is available
  *     client.send(messages) -> Promise<{ text, ms, model }>   rejects with an Error (message scrubbed; .code 'nokey' | 'busy' | 'budget' | 'http' | 'timeout' | 'bad' | 'net')
- *     client.listModels() -> Promise<string[]>        the model names the key can use (not counted in the budget)
- *     client.status() -> { on, hasKey, models: [{ model, today, perDay, lastMinute, perMin, pausedUntil, dead, lastError }], today (all models), perDay (all), lastError, pausedUntil (0, or when the first model is back if none is available), inFlight, url }
+ *     client.listModels(key?) -> Promise<string[]>    the model names the key can use (not counted in the budget); 0.38.0: with `key`, that key instead of the saved one (the start screen checks a key before it is saved; a refused key rejects with .status 400, 401 or 403)
+ *     client.status() -> { hasKey, models: [{ model, today, perDay, lastMinute, perMin, pausedUntil, dead, lastError }], today (all models), perDay (all), lastError, pausedUntil (0, or when the first model is back if none is available), inFlight, url }
  *
  * Depends on: ai/config
  */
-import { AI_URL, AI_MODELS_URL, AI_MODELS, AI_BUDGET, AI_BUDGET_DEFAULT, AI_TIMEOUT, AI_MODES, AI_MODE_DEFAULT, KEY_NAME, ON_NAME, MODE_NAME, COUNT_NAME } from './config.js';
+import { AI_URL, AI_MODELS_URL, AI_MODELS, AI_BUDGET, AI_BUDGET_DEFAULT, AI_TIMEOUT, KEY_NAME, COUNT_NAME } from './config.js';
 
 const FMT = (() => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return null; } })();
 export function pacificDay(ms) {
@@ -118,28 +118,25 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
     finally { inFlight = false; }
   }
 
-  async function listModels() {
-    const k = key(); if (!k) throw fail('nokey', 'no key');
+  async function listModels(given = null) {   // 0.38.0: with `given` a key that is not saved yet is checked (the start screen); its text is scrubbed from errors too
+    const k = given ? String(given).trim() : key(); if (!k) throw fail('nokey', 'no key');
+    const clean = t => scrub(String(t).split(k).join('***'));
     try {
       const res = await doFetch(modelsUrl, { method: 'GET', headers: { Authorization: 'Bearer ' + k } });
-      if (!res.ok) throw fail('http', 'HTTP ' + res.status);
+      if (!res.ok) { const err = fail('http', 'HTTP ' + res.status); err.status = res.status; throw err; }
       const data = await res.json();
       const list = (data && (data.data || data.models)) || [];
       return list.map(m => String(m.id || m.name || '')).filter(Boolean).map(s => s.replace(/^models\//, ''));
-    } catch (e) { throw fail(e && e.code || 'net', scrub(e && e.message || e)); }
+    } catch (e) { const err = fail(e && e.code || 'net', clean(e && e.message || e)); if (e && e.status) err.status = e.status; throw err; }
   }
 
   function status() {
     const rows = models.map(m => ({ model: m, today: counter(m).n, perDay: limits(m).perDay, lastMinute: windowCount(m), perMin: limits(m).perMin, pausedUntil: paused(m) ? M.get(m).pausedUntil : 0, dead: M.get(m).dead, lastError: M.get(m).lastError }));
     const none = next([]) === null, waits = rows.filter(r => r.pausedUntil && !r.dead).map(r => r.pausedUntil);
-    return { on: get(ON_NAME) === '1', hasKey: !!key(), models: rows, today: rows.reduce((a, r) => a + r.today, 0), perDay: rows.reduce((a, r) => a + r.perDay, 0), lastError, pausedUntil: none && waits.length ? Math.min(...waits) : 0, inFlight, url };
+    return { hasKey: !!key(), models: rows, today: rows.reduce((a, r) => a + r.today, 0), perDay: rows.reduce((a, r) => a + r.perDay, 0), lastError, pausedUntil: none && waits.length ? Math.min(...waits) : 0, inFlight, url };
   }
 
   return {
-    on: () => get(ON_NAME) === '1',
-    setOn(v) { set(ON_NAME, v ? '1' : '0'); },
-    mode: () => { const m = get(MODE_NAME); return AI_MODES.includes(m) ? m : AI_MODE_DEFAULT; },   // 0.36.3: the leash, kept in storage (not in the save)
-    setMode(m) { if (AI_MODES.includes(m)) set(MODE_NAME, m); },
     hasKey: () => !!key(),
     setKey(s) { const v = String(s || '').trim(); if (v) { set(KEY_NAME, v); memKey = v; } },
     clearKey() { set(KEY_NAME, null); memKey = null; lastError = null; },

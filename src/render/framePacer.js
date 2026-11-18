@@ -27,8 +27,11 @@
  *   keys, stick, a walking target or the action button held (its ring is filling).
  * maxDt(idle) -> MAX_DT or MAX_DT_IDLE
  *
+ * touchOnly(matchMedia) -> true where the primary pointer is coarse and no fine pointer exists (not on a desktop, nor a laptop with a touch screen) (0.38.0: moved here from render/thumbStick, which is gone)
+ *
  * Depends on: nothing
  */
+export const touchOnly = mm => !!mm && mm('(pointer: coarse)').matches && !mm('(any-pointer: fine)').matches;
 export const FRAME_CAP_TOUCH = 30, IDLE_FPS = 15, IDLE_AFTER_MS = 3000, SLACK_MS = 1;
 export const MAX_DT = 0.05, MAX_DT_IDLE = 0.1;   // idle frames are further apart than MAX_DT, and the game clock should not run slow
 

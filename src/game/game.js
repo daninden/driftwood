@@ -16,7 +16,7 @@
  *   route); one who cannot be there any more (the island changed) is moved to the nearest spot he can stand
  *   (movement nearestStandable), else he starts at spawn. Kneeling work and
  *   a pending tap are not saved.
- *   wantsToMove(input) -> true while keys, the thumb stick or a target ask to walk;
+ *   wantsToMove(input) -> true while keys, a stick direction or a target ask to walk (the input game/actor fills, or a test's);
  *   it stops kneeling work and drops a queued action (a resting stick is null)
  *   REACH (0.55), BESIDE (1.2), OPTIONS (3), AIM, HUSK_TIME, NUT_DRINK, DRINK_TIME, STOOP, PICK_TIME: reaches, times and what a nut gives
  *   game.player                 { x, y, z, heading, moving, speed, phase, stoop, sitting, lie, tired, work }
@@ -84,7 +84,7 @@
  *     the castaway walks to beside it and stands there, doing nothing; river
  *     water, its bank and the castaway himself are just ground.
  *     Everything he does goes through the action button (input.takeAction(),
- *     Space or render/actionButton) or the icons above it (input.takeChoice(), keys 1 to 3): game.action() says what they would do now.
+ *     which game/actor presses since 0.38.0) or the icons above it (input.takeChoice()): game.action() says what they would do now.
  *   0.25 "Shell": tap kinds 'husk' (a coconut within REACH: always husked, HUSK_TIME, a tuft of fibre when there is room; when it is done he eats it if hunger is above EAT_AT or he
  *   carries two already, else he carries the husked nut, 0.27.1 "Husk"; or, with `carried: true` and no `thing`, a carried nut eaten anywhere when hunger is above EAT_AT: EAT_TIME, no tuft, he keeps the shell), 'fill' (river water within 0.8 m,
  *   thirst not above DRINK_AT, an empty shell: kneels FILL_TIME and fills it; otherwise the water offers 'drink') and 'sip' (a full shell drunk

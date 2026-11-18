@@ -12,7 +12,7 @@ import { terrainAt } from '../src/game/movement.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { serialise, parseSave } from '../src/save.js';
 import { thirstFill, FILL_GO as THIRST_FILL_GO } from '../src/game/thirst.js';
-import { THIRST_GO } from '../src/game/mind.js';
+const THIRST_GO = 0.35;   // the half-way point of the thirst mark (it was the old mind's limit for drinking at any hour)
 import { dropClip, thirstOpacity, fillOpacity, drank, createThirstMark, FILL_STEPS } from '../src/render/thirstMark.js';
 import { burntOpacity, BURNT_PEAK, BURNT_FLOOR } from '../src/render/fire.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';

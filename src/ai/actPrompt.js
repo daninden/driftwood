@@ -155,9 +155,8 @@ const askLine = ask => {
   return base;
 };
 
-/** 0.37.5 "Ways": the situation as full AI play tells it: what he really holds (the menu's `carries`: the spear or axe in his hand, a log on his shoulder), and none of the old mind's camp,
- *  home distance, next home part, last night or crab stroll (the old mind does not run with the AI on; every fire and lean-to is on the menu). */
-export const actState = (state, menu) => ({ ...(state || {}), camp: null, fromHome: null, nextHome: null, lastNight: null, crab: null, ...(menu && menu.carries ? { carries: menu.carries } : {}) });
+/** 0.37.5 "Ways": the situation as full AI play tells it: what he really holds (the menu's `carries`: the spear or axe in his hand, a log on his shoulder). */
+export const actState = (state, menu) => ({ ...(state || {}), ...(menu && menu.carries ? { carries: menu.carries } : {}) });
 
 const countLine = c => (c && Number.isFinite(c.claimed) && Number.isFinite(c.minutes) && Math.abs(c.claimed - c.minutes) >= 3 ? `Your last plan: you counted ${c.claimed} minutes, the game counted about ${Math.round(c.minutes)}.` : null);   // 0.37.4
 

@@ -5,7 +5,7 @@ import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createActor } from '../src/game/actor.js';
-import { WAIT } from '../src/game/intent.js';
+import { WAIT } from '../src/game/actions.js';
 import { DO, DIRS, PLAN_MINUTES } from '../src/game/actions.js';
 import { actFixed, buildActMessages, parseActPlan, parseLessons, menuText, WHY_ASKED, bodyText, fireText } from '../src/ai/actPrompt.js';
 import { createPlanner, RETRY_SECS, REJECTS_MAX } from '../src/ai/planner.js';
@@ -13,7 +13,7 @@ import { snapshotOf } from '../src/ai/prompt.js';
 import { thinkingText } from '../src/render/thinkingMark.js';
 import { actPlanLines, actEntryParts, playLogText } from '../src/render/aiPanel.js';
 import { DUSK } from '../src/game/sleep.js';
-import { walkFirstDay } from './helpers/mindSim.js';
+import { walkFirstDay } from './helpers/scene.js';
 
 const MENU = { here: [{ id: 'drink', what: DO.drink.what }], uses: [{ id: 'nut', what: 'eat a carried coconut' }], dirs: DIRS, carries: {}, minutes: PLAN_MINUTES,
   places: [{ id: 'water1', kind: 'water', what: 'fresh river water', dist: 12, dir: 'north', minutes: 6, nearby: true, offers: ['drink'] }, { id: 'coconut1', kind: 'coconut', what: 'a coconut on the ground', dist: 40, dir: 'east', minutes: 20, nearby: false, offers: ['husk'] }] };

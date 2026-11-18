@@ -12,7 +12,7 @@ import { createGame, HUSK_TIME, NUT_DRINK } from '../src/game/game.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { serialise, parseSave } from '../src/save.js';
 import { hungerFill, FILL_GO as HUNGER_FILL_GO } from '../src/game/hunger.js';
-import { HUNGER_GO } from '../src/game/mind.js';
+const HUNGER_GO = 0.4;   // the half-way point of the hunger mark (it was the old mind's limit for eating at any hour)
 import { hungerClip, hungerOpacity, fillOpacity, ate, createHungerMark, FILL_STEPS } from '../src/render/hungerMark.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
 

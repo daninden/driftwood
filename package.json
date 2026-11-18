@@ -1,25 +1,23 @@
 {
   "name": "driftwood",
   "private": true,
-  "version": "0.37.10",
+  "version": "0.38.0",
   "description": "A stylised, diorama-like game on an uninhabited island.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/inline.js",
     "test": "vitest run",
-    "test:fast": "vitest run --exclude \"tests/mindLife*.test.js\" --exclude tests/mindSim.test.js",
-    "test:sim": "vitest run tests/mindLife tests/mindSim.test.js",
+    "test:fast": "vitest run --exclude \"tests/lives*.test.js\"",
+    "test:sim": "vitest run tests/lives",
     "test:watch": "vitest",
     "smoke": "node scripts/smoke.js",
     "smoke:quality": "node scripts/quality-smoke.js",
-    "smoke:hands": "node scripts/hands-smoke.js",
     "smoke:voice": "node scripts/voice-smoke.js",
     "smoke:full": "node scripts/smoke.js --full",
     "smoke:axe": "node scripts/axe-smoke.js",
     "smoke:hut": "node scripts/hut-smoke.js",
-    "smoke:moonless": "node scripts/moonless-smoke.js",
-    "playtest": "node scripts/playtest.js"
+    "smoke:moonless": "node scripts/moonless-smoke.js"
   },
   "dependencies": {
     "three": "0.128.0"

@@ -2,12 +2,14 @@
 // needsChooser(game): thirst, hunger and the night first, then driftwood to a pile beside where he slept, else a rest. Plans of one to three steps, chosen from the menu.
 // 0.37.2 "Torch": the sleep is a plan of its own (the only step), and he walks only where game/dark allows (by day a walk that ends before dusk; later with a torch from a
 // burning fire he stands beside, or in firelight): a walk the rule would refuse is not chosen (he waits, or takes a torch when a fire burns beside him).
+// lifeChooser(game) (0.38.0 "Only him"): needsChooser for the ten-day lives (tests/lives*.test.js): also berries and a carried nut for hunger, and when what he needs is not
+// known yet he wanders out by day (the next direction each time) to find it.
 // runActor(world, spawn, { days, dt, chooser, know, state }) -> { game, actor, events, errors, maxThirst, maxHunger, collapses }
-// Depends on: game/game, game/actor, game/dark, tests/helpers/mindSim (walkFirstDay)
+// Depends on: game/game, game/actor, game/dark, tests/helpers/scene (walkFirstDay)
 import { createGame } from '../../src/game/game.js';
 import { createActor } from '../../src/game/actor.js';
 import { DAY_SECONDS } from '../../src/game/clock.js';
-import { walkFirstDay } from './mindSim.js';
+import { walkFirstDay } from './scene.js';
 import { walkLight } from '../../src/game/dark.js';
 
 export function needsChooser(game) {
@@ -31,6 +33,40 @@ export function needsChooser(game) {
     if (c.driftwood >= 2) return [{ do: 'lay' }];   // 0.37.5: the actor steps aside to where the game offers it
     const d = m.places.find(q => q.kind === 'driftwood' && /dry/.test(q.what));
     if (d && may(d)) return walk(d, [{ do: 'pickup' }]);
+    return [{ wait: 20 }];
+  };
+}
+
+export function lifeChooser(game) {
+  const first = (m, kind) => m.places.find(q => q.kind === kind) || null;
+  const has = (m, id) => m.here.some(o => o.id === id);
+  const DIRS = ['north', 'east', 'south', 'west', 'north-east', 'south-east', 'south-west', 'north-west'];
+  let turn = 0;
+  return (m) => {
+    const t = game.clock.time, night = t > 0.86 || t < 0.22, th = game.thirst.days, hu = game.hunger.days, c = m.carries, p = game.player;
+    const lights = { fires: game.fire.fires.filter(f => game.fire.strength(f) > 0), torches: game.fire.torches };
+    const may = q => walkLight({ time: t, minutes: q.minutes + 3, torch: !!game.fire.torch, from: p, to: q, lights }).ok;
+    const walk = (q, then) => (q.minutes > 25 ? [{ go: q.id }] : [{ go: q.id }, ...then]);
+    const out = () => (t > 0.25 && t < 0.7 ? [{ wander: DIRS[turn++ % DIRS.length], minutes: 20 }] : null);   // by day only, home of nothing: he looks round
+    if (th > 0.35) {
+      if (c.fullShells) return [{ use: 'water' }];
+      if (has(m, 'drink')) return [{ do: 'drink' }];
+      const w = first(m, 'water'); if (w && may(w)) return walk(w, [{ do: 'drink' }]);
+      if (!w && !night) { const o = out(); if (o) return o; }
+    }
+    if (hu > 0.4) {
+      if (c.nuts) return [{ use: 'nut' }];
+      if (c.berries) return [{ use: 'berries' }];
+      if (has(m, 'husk')) return [{ do: 'husk' }];
+      if (has(m, 'berries')) return [{ do: 'berries' }];
+      const k = first(m, 'coconut') || first(m, 'berries'); if (k && may(k)) return walk(k, [{ do: k.kind === 'coconut' ? 'husk' : 'berries' }]);
+      if (!k && !night) { const o = out(); if (o) return o; }
+    }
+    if (night) return has(m, 'sleep') ? [{ do: 'sleep' }] : [{ wait: 20 }];
+    if (c.driftwood >= 2) return [{ do: 'lay' }];
+    const d = m.places.find(q => q.kind === 'driftwood' && /dry/.test(q.what));
+    if (d && may(d)) return walk(d, [{ do: 'pickup' }]);
+    if (!first(m, 'water') || !(first(m, 'coconut') || first(m, 'berries'))) { const o = out(); if (o) return o; }
     return [{ wait: 20 }];
   };
 }

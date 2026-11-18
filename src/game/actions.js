@@ -27,6 +27,8 @@
  *     0.37.4 "Lessons": `minutes` is the chooser's own count of the plan (claimed). 0.37.8 "Firelight": PLAN_MINUTES is the size a plan is asked to have; a plan of several
  *     steps is refused only when the chooser's count or the game's is over PLAN_GRACE (so a walk and an hour of felling fit).
  *
+ * WAIT (0.38.0)          the chooser's "not yet"
+ *
  * Depends on: game/clock, game/movement (WALK_SPEED), game/game (action times), game/shells, game/fire, game/leanto, game/crabs, game/spear, game/axe, game/fish
  */
 import { DAY_SECONDS } from './clock.js';
@@ -40,6 +42,8 @@ import { MAKE_TIME as AXE_TIME, FELL_TIME } from './axe.js';
 import { FISH_TIME } from './fish.js';
 import { WALK_SPEED } from './movement.js';
 
+/** The answer "not yet" of a chooser (game/actor): no plan is ready, he waits and the chooser is asked again on the next step (0.38.0: was in game/intent, which is gone). */
+export const WAIT = Object.freeze({ wait: true });
 export const PLAN_MINUTES = 60;   // the user (2026-11-17): a plan covers at most half an hour of game time; 0.37.6 "Free hands" (the user, 2026-11-18): an hour
 export const PLAN_STEPS = 8;
 export const NEARBY = 15;         // metres: a place this close is `nearby` (no real walk)

@@ -9,10 +9,8 @@ import { startSpot } from '../src/world/spots.js';
 import { createGame, wantsToMove, HUSK_TIME, DRINK_TIME, REACH, BESIDE, STOOP, PICK_TIME, OPTIONS } from '../src/game/game.js';
 import { FIRE_MIN, FUEL_MAX, BURN, EMBERS, TORCH_DAYS, TORCH_COST, DRILL_TIME, createFire } from '../src/game/fire.js';
 import { CARRY_MAX, PILE_MAX, pileVisibleRadius } from '../src/game/wood.js';
-import { createInput } from '../src/game/input.js';
 import { terrainAt } from '../src/game/movement.js';
 import { freshWater } from '../src/game/water.js';
-import { MAIN_ALONE, buttonIcons, buttonOpacity, arcSpots, createActionButton, ICONS, ICON_OF, LABEL_OF, FAINT, CLEAR, HELD, OPT_SIZE, ARC_R } from '../src/render/actionButton.js';
 
 if (!globalThis.window) globalThis.window = new EventTarget();
 let w, spawn, logs, cocos, E;   // E: an empty dry spot, nothing within 5 m
@@ -256,10 +254,6 @@ describe('what the big actions do (light, sleep)', () => {
   it('cannot lie down in the water, nor on a climbing route', () => {
     expect(bigOf(createGame(w, at(WATER.x, WATER.z)))).toBeNull();
   });
-  it('is reached by F too (lighting) and Z (sleep), as before', () => {
-    const g = scene({ pile: FIRE_MIN, fibre: 1 }); run(g, makeInput({ hold: { key: true } }), 1); expect(g.player.work.kind).toBe('drill');
-    const h = scene(); run(h, makeInput({ sleep: true }), 1); expect(h.sleep.asleep).toBe(true);
-  });
   it('a short press never starts a heavy action by accident', () => {
     const g = scene({ pile: FIRE_MIN, fibre: 1 });
     press(g, 'tap'); expect(g.player.work).toBeNull(); expect(g.sleep.asleep).toBe(false); expect(g.fire.attempts).toBe(0);
@@ -287,27 +281,6 @@ describe('clicking only walks', () => {
   });
 });
 
-describe('the press, in the game loop', () => {
-  it('wakes a sleeping castaway, and that press does nothing more', () => {
-    let t = 0; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t);
-    const g = scene({ carried: 0 }); g.sleep.start(); run(g, input, 3);
-    expect(g.sleep.asleep).toBe(true);
-    input.actionStart('key'); run(g, input, 1); t += 2000; run(g, input, 1);
-    expect(g.sleep.asleep).toBe(false);
-    input.actionEnd('key'); run(g, input, 3);
-    expect(input.takeAction()).toBeNull(); expect(g.sleep.asleep).toBe(false); expect(g.player.lie).toBe(0);
-    input.dispose();
-  });
-  it('is ignored while he bends down', () => {
-    const g = scene({ carried: 2, pile: 0 }); press(g, 'tap', 0.1);
-    expect(g.player.stoop).toBeGreaterThan(0); const piles = g.wood.piles.length;
-    press(g, 'tap', STOOP / 4); expect(g.wood.piles.length).toBe(piles);
-  });
-  it('stops a click target once it acts', () => {
-    const g = scene({ carried: 2 }), i = makeInput({ target: { x: E.x + 5, z: E.z, tap: true }, action: 'tap' });
-    g.update(i, 1 / 30); expect(i.target).toBeNull();
-  });
-});
 
 describe('the options: the arc above the ring (0.27.4 "Choices")', () => {
   const smalls = g => g.action().options.filter(o => !o.big).map(o => o.kind), bigs = g => g.action().options.filter(o => o.big).map(o => o.kind);
@@ -380,196 +353,9 @@ describe('the options: the arc above the ring (0.27.4 "Choices")', () => {
     const g = scene(); g.sleep.start(); run(g, makeInput(), 0.2);
     expect(g.actions()).toEqual([]); expect(g.action().options).toEqual([]);
   });
-  it('picks by index from the input: the keys 1 to 3 and the icons', () => {
-    const { input } = (() => { const t = 1000, el = new EventTarget(); return { input: createInput(el, (x, y) => ({ x, z: y }), () => t) }; })();
-    const fireKey = (code, props = {}) => { const e = new Event('keydown', { cancelable: true }); Object.assign(e, { code }, props); window.dispatchEvent(e); };
-    const g = scene({ pile: FIRE_MIN, fibre: 2 });
-    fireKey('Digit3'); run(g, input, 0.3); expect(g.player.work).toBeNull();   // no third icon, nothing happens (and nothing is kept)
-    run(g, input, 0.3); expect(g.player.work).toBeNull();
-    fireKey('Digit1'); run(g, input, DRILL_TIME / 2); expect(g.player.work && g.player.work.kind).toBe('drill');
-    const h = scene({ pile: FIRE_MIN }), i2 = input; i2.choose(1); run(h, i2, 1); expect(h.sleep.asleep).toBe(false);   // (no fibre: the options are [sleep], 1 is none)
-    const s = scene(); input.choose(0); run(s, input, 1); expect(s.sleep.asleep).toBe(true);
-    input.dispose();
-  });
-  it('has no hold at all: a long press of the ring is still a short press', () => {
-    let t = 0; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t);
-    const g = scene({ pile: FIRE_MIN, fibre: 1 });
-    input.actionStart('key'); t += 5000; run(g, input, 0.1); input.actionEnd('key'); run(g, input, 0.2);
-    expect(g.wood.carried.length).toBeGreaterThan(0); expect(g.player.work).toBeNull(); expect(g.sleep.asleep).toBe(false);
-    for (const name of ['actionFill', 'takeHold']) expect(input[name]).toBeUndefined();
-    input.dispose();
-  });
-  it('keeps F and Z as shortcuts', () => {
-    const g = scene({ pile: FIRE_MIN, fibre: 1 }); run(g, makeInput({ hold: true }), 1); expect(g.player.work.kind).toBe('drill');
-    const h = scene(); run(h, makeInput({ sleep: true }), 1); expect(h.sleep.asleep).toBe(true);
-  });
 });
 
-describe('the action input', () => {
-  beforeAll(() => { if (!globalThis.window) globalThis.window = new EventTarget(); });
-  const fire = (target, type, props) => { const e = new Event(type, { cancelable: true }); Object.assign(e, props); target.dispatchEvent(e); return e; };
-  const setup = () => { let t = 1000; const el = new EventTarget(), input = createInput(el, (x, y) => ({ x, z: y }), () => t); return { el, input, later: ms => { t += ms; } }; };
-  it('gives a tap for a press of Space, on release, however long it was held', () => {
-    const { input, later } = setup();
-    fire(window, 'keydown', { code: 'Space' }); expect(input.pressing()).toBe(true); expect(input.takeAction()).toBeNull();
-    later(100); fire(window, 'keyup', { code: 'Space' });
-    expect(input.pressing()).toBe(false); expect(input.takeAction()).toBe('tap'); expect(input.takeAction()).toBeNull();
-    fire(window, 'keydown', { code: 'Space' }); later(3000); expect(input.takeAction()).toBeNull(); fire(window, 'keyup', { code: 'Space' });
-    expect(input.takeAction()).toBe('tap');
-    input.dispose();
-  });
-  it('gives the keys 1, 2 and 3 as a choice, once, and choose(i) the same', () => {
-    const { input } = setup();
-    expect(input.takeChoice()).toBeNull();
-    fire(window, 'keydown', { code: 'Digit1' }); expect(input.takeChoice()).toBe(0); expect(input.takeChoice()).toBeNull();
-    fire(window, 'keydown', { code: 'Numpad2' }); expect(input.takeChoice()).toBe(1);
-    fire(window, 'keydown', { code: 'Digit3' }); fire(window, 'keydown', { code: 'Digit3', repeat: true }); expect(input.takeChoice()).toBe(2);
-    fire(window, 'keydown', { code: 'Digit4' }); fire(window, 'keydown', { code: 'Digit1', ctrlKey: true }); expect(input.takeChoice()).toBeNull();
-    const typing = new Event('keydown', { cancelable: true }); Object.assign(typing, { code: 'Digit1' }); Object.defineProperty(typing, 'target', { value: { tagName: 'INPUT' } });
-    window.dispatchEvent(typing); expect(input.takeChoice()).toBeNull();   // typing a name is no choice
-    input.choose(2); expect(input.takeChoice()).toBe(2); input.choose(3); input.choose(-1); input.choose(0.5); expect(input.takeChoice()).toBeNull();
-    fire(window, 'keydown', { code: 'Digit2' }); fire(window, 'blur', {}); expect(input.takeChoice()).toBeNull();
-    input.dispose();
-  });
-  it('ignores a key held down (repeat), keeps the page from scrolling, wakes like a walking key', () => {
-    const { input } = setup();
-    const e = fire(window, 'keydown', { code: 'Space' }); expect(e.defaultPrevented).toBe(true);
-    expect(input.takeWake()).toBe(true);
-    fire(window, 'keydown', { code: 'Space', repeat: true }); expect(input.takeWake()).toBe(false);
-    fire(window, 'keyup', { code: 'Space' }); expect(input.takeAction()).toBe('tap');
-    input.dispose();
-  });
-  it('can be cancelled (the press that woke him) and by losing focus', () => {
-    const { input, later } = setup();
-    input.actionStart(1); input.cancelAction(); later(2000); expect(input.takeAction()).toBeNull();
-    input.actionEnd(1); expect(input.takeAction()).toBeNull();
-    input.actionStart(2); fire(window, 'blur', {}); input.actionEnd(2); expect(input.takeAction()).toBeNull(); expect(input.pressing()).toBe(false);
-    input.dispose();
-  });
-  it('takes one press at a time, ended only by its own id', () => {
-    const { input } = setup();
-    input.actionStart(1); input.actionStart(2); input.actionEnd(2); expect(input.pressing()).toBe(true);
-    input.actionEnd(1); expect(input.takeAction()).toBe('tap');
-    input.dispose();
-  });
-  it('is no walk tap: a press on the button leaves the target, the stick and two fingers alone', () => {
-    const { el, input } = setup();
-    fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 1, clientX: 200, clientY: 10 });   // a finger on the world
-    expect(input.target).toMatchObject({ tap: true });
-    input.actionStart(7); input.stickStart(9); input.stickMove(9, 0, -30, 50);
-    fire(window, 'pointerup', { pointerType: 'touch', pointerId: 7 }); input.actionEnd(7);
-    fire(el, 'pointerdown', { button: 0, pointerType: 'touch', pointerId: 2, clientX: 100, clientY: 10 });
-    fire(el, 'pointermove', { pointerType: 'touch', pointerId: 2, clientX: 100, clientY: 60 });   // a second world finger: a pinch, which stops the stick walk
-    expect(input.takeAction()).toBe('tap');
-    input.dispose();
-  });
-  it('does not leave a sleeping castaway asleep (any press wakes)', () => {
-    const { input } = setup(); input.actionStart(3); expect(input.takeWake()).toBe(true); input.dispose();
-  });
-});
 
-describe('the button: icons, opacity and the DOM', () => {
-  it('has a drawing and plain words for every kind of action, in the ink', () => {
-    for (const [kind, key] of Object.entries(ICON_OF)) { expect(ICONS[key]).toBeTruthy(); expect(LABEL_OF[kind]).toBeTruthy(); expect(['pickup', 'lay', 'husk', 'feed', 'torch', 'plant', 'drink', 'light', 'buildHere', 'buildIn', 'sleep', 'dig', 'roast', 'fill', 'sip', 'berries', 'bananas', 'eatBerries', 'eatBanana', 'makeSpear', 'takeSpear', 'laySpear', 'fish', 'makeAxe', 'takeAxe', 'layAxe', 'fell']).toContain(kind); }
-    for (const what of ['walls', 'bed', 'ring']) { expect(ICONS[what]).toBeTruthy(); expect(LABEL_OF[what]).toBeTruthy(); }
-    expect(Object.keys(ICON_OF).length).toBe(27);
-    expect(buttonIcons({ tap: null, options: [{ kind: 'buildHere', big: true }, { kind: 'buildIn', big: true }] })).toEqual({ main: null, options: [{ key: 'leanto', label: 'Build a lean-to here' }, { key: 'buildIn', label: 'Build the piece in' }] });
-    for (const svg of Object.values(ICONS)) expect(svg).not.toMatch(/fill="(?!none)/);
-  });
-  it('shows the main action in the ring and the options as icons of the arc', () => {
-    expect(buttonIcons({ tap: { kind: 'pickup' }, options: [{ kind: 'light', big: true }, { kind: 'sleep', big: true }] })).toEqual({ main: 'pickup', options: [{ key: 'flame', label: 'Light the fire' }, { key: 'moon', label: 'Sleep' }] });
-    expect(buttonIcons({ tap: { kind: 'husk' }, options: [] })).toEqual({ main: 'coconut', options: [] });   // the half coconut, as the hunger mark
-    expect(buttonIcons({ tap: null, options: [{ kind: 'sleep', big: true }] }).main).toBeNull();
-    expect(buttonIcons({ tap: null, options: [] })).toEqual({ main: null, options: [] });
-    expect(buttonIcons(null)).toEqual({ main: null, options: [] });
-    expect(buttonIcons({ tap: { kind: 'drink' } }).main).toBe('drop');
-    expect(buttonIcons({ tap: { kind: 'feed' } }).main).toBe('feed');
-    expect(buttonIcons({ tap: { kind: 'torch' } }).main).toBe('torch'); expect(buttonIcons({ tap: { kind: 'plant' } }).main).toBe('plant');
-    expect(buttonIcons({ tap: null, options: [{ kind: 'upgrade', what: 'bed', big: true }] }).options[0]).toEqual({ key: 'bed', label: 'Build a bed' });
-  });
-  it('is faint and empty with nothing to do, clearer with an icon, clearest under a finger', () => {
-    expect([FAINT, CLEAR, HELD]).toEqual([0.45, 0.95, 1]);
-    expect(MAIN_ALONE).toBe(1.8);   // 0.13.3: larger icons
-    expect(MAIN_ALONE * 24).toBeGreaterThan(40);   // fills most of the ring (radius 30)
-    expect(buttonOpacity({ main: null, options: [] })).toBe(0.45); expect(buttonOpacity({ main: null, options: [] }, true)).toBe(0.45);
-    expect(buttonOpacity({ main: 'lay', options: [] })).toBe(0.95); expect(buttonOpacity({ main: 'lay', options: [] }, true)).toBe(1);
-  });
-  it('lays the arc out above the ring: tappable, clear of the ring, the stick and the screen edge', () => {
-    expect(OPT_SIZE).toBeGreaterThanOrEqual(40);
-    expect(arcSpots(0)).toEqual([]);
-    for (const touch of [true, false]) for (const n of [1, 2, 3]) {
-      const s = arcSpots(n, touch); expect(s.length).toBe(n);
-      for (const p of s) { expect(Math.hypot(p.x, p.y)).toBeCloseTo(ARC_R, 0); expect(p.y).toBeLessThan(-ARC_R * 0.3); }   // above the middle of the ring, outside it (radius 30)
-      for (let i = 1; i < n; i++) { expect(s[i].x).toBeGreaterThan(s[i - 1].x); expect(Math.hypot(s[i].x - s[i - 1].x, s[i].y - s[i - 1].y)).toBeGreaterThanOrEqual(OPT_SIZE); }   // left to right, no overlap
-    }
-    expect(arcSpots(1, true)).toEqual([{ x: 0, y: -ARC_R }]);
-    const t = arcSpots(3, true); expect(t[0].x).toBeCloseTo(-t[2].x, 1);   // centred on touch
-    // the ring's middle is 89 px from the right edge on touch (47 + 42) and 60 on a desktop (18 + 42): the rightmost icon stays on the screen
-    expect(89 - (t[2].x + OPT_SIZE / 2)).toBeGreaterThanOrEqual(8); expect(60 - (arcSpots(3, false)[2].x + OPT_SIZE / 2)).toBeGreaterThanOrEqual(8);
-    expect(arcSpots(3, false)[0].x).toBeLessThan(t[0].x);   // a desktop's fan leans left
-  });
-  // a fake element: an event target with the few DOM bits the button uses
-  const fakeEl = () => {
-    const el = new EventTarget(), part = () => ({ innerHTML: '', attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } });
-    const parts = { '.main': part() }, cls = new Set();
-    Object.assign(el, { querySelector: s => parts[s], classList: { toggle: (c, on) => { if (on) cls.add(c); else cls.delete(c); }, has: c => cls.has(c) }, style: {}, captured: null, setPointerCapture(id) { el.captured = id; } });
-    return { el, parts };
-  };
-  const ev = (el, type, props) => { const e = new Event(type, { cancelable: true }); const { target, ...rest } = props || {}; Object.assign(e, rest); if (target) Object.defineProperty(e, 'target', { value: target }); let stopped = false; e.stopPropagation = () => { stopped = true; }; el.dispatchEvent(e); return { e, stopped }; };
-  it('draws what a press would do, and only touches the DOM when it changes', () => {
-    const { el, parts } = fakeEl(), input = createInput(new EventTarget(), () => null), b = createActionButton(el, input);
-    b.update({ tap: null, options: [] }); expect(el.style.opacity).toBe('0.45'); expect(parts['.main'].innerHTML).toBe(''); expect(el.classList.has('on')).toBe(false);
-    b.update({ tap: { kind: 'pickup' }, options: [{ kind: 'light', big: true }] });
-    expect(el.style.opacity).toBe('0.95'); expect(parts['.main'].innerHTML).toContain('<path'); expect(el.classList.has('on')).toBe(true);
-    const html = parts['.main'].innerHTML; parts['.main'].innerHTML = 'kept';
-    b.update({ tap: { kind: 'pickup' }, options: [{ kind: 'light', big: true }] }); expect(parts['.main'].innerHTML).toBe('kept');   // unchanged: not redrawn
-    b.update({ tap: { kind: 'lay' }, options: [] }); expect(parts['.main'].innerHTML).not.toBe(html);
-    b.update({ tap: null, options: [{ kind: 'sleep', big: true }] }); expect(parts['.main'].innerHTML).toBe(''); expect(el.classList.has('on')).toBe(false);   // a big action alone leaves the ring empty
-    b.dispose(); input.dispose();
-  });
-  it('draws the arc: one icon each, with words for a screen reader, redrawn only when they change', () => {
-    const { el } = fakeEl(), { el: arc } = fakeEl(), input = createInput(new EventTarget(), () => null), b = createActionButton(el, input, arc, true);
-    arc.innerHTML = '';
-    b.update({ tap: { kind: 'pickup' }, options: [] }); expect(arc.innerHTML).toBe('');
-    const opts = [{ kind: 'drink' }, { kind: 'light', big: true }, { kind: 'sleep', big: true }];
-    b.update({ tap: { kind: 'pickup' }, options: opts });
-    expect(arc.innerHTML.match(/class="opt"/g).length).toBe(3); expect(arc.innerHTML).toContain('aria-label="Drink"'); expect(arc.innerHTML).toContain('aria-label="Sleep"'); expect(arc.innerHTML).toContain('data-i="2"');
-    expect(arc.innerHTML).not.toMatch(/<text|<rect|<circle class="frame"/);   // no words, no boxes
-    arc.innerHTML = 'kept'; b.update({ tap: { kind: 'pickup' }, options: opts }); expect(arc.innerHTML).toBe('kept');
-    b.update({ tap: null, options: opts.slice(2) }); expect(arc.innerHTML.match(/class="opt"/g).length).toBe(1);
-    b.dispose(); input.dispose();
-  });
-  it('sends a finger or the mouse on it to the input, never to the world', () => {
-    let t = 0; const world = new EventTarget(), input = createInput(world, () => ({ x: 1, z: 1 }), () => t), { el } = fakeEl(), b = createActionButton(el, input);
-    const d = ev(el, 'pointerdown', { pointerId: 4, pointerType: 'touch', button: 0 });
-    expect(d.stopped).toBe(true); expect(d.e.defaultPrevented).toBe(true); expect(el.captured).toBe(4);
-    expect(input.pressing()).toBe(true); expect(input.target).toBeNull();
-    t += 100; const u = ev(el, 'pointerup', { pointerId: 4, pointerType: 'touch', button: 0 });
-    expect(u.stopped).toBe(true); expect(input.takeAction()).toBe('tap'); expect(input.target).toBeNull();
-    ev(el, 'pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0 }); t += 2000; expect(input.takeAction()).toBeNull();   // no hold
-    ev(el, 'pointercancel', { pointerId: 1, pointerType: 'mouse' }); expect(input.pressing()).toBe(false);
-    b.dispose(); input.dispose();
-  });
-  it('picks an icon of the arc on release, and a press on it never reaches the world', () => {
-    const world = new EventTarget(), input = createInput(world, () => ({ x: 1, z: 1 }), () => 0), { el } = fakeEl(), { el: arc } = fakeEl(), b = createActionButton(el, input, arc);
-    const opt = i => ({ closest: () => ({ dataset: { i: String(i) } }) });
-    const d = ev(arc, 'pointerdown', { pointerId: 8, pointerType: 'touch', button: 0, target: opt(1) });
-    expect(d.stopped).toBe(true); expect(d.e.defaultPrevented).toBe(true); expect(input.target).toBeNull(); expect(input.pressing()).toBe(false); expect(input.takeChoice()).toBeNull();   // nothing yet
-    const u = ev(arc, 'pointerup', { pointerId: 8, pointerType: 'touch', target: opt(1) });
-    expect(u.stopped).toBe(true); expect(input.takeChoice()).toBe(1); expect(input.takeAction()).toBeNull();
-    ev(arc, 'pointerdown', { pointerId: 9, pointerType: 'mouse', button: 0, target: opt(0) }); ev(arc, 'pointercancel', { pointerId: 9, pointerType: 'mouse' }); expect(input.takeChoice()).toBeNull();   // cancelled
-    ev(arc, 'pointerdown', { pointerId: 10, pointerType: 'mouse', button: 0, target: { closest: () => null } }); ev(arc, 'pointerup', { pointerId: 10, pointerType: 'mouse' }); expect(input.takeChoice()).toBeNull();   // between the icons
-    b.dispose(); input.dispose();
-  });
-  it('ignores a second finger on it and other pointers ending', () => {
-    const input = createInput(new EventTarget(), () => null), { el } = fakeEl(), b = createActionButton(el, input);
-    ev(el, 'pointerdown', { pointerId: 4, pointerType: 'touch', button: 0 }); ev(el, 'pointerdown', { pointerId: 5, pointerType: 'touch', button: 0 });
-    ev(el, 'pointerup', { pointerId: 5, pointerType: 'touch' }); expect(input.pressing()).toBe(true);
-    ev(el, 'pointerup', { pointerId: 4, pointerType: 'touch' }); expect(input.pressing()).toBe(false);
-    b.dispose(); input.dispose();
-  });
-  it('is not created without its element', () => { expect(createActionButton(null, {})).toBeNull(); });
-});
 
 describe('the pile limit and the full-fire constant stay in step', () => {
   it('a fire holds eight pieces of fuel', () => { expect(FUEL_MAX).toBeCloseTo(8 * BURN, 9); expect(PILE_MAX).toBe(12); expect(REACH).toBeLessThan(BESIDE); });
@@ -579,26 +365,6 @@ describe('the pile limit and the full-fire constant stay in step', () => {
   });
 });
 
-describe('the thumb stick stops kneeling work', () => {
-  // a resting stick is null (game/input), a held one a direction { x, z }
-  const starts = {
-    husk: () => { const c = cocos[0], g = createGame(w, at(c.x + 0.3, c.z), { hunger: { days: 1 } }); press(g, 'tap', 0.3); return g; },
-    drink: () => { const g = createGame(w, at(BANK.x - 0.5, BANK.z), { thirst: { days: 1.4 } }); press(g, 'tap', 0.3); return g; },
-    drill: () => { const g = scene({ pile: FIRE_MIN, fibre: 2 }); press(g, 'big', 1); return g; },
-  };
-  for (const [kind, start] of Object.entries(starts)) {
-    it(`stops ${kind} when the stick is pushed, and not when it rests`, () => {
-      const g = start(); expect(g.player.work && g.player.work.kind).toBe(kind);
-      run(g, makeInput({ stick: null }), 0.3); expect(g.player.work && g.player.work.kind).toBe(kind);
-      run(g, makeInput({ stick: { x: 1, z: 0 } }), 0.1); expect(g.player.work).toBeNull();
-    });
-  }
-  it('wantsToMove: keys, the stick or a target; a resting stick is not asking', () => {
-    expect(wantsToMove(makeInput())).toBe(false); expect(wantsToMove(makeInput({ stick: null }))).toBe(false);
-    expect(wantsToMove(makeInput({ left: true }))).toBe(true); expect(wantsToMove(makeInput({ stick: { x: 0, z: 1 } }))).toBe(true);
-    expect(wantsToMove(makeInput({ target: { x: 1, z: 1 } }))).toBe(true);
-  });
-});
 
 // 0.37.3 "Branches": a torch in one hand, branches under the other arm (nothing else goes with a torch)
 describe('wood with a torch (0.37.3, 0.37.6 "Free hands")', () => {

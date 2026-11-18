@@ -1,9 +1,9 @@
 /**
  * game/actor — Dave's hands in full AI play (0.37.0 "Actions"): it follows a plan of single actions (game/actions) and reports back how each step went.
- * Pure: no DOM, no WebGL, no network, no random numbers of its own. Beside game/mind (0.37.0); with the AI on it plays Dave (0.37.1); the tests drive it with a fixed fake chooser.
+ * Pure: no DOM, no WebGL, no network, no random numbers of its own. Since 0.38.0 "Only him" it is the only thing that plays Dave (the old rules mind is gone); the tests drive it with a fixed fake chooser.
  *
- * Like the mind it adds no game rule: it fills an input object like the player's (a walk target, a press of the action button or an icon of the arc, a click on the inventory
- * row, sitting) and so can do only what a player could do. Walks to a place stay on ground he knows (game/known, as the mind's); a wander may go into ground he does not know.
+ * It adds no game rule: it fills an input object like the player's (a walk target, a press of the action button or an icon of the arc, a click on the inventory
+ * row, sitting) and so can do only what a player could do. Walks to a place stay on ground he knows (game/known); a wander may go into ground he does not know.
  * Everything he walks past is learned (the input never says `learns: false`).
  *
  * createActor(world, game, { chooser, onEvent? }) -> actor
@@ -53,7 +53,7 @@
  * followed when the chooser counted it itself.
  * The menu also has `light`: { dark, hours (until dusk by day, until dawn in the dark), torch: { minutes left } | null, planted: [{ dist, dir, minutes }] (torches in the ground within 40 m), lit (he stands in firelight) }.
  *
- * Depends on: game/actions, game/dark, game/fish, game/intent (WAIT), game/path, game/route, game/movement, game/water, game/wood, game/felled, game/leanto, game/clock, world/constants
+ * Depends on: game/actions (also WAIT), game/dark, game/fish, game/path, game/route, game/movement, game/water, game/wood, game/felled, game/leanto, game/clock, world/constants
  */
 import { HALF, T, NT } from '../world/constants.js';
 import { createPath } from './path.js';
@@ -68,8 +68,7 @@ import { CELL as KNOWN_CELL, NC as KNOWN_NC } from './known.js';
 import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, RING_NOFIRE } from './leanto.js';
 import { fireOutlook, full as fireFull, BURN, TORCH_DRY } from './fire.js';
 import { TIRED_AT, SLEEP_AFTER, NIGHT_AFTER } from './sleep.js';
-import { WAIT } from './intent.js';
-import { PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, LEG_DETOUR, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
+import { WAIT, PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, LEG_DETOUR, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
 
 const BESIDE_FIRE = 1.2;          // game BESIDE: a fire this close (from its edge) is beside him
 export const RECENT_MAX = 20;

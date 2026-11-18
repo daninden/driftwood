@@ -59,20 +59,12 @@ describe('label and version', () => {
     expect(devLabel('0.10', 'Wet wood', 30, 9, false, 10)).toBe('v0.10 · Wet wood · 30 fps · 9 ms');   // zoom only beyond 10
   });
   it('has the current version', () => {
-    expect(VERSION).toBe('0.37.10'); expect(NAME).toBe('Body');
+    expect(VERSION).toBe('0.38.0'); expect(NAME).toBe('Only him');
   });
   it('shows the quality level after the zoom and before idle, only when known', () => {
     expect(devLabel('0.22', 'Crab catch', 30, 9, false, 0, { level: 1, adapt: true })).toBe('v0.22 · Crab catch · 30 fps · 9 ms · q1 auto');
     expect(devLabel('0.22', 'Crab catch', 30, 9, true, 18, { level: 0, adapt: false })).toBe('v0.22 · Crab catch · 30 fps · 9 ms · zoom 18 · q0 fixed · idle');
     expect(devLabel('0.22', 'Crab catch', 30, 9, false, 0, null)).toBe('v0.22 · Crab catch · 30 fps · 9 ms');
-  });
-  it('adds habit last, while the castaway\'s own habit is in charge (0.28)', () => {
-    expect(devLabel('0.28', 'Habit', 30, 9, false, 0, { level: 1, adapt: true }, true)).toBe('v0.28 · Habit · 30 fps · 9 ms · q1 auto · habit');
-    expect(devLabel('0.28', 'Habit', 15, 1, true, 0, { level: 1, adapt: false }, true)).toBe('v0.28 · Habit · 15 fps · 1 ms · q1 fixed · idle · habit');
-    expect(devLabel('0.28', 'Habit', 30, 9, false, 0, 1, false)).toBe('v0.28 · Habit · 30 fps · 9 ms · q1 auto');
-  });
-  it('shows the Hands mode before the separate habit marker', () => {
-    expect(devLabel('0.29', 'Hands', 30, 9, false, 0, { level: 1, adapt: true }, 'computer', true)).toBe('v0.29 · Hands · 30 fps · 9 ms · q1 auto · computer · habit');
   });
   it('starts visible for now', () => { expect(DEV_PANEL_VISIBLE).toBe(true); });
 });
@@ -109,19 +101,6 @@ describe('panel element', () => {
     expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
     p.frame(1 / 15, 4, true); expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms · idle');
     p.frame(1 / 30, 9, false); expect(el.textContent).toBe('v0.7 · Quiet frames · 30 fps · 9 ms');
-  });
-  it('shows habit while the mind is in charge and writes at once when that changes', () => {
-    const el = fakeEl(), p = createDevPanel(el, '0.28', 'Habit', true);
-    for (let i = 0; i < 16; i++) p.frame(1 / 30, 9, false);
-    expect(el.textContent).toBe('v0.28 · Habit · 30 fps · 9 ms');
-    p.setHabit(true); expect(el.textContent).toBe('v0.28 · Habit · 30 fps · 9 ms · habit');
-    const w = el.writes(); p.setHabit(true); expect(el.writes()).toBe(w);
-    p.setHabit(false); expect(el.textContent).toBe('v0.28 · Habit · 30 fps · 9 ms');
-  });
-  it('shows the Hands mode without replacing habit', () => {
-    const el = fakeEl(), p = createDevPanel(el, '0.29', 'Hands', true);
-    p.setHands('auto'); expect(el.textContent).toBe('v0.29 · Hands · – fps · auto');
-    p.setHabit(true); expect(el.textContent).toBe('v0.29 · Hands · – fps · auto · habit');
   });
   it('shows the zoom only beyond 10', () => {
     const el = fakeEl(), p = createDevPanel(el, '0.7', 'Quiet frames', true);

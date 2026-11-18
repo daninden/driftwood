@@ -1,18 +1,18 @@
 // Full AI play, the action layer (0.37.0 "Actions"): game/actions (the steps, their minutes, the plan check) and game/actor (the hands that follow a plan), with fixed fake choosers.
 // 0.37.2 "Torch": game/dark (the dark rule), sleep and fishing as plans of their own (fishing for minutes), the light in the menu.
-// Local tests never use AI. The old mind (game/mind) is untouched: its own tests guard it.
+// Local tests never use AI.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateWorld } from '../src/world/world.js';
 import { startSpot } from '../src/world/spots.js';
 import { createGame } from '../src/game/game.js';
 import { createActor } from '../src/game/actor.js';
-import { WAIT } from '../src/game/intent.js';
+import { WAIT } from '../src/game/actions.js';
 import { checkPlan, stepMinutes, stepText, gameMinutes, realSecs, dirOf, DIRS, DO, USE, PLAN_MINUTES, PLAN_STEPS, PLAN_GRACE, legMinutes, METRES_PER_MINUTE, NEARBY, FISH_MIN, FISH_MAX } from '../src/game/actions.js';
 import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, FIRE_LIGHT, TORCH_LIGHT } from '../src/game/dark.js';
 import { DUSK, DAWN } from '../src/game/sleep.js';
 import { lightText, menuText, buildActMessages, actState } from '../src/ai/actPrompt.js';
 import { DAY_SECONDS } from '../src/game/clock.js';
-import { walkFirstDay } from './helpers/mindSim.js';
+import { walkFirstDay } from './helpers/scene.js';
 import { terrainAt, canStand } from '../src/game/movement.js';
 import { fishableAt } from '../src/game/fish.js';
 import { runActor } from './helpers/actorSim.js';
@@ -253,11 +253,11 @@ describe('following a plan (game/actor)', () => {
     const real = (g.clock.total - t0) * 1440;
     expect(target).toBeTruthy(); expect(real).toBeGreaterThan(target.minutes * 0.4); expect(real).toBeLessThan(target.minutes * 1.6);
   });
-  it('the situation in full AI play: what he really holds, no camp of the old mind (0.37.5)', () => {
-    const st = actState({ carries: { spear: true }, camp: { fire: 'none', store: {} }, fromHome: 4, nextHome: 'walls' }, { carries: { spear: false, log: true } });
-    expect(st.camp).toBeNull(); expect(st.fromHome).toBeNull(); expect(st.nextHome).toBeNull(); expect(st.carries).toEqual({ spear: false, log: true });
-    const m = buildActMessages({ state: { carries: {}, camp: { fire: 'none', store: {} } }, menu: { places: [], here: [], uses: [], carries: { log: true } }, ask: { why: 'done' }, recent: [], notes: [], lessons: [] });
-    expect(m[1].content).toContain('a log on his shoulder'); expect(m[1].content).not.toContain('Fire at his camp');
+  it('the situation in full AI play: what he really holds; the camp and the distance from home are not told (0.37.5; 0.38.0 game/camp)', () => {
+    const st = actState({ carries: { spear: true }, camp: { fire: 'none', store: {} }, fromHome: 4 }, { carries: { spear: false, log: true } });
+    expect(st.carries).toEqual({ spear: false, log: true });
+    const m = buildActMessages({ state: { carries: {}, camp: { fire: 'well', store: { dry: 3 } }, fromHome: 40 }, menu: { places: [], here: [], uses: [], carries: { log: true } }, ask: { why: 'done' }, recent: [], notes: [], lessons: [] });
+    expect(m[1].content).toContain('a log on his shoulder'); expect(m[1].content).not.toContain('Fire at his camp'); expect(m[1].content).not.toContain('Camp store'); expect(m[1].content).not.toMatch(/m from his camp/);
   });
   it('no plan: he stands still and waits, and the chooser is asked again each step', () => {
     const g = fresh();

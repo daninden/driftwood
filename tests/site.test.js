@@ -14,7 +14,6 @@ import { serialise, parseSave } from '../src/save.js';
 import { leantoParts, leantoFronds, wallFronds, bedParts, ringStones, ROOF_N, FROND_N, WALL_N, BED_N, RING_N } from '../src/render/leanto.js';
 import { YAW } from '../src/core/view.js';
 import { createPath } from '../src/game/path.js';
-import { buttonIcons } from '../src/render/actionButton.js';
 
 let w, spawn, drift, branches, fronds, stones;
 beforeAll(async () => {
@@ -121,7 +120,6 @@ describe('starting a site with driftwood in the arms', () => {
     g.wood.carried.length = 0; give(g, 'stone'); expect(bigOf(g) && bigOf(g).kind).not.toBe('buildHere');
     g.wood.stones.length = 0; give(g, 'driftwood');
     const o = bigOf(g); expect(o).toMatchObject({ kind: 'buildHere', what: 'leanto', piece: 'driftwood' });
-    expect(buttonIcons(g.action()).options.some(i => i.key === 'leanto' && /lean-to/i.test(i.label))).toBe(true);
   });
   it('builds the first piece at once: the site appears after PIECE_TIME, with the open side to the camera and the middle SITE_AT behind him; the piece is used up', () => {
     const { g, input } = FLAT(1.0); give(g, 'driftwood', 2);
@@ -260,7 +258,6 @@ describe('upgrades', () => {
     g.wood.carried.length = 0; give(g, 'frond'); expect(bigOf(g)).toMatchObject({ kind: 'upgrade', what: 'walls', piece: 'frond' });
     g.wood.carried.length = 0; give(g, 'branch'); expect(bigOf(g)).toMatchObject({ kind: 'upgrade', what: 'bed', piece: 'branch' });
     g.wood.carried.length = 0; give(g, 'stone'); expect(bigOf(g)).toMatchObject({ kind: 'upgrade', what: 'ring', piece: 'stone' });
-    expect(buttonIcons(g.action()).options.map(o => o.key)).toContain('ring');
     g.wood.stones.length = 0; g.player.x = spawn.x + 2.5; give(g, 'stone'); expect(bigOf(g)).toBeNull();   // beyond UP_REACH
   });
   it('the walls: 6 fronds, 6 presses; wood dries wider only when all are in', () => {

@@ -75,17 +75,6 @@ describe('Voice', () => {
     expect(main).not.toMatch(/game\.onAction/);
   });
 
-  it('has 3 or 4 lines for every kind the mind thinks and every kind the player can lack', () => {
-    const mind = readFileSync(new URL('../src/game/mind.js', import.meta.url), 'utf8');
-    const kinds = new Set([...mind.matchAll(/think\('(\w+)'\)/g)].map(m => m[1]));
-    for (const m of mind.matchAll(/'(\w+Intent)'/g)) kinds.add(m[1]);
-    for (const m of mind.matchAll(/think\([^\n]*\? '(\w+)' : '(\w+)'\)/g)) { kinds.add(m[1]); kinds.add(m[2]); }   // a choice between two kinds
-    for (const m of mind.matchAll(/think: ([^\n]*?)(?:, wanted|,\n)/g)) for (const q of m[1].matchAll(/(?<!=== )'(\w+)'/g)) kinds.add(q[1]);   // the collect option
-    for (const k of LACK_KINDS) kinds.add(k);
-    for (const k of ['fibreIntent', 'foodReserve', 'wetwood', 'fireOut', 'fireLow', 'explore', 'homeWoodIntent', 'axeIntent', 'clearIntent', 'hutIntent']) expect(kinds.has(k)).toBe(true);
-    for (const kind of kinds) { expect(PHRASES[kind], kind).toBeDefined(); expect(PHRASES[kind].length).toBeGreaterThanOrEqual(3); expect(PHRASES[kind].length).toBeLessThanOrEqual(4); }
-    for (const kind of Object.keys(PHRASES)) expect(kinds.has(kind), `unused phrase ${kind}`).toBe(true);
-  });
 
   it('rotates the variants and never repeats a line for a kind twice in a row', () => {
     for (const kind of Object.keys(PHRASES)) {

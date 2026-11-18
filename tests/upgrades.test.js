@@ -16,7 +16,6 @@ import { createSleep, COLD_SLEEP, SHELTER_SLEEP, WALLS_SLEEP, BED_REST, SHELTER_
 import { DAY_SECONDS } from '../src/game/clock.js';
 import { serialise, parseSave, momentKey } from '../src/save.js';
 import { carryItems } from '../src/render/carryMark.js';
-import { buttonIcons, ICONS } from '../src/render/actionButton.js';
 import { wallFronds, bedParts, ringStones, WALL_N, BED_N, RING_N } from '../src/render/leanto.js';
 import { pileTally } from '../src/render/tallyMarks.js';
 
@@ -181,12 +180,6 @@ describe('the upgrades: when they can be built (0.32: from pieces he holds, no p
     expect(UP_REACH).toBeGreaterThan(1.7);
     const g = holding(camp(), 'frond'); g.player.x = spawn.x + 4; g.player.z = spawn.z; expect(bigOf(g)).toBeNull();
     const half = createGame(w, spawn, { leantos: { list: [{ ...LT(), progress: 0.5 }], nextId: 1 } }); holding(half, 'frond'); expect(bigOf(half)).toBeNull();   // a half-built lean-to wants a branch
-  });
-  it('the button shows what will be built', () => {
-    for (const [what, kind, up] of [['walls', 'frond'], ['bed', 'branch', { walls: 1 }], ['ring', 'stone']]) {
-      const icons = buttonIcons(holding(camp({ up }), kind).action());
-      expect(icons.options.map(o => o.key)).toContain(what); expect(ICONS[what]).toMatch(/</);
-    }
   });
 });
 

@@ -1,6 +1,6 @@
 // The name (0.9): the pure texts and rules of game/castaway, the name in the
 // save, counting the days (across midnight, while asleep), the pale ink at
-// night, the lines of writing, and keys typed into the name field.
+// night, the lines of writing, and the start screen (0.38.0: the key, then the name; keys typed into its field stay out of the page).
 import { describe, it, expect, afterEach } from 'vitest';
 import { NAME_MAX, PROMPT_LABEL, FALLBACK, cleanName, shouldAsk, dayNumber, calledBy, dayLine, wakeLine } from '../src/game/castaway.js';
 import { createClock, DAY_SECONDS, START_TIME } from '../src/game/clock.js';
@@ -10,7 +10,7 @@ import { inkStep, inkColor, inkBack, inkGlow, createInk, STEPS, SWITCH, INK_DAY,
 import { skyAt } from '../src/render/sky.js';
 import { wakeOpacity, createDayLine, createWakeLine, WAKE_TIME, WAKE_PEAK, DAY_REST, DAY_PEAK } from '../src/render/nameLines.js';
 import { REST_OPACITY, PEAK_OPACITY, HOLD, EASE } from '../src/render/carryMark.js';
-import { createNamePrompt } from '../src/render/namePrompt.js';
+import { createStartScreen, KEY_LABEL, KEY_NOTE, CHECKING, KEY_BAD, KEY_FAIL, keyError } from '../src/render/startScreen.js';
 import { createInput } from '../src/game/input.js';
 import { createDevPanel } from '../src/render/devPanel.js';
 
@@ -199,66 +199,88 @@ describe('the day line and the waking line', () => {
   });
 });
 
-describe('typing the name', () => {
+describe('the start screen: the key, then the name (0.38.0 "Only him")', () => {
   const saved = globalThis.window;
   afterEach(() => { if (saved === undefined) delete globalThis.window; else globalThis.window = saved; });
+  const flush = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
 
-  // a window and a name field with bubbling: an event goes to the field first and on to the window unless stopped
+  // a window and the #ask element with bubbling: an event goes to the field first and on to the window unless stopped
   function setup() {
     const win = {}, at = (o, t) => (o[t] ||= []);
     globalThis.window = { addEventListener: (t, f) => at(win, t).push(f), removeEventListener() {} };
-    const fl = {}, field = { value: '', disabled: false, focused: false, addEventListener: (t, f) => at(fl, t).push(f), removeEventListener() {}, focus() { this.focused = true; }, blur() { this.focused = false; } };
+    const fl = {}, attrs = {}, field = { value: '', type: 'text', disabled: false, focused: false, addEventListener: (t, f) => at(fl, t).push(f), removeEventListener() {}, focus() { this.focused = true; }, blur() { this.focused = false; }, setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; } };
     const btn = { disabled: false, onclick: [], addEventListener(t, f) { this.onclick.push(f); }, removeEventListener() {} };
-    const label = { textContent: '' };
-    const parts = { '.label': label, input: field, button: btn };
-    const root = { hidden: true, classList: { add(c) { root.cls = c; } }, querySelector: s => parts[s] };
+    const label = { textContent: '' }, note = { textContent: '' };
+    const parts = { '.label': label, input: field, button: btn, '.note': note };
+    const root = { hidden: true, classList: { add(c) { root.cls = c; } }, querySelector: q => parts[q] };
     const press = (type, code, key = code) => {
       const e = { type, code, key, stopped: false, stopPropagation() { this.stopped = true; }, preventDefault() { this.prevented = true; }, repeat: false };
       for (const f of fl[type] || []) f(e);
       if (!e.stopped) for (const f of win[type] || []) f(e);
       return e;
     };
-    return { root, field, btn, label, press, win };
+    return { root, field, btn, label, note, press, win };
   }
 
-  it('shows the question, focuses the field and limits the length', () => {
-    const t = setup(); createNamePrompt(t.root);
+  it('asks the name only, when a key works already: the question, the field focused, the length limited', () => {
+    const t = setup(); createStartScreen(t.root, { askName: true });
     expect(t.root.hidden).toBe(false); expect(t.label.textContent).toBe('What is your name?');
-    expect(t.field.focused).toBe(true); expect(t.field.maxLength).toBe(20);
+    expect(t.field.focused).toBe(true); expect(t.field.maxLength).toBe(20); expect(t.field.type).toBe('text');
   });
-  it('keeps the keys of the game out: W A S D, F, Z, Q, E, + and the backtick do nothing while typing', () => {
+  it('asks the key first, in a password field with the note where a key comes from', () => {
+    const t = setup(); createStartScreen(t.root, { askKey: true, askName: true });
+    expect(t.root.hidden).toBe(false); expect(t.label.textContent).toBe(KEY_LABEL); expect(t.field.type).toBe('password'); expect(t.note.textContent).toBe(KEY_NOTE);
+  });
+  it('checks the key once, says so meanwhile, saves only a key that works, then asks the name', async () => {
+    const t = setup(), checked = [], kept = [];
+    let answer = Promise.reject(Object.assign(new Error('HTTP 400'), { status: 400 }));
+    const p = createStartScreen(t.root, { askKey: true, askName: true, check: k => { checked.push(k); return answer; }, save: k => kept.push(k) });
+    t.field.value = '  bad  '; t.press('keydown', 'Enter', 'Enter');
+    expect(t.note.textContent).toBe(CHECKING); expect(t.field.disabled).toBe(true);
+    await flush();
+    expect(checked).toEqual(['bad']); expect(kept).toEqual([]); expect(t.note.textContent).toBe(KEY_BAD); expect(t.field.value).toBe(''); expect(t.label.textContent).toBe(KEY_LABEL);
+    answer = Promise.reject(Object.assign(new Error('the network'), { code: 'net' }));
+    t.field.value = 'other'; t.press('keydown', 'Enter', 'Enter'); await flush();
+    expect(t.note.textContent).toMatch(/could not be checked: the network/);
+    answer = Promise.resolve(['gemini-3.5-flash-lite']);
+    t.field.value = 'good'; for (const f of t.btn.onclick) f({ preventDefault() {} }); await flush();
+    expect(kept).toEqual(['good']); expect(t.label.textContent).toBe('What is your name?'); expect(t.field.type).toBe('text'); expect(t.field.value).toBe('');
+    t.field.value = '  Dave  '; t.press('keydown', 'Enter', 'Enter');
+    await expect(p.done).resolves.toEqual({ name: 'Dave' });
+    expect(t.root.cls).toBe('done'); expect(t.field.disabled).toBe(true); expect(t.field.focused).toBe(false);
+  });
+  it('a key alone (the name is known): done with no name; an empty key is not sent', async () => {
+    const t = setup(); let n = 0;
+    const p = createStartScreen(t.root, { askKey: true, askName: false, check: () => { n++; return Promise.resolve([]); } });
+    t.press('keydown', 'Enter', 'Enter'); await flush(); expect(n).toBe(0);
+    t.field.value = 'k'; t.press('keydown', 'Enter', 'Enter');
+    await expect(p.done).resolves.toEqual({ name: null }); expect(n).toBe(1);
+  });
+  it('nothing to ask: done at once, the screen stays hidden', async () => {
+    const t = setup(), p = createStartScreen(t.root, {});
+    await expect(p.done).resolves.toEqual({ name: null }); expect(t.root.hidden).toBe(true);
+  });
+  it('keeps the keys of the page out while typing: Q, E, + and the backtick do nothing', () => {
     const t = setup();
-    createNamePrompt(t.root);
-    const input = createInput({ addEventListener() {}, removeEventListener() {} }, () => null);
+    createStartScreen(t.root, { askKey: true });
+    const input = createInput({ addEventListener() {}, removeEventListener() {} });
     const dev = createDevPanel({ hidden: false, textContent: '' }, '0.9', 'Name');
-    for (const code of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ShiftLeft']) t.press('keydown', code);
-    expect(input.up || input.down || input.left || input.right || input.run).toBe(false);
-    t.press('keydown', 'KeyZ'); t.press('keydown', 'KeyF');
-    expect(input.takeSleep()).toBe(false); expect(input.takeLight()).toBe(false); expect(input.takeWake()).toBe(false);
     t.press('keydown', 'Equal'); expect(input.takeZoom()).toBe(0);
     t.press('keydown', 'KeyQ'); expect(input.takeTurn(1).yaw).toBe(0);
     const tick = t.press('keydown', 'Backquote', '`');
-    expect(dev.visible()).toBe(true);   // not toggled
-    expect(tick.stopped).toBe(true);
-    // the same keys outside the field do reach the game
-    for (const f of t.win.keydown) f({ code: 'KeyW', repeat: false, preventDefault() {} });
-    expect(input.up).toBe(true);
+    expect(dev.visible()).toBe(true); expect(tick.stopped).toBe(true);
     for (const f of t.win.keydown) f({ code: 'Backquote', repeat: false, shiftKey: false, preventDefault() {} });
     expect(dev.visible()).toBe(false);
   });
-  it('Enter confirms with the cleaned name; the field goes quiet and loses focus', async () => {
-    const t = setup(), p = createNamePrompt(t.root);
-    t.field.value = '  Dave  ';
-    const e = t.press('keydown', 'Enter', 'Enter');
-    expect(e.prevented).toBe(true);
-    await expect(p.done).resolves.toBe('Dave');
-    expect(t.root.cls).toBe('done'); expect(t.field.disabled).toBe(true); expect(t.field.focused).toBe(false);
-  });
-  it('the arrow confirms too, an empty name is allowed, and it only answers once', async () => {
-    const t = setup(), p = createNamePrompt(t.root);
+  it('the arrow confirms the name too, an empty name is allowed, and it only answers once', async () => {
+    const t = setup(), p = createStartScreen(t.root, { askName: true });
     for (const f of t.btn.onclick) f({ preventDefault() {} });
-    await expect(p.done).resolves.toBe('');
+    await expect(p.done).resolves.toEqual({ name: '' });
     t.field.value = 'Late'; t.press('keydown', 'Enter', 'Enter');
-    await expect(p.done).resolves.toBe('');
+    await expect(p.done).resolves.toEqual({ name: '' });
+  });
+  it('a refused key and any other failure have their own words', () => {
+    expect(keyError({ status: 401 })).toBe(KEY_BAD); expect(keyError({ status: 403 })).toBe(KEY_BAD);
+    expect(keyError({ message: 'timeout' })).toBe(`${KEY_FAIL}: timeout. Try again.`); expect(keyError(null)).toBe(`${KEY_FAIL}. Try again.`);
   });
 });

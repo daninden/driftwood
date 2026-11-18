@@ -7,6 +7,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { aiRoute, saveKey, installHands } from './smoke-ai.js';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -19,9 +20,11 @@ const errors = [];
 try {
   const page = await browser.newPage({ viewport: { width: 640, height: 400 }, deviceScaleFactor: 2 }); page.setDefaultTimeout(240000);
   page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await aiRoute(page); await saveKey(page);   // 0.38.0: the model's requests are answered here; the test plays him with its own hands (scripts/smoke-ai)
   await page.goto('file://' + file + '?spawn=-98,151&time=0.5', { waitUntil: 'commit', timeout: 0 });
   await page.waitForFunction(() => window.__driftwood?.ready || document.body.dataset.error, null, { timeout: 300000 });
   const failed = await page.evaluate(() => document.body.dataset.error); if (failed) throw new Error(failed);
+  await page.evaluate(() => window.__driftwood.pause(true)); await installHands(page);
   await page.evaluate(() => {
     const d = window.__driftwood; d.pause(true);
     window.__press = () => { d.input.actionStart('smoke'); d.input.actionEnd('smoke'); };
