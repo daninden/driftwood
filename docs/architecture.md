@@ -193,6 +193,11 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Clear (0.40.1)
+
+- **A blocked place for a home:** `game/game` `siteBlock(c)` (what keeps a lean-to from starting: ground, another site within SITE_APART, a tree or rock, a pile, fire or burnt place in its walls or keep-free region; `siteFits` is `!siteBlock`). `game/actor` `homeSpots` keys its cache on the lean-tos' version, the felled count and the camp's key (`movement.obstacles.camp.refresh().key`), so a pile or fire laid on a place takes it off the menu; `homeWay(site)` words `siteBlock` or `homeBlock` for a `go` that finds its place no longer fits (a pile by its `placeId`). `ai/actPrompt` `actFixed`: a pile or a fire on a place for a home blocks it.
+- **Tests:** `tests/clear.test.js`.
+
 ### Belt (0.40.0)
 
 - **The axe at his belt:** `game/axe` is `{ made }`; `game/game` `canFell()` replaces `axe.hand` (the axe made, both hands free: no spear, torch, stones or log; wood under his arm is laid down first as before); `canHold` and `handsFree` no longer look at the axe; `takeAxe`, `layAxe`, the lying axe and its sleep lay-down are gone (`game/actions` `DO`, `game/actor`, `render/axe`, `render/islandView`). `player.axe` (in hand) only during the `fell` work, `player.belt` otherwise (`render/hero` `beltAxe`). `game/actor` `whyNot('fell')`. The save keeps `axe: { made }`.

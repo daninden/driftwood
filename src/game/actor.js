@@ -39,6 +39,9 @@
  * game `homeFits` for one of the eight ways, spaced HOME_APART apart, nearest first; `what` says the fresh water he knows nearest, the shore, the trees within 20 m and those where the hut will go;
  * cached until a lean-to or a felled tree changes the ground); a `go` to one stands where its lean-to would be started and sets input.siteYaw (its way) until the next walk or the plan's end,
  * so "buildHere" opens it that way; a refused "buildHere" says why ("no home fits here: ...").
+ * 0.40.1 "Clear": the places for a home are looked at again whenever the camp changes (a pile or a fire laid, taken or burnt out: the camp's key), so a place that a pile now blocks
+ * leaves the menu; a "go" to a place that no longer fits says what is in the way and where (`homeWay`, game `siteBlock` then `homeBlock`): "his pile of 4 stones (laid 09:45) (pile1) right
+ * there lies where the lean-to would go; carry it away, or choose another place".
  * 0.38.3 "Steady": when rain stops a plan, the work he is doing stops too (input.stopWork for one frame, as walking off stops it): the interrupt's record says what stopped
  * ("stopped felling the tree: the chopping done so far is kept", else "nothing was used up; it would start over").
  * 0.38.2 "True": a step is done only when the action itself changed something (`changed`: thirst and hunger only when they went down, a fire only with more fuel or a new
@@ -144,6 +147,16 @@ export function createActor(world, game, opts = {}) {
     return `the hut has no room here: ${pile ? `his ${pileWhat(pile).replace(/^his /, '')} (${placeId('pile', pile)})` : HUT_IN_WAY[b.what] || 'something'} ${where} stands in its way; ${fixed}`;
   }
 
+  function homeWay(site) {   // 0.40.1 "Clear": what keeps a place for a home from fitting now, in words (game `siteBlock`, then `homeBlock`)
+    const b = game.siteBlock(site) || game.homeBlock(site);
+    if (!b) return 'something now stands in the way';
+    if (b.what === 'ground') return b.steep ? 'the ground there is not level enough for the hut' : 'the ground there is wet or will not bear him';
+    const d = Math.round(dist(b, site)), where = d < 1 ? 'right there' : `${d} m ${dirOf(b.x - site.x, b.z - site.z)} of it`;
+    const pile = b.what === 'pile' ? W.piles.filter(q => dist(q, b) < 1).sort((u, v) => dist(u, b) - dist(v, b))[0] : null;
+    const fixed = b.what === 'pile' ? 'carry it away, or choose another place' : b.what === 'fire' || b.what === 'burnt' ? 'ashes fade within two days after a fire burns out; choose another place' : 'choose another place';
+    return `${pile ? `his ${pileWhat(pile).replace(/^his /, '')} (${placeId('pile', pile)})` : HUT_IN_WAY[b.what] || 'something'} ${where} ${b.what === 'tree' || b.what === 'rock' ? 'stands' : 'lies'} where the lean-to would go; ${fixed}`;
+  }
+
   // ---------- what he knows round him ----------
   const tilesNear = (x, z, r) => {
     const out = [], tx0 = Math.max(0, Math.floor((x - r + HALF) / T)), tx1 = Math.min(NT - 1, Math.floor((x + r + HALF) / T)), tz0 = Math.max(0, Math.floor((z - r + HALF) / T)), tz1 = Math.min(NT - 1, Math.floor((z + r + HALF) / T));
@@ -213,7 +226,7 @@ export function createActor(world, game, opts = {}) {
   }
   function homeSpots() {
     if (game.leantos.list.length) return [];
-    const ver = game.leantos.version + ':' + game.felled.list.length;
+    const ver = game.leantos.version + ':' + game.felled.list.length + ':' + game.movement.obstacles.camp.refresh().key;   // 0.40.1 "Clear": a pile or fire laid there changes the ground too
     if (ver !== homeVer) { homeCache.clear(); homeVer = ver; }
     const out = [], i0 = Math.ceil((p.x - HOME_R) / HOME_GRID), i1 = Math.floor((p.x + HOME_R) / HOME_GRID), j0 = Math.ceil((p.z - HOME_R) / HOME_GRID), j1 = Math.floor((p.z + HOME_R) / HOME_GRID);
     for (let iz = j0; iz <= j1; iz++) for (let ix = i0; ix <= i1; ix++) {
@@ -414,7 +427,7 @@ export function createActor(world, game, opts = {}) {
     return true;
   }
   function* goTo(pl) {
-    if (!stillThere(pl)) return { ok: false, reason: pl.kind === 'homespot' ? (game.leantos.list.length ? 'he has begun a home already' : 'that place no longer fits a home (something now stands in the way)') : `${pl.what} is gone` };
+    if (!stillThere(pl)) return { ok: false, reason: pl.kind === 'homespot' ? (game.leantos.list.length ? 'he has begun a home already' : `that place no longer fits a home: ${homeWay(pl.ref.site)}`) : `${pl.what} is gone` };
     const r = pl.ref, limit = realSecs(pl.minutes) * 3 + 30;
     if (pl.kind === 'pile') {
       const kind = W.load() === 0 ? 'take' : 'add';

@@ -62,6 +62,7 @@
  *   game.homeFits(c), game.homeBlock(c), game.hutTrees(c)   0.39.0 "Landfall": may a new lean-to start at site c = { x, z, heading } (siteFits and the whole home can stand: no ground wet at high water,
  *                               too steep or not standable, no other lean-to, no boulder in the hut's room; trees, piles and fires are not counted); what keeps it, or null; the trees in the hut's way (pure).
  *                               A new lean-to ('buildHere') starts only where homeFits: the way input.siteYaw asks first, then the camera's, then the eight ways round.
+ *   game.siteBlock(c)           0.40.1 "Clear": what keeps a lean-to from starting at site c (the test of `siteFits`): { what: 'ground'|'leanto'|'tree'|'rock'|'pile'|'fire'|'burnt', x, z } or null (pure)
  *   game.hutBlock(l)            0.37.7 "Reasons": what keeps the hut from fitting round l (the first thing `hutFits` finds): { what: 'ground'|'leanto'|'tree'|'rock'|'pile'|'fire'|'burnt', x, z, steep? } or null (pure)
  *   game.lackAt(x?, z?)         0.30.20: what is missing for an action that is almost possible there (default: where he stands): 'needSpear' | 'spearAway' | 'needFibre' | 'needMoreWood' | null (pure, game/lack; the voice says it)
  *   game.onAction(listener)     optional presentation notification when a deliberate action is accepted; listeners receive { kind, x, z }, alter no game state and are not saved
@@ -258,7 +259,7 @@ export function createGame(world, spawn, opts = {}) {
   player.lie = sleep.lie; player.tired = sleep.tired(); player.work = null; player.queued = null; player.torch = !!fire.torch; player.spear = spear.hand; player.axe = false; player.belt = axe.has(); player.thirsty = thirst.level(); player.hungry = hunger.level();
   const voiceListeners = new Set();
   const notifyAction = kind => { for (const listener of voiceListeners) listener({ kind, x: player.x, z: player.z }); };
-  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, ground, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, hutFits, hutBlock, homeFits, homeBlock, hutTrees, canPileAt, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
+  const wildlife = createWildlife(world), fireflies = createFireflies(world), weather = createWeather(world.seed), game = { player, clock, wood, sleep, fibre, branches, fronds, stones, felled, ground, logs, axe, leantos, fire, thirst, hunger, breath, crabs, spear, fish, shells, berries, bananas, known, wildlife, fireflies, weather, movement, rain: weather.intensity(clock.total), sea: seaLevel(clock.total), update, state, action, actions, actionAt, actionsAt, offersAt, lackAt, siteFits, hutFits, hutBlock, homeFits, homeBlock, siteBlock, hutTrees, canPileAt, yaw, act, use, onAction(listener) { voiceListeners.add(listener); return () => voiceListeners.delete(listener); } };
   const stand = game.stand = createStand(game, world, { BESIDE });   // 0.30.3 "Routes": standing points (game/stand), asked by the click on a pile or fire and by the walk to the spot of a light, a build or an upgrade
   let rainAt = -Infinity;   // the clock when the rain last wet the wood
   let blockedFor = 0, work = null, slept = sleep.asleep, queued = null, chosen = null;   // work: { kind, t, dur, thing } while kneeling; queued: 'drink' while hands are being freed for it
@@ -385,14 +386,19 @@ export function createGame(world, spawn, opts = {}) {
   };
   /** Does a lean-to fit at c = { x, z, heading }? The ground at its middle and corners is dry and standable, no other site within SITE_APART, and no trunk, boulder or solid of the camp touches its
    *  walls (leantoCircles) or the region that stays free (keepFree) (pure). */
-  function siteFits(c) {
+  function siteFits(c) { return !siteBlock(c); }
+  /** 0.40.1 "Clear": what keeps a lean-to from starting at site c (the very test of `siteFits`), the first thing found, or null when it fits:
+   *  { what: 'ground' (wet now or not standable) | 'leanto' (another site within SITE_APART) | 'tree' | 'rock' | 'pile' | 'fire' | 'burnt' (in its walls or the region that stays free), x, z } (pure). */
+  function siteBlock(c) {
     const dry = (x, z) => !wet(terrainAt(world, x, z, game.sea)) && canStand(world, x, z, game.sea);
-    if (!dry(c.x, c.z) || leantos.list.some(l => Math.hypot(l.x - c.x, l.z - c.z) < SITE_APART)) return false;
-    for (const [f, r] of [[LEANTO_BACK, -LEANTO_SIDE], [LEANTO_BACK, LEANTO_SIDE], [LEANTO_FRONT, -LEANTO_SIDE], [LEANTO_FRONT, LEANTO_SIDE]]) { const q = leantoPoint(c, f, r); if (wet(terrainAt(world, q.x, q.z, game.sea))) return false; }
-    const keep = keepFree(c), hyp = leantoCircles(c);
-    for (const o of naturalNear(c.x, c.z)) { for (const h of hyp) if (Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) return false; if (keep.touches(o.x, o.z, o.r)) return false; }
-    for (const o of movement.obstacles.camp.near(c.x, c.z, 4.5)) { for (const h of hyp) if (Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) return false; if (keep.touches(o.x, o.z, o.r)) return false; }
-    return true;
+    if (!dry(c.x, c.z)) return { what: 'ground', x: c.x, z: c.z };
+    const other = leantos.list.find(l => Math.hypot(l.x - c.x, l.z - c.z) < SITE_APART);
+    if (other) return { what: 'leanto', x: other.x, z: other.z };
+    for (const [f, r] of [[LEANTO_BACK, -LEANTO_SIDE], [LEANTO_BACK, LEANTO_SIDE], [LEANTO_FRONT, -LEANTO_SIDE], [LEANTO_FRONT, LEANTO_SIDE]]) { const q = leantoPoint(c, f, r); if (wet(terrainAt(world, q.x, q.z, game.sea))) return { what: 'ground', x: q.x, z: q.z }; }
+    const keep = keepFree(c), hyp = leantoCircles(c), hits = o => hyp.some(h => Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) || keep.touches(o.x, o.z, o.r);
+    for (const o of naturalNear(c.x, c.z)) if (hits(o)) return { what: o.tree !== undefined ? 'tree' : 'rock', x: o.x, z: o.z };
+    for (const o of movement.obstacles.camp.near(c.x, c.z, 4.5)) if (hits(o)) return { what: o.g.kind, x: o.g.x, z: o.g.z };
+    return null;
   }
   /** 0.33 "Hut": does the hut fit round lean-to l? Its corners and middle are dry, standable ground within HUT_SLOPE of one another in height, no other site within HUT_APART, and no trunk, boulder, pile, fire place or burnt place
    *  touches its walls or its inside (the region of `inHutBox` grown by the clearance of a wall circle); the stone ring and the lean-to itself are no hindrance (pure). */

@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.40.1 "Clear" — 2026-11-19
+
+Agreed with the user 2026-11-19 after an AI log on 0.40.0: he laid his stones on two places for a home, the menu kept offering both, and about fifteen requests in two game minutes walked to them and failed with "something now stands in the way".
+
+- **A blocked place leaves the menu:** the places for a home are looked at again whenever the camp changes (a pile or a fire laid, taken or burnt out), not only when a lean-to is begun or a tree felled; a place that a pile now blocks is no longer offered.
+- **What is in the way:** a "go" to a place for a home that no longer fits says what keeps it and where: "his pile of 4 stones (laid 09:45) (pile1) right there lies where the lean-to would go; carry it away, or choose another place" (also a fire place, old ashes, a trunk, a boulder, wet or uneven ground).
+- **The rule:** the model's rules say a pile or a fire laid on a place for a home blocks it, so material is laid a few steps beside it.
+- **Tests:** `tests/clear.test.js` (`siteBlock`, the place leaving the menu, the reason by the pile's id, the rule).
+
 ## 0.40.0 "Belt" — 2026-11-19
 
 Agreed with the user 2026-11-19 after watching the AI play (too focused on building, a lean-to and then the hut at once, fetching what he already carried, carrying stones he did not need, a fire not valued, the axe laid down to carry a log); built together with 0.39.1 "Tests" in one release, as the user asked.
