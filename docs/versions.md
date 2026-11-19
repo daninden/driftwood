@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.40.3 "Weary" — 2026-11-19
+
+Agreed with the user 2026-11-19 ("ja, bouw alle drie") after an AI log on 0.40.2: he lay down at 19:01, before dusk (19:55), so it was a nap of two hours; he woke at 21:20 still 1.1 days awake, and the model chose "rest for 60 minutes" four times in a row instead of sleeping ("I woke up in the dark, well-rested").
+
+- **Tiredness in words:** the request says what being awake does to him, as for thirst and hunger: "Awake for 1.1 days: tired (he walks about 21% slower); he falls asleep where he stands at 1.5 days, in about 10 hours. He can lie down to sleep now." Not tired yet: when he will be. When he may not lie down yet: in how long he may. By day: that a sleep now is a nap of two hours (before dusk).
+- **A wait is a wait:** the step is told as "wait for 60 minutes (awake)", not "rest", and the rules say that waiting does not rest him; only a sleep does.
+- **What the sleep was:** the request after he wakes says whether it was a nap, how long he slept and how long he is awake now: "He has just woken up: it was a nap (he lay down before dusk): he slept about 2 hours, awake for 1.0 days now." The same stands in what he did lately.
+- **Tests:** `tests/weary.test.js` (the awake line by day, at night, not tired, at the limit, not yet allowed; the wait's words and rule; the nap told after waking, in a real game); `tests/planner.test.js` follows the new awake line.
+
 ## 0.40.2 "Armful" — 2026-11-19
 
 Agreed with the user 2026-11-19: during the AI test game on 0.40.1 the user saw him fetch the branches for the lean-to one at a time ("optie 1 + 2"), and after the test game's findings "a t/m d"; while it was built the user asked that his thoughts never name the menu's ids.

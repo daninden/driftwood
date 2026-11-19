@@ -29,6 +29,7 @@
  * (it fails only when there is no ground to go to that way). `do` presses that action when the action button or its arc offers it where he stands (else it fails: "not
  * offered here", with what is missing when the game knows, game/lack) and waits until the work is done; it fails when nothing changed (a dig whose crab got away, a drill that
  * did not catch). `use` eats or drinks a carried thing (game/game `use`). `wait` sits for its minutes. A sleep ends when he wakes; then a new plan is asked.
+ * 0.40.3 "Weary": a sleep step's record (its note) says whether it was a nap, how long he slept and how long he is awake now (`sleepNote`); the request after waking tells it.
  *
  * 0.37.2 "Torch": a `go` or `wander` that starts in the dark (or would end after dusk) is allowed only with a burning torch in his hand or, for a `go`, with both where he stands and the place
  * in the light of a burning fire or a torch in the ground (game/dark `walkLight`); else the step fails with the plain reason ("it is dark and he has no torch ...") and a new plan is asked.
@@ -588,9 +589,10 @@ export function createActor(world, game, opts = {}) {
       sleeping = true;   // (from the press on: step() must not take the lying down for a collapse)
       for (let t = 0; t < 40 && !game.sleep.asleep && p.lie <= 0; t++) yield;
       if (!game.sleep.asleep && p.lie <= 0) { sleeping = false; return { ok: false, reason: 'he could not lie down here' }; }
-      while (game.sleep.asleep || p.lie > 0) yield;   // (step() keeps him still meanwhile)
+      let nap = false;
+      while (game.sleep.asleep || p.lie > 0) { if (game.sleep.asleep && game.sleep.nap) nap = true; yield; }   // (step() keeps him still meanwhile)
       sleeping = false;
-      return { ok: true };
+      return { ok: true, note: sleepNote(nap, game.sleep.slept, game.sleep.awake) };   // 0.40.3 "Weary": what kind of sleep it was, and how rested he is
     }
     yield* waitActs(); yield* waitIdle();
     if (kind === 'light' && !game.fire.fires.some(f => game.fire.strength(f) > 0 && dist(f, p) <= 3)) return { ok: false, reason: 'the fire did not catch' + (game.sleep.awake >= TIRED_AT ? ' (he is tired: the drill seldom catches)' : '') };   // 0.37.4: the fibre is used up either way; done only with a fire
@@ -703,6 +705,11 @@ export function createActor(world, game, opts = {}) {
   const join = (a, b) => (a && b ? `${a}; ${b}` : a || b || null);
   const pileKind = q => (q.kind === 'driftwood' ? 'driftwood' : q.kind);
   const pileNoun = q => (q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : q.kind === 'log' ? 'logs' : 'driftwood');
+  // 0.40.3 "Weary": the record of a sleep step, so the request after waking says whether it was a nap and how long he is awake now
+  const sleepNote = (nap, slept, awake) => {
+    const h = Math.max(0, slept) * 24, hours = h < 1 ? `${Math.max(1, Math.round(h * 60))} minutes` : `${Math.round(h * 2) / 2} hours`, aw = `awake for ${(Math.round(awake * 10) / 10).toFixed(1)} days now`;
+    return nap ? `it was a nap (he lay down before dusk): he slept about ${hours}, ${aw}` : `he slept about ${hours}, ${aw}`;
+  };
   function* runPlan(plan) {
     for (let i = 0; i < plan.steps.length; i++) {
       const s = plan.steps[i], what = stepText(s, plan.menu.places);

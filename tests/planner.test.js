@@ -55,7 +55,7 @@ describe('the request and the answer (ai/actPrompt)', () => {
     const b = bodyText({ thirst: 0.8, hunger: 0.8, awake: 0.3 });   // the user's Gemini game: day 2 04:04, never drunk on day 1
     expect(b).toContain('Thirst: 0.8 days since he drank: thirsty (he walks about 11% slower). Very thirsty at 1 day (his rest runs out twice as fast), in about 5 hours; he collapses at 1.5 days, in about 17 hours.');
     expect(b).toContain('Hunger: 0.8 days since he ate: hungry (he walks about 3% slower, the fire drill tires him 1.5 times as much); starving at 3 days');
-    expect(b).toContain('Awake for 0.3 days.');
+    expect(b).toContain('Awake for 0.3 days: not tired.');   // 0.40.3 "Weary": with what it does to him
     expect(bodyText({ thirst: 0.2, hunger: 0.1, awake: 0 })).toMatch(/not thirsty\. Thirsty at 0\.5 \(he walks slower\), in about 7 hours; he collapses at 1\.5 days, in about 31 hours/);
     expect(bodyText({ thirst: 1.2, hunger: 0, awake: 0 })).toMatch(/very thirsty \(he walks about 24% slower, his rest runs out twice as fast\); he collapses at 1\.5 days, in about 7 hours/);
     expect(bodyText({ thirst: 1.5, hunger: 3, awake: 0 })).toMatch(/at the point of collapse[\s\S]*starving \(he walks about 25% slower/);

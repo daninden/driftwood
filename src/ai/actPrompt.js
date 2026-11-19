@@ -19,7 +19,7 @@
  *   actRecentText(recent) -> string                   game/actor's records as lines
  *   buildActMessages({ name, state, menu, ask, recent, notes, lessons }) -> [{ role: 'system', content }, { role: 'user', content }]
  *   armText(carries) -> string                       0.38.1 "Trace": "Under his arm: 2 of 3." (in NOW, after what he carries)
- *   bodyText(state) -> string (0.37.10: thirst, hunger, awake), fireText(fires) -> string (0.37.10: his fires, or that none burns)
+ *   bodyText(state) -> string (0.37.10: thirst, hunger, awake), awakeText(state) -> string (0.40.3: awake, tired, when he falls asleep, whether he may lie down now), fireText(fires) -> string (0.37.10: his fires, or that none burns)
  *   parseActPlan(text, old?) -> { ok, steps, say, notes, error }   the first JSON object of the text (code fences allowed); `steps` as given (checked later), `notes` [text] | null
  *                                (0.37.8: a whole number n in `notes` keeps note n of `old`, his notes before)
  *
@@ -62,7 +62,7 @@ import { stateText, hhmm, notesText, clipLine, whoName } from './prompt.js';
 import { NOTES_MAX, NOTE_LEN, SAID_LEN, LESSONS_MAX, LESSON_LEN, RECENT_SHOWN } from './config.js';
 import { THIRSTY_AT, VERY_AT, COLLAPSE_AT, THIRST_SLOW, DRAIN } from '../game/thirst.js';
 import { HUNGRY_AT, STARVING_AT, HUNGER_SLOW, DRILL_COST as HUNGER_DRILL, STARVE_DRAIN } from '../game/hunger.js';
-import { AWAKE_MAX, TIRED_AT, DUSK, DAWN, NAP_DAYS, NAP_REST, REST_RATE, NIGHT_AFTER, COLD_SLEEP, SHELTER_SLEEP, WALLS_SLEEP, SHELTER_REST, BED_REST } from '../game/sleep.js';
+import { AWAKE_MAX, TIRED_AT, TIRED_SLOW, SLEEP_AFTER, isNight, DUSK, DAWN, NAP_DAYS, NAP_REST, REST_RATE, NIGHT_AFTER, COLD_SLEEP, SHELTER_SLEEP, WALLS_SLEEP, SHELTER_REST, BED_REST } from '../game/sleep.js';
 import { WOOD_SHELTER, FIRE_SHELTER } from '../game/weather.js';
 import { FIBRE_MAX } from '../game/fibre.js';
 import { FIRE_MIN, TORCH_DAYS, TORCH_RAIN, BURN, BRANCH_BURN, RING_BURN } from '../game/fire.js';
@@ -106,7 +106,7 @@ export function actFixed(name) {
     actionLines(),
     '  {"use": "<thing>"}: eat or drink something he carries, anywhere. Things:',
     useLines(),
-    `  {"wait": n}: rest where he is for 1 to ${WAIT_MAX} minutes.`,
+    `  {"wait": n}: wait where he is for 1 to ${WAIT_MAX} minutes. He stays awake: waiting does not rest him, only "sleep" does.`,
     '- "sleep" is a plan of its own: its only step. He sleeps until he wakes, then you are asked again.',
     `- Fishing is a plan of its own too: {"do": "fish", "minutes": n} with n from ${FISH_MIN} to ${FISH_MAX} game minutes, the only step. He needs the spear in his hand; he walks into the shallows near him if he does not stand in them, and strikes again and again until he catches a fish or the minutes are up (no fish then is a normal end, not an error). You choose how long.`,
     `- A place within ${NEARBY} m is marked "nearby". A place's "can do there" says what the action button would offer standing there, with what he holds now.`,
@@ -160,6 +160,7 @@ export function actRecentText(recent) {
 const askLine = ask => {
   const a = ask || {}, base = WHY_ASKED[a.why] || 'A new plan is wanted.', l = a.last;
   if ((a.why === 'failed' || a.why === 'rejected') && l && l.reason) return `${base} ${a.why === 'failed' ? `"${l.what}" failed: ${l.reason}.` : `Reason: ${l.reason}.`}`;
+  if (a.why === 'woke' && l && l.outcome === 'done' && l.reason) return `He has just woken up: ${l.reason}.`;   // 0.40.3 "Weary": a nap, how long he slept, how long awake now
   if (a.why === 'done' && l && l.outcome === 'done' && l.reason) return `${base} Its last step ended with: ${l.reason}.`;   // 0.37.2: a fishing with no catch
   return base;
 };
@@ -186,7 +187,23 @@ export function bodyText(s) {
   const hunger = hu >= STARVING_AT ? `Hunger: ${d1b(hu)} days since he ate: starving (he walks about ${hSlow}% slower, his rest runs out ${STARVE_DRAIN} times as fast).`
     : hu >= HUNGRY_AT ? `Hunger: ${d1b(hu)} days since he ate: hungry (he walks about ${hSlow}% slower, the fire drill tires him ${HUNGER_DRILL} times as much); ${starving}.`
     : `Hunger: ${d1b(hu)} days since he ate: not hungry. Hungry at ${HUNGRY_AT} (he walks slower), ${inHours(HUNGRY_AT - hu)}; ${starving}.`;
-  return `${thirst}\n${hunger}\nAwake for ${d1b(s.awake)} days.`;
+  return `${thirst}\n${hunger}\n${awakeText(s)}`;
+}
+
+/** 0.40.3 "Weary": how long he has been awake, what it does to him now, when he falls asleep where he stands, and whether he may lie down to sleep now
+ *  (game/sleep `canLie`; a sleep begun before dusk is a nap). The game's own tests (dry ground, not stooping) are not counted here. */
+export function awakeText(s) {
+  const aw = Math.max(0, +s.awake || 0), drop = `he falls asleep where he stands at ${AWAKE_MAX} days, ${inHours(AWAKE_MAX - aw)}`;
+  const head = aw >= AWAKE_MAX ? `Awake for ${d1b(aw)} days: he falls asleep where he stands.`
+    : aw >= TIRED_AT ? `Awake for ${d1b(aw)} days: tired (he walks about ${slower((aw - TIRED_AT) / (AWAKE_MAX - TIRED_AT), TIRED_SLOW)}% slower); ${drop}.`
+    : `Awake for ${d1b(aw)} days: not tired. Tired at ${Math.round(TIRED_AT * 100) / 100} (he walks slower), ${inHours(TIRED_AT - aw)}; ${drop}.`;
+  if (aw >= AWAKE_MAX) return head;
+  const t = Number.isFinite(+s.time) ? ((+s.time % 1) + 1) % 1 : null;
+  if (t === null) return head;
+  const night = isNight(t), toDusk = night ? 0 : DUSK - t;
+  if (aw >= SLEEP_AFTER || (night && aw >= NIGHT_AFTER)) return `${head} He can lie down to sleep now${night ? '' : ` (before dusk, ${hhmm(DUSK)}, a sleep is a nap of ${Math.round(NAP_DAYS * 24)} hours)`}.`;
+  const wait = night ? Math.min(NIGHT_AFTER - aw, SLEEP_AFTER - aw) : Math.min(SLEEP_AFTER - aw, Math.max(toDusk, NIGHT_AFTER - aw));
+  return `${head} He can lie down to sleep ${inHours(wait)}.`;
 }
 
 /** 0.37.10 "Body": his fires (game/actor `menu().fires`), also when none burns. */

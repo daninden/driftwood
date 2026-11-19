@@ -193,6 +193,13 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Weary (0.40.3)
+
+- **The awake line:** `ai/actPrompt` `awakeText(state)` (used by `bodyText`) tells awake, tired (`TIRED_AT`, the slowdown from `TIRED_SLOW`), when he falls asleep where he stands (`AWAKE_MAX`), and from `state.time` whether `sleep.canLie` would allow lying down now (`SLEEP_AFTER`, `NIGHT_AFTER`, `isNight`), a nap by day, or in how long. The game's own tests (dry ground, not stooping) are not counted.
+- **A wait:** `game/actions` `stepText` says "wait for n minutes (awake)"; the rules line of `{"wait": n}` says waiting does not rest him.
+- **After a sleep:** `game/actor` `runStep` notes whether the sleep was a nap (`sleep.nap` while asleep) and returns `sleepNote(nap, sleep.slept, sleep.awake)` as the step's note; `ai/actPrompt` `askLine` puts it after "He has just woken up:" for `why: 'woke'`.
+- **Tests:** `tests/weary.test.js`; `tests/planner.test.js` follows the awake line.
+
 ### Armful (0.40.2)
 
 - **A plan of up to 12 steps:** `game/actions` `PLAN_STEPS` 12 (was 8); the request says it through the constant.

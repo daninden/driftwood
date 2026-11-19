@@ -129,7 +129,7 @@ export function stepText(s, places) {
   const k = stepKind(s);
   if (k === 'go') { const q = placeOf(places, s.go); return 'walk to ' + (q ? q.what : s.go); }
   if (k === 'wander') return `wander ${s.wander} for ${s.minutes} minutes`;
-  if (k === 'wait') return `rest for ${s.wait} minutes`;
+  if (k === 'wait') return `wait for ${s.wait} minutes (awake)`;
   if (k === 'do') return s.do === 'fish' && Number.isFinite(s.minutes) ? `fish with the spear for up to ${s.minutes} minutes` : DO[s.do] ? DO[s.do].what : String(s.do);
   if (k === 'use') return USE[s.use] ? USE[s.use].what : String(s.use);
   return 'an unknown step';
