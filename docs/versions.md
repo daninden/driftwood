@@ -2,6 +2,18 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.40.0 "Belt" — 2026-11-19
+
+Agreed with the user 2026-11-19 after watching the AI play (too focused on building, a lean-to and then the hut at once, fetching what he already carried, carrying stones he did not need, a fire not valued, the axe laid down to carry a log); built together with 0.39.1 "Tests" in one release, as the user asked.
+
+- **The axe at his belt:** once made it hangs at his belt (drawn tucked in on his back, the head up behind his right shoulder): always with him, no hand, never laid down. It is no hindrance to wood, stones, a log, a torch, the spear, building or making. Felling takes it in both hands (no spear, torch, stones or log; wood under his arm is laid down first) and it goes back afterwards. `takeAxe`, `layAxe` and the lying axe are gone; a refused "fell" says why.
+- **Why a place offers nothing now:** a place on the menu whose things he cannot take up with what he holds says why ("cannot take it up now: his arms are full: 3 of 3 under his arm ("lay" first)", stones with the spear or a torch, full hands of stones, a log on his shoulder). NOW says the stones in his hands and how much what he carries slows him.
+- **Fire matters:** a cold sleep under a lean-to lasts 4 hours (was 6), with side walls 5 (was 7); a whole night still needs a fire until the hut. The rules say what a fire gives him (a whole night, roasted crabs and fish, light and torches in the dark).
+- **The hut later:** a felled log is green and dries 2 days (wherever it lies) before it goes into the hut; the menu says whether a log is green (and when it is dry) and how many logs of a pile are dry; a hut part refused with a green log says when it is dry.
+- **No hurry:** the rules say "There is no hurry: the home takes days. A day is also for water, food, his fire and looking round the island." (advice, an exception to *rules, not advice*, agreed by the user).
+- **0.39.1 "Tests" (in this release):** the tests 0.39.0 should have had: `tests/landfall.test.js` (where a whole home can stand: wet at high water, too steep, a boulder, another lean-to, trees and piles not counted; the way a new lean-to opens; the places for a home on the menu, gone once a lean-to is begun, a "go" that starts the lean-to at the place, a refused "buildHere" with its reason; `pickIsland` / `forgetIsland`; "Island <seed>." of the AI panel, now the pure `islandLine`).
+- **Tests:** `tests/belt.test.js` (the arm line, `notNow`, green logs, the hut with a green log, the rules text), `tests/axe.test.js` rewritten for the belt (and green logs of a felled tree), the cold sleeps in `tests/leanto`, `sleep`, `upgrades` and `planner`; `scripts/axe-smoke.js` shoots the axe at his belt.
+
 ## 0.39.0 "Landfall" — 2026-11-18
 
 Agreed with the user 2026-11-18 (option 1a: the rule and the facts). In place of 0.38.4 "Proof": no new test scenarios, the documents updated.

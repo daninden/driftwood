@@ -59,7 +59,7 @@ try {
     d.game.update(d.input, 0); window.__drawDt(3, 1); return d.game.action().tap && d.game.action().tap.kind;
   }, t);
   const fellIt = key => page.evaluate(() => { const d = window.__driftwood, n = d.game.felled.falls; window.__press(); d.step(80, () => d.game.felled.falls > n && !d.game.player.work); return d.game.felled.falls - n; });
-  await page.evaluate(() => { const d = window.__driftwood; d.game.axe.make(); d.game.update(d.input, 0); });   // a new axe in his hand
+  await page.evaluate(() => { const d = window.__driftwood; d.game.axe.make(); d.game.update(d.input, 0); });   // a new axe at his belt (0.40.0)
   // 1: the axe in his hand, and 2: a chop (the pose follows the real time: three shots a little apart)
   const first = find.giant || find.tree || find.palm;   // the first scenes at the giant near the start (it gives three logs)
   console.log('tap', await stand(first));
@@ -85,7 +85,6 @@ try {
   // 5: a pile of twelve logs, a lying log, and a log on his shoulder
   await page.evaluate(() => {
     const d = window.__driftwood, g = d.game, p = g.player, ox = p.x, oz = p.z;
-    g.axe.hand && g.axe.lay(p.x, p.z);
     const c = d.view.camera.position, dx = c.x - ox, dz = c.z - oz, n = Math.hypot(dx, dz), ux = dx / n, uz = dz / n, rx = -uz, rz = ux;   // towards the camera, and to the right of the screen
     const px = ox + rx * 1.8, pz = oz + rz * 1.8, pile = { x: px, z: pz, kind: 'log', logs: [] };
     for (let i = 0; i < 12; i++) { const l = g.logs.add({ x: px, z: pz, len: 1.9 + (i % 3) * 0.15, a: 0, rad: 0.12 + (i % 4) * 0.015 }); g.logs.take(l); pile.logs.push(l); }
@@ -99,9 +98,11 @@ try {
   await shot('axe-6b-shoulder-closeup.png');
   await page.evaluate(() => { const d = window.__driftwood; d.input.up = true; d.step(0.6); d.input.up = false; window.__drawDt(0.05, 2); });
   await shot('axe-7-walking-with-log.png');
-  // 6: the axe lying on the ground
-  await page.evaluate(() => { const d = window.__driftwood, g = d.game; g.wood.log = null; g.wood.version++; g.update(d.input, 0); g.axe.hand || g.axe.take(); g.update(d.input, 0); g.axe.lay(g.player.x, g.player.z); g.update(d.input, 0); window.__drawDt(0.2, 3); });
-  await shot('axe-8-axe-lying.png');
+  // 6: 0.40.0 "Belt": the axe at his belt (he never lays it down), seen from behind and from the side
+  await page.evaluate(() => { const d = window.__driftwood, g = d.game, c = d.view.camera.position, p = g.player; g.wood.log = null; g.wood.version++; p.heading = Math.atan2(p.x - c.x, p.z - c.z); g.update(d.input, 0); window.__drawDt(0.2, 3); });
+  await shot('axe-8-axe-at-belt-back.png');
+  await page.evaluate(() => { const d = window.__driftwood, g = d.game; g.player.heading += Math.PI / 2; g.update(d.input, 0); window.__drawDt(0.2, 3); });
+  await shot('axe-8b-axe-at-belt-side.png');
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('axe smoke: no runtime errors');
 } finally { await browser.close(); }

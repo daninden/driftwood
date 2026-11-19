@@ -428,8 +428,8 @@ describe('free hands (0.37.6)', () => {
     expect(g.spear.hand).toBe(true); expect(g.wood.carried.length).toBe(1);
     const t = scene({ fire: fireAt(E.x + 0.8, E.z, 2 * BURN) }); t.spear.hand = true;
     expect(t.actions().some(o => o.kind === 'torch')).toBe(true);
-    const a = scene({ fire: fireAt(E.x + 0.8, E.z, 2 * BURN) }); a.axe.hand = true;
-    expect(a.actions().some(o => o.kind === 'torch')).toBe(false);   // not with the axe: felling takes both hands
+    const a = scene({ fire: fireAt(E.x + 0.8, E.z, 2 * BURN) }); a.axe.made = true;
+    expect(a.actions().some(o => o.kind === 'torch')).toBe(true);   // 0.40.0 "Belt": the axe at his belt takes no hand
     const st = scene(); st.spear.at = { x: E.x + 0.3, z: E.z }; st.wood.stones.push({ id: 990002, x: E.x, y: 1, z: E.z, len: 0.2, a: 0, rad: 0.1, stone: true });
     expect(st.actions().some(o => o.kind === 'takeSpear')).toBe(false);   // stones take both hands
   });

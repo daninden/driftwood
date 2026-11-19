@@ -80,8 +80,6 @@ export const DO = Object.freeze({
   laySpear:  { what: 'lay the spear down', secs: STOOP },
   fish:      { what: 'fish with the spear in shallow sea water, for the minutes you give, until he catches one (a plan of its own, the only step)', secs: FISH_TIME },
   makeAxe:   { what: 'make an axe (the branch he carries, a stone beside him, a tuft of fibre)', secs: AXE_TIME },
-  takeAxe:   { what: 'take up the axe', secs: STOOP },
-  layAxe:    { what: 'lay the axe down', secs: STOOP },
   fell:      { what: 'fell the tree beside him (an hour of chopping)', secs: FELL_TIME },
 });
 

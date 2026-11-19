@@ -237,12 +237,12 @@ describe('what the upgrades do', () => {
     expect(wetAt(null, 2.2)).toBe(true); expect(wetAt({ walls: 1 }, 2.2)).toBe(false);
     delete logs0[0].t;
   });
-  it('walls: a cold sleep under it lasts seven hours and he wakes 87 % rested, a bare lean-to six hours, none three', () => {
+  it('walls: a cold sleep under it lasts five hours and he wakes about 62 % rested, a bare lean-to four hours, none three (0.40.0 "Belt": was seven and six)', () => {
     const cold = shelter => { const s = createSleep({ awake: 1.5 }); s.start(); let n = 0; while ((s.asleep || s.lie < 1) && n++ < 40000) s.update(1 / 30, true, false, {}, shelter); return s; };
     const a = cold(false), b = cold(true), c = cold({ walls: true, bed: false });
     expect(a.slept).toBeCloseTo(COLD_SLEEP, 1); expect(b.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(c.slept).toBeCloseTo(WALLS_SLEEP, 1);
-    expect(WALLS_SLEEP * 24).toBe(7);
-    expect(c.rest()).toBeGreaterThan(0.85); expect(c.rest()).toBeLessThan(0.9); expect(b.rest()).toBeLessThan(c.rest());
+    expect(WALLS_SLEEP * 24).toBeCloseTo(5, 9); expect(SHELTER_SLEEP * 24).toBeCloseTo(4, 9);
+    expect(c.rest()).toBeGreaterThan(0.58); expect(c.rest()).toBeLessThan(0.66); expect(b.rest()).toBeLessThan(c.rest());
   });
   it('bed: he rests 25 % faster, warm or cold', () => {
     const rested = (warm, shelter) => { const s = createSleep({ awake: 1.5 }); s.start(); let days = 0; while (days < 2 / 24) days += s.update(1 / 30, true, warm, {}, shelter) / DAY_SECONDS; return 1.5 - s.awake; };

@@ -2,31 +2,36 @@
  * game/logs — the logs of felled trees (0.31 "Axe"): timber, lying where a tree went down until he shoulders one.
  *
  * Rules
- *   - A log is a piece like a driftwood log (game/wood): { id, x, y, z, len, a, rad, timber: true }, about 2 m long (game/felled LOG_LEN) and a hand thick or more. It is always dry, never
- *     rots, never burns and is never taken by the sea. Lying logs block no step (nothing loose is solid).
+ *   - A log is a piece like a driftwood log (game/wood): { id, x, y, z, len, a, rad, timber: true, cut? }, about 2 m long (game/felled LOG_LEN) and a hand thick or more. It is always dry, never
+ *     rots, never burns and is never taken by the sea. 0.40.0 "Belt": a log is green when it is felled (`cut`, the clock's total then) and dry for the hut SEASON_DAYS (2) later,
+ *     wherever it lies or is carried (`seasoned`); a log without `cut` is dry. Lying logs block no step (nothing loose is solid).
  *   - Logs exist only where a tree was felled (`add`); there are none in a new world. A log is lying, carried (one at a time, game/wood `log`) or on a log pile (kind 'log'); it never lies loose
  *     again once it was picked up. Ids start at LOG_ID0, above the stone ids, so a saved pile or a carried log is read back by `piece(id)`.
  *
  * Pure data on a world; no DOM, no Three.js.
  *
- * LOG_ID0
+ * LOG_ID0, SEASON_DAYS
+ * seasoned(log, total) -> bool   dry for the hut: no `cut`, or SEASON_DAYS since it was felled;   dryAt(log) -> the clock's total when it is (or was) dry
  * createLogs(world, saved?) -> logs
  *   logs.all                  every log there is, lying or not (a Map id -> log)
  *   logs.version              goes up with every change, for the renderer      logs.dirty   a Set of the indices of the tiles (world.tiles) whose lying logs changed (the view empties it); not saved
- *   logs.add({ x, z, len, a, rad }) -> log      a new log lying there (y is the ground)
+ *   logs.add({ x, z, len, a, rad, cut? }) -> log      a new log lying there (y is the ground; cut: when it was felled)
  *   logs.near(x, z, reach)    the logs lying within reach (and a log's half length) of (x, z)
  *   logs.lying(tile)          the logs lying on a tile (for the renderer)
  *   logs.onGround(l)          true while the log lies where it was made
  *   logs.piece(id)            the log with that id (lying or not), or null
  *   logs.move(l, x, z, a?) -> the log (moved in place) | null   (0.36.2 "Ground") a lying log is moved (a building cleared its place); null when it is not lying
  *   logs.take(l) -> true when it was lifted off the ground (false: gone already)
- *   logs.state() -> { list: [{ id, x, y, z, len, a, rad }], taken: [id] }   plain, for saving; saved: such a state
+ *   logs.state() -> { list: [{ id, x, y, z, len, a, rad, cut? }], taken: [id] }   plain, for saving; saved: such a state
  *
  * Depends on: world/constants
  */
 import { HALF, T, NT } from '../world/constants.js';
 
 export const LOG_ID0 = 4 << 24;
+export const SEASON_DAYS = 2;   // 0.40.0 "Belt": a felled log dries this many days before it goes into the hut
+export const dryAt = l => (l && Number.isFinite(l.cut) ? l.cut + SEASON_DAYS : -Infinity);
+export const seasoned = (l, total) => !!l && total >= dryAt(l);
 const tileOf = (x, z) => Math.floor((z + HALF) / T) * NT + Math.floor((x + HALF) / T);
 
 export function createLogs(w, saved) {
@@ -36,12 +41,12 @@ export function createLogs(w, saved) {
   if (saved) {
     for (const e of saved.list || []) {
       if (!e || ![e.id, e.x, e.y, e.z, e.len, e.a, e.rad].every(Number.isFinite) || !Number.isInteger(e.id) || e.id < LOG_ID0 || all.has(e.id)) continue;
-      all.set(e.id, { id: e.id, x: e.x, y: e.y, z: e.z, len: e.len, a: e.a, rad: e.rad, timber: true }); next = Math.max(next, e.id + 1);
+      all.set(e.id, { id: e.id, x: e.x, y: e.y, z: e.z, len: e.len, a: e.a, rad: e.rad, timber: true, ...(Number.isFinite(e.cut) ? { cut: e.cut } : {}) }); next = Math.max(next, e.id + 1);
     }
     for (const id of saved.taken || []) if (all.has(id)) taken.add(id);
   }
   function add(s) {
-    const l = { id: next++, x: s.x, y: w.H(s.x, s.z), z: s.z, len: s.len, a: s.a, rad: s.rad, timber: true };
+    const l = { id: next++, x: s.x, y: w.H(s.x, s.z), z: s.z, len: s.len, a: s.a, rad: s.rad, timber: true, ...(Number.isFinite(s.cut) ? { cut: s.cut } : {}) };
     all.set(l.id, l); logs.dirty.add(tileOf(l.x, l.z)); logs.version++; return l;
   }
   function onGround(l) { return !taken.has(l.id); }
@@ -60,6 +65,6 @@ export function createLogs(w, saved) {
     if (!l || !l.timber || taken.has(l.id) || !all.has(l.id)) return null;
     logs.dirty.add(tileOf(l.x, l.z)); l.x = x; l.z = z; l.y = w.H(x, z); if (Number.isFinite(a)) l.a = a; logs.dirty.add(tileOf(x, z)); logs.version++; return l;
   }
-  function state() { return { list: [...all.values()].map(l => ({ id: l.id, x: l.x, y: l.y, z: l.z, len: l.len, a: l.a, rad: l.rad })), taken: [...taken] }; }
+  function state() { return { list: [...all.values()].map(l => ({ id: l.id, x: l.x, y: l.y, z: l.z, len: l.len, a: l.a, rad: l.rad, ...(Number.isFinite(l.cut) ? { cut: l.cut } : {}) })), taken: [...taken] }; }
   return logs;
 }

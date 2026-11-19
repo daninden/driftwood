@@ -194,9 +194,9 @@ describe('sleeping under a lean-to', () => {
     const l = createLeantos(w, { list: [{ id: 0, x: 0, z: 0, heading: 0, progress: 1 }, { id: 1, x: 10, z: 0, heading: 0, progress: 0.5 }] });
     expect(l.shelter(0.9, 0)).toBe(true); expect(l.shelter(SLEEP_R + 0.05, 0)).toBe(false); expect(l.shelter(10, 0)).toBe(false);
   });
-  it('without a fire the cold sleep lasts six hours and he wakes three quarters rested', () => {
+  it('without a fire the cold sleep lasts four hours (0.40.0 "Belt", was six) and he wakes half rested', () => {
     const g = sleepOut(shelterGame());
-    expect(g.sleep.slept * 24).toBeCloseTo(6, 0); expect(g.sleep.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.72); expect(g.sleep.rest()).toBeLessThan(0.8);
+    expect(g.sleep.slept * 24).toBeCloseTo(4, 0); expect(g.sleep.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.47); expect(g.sleep.rest()).toBeLessThan(0.55);
   });
   it('outside it the cold sleep is three hours, about 33 % rested from empty (it takes off half a day)', () => {
     const g = sleepOut(createGame(w, spawn, { sleep: { awake: 1.5 }, leantos: { list: [{ id: 0, x: spawn.x + 3, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } }));

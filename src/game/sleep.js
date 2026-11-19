@@ -29,11 +29,10 @@
  *     whole night through. If the fire goes out while he sleeps, the cold
  *     wakes him once he has slept COLD_SLEEP.
  *
- *   - Under a lean-to (game/leanto) the cold sleep lasts SHELTER_SLEEP (six hours, three
- *     quarters rested) instead of COLD_SLEEP; by a fire it still lasts the whole night, but
+ *   - Under a lean-to (game/leanto) the cold sleep lasts SHELTER_SLEEP (four hours since 0.40.0 "Belt", was six) instead of COLD_SLEEP; by a fire it still lasts the whole night, but
  *     he rests SHELTER_REST (1.25) times as fast as by a fire alone.
  *
- *   - 0.27 "Home": a lean-to with side walls lasts WALLS_SLEEP (seven hours, 87.5 % rested) when it is cold, instead of
+ *   - 0.27 "Home": a lean-to with side walls lasts WALLS_SLEEP (five hours since 0.40.0, was seven) when it is cold, instead of
  *     SHELTER_SLEEP; one with a bed rests him BED_REST (1.25) times as fast, warm or cold.
  *
  *   - 0.33 "Hut": in a finished hut (shelter.hut) a cold sleep lasts the whole night, as by a fire, and rests him HUT_REST (95 % of the whole night's rest, the bed included, so he wakes nearly, not quite, rested); by a fire he rests as under a lean-to
@@ -82,9 +81,9 @@ export const SLEEP_AFTER = 0.5;   // by day he can only choose to sleep after ha
 export const NIGHT_AFTER = 0.15;  // at night after about 3½ hours awake
 export const DUSK = 0.83, DAWN = 0.17;   // a night (the sun goes down at 0.825 and comes up at 0.175, render/sky)
 export const NAP_DAYS = 2 / 24, NAP_REST = 0.5;   // a nap by day: two hours, resting half as fast
-export const SHELTER_SLEEP = 6 / 24;   // under a lean-to, after six hours
+export const SHELTER_SLEEP = 4 / 24;   // under a lean-to, after four hours (0.40.0 "Belt", was six: the lean-to keeps the fire's warmth, it does not replace it)
 export const SHELTER_REST = 1.25;   // by a fire under a lean-to he rests this much faster
-export const WALLS_SLEEP = 7 / 24;   // under a lean-to with side walls, a cold sleep lasts seven hours
+export const WALLS_SLEEP = 5 / 24;   // under a lean-to with side walls, a cold sleep lasts five hours (0.40.0, was seven)
 export const HUT_REST = 0.95;   // in a hut a cold night's sleep rests him this much of a full night's (he wakes nearly, not quite, rested)
 export const BED_REST = 1.25;   // on the bed of a lean-to he rests this much faster
 

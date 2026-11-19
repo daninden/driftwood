@@ -45,7 +45,7 @@ describe('the request and the answer (ai/actPrompt)', () => {
   });
   it('the rules tell what the home gives, that a hut part takes about 15 minutes, the nap\'s share and that he can go far (0.37.9 "Far")', () => {
     const f = actFixed('');
-    expect(f).toMatch(/What his home gives.*the lean-to: a night without a fire close by lasts 6 hours instead of 3.*the bed: he rests 1.25 times as fast; the ring: a fire in it burns 1.5 times as long.*the hut: he sleeps the whole night even without a fire/);
+    expect(f).toMatch(/What his home gives.*the lean-to: a night without a fire close by lasts 4 hours instead of 3.*the bed: he rests 1.25 times as fast; the ring: a fire in it burns 1.5 times as long.*the hut: he sleeps the whole night even without a fire/);
     expect(f).toContain('a part of the hut takes three times as long, about 15 min');
     expect(f).toMatch(/it takes only about 0.2 day off his awake count; a whole night of sleep by a fire takes it to 0/);
     expect(f).toContain('He can sleep, drink at any river and make a fire anywhere, far from home too.');

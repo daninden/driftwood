@@ -221,16 +221,17 @@ describe('following a plan (game/actor)', () => {
     const f = createActor(w, g, {}).menu().places.find(q => q.kind === 'fire');
     expect(f).toBeTruthy(); expect(f.minutes).toBeGreaterThan(0);
   });
-  it('a refused sleep or taking up the axe says why (0.37.8 "Firelight")', () => {
+  it('a refused sleep or taking up the spear says why (0.37.8 "Firelight")', () => {
     const reason = (g, steps) => { const asks = []; let n = 0; const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return n++ ? null : steps; } }); run(g, a, 2); return asks[1] && asks[1].last.reason; };
     const night = fresh(); night.clock.time = 0.05; night.sleep.awake = 0.05;
     expect(reason(night, [{ do: 'sleep' }])).toMatch(/he woke not long ago: at night he can lie down again after about 3.5 hours awake/);
     const day = fresh(); day.clock.time = 0.5; day.sleep.awake = 0.3;
     expect(reason(day, [{ do: 'sleep' }])).toMatch(/by day he can lie down only after half a day awake/);
-    const held = fresh(); held.axe.hand = true;
-    expect(reason(held, [{ do: 'takeAxe' }])).toMatch(/the axe is already in his hand/);
+    const held = fresh(); held.spear.hand = true;
+    expect(reason(held, [{ do: 'takeSpear' }])).toMatch(/the spear is already in his hand/);
     const none = fresh();
-    expect(reason(none, [{ do: 'takeAxe' }])).toMatch(/there is no axe lying anywhere/);
+    expect(reason(none, [{ do: 'takeSpear' }])).toMatch(/there is no spear lying anywhere/);
+    expect(reason(fresh(), [{ do: 'fell' }])).toMatch(/he has no axe yet/);   // 0.40.0 "Belt"
   });
   it('reasons belong to their own action (0.37.4): a lack of the fire is not told for a dig; light without a fire fails', () => {
     const g = fresh(), asks = [];
@@ -470,7 +471,7 @@ describe('0.38.1 "Trace": what he did, facts only', () => {
     expect(g.wood.state().piles.some(x => Number.isFinite(x.laid))).toBe(true);
   }, 60000);
   it('NOW says the room left under his arm', () => {
-    expect(armText({ branches: 1, fronds: 1 })).toBe('Under his arm: 2 of 3.');
+    expect(armText({ branches: 1, fronds: 1 })).toBe('Under his arm: 2 of 3. What he carries slows him to about 76% of his pace.');
     expect(armText({})).toBe('Under his arm: 0 of 3.');
     expect(armText({ log: true })).toMatch(/log on his shoulder/);
     const m = buildActMessages({ state: { carries: {} }, menu: { places: [], here: [], uses: [], carries: { driftwood: 2 } }, ask: { why: 'done' }, recent: [], notes: [], lessons: [] });
@@ -501,10 +502,10 @@ describe('0.38.2 "True": facts that hold', () => {
     expect(d && d.outcome).toBe('done');
     expect(d.reason).toMatch(/^he laid down what he carried first: a branch on a new pile (here|\d+ m [a-z-]+) \(pile\d+\)$/);
   }, 90000);
-  it('the sunset request says the spear and the axe only when in his hand', () => {
+  it('the sunset request says the spear only when in his hand, the axe once it is made (at his belt, 0.40.0)', () => {
     const g = fresh();
     expect(snapshotOf(g, null).carries.spear).toBe(false); expect(snapshotOf(g, null).carries.axe).toBe(false);
-    g.spear.hand = true; g.axe.hand = true;
+    g.spear.hand = true; g.axe.made = true;
     expect(snapshotOf(g, null).carries.spear).toBe(true); expect(snapshotOf(g, null).carries.axe).toBe(true);
   });
   it('the lay day of a pile is counted as the request counts days (dayNo)', () => {

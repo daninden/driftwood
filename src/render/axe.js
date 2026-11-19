@@ -2,9 +2,7 @@
  * render/axe — the stone axe (0.31 "Axe"): a short wooden haft with a flat stone blade lashed on, in the toon style with the dark outline.
  *
  * makeAxe() -> Group   an axe with its grip at the origin, the haft standing along +y (from -0.1 to +0.62 m) and the blade at the top reaching out along +z (the edge forward, away from the
- *   haft); render/hero holds one in his right hand in place of the staff (head up when he walks, along his arm when he chops)
- * createAxeView(scene, axe, H) -> { update() }   draws the axe that lies on the ground (game/axe `at`): flat on the ground, turned by its place, the blade to one side;
- *   nothing while it is in his hand or does not exist
+ *   haft); render/hero holds one in his hands while he fells, and (0.40.0 "Belt") one tucked in his belt on his back the rest of the time (the axe never lies on the ground)
  *
  * Depends on: three, render/materials, render/palette
  */
@@ -23,20 +21,4 @@ export function makeAxe() {
   const bo = new THREE.Mesh(bladeGeo, outlineMat); bo.scale.set(1.25, 1.07, 1.25); blade.add(bo); g.add(blade);
   const lash = new THREE.Mesh(lashGeo, lashMat); lash.position.y = 0.565; g.add(lash);
   return g;
-}
-
-export function createAxeView(scene, axe, H) {
-  const g = makeAxe(); g.visible = false; scene.add(g);
-  let at = null;
-  return {
-    update() {
-      const a = axe.at;
-      if (!a) { g.visible = false; at = null; return; }
-      if (at !== a) {   // laid somewhere new: flat on the ground, along a direction fixed by its place
-        at = a; const yaw = (Math.sin(a.x * 12.9898 + a.z * 78.233) * 43758.5453 % 1) * Math.PI;
-        g.position.set(a.x, H(a.x, a.z) + 0.05, a.z); g.rotation.set(Math.PI / 2, 0, 0); g.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), yaw);
-      }
-      g.visible = true;
-    },
-  };
 }

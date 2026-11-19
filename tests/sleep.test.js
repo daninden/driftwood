@@ -178,10 +178,10 @@ describe('sleeping only after a while awake (0.17.3)', () => {
     const warm = createSleep({ awake: 2 / 3 }); warm.start(); guard = 0; while (warm.asleep && guard++ < 100000) warm.update(1 / 30, true, true);
     expect(warm.awake).toBe(0);
   });
-  it('a sleep under a lean-to without fire is still 6 hours and three quarters; by a fire it goes on the whole night', () => {
+  it('a sleep under a lean-to without fire is 4 hours and half a rest (0.40.0, was 6 and three quarters); by a fire it goes on the whole night', () => {
     const s = createSleep({ awake: AWAKE_MAX }); s.start();
     let guard = 0; while (s.asleep && guard++ < 100000) s.update(1 / 30, true, false, {}, true);
-    expect(s.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(s.rest()).toBeGreaterThan(0.74); expect(s.rest()).toBeLessThan(0.76);
+    expect(s.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(s.slept * 24).toBeCloseTo(4, 1); expect(s.rest()).toBeGreaterThan(0.49); expect(s.rest()).toBeLessThan(0.52);
     const f = createSleep({ awake: AWAKE_MAX }); f.start();
     guard = 0; while (f.asleep && guard++ < 100000) f.update(1 / 30, true, true);
     expect(f.slept).toBeCloseTo(SLEEP_DAYS, 1); expect(f.rest()).toBeGreaterThan(0.99);

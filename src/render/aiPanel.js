@@ -22,6 +22,7 @@
  *   requestText(messages, raw) -> string   the full exchange of a request, for the expanded view
  *   actPlanLines(plan, index, recent), actEntryParts(entry)   (pure) the plan as marked lines; one request as { n, head, lines, ok }
  *   playLogText({ entries, model, days }) -> string   (pure) the "copy log" text
+ *   islandLine(seed, status) -> string   (pure, 0.39.1) "Island <seed>. <status>", or the status alone without a seed
  *   saveTextFile(name, text, { doc?, url? })   gives a text to the browser as a file (a Blob and a link with `download`)
  *   createAiPanel(el, { client, play: { actor, planner }, now?, logbook?, onKeyRemoved?, seed? })   (seed, 0.39.0: shown as "Island <seed>." before the status) -> { toggle(), visible(), update() }   el: the #ai element (index.html); update() is called every frame and touches the DOM only when something changed; listens for I on window
  *
@@ -151,6 +152,9 @@ export function playLogText({ entries = [], model = null, days = 2 } = {}) {
   return out.join('\n');
 }
 
+/** 0.39.0: the status line with the island's seed before it ("Island 4242. ..."); the status alone without a seed (pure). */
+export const islandLine = (seed, status) => (seed === null || seed === undefined ? status : `Island ${seed}. ${status}`);
+
 export function createAiPanel(el, { client, play, now = () => Date.now(), logbook = null, onKeyRemoved = null, seed = null } = {}) {
   let shown = false, seen = -1, lastStatus = '', lastModels = null;
   const open = new Set();
@@ -247,7 +251,7 @@ export function createAiPanel(el, { client, play, now = () => Date.now(), logboo
     if (t !== lastNow) { lastNow = t; nowEl.textContent = t; }
     const sm = summaryLine(cs, { waiting: ac.waiting, inFlight: play.planner.status().state === 'thinking' }, now()), key2 = sm.text + '|' + sm.problem;
     if (key2 !== lastSummary) { lastSummary = key2; sumText.textContent = sm.text; sumBad.textContent = sm.problem; sum.classList.toggle('bad', !!sm.problem); }
-    const st = seed === null ? s : `Island ${seed}. ${s}`;   // 0.39.0: the island's seed (a new game draws a random one)
+    const st = islandLine(seed, s);   // 0.39.0: the island's seed (a new game draws a random one)
     if (st !== lastStatus) { lastStatus = st; status.textContent = st; }
     const mt = ml.join('\n'); if (mt !== lastModels) { lastModels = mt; perModel.textContent = mt; }
     const memV = play.planner.memoryVersion; if (memV !== lastMem) { lastMem = memV; renderMemory(); }

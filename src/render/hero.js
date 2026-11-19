@@ -35,7 +35,8 @@
  * left hand. Since 0.30.17 "Spear" (player.spear) the spear is in his right hand in place of the staff; to fish (player.work 'fish') he stands, leans over the water, peers with the point of the spear forward and down (the hand near the butt), and thrusts the point into the water in the last third.
  *
  * 0.37.3 "Branches": carrying wood (branches) with a burning torch, the torch is held up in the right hand in place of the staff; the bundle stays under the left arm.
- * 0.31 "Axe": the stone axe (player.axe, render/axe) is in his right hand in place of the staff, head up when he carries it. To fell a tree (player.work 'fell') he stands and chops: the arm goes up
+ * 0.40.0 "Belt": once made, the axe (player.belt) is tucked in his belt on his back, the head up behind his right shoulder (hidden while he lies down); only to fell is it in his hands.
+ * 0.31 "Axe": the stone axe (player.axe, render/axe) is in his right hand in place of the staff while he fells (since 0.40.0 only then). To fell a tree (player.work 'fell') he stands and chops: the arm goes up
  * over his head and the axe comes down in front of him, about every CHOP_PERIOD seconds (render/chop `chopPose`, real time from the start of the work, so the sound of audio/sound, which uses the same rhythm, follows
  * it), his body leaning into the blow. A log (the `log` argument, a game/wood `wood.log`) lies on his right shoulder at its real length, held there by the raised right arm; he walks bent a little under it.
  *
@@ -145,6 +146,7 @@ export function createHero(scene) {
   let spearGrip = 0;   // 0..1: how far the hand has slid down the spear's pole while he fishes
   const spear = makeSpear(); spear.scale.setScalar(1 / 0.62); spear.position.set(0.06, -0.3, 0.1); spear.rotation.x = 0.3; spear.visible = false; shR.add(spear);   // 0.30.17: the fishing spear in his right hand, in place of the staff
   const axe = makeAxe(); axe.scale.setScalar(1 / 0.62); axe.position.set(0.06, -0.3, 0.1); axe.rotation.x = 0.3; axe.visible = false; shR.add(axe);   // 0.31: the stone axe in his right hand, in place of the staff
+  const beltAxe = makeAxe(); beltAxe.scale.setScalar(0.6 / 0.62); beltAxe.position.set(0.04, 0.4, -0.135); beltAxe.rotation.set(0, Math.PI, 0.35); beltAxe.visible = false; torso.add(beltAxe);   // 0.40.0 "Belt": the axe tucked in his belt on his back, the head up behind his right shoulder, the edge backwards
   const drill = joint(0, 0.2, 0.34, body);   // the staff upright as a fire drill, its foot on the hearth in front of his knees
   part(drill, staffGeo, staffMat, 0, 0.62, 0); drill.visible = false;
 
@@ -200,7 +202,7 @@ export function createHero(scene) {
     const wk = p.work, kneel = wk && wk.kind !== 'fish' && wk.kind !== 'fell' ? Math.min(1, wk.f * (wk.kind === 'drill' || wk.kind === 'build' ? 14 : wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip' || wk.kind === 'dig' ? 4 : wk.kind === 'roast' ? 6 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && (wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip');
     const holding = !!p.spear && !(p.lie > 0), fishing = holding && !!wk && wk.kind === 'fish';   // 0.30.17: he stands and peers, then strikes in the last third
     const holdingAxe = !!p.axe && !(p.lie > 0) && !holding, chopping = holdingAxe && !!wk && wk.kind === 'fell', shoulder = !!log && !(p.lie > 0);   // 0.31: the axe in his hand, chopping, a log on his shoulder
-    staff.visible = !drilling && !holding && !holdingAxe && !shoulder && !(p.torch && !(p.lie > 0) && load.length > 0); drill.visible = drilling; spear.visible = holding; axe.visible = holdingAxe;
+    staff.visible = !drilling && !holding && !holdingAxe && !shoulder && !(p.torch && !(p.lie > 0) && load.length > 0); drill.visible = drilling; spear.visible = holding; axe.visible = holdingAxe; beltAxe.visible = !!p.belt && !holdingAxe && !(p.lie > 0);
     if (chopping) { if (chopT < 0) chopT = performance.now() / 1000; } else chopT = -1;
     const chop = chopping ? chopPose((performance.now() / 1000 - chopT) / CHOP_PERIOD) : { arm: 0, lean: 0 };
     chopK += ((chopping ? 1 : 0) - chopK) * 0.2;

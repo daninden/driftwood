@@ -44,7 +44,7 @@ export function snapshotOf(game, camp = null) {
   const carries = {
     driftwood: carriedWood, branches: branch, fronds: frond, stones: n(() => g.wood.stones.length), fibre: n(() => g.fibre.carried), nuts: n(() => g.shells.nuts),
     emptyShells: n(() => g.shells.empty()), fullShells: n(() => g.shells.full()), crabs: n(() => g.crabs.carried.length), fish: n(() => g.fish.carried.length),
-    berries: n(() => g.berries.carried.length), bananas: n(() => g.bananas.carried.length), spear: !!n(() => g.spear.hand, false), axe: !!n(() => g.axe.hand, false),   // 0.38.2: in his hand (it said a spear whenever he had made one, also lying; the axe from a stale field)
+    berries: n(() => g.berries.carried.length), bananas: n(() => g.bananas.carried.length), spear: !!n(() => g.spear.hand, false), axe: !!n(() => g.axe.has(), false),   // 0.40.0 "Belt": at his belt once made; 0.38.2: the spear in his hand (it said a spear whenever he had made one, also lying; the axe from a stale field)
     torch: !!n(() => g.fire.torch, false),
   };
   const lts = n(() => g.leantos.list, []);
@@ -74,7 +74,7 @@ const d1 = v => (Math.round((+v || 0) * 10) / 10).toFixed(1);
 export function stateText(s, o = {}) {
   const c = s.carries || {}, has = [];
   for (const [k, label] of [['driftwood', 'driftwood'], ['branches', 'branches'], ['fronds', 'fronds'], ['stones', 'stones'], ['fibre', 'fibre'], ['nuts', 'coconuts'], ['emptyShells', 'empty half shells'], ['fullShells', 'full half shells'], ['crabs', 'crabs'], ['fish', 'fish'], ['berries', 'handfuls of berries'], ['bananas', 'banana bunches']]) if (c[k] > 0) has.push(`${c[k]} ${label}`);
-  for (const [k, label] of [['spear', 'a spear'], ['axe', 'an axe'], ['torch', 'a torch'], ['log', 'a log on his shoulder']]) if (c[k]) has.push(label);   // 0.37.5: the log too
+  for (const [k, label] of [['spear', 'a spear'], ['axe', 'the axe at his belt'], ['torch', 'a torch'], ['log', 'a log on his shoulder']]) if (c[k]) has.push(label);   // 0.37.5: the log too
   const h = s.home, t = s.tide;
   const home = !h ? 'no shelter yet' : `lean-to ${h.leanto}%, walls ${h.walls}%, bed ${h.bed}%, stone ring ${h.ring}%, hut ${h.hut}%`;
   return [

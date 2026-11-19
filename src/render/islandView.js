@@ -25,7 +25,7 @@
  *     of the rain forest (game/forage, render/bananas), and the fires
  *     (game/fire, render/fire), the branches under the trees (game/branches,
  *     render/branches), the fallen palm fronds and the stones on the ground (game/fronds, game/stones, render/finds), the lean-tos with their upgrades (game/leanto, render/leanto), with the tally marks of piles and fires while
- *     he stands beside them (render/tallyMarks), the spear and the axe lying on the ground (game/spear, game/axe, render/spear, render/axe), the logs lying on the ground, the cut marks and the fall of a felled tree (game/logs, game/felled, render/timber, render/felling), and the crabs, fish and birds near him (game/wildlife, render/wildlife), and the fireflies at night (game/fireflies, render/fireflies)
+ *     he stands beside them (render/tallyMarks), the spear lying on the ground (game/spear, render/spear; 0.40.0: the axe never lies, it is at his belt, render/hero), the logs lying on the ground, the cut marks and the fall of a felled tree (game/logs, game/felled, render/timber, render/felling), and the crabs, fish and birds near him (game/wildlife, render/wildlife), and the fireflies at night (game/fireflies, render/fireflies)
  *   view.pickGround(clientX, clientY, touch?) -> { x, z } | null
  *     the ground under the screen point; on a piece of beach driftwood as drawn (its trunk, a branch or the
  *     roots standing up, with a finger a little wider) a point on that piece,
@@ -75,7 +75,6 @@ import { createBananaView } from './bananas.js';
 import { createLeantoView } from './leanto.js';
 import { createFireView } from './fire.js';
 import { createSpearView } from './spear.js';
-import { createAxeView } from './axe.js';
 import { createTimberView } from './timber.js';
 import { createFellingView } from './felling.js';
 import { createTallyView } from './tallyMarks.js';
@@ -105,7 +104,7 @@ export async function createIslandView(world, container, progress, start, opts =
   const near = new Map();   // tile -> { group }
   const pools = poolsOf(scene);   // the shared instanced pools of the near tiles and of what lies on the ground (render/batch)
   const startLights = opts.settings ? opts.settings.fireLights : undefined; let fireLights = startLights;   // the pool of fire lights is sized once, by the quality at the start
-  let woodView = null, cocoView = null, branchView = null, findsView = null, leantoView = null, berryView = null, bananaView = null, fireView = null, tallyView = null, wildView = null, flyView = null, spearView = null, axeView = null, timberView = null, fellingView = null, lightLayer = null, game = null, building = false;
+  let woodView = null, cocoView = null, branchView = null, findsView = null, leantoView = null, berryView = null, bananaView = null, fireView = null, tallyView = null, wildView = null, flyView = null, spearView = null, timberView = null, fellingView = null, lightLayer = null, game = null, building = false;
   const streamer = createStreamer({
     tiles: world.tiles, slicer,
     build: tile => buildNearTile(world, colorAt, kit, tile, slicer, aniso, pools),
@@ -179,7 +178,6 @@ export async function createIslandView(world, container, progress, start, opts =
     if (tallyView) tallyView.update(dt, { game, camera: cam.camera, H: world.H, player });
     if (wildView) wildView.update(dt, sky.day);
     if (spearView) spearView.update();
-    if (axeView) axeView.update();
     if (flyView) flyView.update(dt, cam.camera);
     if (lightLayer) lightLayer.end();
     stage.followSun({ target: cam.target, yaw, pitch, zoom: cam.zoom, aspect }, sky.light.dir, sky.shadows);
@@ -207,7 +205,6 @@ export async function createIslandView(world, container, progress, start, opts =
     tallyView = createTallyView(container);
     wildView = createWildlifeView(scene, g.wildlife);
     spearView = createSpearView(scene, g.spear, world.H);   // 0.30.17: the spear lying on the ground
-    axeView = createAxeView(scene, g.axe, world.H);   // 0.31: the axe lying on the ground
     flyView = createFireflyView(container, g.fireflies, lightLayer);
   }
 

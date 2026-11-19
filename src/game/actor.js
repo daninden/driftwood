@@ -17,14 +17,14 @@
  *   actor.menu() -> menu                          what he could do now (pure but for the path searches; no state changes):
  *                                                   { here: [{ id, what }], uses: [{ id, what }], places: [place], fires: [fire], dirs, carries, light, minutes: PLAN_MINUTES }
  *                                                   fire (0.37.10 "Body"): { id, state: 'burning' | 'embers' | 'cold', hours (left while burning), ring, dist, dir }: every fire of his on the menu
- *                                                   place: { id, kind, what, x, z, dist, dir, minutes, nearby, offers: [kind] } (offers: what the action button would offer standing there, with what he holds now)
+ *                                                   place: { id, kind, what, x, z, dist, dir, minutes, nearby, offers: [kind], notNow? } (offers: what the action button would offer standing there, with what he holds now; 0.40.0 notNow: why what lies there cannot be taken up with what he holds, `holdWhy`)
  *   actor.plan -> { steps, minutes, at, menu, say, why } | null      the plan being followed (menu: the menu it was chosen from; its place ids hold for the whole plan; say: the chooser's thought for it)
  *   actor.stepIndex, actor.waiting, actor.why             the running step, whether he waits for a plan, why the next plan is (or was last) asked
  *   actor.recent -> [record]                      the last RECENT_MAX records { day, time, kind ('step' | 'plan' | 'rejected' | 'interrupt'), what, outcome ('done' | 'failed' | ...), reason }
  *   actor.stats                                   { plans, rejected, steps, done, failed, interrupts, waits (steps with no plan) }
  *
  * The steps (game/actions): `go` walks to a place of the plan's menu: a pile or a fire to a standing spot where the game offers its action (game/stand), river water until
- * drinking is offered, a loose thing (a coconut, a piece of wood, a stone, a bush, the spear, the axe, a log) until it is offered, a lean-to to its front, a tree beside its
+ * drinking is offered, a loose thing (a coconut, a piece of wood, a stone, a bush, the spear, a log) until it is offered, a lean-to to its front, a tree beside its
  * trunk, crab holes to their colony; it fails when the thing is gone, there is no way, or the walk stalls (with that reason). `wander` walks out that way for its minutes
  * (it fails only when there is no ground to go to that way). `do` presses that action when the action button or its arc offers it where he stands (else it fails: "not
  * offered here", with what is missing when the game knows, game/lack) and waits until the work is done; it fails when nothing changed (a dig whose crab got away, a drill that
@@ -52,8 +52,9 @@
  * 0.37.9 "Far": the menu's `island` { across (metres), seen (% of the island's land cells of game/known) }; a pile of driftwood says how many pieces are dry and how many wet.
  * 0.37.8 "Firelight": no walk in the dark without light again (game/dark; the half pace of 0.37.6 is gone); a walk's minutes are at the pace he has now (`paceNow`: his load,
  * tired, thirsty, hungry, as game/game; WALK_SLACK 1.1, was 1.25 for the load); his fires and lean-tos stay on the menu when no route to them is found (the straight line x LEG_DETOUR);
- * reasons for a refused sleep (in water, too soon after waking at night, by day before half a day awake) and take up the axe or spear (already in hand, none lying, a log, stones, the
- * other tool, a torch, too far).
+ * reasons for a refused sleep (in water, too soon after waking at night, by day before half a day awake) and take up the spear (already in hand, none lying, a log, stones, a torch
+ * with wood, too far).
+ * 0.40.0 "Belt": the axe is at his belt once made (game/axe): no axe on the menu, no take or lay; a refused "fell" says why (no axe, a log, stones, the spear, a torch, water, no trunk).
  * 0.37.7 "Reasons": a `do` waits while the game has an action queued (player.queued: the bend that lays the wood down before a fell, a drink or a fill), so a "fell" with wood
  * under his arm lasts the whole felling (it ended after the bend before); a hut with no room says what is in its way and where (`hutWay`, game `hutBlock`); a refused "feed" says
  * why (no wood, no fire beside him, the wood too wet, the fire full, a fire within RING_NOFIRE of his stone ring).
@@ -61,12 +62,13 @@
  * more reasons (`whyNot`: dig, drink when not thirsty, lay, the tool not in hand, the hut's next part or no room for it); a lean-to with walls, bed and ring tells the hut's parts
  * and whether it has room; `use` waits until he stands still and says a torch or water stands in the way.
  * 0.37.4 "Lessons": a failed action says why in plain words where the game knows (`whyNot`: the lack of the fire or the spear only for 'light' and 'fish'; for 'pickup' the
- * spear or axe in hand, a log, a torch with other wood, taking from a pile with something under his arm, full arms; for 'buildIn' / 'upgrade' the kind the lean-to needs next).
+ * spear in hand, a log, a torch with other wood, taking from a pile with something under his arm, full arms; for 'buildIn' / 'upgrade' the kind the lean-to needs next).
  * 'light' is done only when a fire burns within 3 m afterwards (the drill uses the fibre either way). Fires and lean-tos keep their number on the menu (fire<n>, leanto<n>; since 0.38.1 every place keeps its id); a fire says its pieces and hours left, a lean-to its parts and what it needs next. The menu's `count` is { claimed, minutes } of the last plan
  * followed when the chooser counted it itself.
  * The menu also has `light`: { dark, hours (until dusk by day, until dawn in the dark), torch: { minutes left } | null, planted: [{ dist, dir, minutes }] (torches in the ground within 40 m), lit (he stands in firelight) }.
  *
- * Depends on: game/actions (also WAIT), game/dark, game/fish, game/path, game/route, game/movement, game/water, game/wood, game/felled, game/leanto, game/clock, world/constants
+ * 0.40.0 "Belt": a felled log says whether it is still green or dry for the hut (game/logs `seasoned`), a log pile how many of its logs are; a refused hut part with a green log says when it is dry.
+ * Depends on: game/actions (also WAIT), game/dark, game/logs, game/fish, game/path, game/route, game/movement, game/water, game/wood, game/felled, game/leanto, game/clock, world/constants
  */
 import { HALF, T, NT } from '../world/constants.js';
 import { createPath } from './path.js';
@@ -77,6 +79,7 @@ import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
 import { freshWater } from './water.js';
 import { dryness, LOG_WALK, CARRY_SLOW, CARRY_MAX, STONE_MAX } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
+import { seasoned, dryAt, SEASON_DAYS } from './logs.js';
 import { CELL as KNOWN_CELL, NC as KNOWN_NC } from './known.js';
 import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, RING_NOFIRE } from './leanto.js';
 import { fireOutlook, full as fireFull, BURN, TORCH_DRY } from './fire.js';
@@ -158,9 +161,13 @@ export function createActor(world, game, opts = {}) {
     berries:   { list: t => game.berries.bearingIn(t), what: () => 'a berry bush with berries' },
     bananas:   { list: t => game.bananas.bearingIn(t), what: () => 'a banana plant with a bunch' },
   };
+  /** 0.40.0 "Belt": a felled log, green until SEASON_DAYS after its felling (game/logs), and when it is dry for the hut */
+  const logWhat = l => (seasoned(l, clock.total) ? 'a felled log, dry for the hut' : `a felled log, still green (dry for the hut about ${dryText(l)})`);
+  const dryText = l => { const t = dryAt(l); return `${Math.floor(t) === clock.day ? 'today' : `day ${dayNo(Math.floor(t))}`} ${clockText(t)}`; };
   const clockText = t => { const m = Math.floor(((t % 1) + 1) % 1 * 1440 + 1e-9) % 1440, pad = n => String(n).padStart(2, '0'); return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; };
   const laidText = q => (Number.isFinite(q.laid) ? ` (laid ${Math.floor(q.laid) === clock.day ? '' : `day ${dayNo(Math.floor(q.laid))} `}${clockText(q.laid)})` : '');   // 0.38.1 "Trace": when he last laid on it
-  const pileWhat = q => `his pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : q.logs.every(wet) ? 'wet driftwood' : `driftwood (${q.logs.filter(l => !wet(l)).length} dry, ${q.logs.filter(wet).length} wet)`) : q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : 'logs'}${laidText(q)}`;
+  const pileWhat = q => `his pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : q.logs.every(wet) ? 'wet driftwood' : `driftwood (${q.logs.filter(l => !wet(l)).length} dry, ${q.logs.filter(wet).length} wet)`) : q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : `logs${logsDry(q)}`}${laidText(q)}`;
+  const logsDry = q => { const g = q.logs.filter(l => !seasoned(l, clock.total)); return !g.length ? ', dry for the hut' : g.length === q.logs.length ? `, still green (the first dry for the hut about ${dryText(g.reduce((a, b) => (dryAt(a) <= dryAt(b) ? a : b)))})` : ` (${q.logs.length - g.length} dry for the hut, ${g.length} still green)`; };   // 0.40.0
   const fireWhat = f => {   // 0.37.4: how long it still burns
     const ring = !!game.leantos.ring(f.x, f.z), burning = game.fire.strength(f) > 0;
     const o = burning ? fireOutlook({ fuel: f.fuel, ring }) : null;
@@ -233,9 +240,8 @@ export function createActor(world, game, opts = {}) {
     for (const q of W.piles) if (q.logs.length && near(q)) out.push({ kind: 'pile', ref: q, x: q.x, z: q.z, what: pileWhat(q) });
     for (const f of game.fire.fires) if (anywhere(f)) out.push({ kind: 'fire', ref: f, x: f.x, z: f.z, what: fireWhat(f) });
     for (const l of game.leantos.list) if (anywhere(l)) out.push({ kind: 'leanto', ref: l, x: l.x, z: l.z, what: leantoWhat(l) });
-    for (const l of game.logs.near(p.x, p.z, R)) if (near(l)) out.push({ kind: 'log', ref: l, x: l.x, z: l.z, what: 'a felled log' });
+    for (const l of game.logs.near(p.x, p.z, R)) if (near(l)) out.push({ kind: 'log', ref: l, x: l.x, z: l.z, what: logWhat(l) });
     if (game.spear.at && near(game.spear.at)) out.push({ kind: 'spear', ref: game.spear.at, x: game.spear.at.x, z: game.spear.at.z, what: 'his spear, lying' });
-    if (game.axe.at && near(game.axe.at)) out.push({ kind: 'axe', ref: game.axe.at, x: game.axe.at.x, z: game.axe.at.z, what: 'his axe, lying' });
     if (game.axe.has()) for (const t of tilesNear(p.x, p.z, 60)) for (const list of LISTS) t[list].forEach((tree, index) => {
       const id = treeId(t, list, index); if (game.felled.has(id) || !near(tree) || Math.hypot(tree.x - p.x, tree.z - p.z) > 60) return;
       const k = sizeKind(list, tree); out.push({ kind: 'tree', ref: { id, x: tree.x, z: tree.z, r: trunkRadius(tree, k) }, x: tree.x, z: tree.z, what: `a standing ${k === 'palm' ? 'palm' : k === 'pine' ? 'pine' : 'tree'}` });
@@ -278,8 +284,9 @@ export function createActor(world, game, opts = {}) {
         let len = 0, q0 = p; if (r) for (const q of r.pts) { len += Math.hypot(q.x - q0.x, q.z - q0.z); q0 = q; } else if (c.dist >= 1.5) len = c.dist * LEG_DETOUR;
         const offers = [...new Set(game.offersAt(c.x, c.z).map(o => o.kind))].filter(k => DO[k]);
         const mins = walkMinutes(len / paceNow());   // 0.37.8: at the pace he walks with now (his load, tired, thirsty, hungry), as game/game
+        const notNow = offers.includes('pickup') ? null : holdWhy(kind, c.ref);   // 0.40.0: why what lies there cannot be taken up with what he holds now
         places.push({ id: placeId(kind, c.ref), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
-          minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers });
+          minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers, ...(notNow ? { notNow } : {}) });
       }
     }
     places.sort((a, b) => a.dist - b.dist);
@@ -307,7 +314,23 @@ export function createActor(world, game, opts = {}) {
     const n = k => W.carried.filter(l => (k === 'branch' ? l.branch : k === 'frond' ? l.frond : !l.branch && !l.frond)).length;
     return { driftwood: n('driftwood'), branches: n('branch'), fronds: n('frond'), stones: W.stones.length, log: !!W.log, fibre: game.fibre.carried, nuts: game.shells.nuts,
       emptyShells: game.shells.empty(), fullShells: game.shells.full(), berries: game.berries.carried.length, bananas: game.bananas.carried.length, crabs: game.crabs.carried.length, fish: game.fish.carried.length,
-      torch: !!game.fire.torch, spear: !!game.spear.hand, axe: !!game.axe.hand };
+      torch: !!game.fire.torch, spear: !!game.spear.hand, axe: game.axe.has(), green: !!W.log && !seasoned(W.log, clock.total) };   // 0.40.0 "Belt": the axe is at his belt once made
+  }
+
+  /** 0.40.0 "Belt": why the things of a place (loose wood, a stone, a log, a pile) cannot be taken up with what he holds now, in plain words; null when his hands are no hindrance
+   *  (the rules of game/game `actionsAt` `room`: wood under his arm up to CARRY_MAX, not with the spear and a torch both; stones up to STONE_MAX, not with the spear or a torch; a log alone). */
+  function holdWhy(kind, ref) {
+    const pk = kind === 'pile' ? ref.kind : kind, torch = !!game.fire.torch, spear = !!game.spear.hand;
+    const what = pk === 'log' ? 'log' : pk === 'stone' ? 'stone' : pk === 'driftwood' || pk === 'branch' || pk === 'frond' ? 'wood' : null;
+    if (!what) return null;
+    if (W.log) return 'a log is on his shoulder ("lay" it first)';
+    if (what === 'log') return W.load() || torch || spear ? 'a log is carried alone: nothing else in his arms or hands ("lay", "laySpear", "plant" first)' : null;
+    if (what === 'stone') {
+      if (spear || torch) return `stones take both hands: the ${spear ? 'spear' : 'torch'} is in one ("${spear ? 'laySpear' : 'plant'}" first)`;
+      return W.stones.length >= STONE_MAX ? `his hands are full: ${W.stones.length} of ${STONE_MAX} stones ("lay" them first)` : null;
+    }
+    if (spear && torch) return 'the spear and a torch fill his hands';
+    return W.carried.length >= CARRY_MAX ? `his arms are full: ${W.carried.length} of ${CARRY_MAX} under his arm ("lay" first)` : null;
   }
 
   // ---------- the hands ----------
@@ -375,7 +398,6 @@ export function createActor(world, game, opts = {}) {
     if (pl.kind === 'crabs') return o.kind === 'dig';
     if (pl.kind === 'tree') return o.kind === 'fell' && o.tree && o.tree.id === r.id;
     if (pl.kind === 'spear') return o.kind === 'takeSpear';
-    if (pl.kind === 'axe') return o.kind === 'takeAxe';
     return !!th && (th.log === r || th.pile === r || th.coco === r || th.plant === r || th.fire === r);
   };
   const offeredHere = pl => offersNow().some(o => offerFor(pl, o));
@@ -385,7 +407,6 @@ export function createActor(world, game, opts = {}) {
     if (pl.kind === 'fire') return game.fire.fires.includes(r);
     if (pl.kind === 'leanto') return game.leantos.list.includes(r);
     if (pl.kind === 'spear') return !!game.spear.at && dist(game.spear.at, r) < 0.05;
-    if (pl.kind === 'axe') return !!game.axe.at && dist(game.axe.at, r) < 0.05;
     if (pl.kind === 'tree') return !game.felled.has(r.id);
     if (pl.kind === 'homespot') return !game.leantos.list.length && game.homeFits(r.site);
     if (pl.kind === 'log') return game.logs.near(r.x, r.z, 0.5).includes(r);
@@ -407,7 +428,7 @@ export function createActor(world, game, opts = {}) {
     }
     if (pl.kind === 'leanto') { const s = standFor(r); return yield* walk(s.x, s.z, { stop: 0.5, maxSecs: limit }); }
     if (pl.kind === 'tree') {
-      if (game.axe.hand) { const g = yield* goStand('fell', r); if (g.ok) return g; }
+      if (game.axe.has()) { const g = yield* goStand('fell', r); if (g.ok) return g; }
       return yield* walk(r.x, r.z, { stop: r.r + 0.9, maxSecs: limit });
     }
     if (pl.kind === 'water') {
@@ -446,7 +467,7 @@ export function createActor(world, game, opts = {}) {
   // 0.38.2 "True": whether an action did anything, from what only an action changes; thirst and hunger count only when they went down, a fire only when it got more fuel or a new fire
   // burns (time alone raises thirst and hunger and burns fuel: a dig that caught nothing was "done" before)
   const snapshot = () => ({ fixed: JSON.stringify([carries(), game.leantos.list.map(l => l.progress + ':' + JSON.stringify(l.parts || l.up || null) + ':' + (l.hut || 0)),
-    W.piles.length, W.piles.reduce((n, q) => n + q.logs.length, 0), game.felled.list.length, !!game.spear.at, !!game.axe.at, game.fire.torches.length]),
+    W.piles.length, W.piles.reduce((n, q) => n + q.logs.length, 0), game.felled.list.length, !!game.spear.at, game.fire.torches.length]),
     thirst: game.thirst.days, hunger: game.hunger.days, fuel: new Map(game.fire.fires.map(f => [f, f.fuel])), burning: game.fire.fires.filter(f => game.fire.strength(f) > 0).length });
   const changed = (a, b) => a.fixed !== b.fixed || b.thirst < a.thirst - 1e-6 || b.hunger < a.hunger - 1e-6 || b.burning > a.burning
     || game.fire.fires.some(f => !a.fuel.has(f) || f.fuel > a.fuel.get(f) + 1e-6);
@@ -456,22 +477,30 @@ export function createActor(world, game, opts = {}) {
     if (lack && ((kind === 'fish' && (lack === 'needSpear' || lack === 'spearAway')) || (kind === 'light' && (lack === 'needFibre' || lack === 'needMoreWood')))) return LACK_TEXT[lack] || lack;
     if (kind === 'pickup') {   // 0.37.6 "Free hands": his two hands
       if (W.log) return 'a log is on his shoulder: he carries it alone';
-      const tool = game.spear.hand ? 'spear' : game.axe.hand ? 'axe' : null, torch = !!game.fire.torch;
+      const tool = game.spear.hand ? 'spear' : null, torch = !!game.fire.torch;
       if (tool && torch) return `the ${tool} and a torch fill his hands`;
       const pile = W.findAll(p.x, p.z, 1.6, 'pile')[0], k = pile ? pile.pile.kind : null;
       if ((tool || torch) && k === 'stone') return `stones take both hands: the ${tool || 'torch'} is in one`;
       if ((tool || torch || W.load() > 0) && k === 'log') return 'a log is carried alone, with nothing else in his arms or hands';
       if (W.carried.length >= 3) return 'his arms are full';
     }
-    if (kind === 'takeAxe' || kind === 'takeSpear') {   // 0.37.8 "Firelight": the tests of game `canHold` and the reach, in words
-      const name = kind === 'takeAxe' ? 'axe' : 'spear', tool = kind === 'takeAxe' ? game.axe : game.spear, other = kind === 'takeAxe' ? game.spear : game.axe;
-      if (tool.hand) return `the ${name} is already in his hand`;
-      if (!tool.at) return `there is no ${name} lying anywhere`;
+    if (kind === 'takeSpear') {   // 0.37.8 "Firelight": the tests of game `canHold` and the reach, in words
+      const tool = game.spear;
+      if (tool.hand) return 'the spear is already in his hand';
+      if (!tool.at) return 'there is no spear lying anywhere';
       if (W.log) return 'a log is on his shoulder: he carries it alone';
       if (W.stones && W.stones.length) return 'stones fill both his hands (lay them down first)';
-      if (other.hand) return `the ${name === 'axe' ? 'spear' : 'axe'} is in his hand: one tool at a time ("${name === 'axe' ? 'laySpear' : 'layAxe'}" first)`;
-      if (game.fire.torch && (name === 'axe' || W.carried.length)) return name === 'axe' ? 'a torch is in his hand: felling takes both hands, so no axe with it ("plant" first)' : 'the torch and the wood under his arm fill his hands';
-      const d = dist(tool.at, p); if (d > 0.55) return `the ${name} lies ${Math.round(d)} m ${dirOf(tool.at.x - p.x, tool.at.z - p.z)} of him: he must stand right at it`;
+      if (game.fire.torch && W.carried.length) return 'the torch and the wood under his arm fill his hands';
+      const d = dist(tool.at, p); if (d > 0.55) return `the spear lies ${Math.round(d)} m ${dirOf(tool.at.x - p.x, tool.at.z - p.z)} of him: he must stand right at it`;
+    }
+    if (kind === 'fell') {   // 0.40.0 "Belt": the tests of game `canFell`, in words
+      if (!game.axe.has()) return 'he has no axe yet ("makeAxe")';
+      if (W.log) return 'a log is on his shoulder: felling takes both hands ("lay" it first)';
+      if (W.stones && W.stones.length) return 'stones fill his hands: felling takes both hands ("lay" them first)';
+      if (game.spear.hand) return 'the spear is in his hand: felling takes both hands ("laySpear" first)';
+      if (game.fire.torch) return 'a torch is in his hand: felling takes both hands ("plant" it first)';
+      if (terrainAt(world, p.x, p.z, game.sea).depth > 0.05) return 'he stands in water';
+      return 'no standing trunk beside him: he must stand right at it';
     }
     if (kind === 'sleep') {   // 0.37.8: the tests of game `sleepable` and sleep `canLie`, in words
       const t = terrainAt(world, p.x, p.z, game.sea), awake = game.sleep.awake, night = isDark(game.clock.time);
@@ -494,16 +523,16 @@ export function createActor(world, game, opts = {}) {
     }
     if (kind === 'lay' && W.load() > 0) return 'there is no room to lay it down here (water, or the camp too close): a few steps away, on open ground';   // 0.37.5; 0.37.6: "lay" is always offered on dry ground
     if (kind === 'fill' && !game.shells.empty()) return 'he has no empty shell';
-    if (kind === 'torch' && game.axe.hand) return 'the axe is in his hand: felling takes both hands, so no torch with it';   // 0.37.6
     if (kind === 'torch' && game.spear.hand && W.carried.length) return 'the spear and the wood under his arm fill his hands';
-    if ((kind === 'buildIn' || kind === 'upgrade' || kind === 'buildHere' || kind === 'makeSpear' || kind === 'makeAxe') && (game.spear.hand || game.axe.hand || game.fire.torch)) return `that needs both hands: the ${game.spear.hand ? 'spear' : game.axe.hand ? 'axe' : 'torch'} is in one ("${game.spear.hand ? 'laySpear' : game.axe.hand ? 'layAxe' : 'plant'}" first)`;
+    if ((kind === 'buildIn' || kind === 'upgrade' || kind === 'buildHere' || kind === 'makeSpear' || kind === 'makeAxe') && (game.spear.hand || game.fire.torch)) return `that needs both hands: the ${game.spear.hand ? 'spear' : 'torch'} is in one ("${game.spear.hand ? 'laySpear' : 'plant'}" first)`;
     if (kind === 'buildHere') {   // 0.39.0 "Landfall"
       if (!W.carried.some(l => !l.branch && !l.frond)) return 'he needs driftwood under his arm to start a lean-to';
-      if (!(game.spear.hand || game.axe.hand || game.fire.torch) && !terrainAt(world, p.x, p.z, game.sea).depth) return 'no home fits here: the lean-to and later the hut round it need level ground that stays dry at high water, with no boulder or other lean-to in the hut\'s room and nothing touching the lean-to\'s walls; the menu lists the places for a home he has seen';
+      if (!(game.spear.hand || game.fire.torch) && !terrainAt(world, p.x, p.z, game.sea).depth) return 'no home fits here: the lean-to and later the hut round it need level ground that stays dry at high water, with no boulder or other lean-to in the hut\'s room and nothing touching the lean-to\'s walls; the menu lists the places for a home he has seen';
     }
-    if (kind === 'laySpear' || kind === 'layAxe') { if (!(kind === 'laySpear' ? game.spear.hand : game.axe.hand)) return `the ${kind === 'laySpear' ? 'spear' : 'axe'} is not in his hand`; }
+    if (kind === 'laySpear' && !game.spear.hand) return 'the spear is not in his hand';
     if (kind === 'buildIn' || kind === 'upgrade') {
       const l = game.leantos.list.filter(q => dist(q, p) < 4).sort((a, b) => dist(a, p) - dist(b, p))[0];
+      if (l && hutReady(l) && !hutDone(l) && hutKind(l) === 'log' && W.log && !seasoned(W.log, clock.total)) return `the log on his shoulder is still green: a felled log dries ${SEASON_DAYS} days before it goes into the hut (this one about ${dryText(W.log)})`;   // 0.40.0
       if (l && hutReady(l) && !hutDone(l)) { const hk = hutKind(l); if (hk === 'log' && !hutBegun(l) && !game.hutFits(l)) return hutWay(l); if (hk) return `the hut needs ${hk === 'log' ? 'a log on his shoulder' : kindWord(hk)} next`; }
       if (l) {
         const need = nextKind(l, 'leanto') || UP_ORDER.map(w => nextKind(l, w)).find(Boolean);

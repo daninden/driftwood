@@ -470,7 +470,7 @@ console.log('built', JSON.stringify(built));
 if (built.progress < 1) errors.push('the lean-to did not get finished: ' + built.progress);
 await page.evaluate(() => { const { game, step } = window.__driftwood, p = game.player, l = game.leantos.list[0]; p.x = l.x + 2.4 * Math.sin(l.heading); p.z = l.z + 2.4 * Math.cos(l.heading); p.y = window.__driftwood.world.H(p.x, p.z); step(0.1); });
 await shot('smoke-23.png', { quick: true });
-// Cold sleep under it: six hours, three quarters rested.
+// Cold sleep under it: four hours, about half rested (0.40.0 "Belt", was six and three quarters).
 const under = await page.evaluate(() => {
   const { game, step, world } = window.__driftwood, p = game.player, l = game.leantos.list[0];
   p.x = l.x; p.z = l.z; p.y = world.H(p.x, p.z); game.sleep.awake = 2; step(0.1);
@@ -480,8 +480,8 @@ await page.evaluate(() => window.__driftwood.input.sleepKey());   // Z (the hand
 const slept = await page.evaluate(() => { const { game, step } = window.__driftwood; step(4); const was = game.sleep.asleep; step(60, () => !game.sleep.asleep && game.player.lie === 0); return { was, slept: game.sleep.slept, rest: game.sleep.rest() }; });
 console.log('sleeping under the lean-to', JSON.stringify({ ...under, ...slept }));
 if (!under.sheltered) errors.push('not sheltered at the centre of the lean-to');
-if (slept.slept < 0.24 || slept.slept > 0.27) errors.push('a cold sleep under the lean-to lasted ' + (slept.slept * 24).toFixed(1) + ' h instead of 6');
-if (slept.rest < 0.7) errors.push('not three quarters rested under the lean-to: ' + slept.rest);
+if (slept.slept < 0.157 || slept.slept > 0.177) errors.push('a cold sleep under the lean-to lasted ' + (slept.slept * 24).toFixed(1) + ' h instead of 4');
+if (slept.rest < 0.45 || slept.rest > 0.56) errors.push('not about half rested under the lean-to: ' + slept.rest);
 
 // Shelter upgrades (0.27 "Home"): piles of fronds, branches and stones beside the finished lean-to, the action button's
 // icon for the first upgrade, F builds the side walls, the bed and the stone ring one after the other (30 s of work each), then

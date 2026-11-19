@@ -10,7 +10,7 @@ import { createGame } from '../src/game/game.js';
 import { createAxe, MAKE_TIME, FELL_TIME, FELL_REACH } from '../src/game/axe.js';
 import { createSpear } from '../src/game/spear.js';
 import { LISTS, treeId, treeInfo, isGiant, sizeKind, trunkRadius, plan, felledOf, LOG_LEN } from '../src/game/felled.js';
-import { LOG_ID0 } from '../src/game/logs.js';
+import { LOG_ID0, seasoned, SEASON_DAYS } from '../src/game/logs.js';
 import { PILE_MAX, LOG_WALK, kindOf } from '../src/game/wood.js';
 import { stonesOfTile } from '../src/game/stones.js';
 import { branchesOfTile } from '../src/game/branches.js';
@@ -70,10 +70,10 @@ function stoneScene(opts = {}) {
   g.wood.take({ kind: 'log', log: aBranch(g) }, g.clock.total); g.fibre.carried = 1;
   return g;
 }
-// a game with the axe in his hand beside the lone tree of that sort
+// a game with the axe at his belt beside the lone tree of that sort
 function treeScene(key, opts = {}) {
   const s = spots[key]; expect(s, 'a lone ' + key + ' on dry ground').toBeTruthy();
-  const g = dryGame(s.x, s.z, { axe: { hand: true, at: null }, ...opts });
+  const g = dryGame(s.x, s.z, { axe: { made: true }, ...opts });
   return { g, s, id: s.info.id };
 }
 const fellNow = (g, id) => { const tr = g.felled.nearest(g.player.x, g.player.z, FELL_REACH); expect(tr && tr.id).toBe(id); doKind(g, 'fell'); run(g, makeInput(), FELL_TIME + 1); };
@@ -85,12 +85,12 @@ describe('making the axe', () => {
     expect(g.action().options.map(o => o.kind)).toContain('makeAxe');
     expect(g.action().tap && g.action().tap.kind).not.toBe('makeAxe');
   });
-  it('is not offered without fibre, without the branch, with a spear or an axe or a torch around, or in the water', () => {
+  it('is not offered without fibre, without the branch, with a spear in hand or an axe made, or in the water', () => {
     const g = stoneScene(); g.fibre.carried = 0;
     expect(kinds(g)).not.toContain('makeAxe');
     const none = dryGame(stone.x + 0.3, stone.z); none.fibre.carried = 2;
     expect(kinds(none)).not.toContain('makeAxe');
-    const made = stoneScene({ axe: { hand: false, at: { x: 1, z: 1 } } });
+    const made = stoneScene({ axe: { made: true } });
     expect(kinds(made)).not.toContain('makeAxe');   // one axe exists
     const sp = stoneScene({ spear: { hand: true, at: null } });
     expect(kinds(sp)).not.toContain('makeAxe');     // the hand is full (and the wood could not be picked up anyway)
@@ -102,7 +102,7 @@ describe('making the axe', () => {
     run(g, makeInput(), MAKE_TIME - 1);
     expect(g.axe.has()).toBe(false);
     run(g, makeInput(), 2);
-    expect(g.axe.hand).toBe(true); expect(g.player.axe).toBe(true);
+    expect(g.axe.has()).toBe(true); expect(g.player.belt).toBe(true); expect(g.player.axe).toBe(false);   // 0.40.0 "Belt": at his belt, not in his hand
     expect(g.wood.load()).toBe(0); expect(g.fibre.carried).toBe(0);
     expect(g.stones.near(stone.x, stone.z, 0.6).some(s => s.id === stone.id)).toBe(false);   // the stone is gone for good
     expect(g.wood.carried.includes(b)).toBe(false);
@@ -113,11 +113,11 @@ describe('making the axe', () => {
     for (const q of g.stones.near(g.player.x, g.player.z, 2)) g.stones.take(q);   // no loose stone left: the pile's
     g.wood.piles.push({ x: g.player.x + 0.5, z: g.player.z, kind: 'stone', logs: [s0, { ...s0, id: s0.id + 1 }] });
     doKind(g, 'makeAxe'); run(g, makeInput(), MAKE_TIME + 1);
-    expect(g.axe.hand).toBe(true); expect(g.wood.piles[0].logs.length).toBe(1);
+    expect(g.axe.has()).toBe(true); expect(g.wood.piles[0].logs.length).toBe(1);
   });
 });
 
-describe('the hand: one of spear, axe, torch', () => {
+describe('the hands and the belt (0.40.0 "Belt")', () => {
   it('fells with wood under his arm: the wood is laid down first (0.37.6 "Free hands")', () => {
     const { g } = treeScene('tree');
     g.wood.take({ kind: 'log', log: aBranch(g) }, g.clock.total); expect(g.wood.carried.length).toBe(1);
@@ -137,40 +137,48 @@ describe('the hand: one of spear, axe, torch', () => {
     expect(g.felled.has(id)).toBe(true);
     expect(ends).toHaveLength(1); expect(ends[0].outcome).toBe('done');
   });
-  it('lays the axe down at his feet and takes it up again; the spear cannot be taken meanwhile', () => {
+  it('0.40.0 "Belt": the axe is never laid down or taken up; at his belt it takes no hand', () => {
     const { g } = treeScene('tree');
     put(g, spawn.x, spawn.z);
-    expect(kinds(g)).toContain('layAxe');
-    doKind(g, 'layAxe'); run(g, makeInput(), 1);
-    expect(g.axe.hand).toBe(false); expect(g.axe.at).toBeTruthy();
-    expect(kinds(g)).toContain('takeAxe');
-    doKind(g, 'takeAxe'); run(g, makeInput(), 1);
-    expect(g.axe.hand).toBe(true); expect(g.axe.at).toBe(null);
+    expect(kinds(g)).not.toContain('layAxe'); expect(g.actions().some(o => o.kind === 'layAxe' || o.kind === 'takeAxe')).toBe(false);
+    expect(g.player.belt).toBe(true); expect(g.player.axe).toBe(false);
+    expect(Object.keys(g.axe.state())).toEqual(['made']);
   });
-  it('is refused with a spear in the hand, and a spear is refused with the axe in the hand', () => {
-    const a = createAxe({ hand: false, at: { x: 1, z: 1 } }), sp = createSpear({ hand: true });
-    expect(a.take()).toBe(true); expect(sp.hand).toBe(true);
-    const { g } = treeScene('tree', { axe: { hand: false, at: { x: 0, z: 0 } }, spear: { hand: true, at: null } });
-    put(g, 0.1, 0.1);
-    expect(kinds(g)).not.toContain('takeAxe');
-    const h = treeScene('tree').g;
-    expect(kinds(h)).not.toContain('takeSpear'); expect(kinds(h)).not.toContain('makeSpear');
-    expect(kinds(h)).not.toContain('pickup');
+  it('with the axe at his belt he still takes the spear, a torch and stones, makes the spear and builds', () => {
+    const h = treeScene('tree', { spear: { hand: false, at: null } }).g;
+    put(h, stone.x + 0.3, stone.z);
+    expect(h.actions().some(o => o.kind === 'pickup' && o.thing.log && o.thing.log.stone)).toBe(true);   // a stone: both hands, the axe is no hindrance
+    h.wood.take({ kind: 'log', log: aBranch(h) }, h.clock.total);
+    expect(kinds(h)).toContain('makeSpear');
   });
-  it('is put down beside him when he sleeps', () => {
-    const { g } = treeScene('tree');
+  it('felling takes both hands: not with the spear, a torch, stones or a log; a refused "fell" says why', () => {
+    const sp = treeScene('tree', { spear: { hand: true, at: null } }).g;
+    expect(kinds(sp)).not.toContain('fell');
+    const st = treeScene('tree').g; st.wood.stones.push({ ...stone }); expect(kinds(st)).not.toContain('fell');
+    const lg = treeScene('tree').g; lg.wood.log = { id: (4 << 24) + 990000, x: 0, y: 0, z: 0, len: 2, a: 0, rad: 0.14, timber: true }; expect(kinds(lg)).not.toContain('fell');
+    const asks = []; let n = 0;
+    const a = createActor(w, sp, { chooser: (m, ask) => { asks.push(ask); return n++ ? null : [{ do: 'fell' }]; } });
+    for (let i = 0; i < 30; i++) { a.step(0.1); sp.update(a.input, 0.1); }
+    expect(asks[1].why).toBe('failed'); expect(asks[1].last.reason).toMatch(/felling takes both hands \("laySpear" first\)/);
+  });
+  it('stays at his belt when he sleeps; while he fells it is in his hands', () => {
+    const { g, id } = treeScene('tree');
+    doKind(g, 'fell'); run(g, makeInput(), 1);
+    expect(g.player.axe).toBe(true); expect(g.player.belt).toBe(false);
+    run(g, makeInput(), FELL_TIME + 1); expect(g.felled.has(id)).toBe(true);
+    expect(g.player.axe).toBe(false); expect(g.player.belt).toBe(true);
     g.sleep.awake = 5; g.update(makeInput({ sleep: true }), 1 / 30); run(g, makeInput(), 1);
-    expect(g.axe.hand).toBe(false); expect(g.axe.at).toBeTruthy();
+    expect(g.axe.has()).toBe(true); expect(g.player.belt).toBe(true);
   });
 });
 
 describe('felling', () => {
-  it('is offered beside a trunk with the axe in the hand and not without the axe, not away from the tree', () => {
+  it('is offered beside a trunk with the axe at his belt and not without the axe, not away from the tree', () => {
     const { g } = treeScene('tree');
     expect(kinds(g)).toContain('fell');
     expect(g.action().tap.kind).toBe('fell');                      // the ring does it: nothing nearer to do
-    g.axe.hand = false; expect(kinds(g)).not.toContain('fell');
-    g.axe.hand = true; put(g, g.player.x + 5, g.player.z + 5);
+    g.axe.made = false; expect(kinds(g)).not.toContain('fell');
+    g.axe.made = true; put(g, g.player.x + 5, g.player.z + 5);
     expect(kinds(g)).not.toContain('fell');
   });
   it('is standing work of about an hour of game time that costs rest like the lean-to, and the tree falls at the end, away from him', () => {
@@ -246,9 +254,14 @@ describe('felling', () => {
       expect(g.felled.has(id)).toBe(true); expect(g.logs.all.size).toBeGreaterThanOrEqual(1);
     }
   });
+  it('0.40.0 "Belt": its logs are green, felled at the clock\'s time and dry for the hut SEASON_DAYS later', () => {
+    const { g, s, id } = treeScene('tree'), t0 = g.clock.total; fellNow(g, id);
+    const logs = g.logs.near(s.info.x, s.info.z, 6); expect(logs.length).toBeGreaterThanOrEqual(1);
+    for (const l of logs) { expect(l.cut).toBeGreaterThanOrEqual(t0); expect(l.cut).toBeLessThanOrEqual(g.clock.total); expect(seasoned(l, g.clock.total)).toBe(false); expect(seasoned(l, l.cut + SEASON_DAYS)).toBe(true); }
+  });
   it('the crown material is ordinary: picked up and carried like any branch', () => {
     const { g, s, id } = treeScene('tree');
-    fellNow(g, id); g.axe.lay(g.player.x, g.player.z);
+    fellNow(g, id);
     const b = g.branches.near(s.info.x, s.info.z, 8).find(q => q.extra);
     put(g, b.x, b.z);
     expect(g.wood.take({ kind: 'log', log: b }, g.clock.total)).toBe(1);
@@ -307,25 +320,25 @@ describe('a felled trunk', () => {
 });
 
 describe('logs', () => {
-  const felledScene = () => { const { g, s, id } = treeScene('tree'); fellNow(g, id); g.axe.lay(g.player.x, g.player.z); const log = g.logs.near(s.info.x, s.info.z, 6)[0]; return { g, log, s }; };
+  const felledScene = () => { const { g, s, id } = treeScene('tree'); fellNow(g, id); const log = g.logs.near(s.info.x, s.info.z, 6)[0]; return { g, log, s }; };
   it('lie loose and block no step', () => {
     const { g, log } = felledScene();
     expect(obstaclesNear(w, log.x, log.z, { obstacles: g.movement.obstacles }).some(o => Math.hypot(o.x - log.x, o.z - log.z) < 1)).toBe(false);
     expect(canStand(w, log.x, log.z, sea0)).toBe(true);
   });
-  it('are picked up only with nothing else carried and nothing in the hand, and then carried alone', () => {
+  it('are picked up only with nothing else carried and nothing in the hand, and then carried alone; the axe at his belt is no hindrance (0.40.0 "Belt")', () => {
     const { g, log } = felledScene();
     put(g, log.x, log.z);
-    g.axe.hand = true; g.axe.at = null;
-    expect(g.actions().some(a => a.kind === 'pickup' && a.thing.kind === 'log' && a.thing.log === log)).toBe(false);   // the axe in his hand (a branch of the crown he could take)
-    g.axe.hand = false; g.axe.at = { x: 0, z: 0 };
+    g.spear.hand = true;
+    expect(g.actions().some(a => a.kind === 'pickup' && a.thing.kind === 'log' && a.thing.log === log)).toBe(false);   // the spear in his hand (a branch of the crown he could take)
+    g.spear.hand = false; expect(g.axe.has()).toBe(true);
     g.wood.carried.push(aBranch(g)); expect(g.wood.take({ kind: 'log', log }, 0)).toBe(0);
     g.wood.carried.length = 0;
     expect(g.action().tap.kind).toBe('pickup');
     g.act(g.action().tap); g.update(makeInput(), 1 / 30);
     expect(g.wood.log).toBe(log); expect(g.wood.load()).toBe(1); expect(g.logs.near(log.x, log.z, 0.3).length).toBe(0);
     expect(g.wood.take({ kind: 'log', log: aBranch(g) }, 0)).toBe(0);   // nothing else is taken
-    expect(kinds(g)).not.toContain('pickup'); expect(kinds(g)).not.toContain('takeAxe');
+    expect(kinds(g)).not.toContain('pickup');
   });
   it('slow him to LOG_WALK and let him run no more', () => {
     const { g, log } = felledScene();
@@ -373,7 +386,7 @@ describe('logs', () => {
     put(g, log.x, log.z);
     const logsOf = n => Array.from({ length: n }, (_, i) => g.logs.add({ x: log.x + 4, z: log.z + i * 0.1, len: 2, a: 0, rad: 0.15 }));
     g.wood.piles.push({ x: g.player.x + 0.8, z: g.player.z, kind: 'log', logs: logsOf(6) });
-    g.fibre.carried = 1; g.axe.hand = false;
+    g.fibre.carried = 1;
     expect(kinds(g)).not.toContain('light'); expect(kinds(g)).not.toContain('build');
     expect(g.lackAt()).toBe(null);
     // the flood: a pile on ground the sea covers
@@ -390,16 +403,16 @@ describe('logs', () => {
 describe('the save', () => {
   it('keeps the axe, the felled trees, the logs, a carried log, log piles, the crown pieces and the progress; old saves load with nothing felled', () => {
     const { g, s, id } = treeScene('tree');
-    fellNow(g, id); g.axe.lay(g.player.x, g.player.z);
+    fellNow(g, id);
     const log = g.logs.near(s.info.x, s.info.z, 6)[0], b = g.branches.near(s.info.x, s.info.z, 8).find(q => q.extra);
     put(g, log.x, log.z); g.wood.take({ kind: 'log', log }, 0); g.wood.drop(g.player.x, g.player.z, 0, false, () => false, null);   // a log pile
     const l2 = g.logs.add({ x: log.x + 1, z: log.z + 2, len: 2, a: 0.2, rad: 0.15 }); put(g, l2.x, l2.z); g.wood.take({ kind: 'log', log: l2 }, 0);   // and one on his shoulder
     g.felled.setChopped(treeId(spots.palm.info.tile, 'palms', spots.palm.info.index), 0.4);
     const text = serialise(g.state()), saved = parseSave(text, 1337);
-    expect(saved).toBeTruthy(); expect(saved.felled.list.length).toBe(1); expect(saved.axe.at).toBeTruthy();
+    expect(saved).toBeTruthy(); expect(saved.felled.list.length).toBe(1); expect(saved.axe).toEqual({ made: true });
     const h = createGame(w, spawn, saved);
     expect(h.felled.has(id)).toBe(true); expect(h.felled.list[0].h).toBeCloseTo(g.felled.list[0].h, 6);
-    expect(h.axe.at).toBeTruthy(); expect(h.axe.hand).toBe(false);
+    expect(h.axe.has()).toBe(true); expect(h.player.belt).toBe(true);
     expect(h.wood.log && h.wood.log.id).toBe(l2.id); expect(h.wood.piles[0].kind).toBe('log'); expect(h.wood.piles[0].logs[0].id).toBe(log.id);
     expect(h.logs.near(l2.x, l2.z, 0.3).length).toBe(0);
     expect(h.branches.near(b.x, b.z, 0.2).some(q => q.id === b.id)).toBe(true);
@@ -413,7 +426,7 @@ describe('the save', () => {
   });
   it('rejects a broken new field like any other', () => {
     const g = dryGame(spawn.x, spawn.z), st = g.state();
-    for (const bad of [{ axe: { hand: 1 } }, { felled: { list: [{ id: 'x', h: 0 }] } }, { logs: { list: [{ id: 1 }] } }]) expect(parseSave(serialise({ ...st, ...bad }), 1337)).toBe(null);
+    for (const bad of [{ axe: { made: 1 } }, { felled: { list: [{ id: 'x', h: 0 }] } }, { logs: { list: [{ id: 1 }] } }]) expect(parseSave(serialise({ ...st, ...bad }), 1337)).toBe(null);
   });
   it('tolerates a felled id the island does not have, and plans the same fall twice', () => {
     const g = createGame(w, spawn, { time: 0.3, day: 1, felled: { list: [{ id: 7e9, h: 0 }, { id: spots.tree.info.id, h: 1 }] } });
