@@ -30,7 +30,7 @@ describe('the request and the answer (ai/actPrompt)', () => {
   it('the rules name what the AI test game of 0.37.6 found missing (0.37.7 "Reasons"): the fibre cap, the nap, where a fire is fed, the hut\'s room', () => {
     const f = actFixed('');
     expect(f).toContain('he carries at most 3 tufts'); expect(f).toMatch(/a sleep begun before dusk \(19:5\d\) is a nap: he wakes after 2 hours/);
-    expect(f).toContain('(or its glowing embers) with "feed", standing right at it; within 8 m of a finished stone ring only the fire in the ring can be fed');
+    expect(f).toContain('(or its glowing embers) with "feed", standing right at it; within 8 m of a finished stone ring a fire is lit and fed only in the ring');   // 0.40.4 "Ring": lit too
     expect(f).toContain('about 3 m wide and 2.5 m deep'); expect(f).toContain('the menu names what is in the way');
   });
   it('the user part says why it is asked, how the last step went, and the menu with ids and minutes', () => {

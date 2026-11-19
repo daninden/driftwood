@@ -193,6 +193,14 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Ring (0.40.4)
+
+- **The ring on the menu:** `game/actor` `ringNote(pile)` (after `pileWhat` in the menu's candidates only; a pile in a hut's way keeps its short name): a driftwood or branch pile within `RING_R` of a finished ring's middle (`ringOf`) is "in the stone ring of leanto<n>" with "ready to light where it lies" at `FIRE_MIN` pieces or more, else how many it needs; one in `leantos.noFire` says it cannot be lit. `ringHolds(leanto)` adds what a finished ring holds: his fire (burning or embers), his pile by its id (`ringPile`), or that it is empty.
+- **Reasons:** `whyNot('light')` is `lightWhy()`: water, no fibre or torch, no fuel pile within `BESIDE_FIRE` (with the pile in the ring by its id), a pile in `noFire`, a pile under `FIRE_MIN` (with the pieces of its kind under his arm). `game/lack` said nothing with wood under his arm, so the 0.40.3 loop got no reason. `whyNot('lay')` with `W.load() === 0` says he carries nothing to lay.
+- **No endless step:** `goStand(kind, obj, limit)` passes `goTo`'s limit (`realSecs(minutes) * 3 + 30`, default 60) to its walk as `maxSecs`; `waitIdle(max = IDLE_MAX)` (300 real s) returns false when he is still busy, and `doAction` then fails with "it took far too long: he was still busy with it".
+- **The rule:** `ai/actPrompt` `actFixed`, the fire line.
+- **Tests:** `tests/ring.test.js`.
+
 ### Weary (0.40.3)
 
 - **The awake line:** `ai/actPrompt` `awakeText(state)` (used by `bodyText`) tells awake, tired (`TIRED_AT`, the slowdown from `TIRED_SLOW`), when he falls asleep where he stands (`AWAKE_MAX`), and from `state.time` whether `sleep.canLie` would allow lying down now (`SLEEP_AFTER`, `NIGHT_AFTER`, `isNight`), a nap by day, or in how long. The game's own tests (dry ground, not stooping) are not counted.

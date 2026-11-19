@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.40.4 "Ring" — 2026-11-19
+
+Agreed with the user 2026-11-19 ("ja, bouw maar, met de tijdslimiet erbij") after an AI log on 0.40.3 in which he seemed to hang at 17:56 on day 3: he kept picking wood up and laying it down again, wanting to light a fire. His pile of 6 dry driftwood already lay in his stone ring, ready to light; the model took 3 pieces from it to carry them "to the ring", tried to light with the pile down to 3 ("not offered here", no reason), laid them back, and did it again. Before that it tried "lay" six times with nothing to lay (the stone already lay on its pile), also with no reason.
+
+- **The ring on the menu:** a pile of driftwood or branches in a lean-to's finished stone ring says so: "his pile of 6 dry driftwood (laid 17:55) in the stone ring of leanto1: ready to light where it lies ("light" beside it; taking wood from it makes it too small)", or that a fire needs at least 4 pieces. A pile within 8 m of the ring but not in it says it cannot be lit. The lean-to says what its ring holds: his fire, his pile by its id, or nothing.
+- **The rule:** within 8 m of a finished stone ring a fire is lit (not only fed) only in the ring; wood laid down at the ring lies in its middle and is the fire to be; light it where it lies and do not take its wood up again.
+- **Why "light" failed:** in water, no fibre or torch, no pile beside him (and which pile lies in the ring), a pile beside the ring, a pile under 4 pieces (and how many he holds under his arm to lay on it first).
+- **Why "lay" failed:** "he carries nothing to lay down: nothing under his arm, no stones in his hands, no log; fibre, coconuts, shells, berries, crabs and fish stay with him".
+- **No step without an end:** the walk to a standing spot beside a pile, a fire or a tree has the time limit of the other walks (it had none), and a step waits at most 300 real seconds for him to finish his work; else it fails ("it took far too long") and a new plan is asked.
+- **Tests:** `tests/ring.test.js` (the pile in the ring, a small one, an empty ring, a pile beside the ring, the reasons of a refused light and lay, the ring lit where it lies, the rule).
+
 ## 0.40.3 "Weary" — 2026-11-19
 
 Agreed with the user 2026-11-19 ("ja, bouw alle drie") after an AI log on 0.40.2: he lay down at 19:01, before dusk (19:55), so it was a nap of two hours; he woke at 21:20 still 1.1 days awake, and the model chose "rest for 60 minutes" four times in a row instead of sleeping ("I woke up in the dark, well-rested").

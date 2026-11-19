@@ -76,6 +76,11 @@
  * (`hutTreeBlocks`); a refused "use" says why (`useWhy`: lying down, busy, a torch, water, nothing of that kind carried, no fire for a crab), after waiting up to 20 s for a bend to end;
  * a pile of one piece is "1 log", "1 branch".
  * 0.40.0 "Belt": a felled log says whether it is still green or dry for the hut (game/logs `seasoned`), a log pile how many of its logs are; a refused hut part with a green log says when it is dry.
+ * 0.40.4 "Ring": a pile of driftwood or branches on the menu says when it lies in a lean-to's finished stone ring ("in the stone ring of leanto1: ready to light where it lies",
+ * or how many pieces it still needs) or within RING_NOFIRE of it but not in it (it cannot be lit); a lean-to with a finished ring says what the ring holds (his fire, a pile by its id,
+ * or nothing); a refused "light" says why (`lightWhy`: water, no fibre or torch, no pile beside him (and which pile lies in the ring), a pile beside the ring, a pile under FIRE_MIN
+ * pieces and the wood he holds for it); a refused "lay" with nothing to lay says so; the walk to a standing spot (`goStand`) has the time limit of the other walks, and a step waits
+ * at most IDLE_MAX real seconds for him to finish his work (else it fails: "it took far too long").
  * Depends on: game/actions (also WAIT), game/dark, game/logs, game/fish, game/path, game/route, game/movement, game/water, game/wood, game/felled, game/leanto, game/clock, world/constants
  */
 import { HALF, T, NT } from '../world/constants.js';
@@ -89,8 +94,8 @@ import { dryness, LOG_WALK, CARRY_SLOW, CARRY_MAX, STONE_MAX } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
 import { seasoned, dryAt, SEASON_DAYS } from './logs.js';
 import { CELL as KNOWN_CELL, NC as KNOWN_NC } from './known.js';
-import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, RING_NOFIRE } from './leanto.js';
-import { fireOutlook, full as fireFull, BURN, TORCH_DRY } from './fire.js';
+import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, ringCentre, RING_R, RING_NOFIRE } from './leanto.js';
+import { fireOutlook, full as fireFull, BURN, TORCH_DRY, FIRE_MIN } from './fire.js';
 import { TIRED_AT, SLEEP_AFTER, NIGHT_AFTER } from './sleep.js';
 import { WAIT, PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, LEG_DETOUR, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
 
@@ -99,7 +104,7 @@ export const RECENT_MAX = 20;
 export const SCAN_R = 150;          // metres round him in which the menu looks for places he knows
 export const FISH_WALK = 40;        // metres: how far from where he stands a fishing looks for the shallows (known ground only)
 export const walkMinutes = metres => Math.max(1, Math.ceil(gameMinutes(metres / WALK_SPEED * WALK_SLACK)));   // 0.37.5: a walk of that many metres of route in game minutes (with a little slack)
-const STOP = 0.12, SETTLE = 3, WALK_SLACK = 1.1, SETTLE_TICKS = 12, ASIDE = 3;   // the follower's stop at a standing point (as game/mind), and the walk's estimate made a little longer for the slower pace of a load
+const STOP = 0.12, SETTLE = 3, WALK_SLACK = 1.1, SETTLE_TICKS = 12, ASIDE = 3, IDLE_MAX = 300;   // IDLE_MAX (0.40.4): real seconds a step waits for him to finish his work (a felling is 50, a drill 14)   // the follower's stop at a standing point (as game/mind), and the walk's estimate made a little longer for the slower pace of a load
 
 export function createActor(world, game, opts = {}) {
   const chooser = typeof opts.chooser === 'function' ? opts.chooser : () => null;
@@ -214,6 +219,23 @@ export function createActor(world, game, opts = {}) {
     if (!hk) return 'his lean-to, finished with walls, bed and ring';
     return `his lean-to with walls, bed and ring; the hut: ${built(l, 'hut')} of ${partsOf('hut').length} parts, it still needs ${stillNeeds(l, 'hut')}${hk === 'log' ? ' (each log carried alone on his shoulder)' : ''}${!hutBegun(l) && !game.hutFits(l) ? ` (but ${hutWay(l)})` : ''}`;
   };
+  // ---------- 0.40.4 "Ring": what lies in his stone ring, and the piles beside it that cannot be lit ----------
+  const fuelKind = q => q.kind === 'driftwood' || q.kind === 'branch';
+  const ringOf = (x, z) => game.leantos.list.find(l => l.progress >= 1 && game.leantos.has(l, 'ring') && Math.hypot(ringCentre(l).x - x, ringCentre(l).z - z) <= RING_R) || null;   // the lean-to whose finished ring (x, z) lies in
+  const ringPile = l => { const c = ringCentre(l); return W.piles.find(q => q.logs.length && fuelKind(q) && Math.hypot(q.x - c.x, q.z - c.z) <= RING_R) || null; };
+  const ringNote = q => {   // a pile on the menu: in the ring (ready to light, or how many it still needs), or beside the ring where no fire can be lit
+    if (!fuelKind(q)) return '';
+    const l = ringOf(q.x, q.z);
+    if (l) return ` in the stone ring of ${placeId('leanto', l)}: ${q.logs.length >= FIRE_MIN ? 'ready to light where it lies ("light" beside it; taking wood from it makes it too small)' : `a fire needs at least ${FIRE_MIN} pieces (lay more on it here)`}`;
+    return game.leantos.noFire(q.x, q.z) ? ` (within ${RING_NOFIRE} m of his stone ring but not in it: it cannot be lit; only the fire in the ring)` : '';
+  };
+  const ringHolds = l => {   // a lean-to with a finished ring: what the ring holds now
+    if (!(l.progress >= 1 && game.leantos.has(l, 'ring'))) return '';
+    const c = ringCentre(l), f = game.fire.fires.find(q => Math.hypot(q.x - c.x, q.z - c.z) <= RING_R && (game.fire.strength(q) > 0 || q.embers > 0.005));
+    if (f) return `; his fire is in its stone ring (${game.fire.strength(f) > 0 ? 'burning' : 'embers'})`;
+    const q = ringPile(l);
+    return q ? `; its stone ring holds his pile ${placeId('pile', q)} (${q.logs.length} piece${q.logs.length === 1 ? '' : 's'}${q.logs.length >= FIRE_MIN ? ', ready to light' : `, a fire needs ${FIRE_MIN}`})` : `; its stone ring is empty (wood laid down in it lies in its middle)`;
+  };
   // ---------- 0.39.0 "Landfall": the places for a home he has seen (until he has begun one) ----------
   const HOME_GRID = 6, HOME_APART = 15, HOME_R = 120;
   const homeCache = new Map(); let homeVer = '';
@@ -263,9 +285,9 @@ export function createActor(world, game, opts = {}) {
     const out = [], R = SCAN_R, near = q => Math.hypot(q.x - p.x, q.z - p.z) <= R && known.has(q.x, q.z), anywhere = q => known.has(q.x, q.z);   // water, fires and lean-tos he knows are on the menu however far
     for (const q of waterAll) if (anywhere(q)) out.push({ kind: 'water', ref: q, x: q.x, z: q.z, what: 'fresh river water' });
     for (const t of tilesNear(p.x, p.z, R)) for (const [kind, L] of Object.entries(LOOSE)) for (const o of L.list(t)) if (near(o)) out.push({ kind, ref: o, x: o.x, z: o.z, what: L.what(o) });
-    for (const q of W.piles) if (q.logs.length && near(q)) out.push({ kind: 'pile', ref: q, x: q.x, z: q.z, what: pileWhat(q) });
+    for (const q of W.piles) if (q.logs.length && near(q)) out.push({ kind: 'pile', ref: q, x: q.x, z: q.z, what: pileWhat(q) + ringNote(q) });
     for (const f of game.fire.fires) if (anywhere(f)) out.push({ kind: 'fire', ref: f, x: f.x, z: f.z, what: fireWhat(f) });
-    for (const l of game.leantos.list) if (anywhere(l)) out.push({ kind: 'leanto', ref: l, x: l.x, z: l.z, what: leantoWhat(l) });
+    for (const l of game.leantos.list) if (anywhere(l)) out.push({ kind: 'leanto', ref: l, x: l.x, z: l.z, what: leantoWhat(l) + ringHolds(l) });
     for (const l of game.logs.near(p.x, p.z, R)) if (near(l)) out.push({ kind: 'log', ref: l, x: l.x, z: l.z, what: logWhat(l) });
     if (game.spear.at && near(game.spear.at)) out.push({ kind: 'spear', ref: game.spear.at, x: game.spear.at.x, z: game.spear.at.z, what: 'his spear, lying' });
     const blocks = hutTreeBlocks();
@@ -371,7 +393,7 @@ export function createActor(world, game, opts = {}) {
     if (i >= 0) { choice = i; emit('act', { kind: a.options[i].kind }); return a.options[i].kind; }
     return null;
   }
-  function* waitIdle() { while (busy()) yield; yield; }
+  function* waitIdle(max = IDLE_MAX) { const t0 = now; while (busy()) { if (now - t0 > max) return false; yield; } yield; return true; }   // 0.40.4 "Ring": false when he was still busy after max real seconds
   function* waitActs(max = 25) { const t0 = now; yield; while (inp.target && inp.target.act && now - t0 < max) yield; yield; }
 
   // ---------- walking ----------
@@ -408,13 +430,13 @@ export function createActor(world, game, opts = {}) {
       yield;
     }
   }
-  function* goStand(kind, obj) {   // to a spot where the game offers `kind` for obj (game/stand); { ok, reason }
+  function* goStand(kind, obj, limit = 60) {   // to a spot where the game offers `kind` for obj (game/stand); { ok, reason } (0.40.4 "Ring": within limit real seconds, as every walk)
     const stand = game.stand;
     for (let tries = 0; tries < 2; tries++) {
       if (stand.usable(kind, obj, p.x, p.z, inside)) { idle(); return { ok: true }; }
       const s = stand.plan(kind, obj, path, p, { allow: inside });
       if (!s) return { ok: false, reason: 'there is no spot he can stand at to reach it' };
-      const r = yield* walk(s.x, s.z, { stop: STOP });
+      const r = yield* walk(s.x, s.z, { stop: STOP, maxSecs: limit });
       if (!r.ok) return r;
       if (stand.offered(kind, obj, p.x, p.z)) return { ok: true };
     }
@@ -446,17 +468,17 @@ export function createActor(world, game, opts = {}) {
     const r = pl.ref, limit = realSecs(pl.minutes) * 3 + 30;
     if (pl.kind === 'pile') {
       const kind = W.load() === 0 ? 'take' : 'add';
-      const g = yield* goStand(kind, r);
+      const g = yield* goStand(kind, r, limit);
       if (g.ok) return g;
       return yield* walk(r.x, r.z, { stop: 1.4, maxSecs: limit });
     }
     if (pl.kind === 'fire') {
-      if (W.carried.length) { const g = yield* goStand('feed', r); if (g.ok) return g; }
+      if (W.carried.length) { const g = yield* goStand('feed', r, limit); if (g.ok) return g; }
       return yield* walk(r.x, r.z, { stop: 1.4, maxSecs: limit });
     }
     if (pl.kind === 'leanto') { const s = standFor(r); return yield* walk(s.x, s.z, { stop: 0.5, maxSecs: limit }); }
     if (pl.kind === 'tree') {
-      if (game.axe.has()) { const g = yield* goStand('fell', r); if (g.ok) return g; }
+      if (game.axe.has()) { const g = yield* goStand('fell', r, limit); if (g.ok) return g; }
       return yield* walk(r.x, r.z, { stop: r.r + 0.9, maxSecs: limit });
     }
     if (pl.kind === 'water') {
@@ -500,10 +522,25 @@ export function createActor(world, game, opts = {}) {
     thirst: game.thirst.days, hunger: game.hunger.days, fuel: new Map(game.fire.fires.map(f => [f, f.fuel])), burning: game.fire.fires.filter(f => game.fire.strength(f) > 0).length });
   const changed = (a, b) => a.fixed !== b.fixed || b.thirst < a.thirst - 1e-6 || b.hunger < a.hunger - 1e-6 || b.burning > a.burning
     || game.fire.fires.some(f => !a.fuel.has(f) || f.fuel > a.fuel.get(f) + 1e-6);
+  // 0.40.4 "Ring": why "light" is not offered where he stands (the tests of game `lightable`, in words, with the pile by its id)
+  function lightWhy() {
+    if (terrainAt(world, p.x, p.z, game.sea).depth > 0.05) return 'he stands in water';
+    if (!game.fire.torch && !game.fibre.carried) return LACK_TEXT.needFibre;
+    const q = (W.findAll(p.x, p.z, BESIDE_FIRE, 'pile').find(c => fuelKind(c.pile)) || {}).pile;
+    if (!q) {
+      const inRing = game.leantos.list.map(l => (l.progress >= 1 && game.leantos.has(l, 'ring') ? ringPile(l) : null)).find(Boolean);
+      return `no pile of driftwood or branches beside him (within about a metre of its edge)${inRing ? `; the pile in his stone ring is ${placeId('pile', inRing)}` : ''}`;
+    }
+    const id = placeId('pile', q), held = W.carried.filter(l => (q.kind === 'branch' ? l.branch : !l.branch && !l.frond)).length;   // what would go on this pile
+    if (game.leantos.noFire(q.x, q.z)) return `his pile ${id} lies within ${RING_NOFIRE} m of his stone ring but not in it: beside a ring a fire is lit only in the ring`;
+    if (q.logs.length < FIRE_MIN) return `his pile ${id} has only ${q.logs.length} piece${q.logs.length === 1 ? '' : 's'}: a fire needs at least ${FIRE_MIN}${held ? ` (he holds ${held} under his arm: "lay" them on it first)` : ''}`;
+    return null;
+  }
   // 0.37.4 "Lessons": why an action is not offered where he stands, in plain words (null when the game does not say); a lack belongs only to its own action
   function whyNot(kind) {
     const lack = game.lackAt();
-    if (lack && ((kind === 'fish' && (lack === 'needSpear' || lack === 'spearAway')) || (kind === 'light' && (lack === 'needFibre' || lack === 'needMoreWood')))) return LACK_TEXT[lack] || lack;
+    if (kind === 'light') return lightWhy();   // 0.40.4 "Ring": every reason in words (the lack said nothing with wood under his arm)
+    if (lack && kind === 'fish' && (lack === 'needSpear' || lack === 'spearAway')) return LACK_TEXT[lack] || lack;
     if (kind === 'pickup') {   // 0.37.6 "Free hands": his two hands
       if (W.log) return 'a log is on his shoulder: he carries it alone';
       const tool = game.spear.hand ? 'spear' : null, torch = !!game.fire.torch;
@@ -550,6 +587,7 @@ export function createActor(world, game, opts = {}) {
       if (game.crabs.full()) return 'he carries as many crabs as he can';
       return 'no crab is hiding in a hole beside him; they hide when he comes near at low water, and the holes may be empty';
     }
+    if (kind === 'lay' && W.load() === 0) return 'he carries nothing to lay down: nothing under his arm, no stones in his hands, no log; fibre, coconuts, shells, berries, crabs and fish stay with him';   // 0.40.4 "Ring"
     if (kind === 'lay' && W.load() > 0) return 'there is no room to lay it down here (water, or the camp too close): a few steps away, on open ground';   // 0.37.5; 0.37.6: "lay" is always offered on dry ground
     if (kind === 'fill' && !game.shells.empty()) return 'he has no empty shell';
     if (kind === 'torch' && game.spear.hand && W.carried.length) return 'the spear and the wood under his arm fill his hands';
@@ -594,7 +632,8 @@ export function createActor(world, game, opts = {}) {
       sleeping = false;
       return { ok: true, note: sleepNote(nap, game.sleep.slept, game.sleep.awake) };   // 0.40.3 "Weary": what kind of sleep it was, and how rested he is
     }
-    yield* waitActs(); yield* waitIdle();
+    yield* waitActs();
+    if (!(yield* waitIdle())) return { ok: false, reason: 'it took far too long: he was still busy with it' };
     if (kind === 'light' && !game.fire.fires.some(f => game.fire.strength(f) > 0 && dist(f, p) <= 3)) return { ok: false, reason: 'the fire did not catch' + (game.sleep.awake >= TIRED_AT ? ' (he is tired: the drill seldom catches)' : '') };   // 0.37.4: the fibre is used up either way; done only with a fire
     if (!changed(before, snapshot())) return { ok: false, reason: kind === 'dig' ? 'the crab got away' : kind === 'light' ? 'the fire did not catch' : kind === 'fish' ? 'he missed the fish' : 'nothing came of it' };
     return { ok: true };
