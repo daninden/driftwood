@@ -41,7 +41,8 @@ let used = 0;
 const piece = kind => SRC[kind]()[used++ % 40 + 3];   // a fresh-looking piece of that kind (never two alike in one test run of the helper)
 const give = (g, kind, n = 1) => { for (let i = 0; i < n; i++) (kind === 'stone' ? g.wood.stones : g.wood.carried).push({ ...piece(kind) }); };
 // build the next piece with the arc's icon and wait for it; returns the option used
-const buildNext = (g, input) => { const o = bigOf(g); expect(o).not.toBeNull(); g.act(o); run(g, input, PIECE_TIME + 0.5); return o; };
+// 0.40.2 "Armful": one press builds in every piece he holds that is next, so it waits until he is done
+const buildNext = (g, input) => { const o = bigOf(g); expect(o).not.toBeNull(); g.act(o); run(g, input, PIECE_TIME + 0.5); for (let i = 0; i < 20 && g.player.work; i++) run(g, input, PIECE_TIME); return o; };
 const FLAT = (yaw = 0.8) => { const g = createGame(w, spawn, { sleep: { awake: 0.1 } }); return { g, input: makeInput({ yaw }) }; };
 const finishedAt = (x, z, up) => ({ list: [{ id: 0, x, z, heading: 0, progress: 1, ...(up ? { up } : {}) }], nextId: 1 });
 
@@ -128,7 +129,7 @@ describe('starting a site with driftwood in the arms', () => {
     input.big = true; run(g, input, 1);
     expect(g.player.work).toMatchObject({ kind: 'build' }); expect(g.leantos.list.length).toBe(0); expect(g.wood.carried.length).toBe(2);   // kneeling: nothing yet
     run(g, input, PIECE_TIME);
-    expect(g.player.work).toBeNull(); expect(g.wood.carried.length).toBe(1); expect(g.leantos.list.length).toBe(1);
+    expect(g.player.work).toMatchObject({ kind: 'build' }); expect(g.wood.carried.length).toBe(1); expect(g.leantos.list.length).toBe(1);   // 0.40.2: the second piece goes in at once
     const l = g.leantos.list[0];
     expect(H).toBeDefined(); expect(l.heading).toBeCloseTo(H, 9); expect(l.x).toBeCloseTo(px - Math.sin(H) * SITE_AT, 5); expect(l.z).toBeCloseTo(pz - Math.cos(H) * SITE_AT, 5);
     expect(built(l)).toBe(1); expect(l.progress).toBeCloseTo(1 / 15, 9);
@@ -184,7 +185,7 @@ describe('building the lean-to piece by piece', () => {
     const l = g.leantos.list[0];
     g.wood.carried.length = 0; give(g, 'branch');
     expect(bigOf(g)).toBeNull();
-    g.wood.carried.length = 0; give(g, 'driftwood', 3); for (let i = 0; i < 3; i++) buildNext(g, input);
+    g.wood.carried.length = 0; give(g, 'driftwood', 3); buildNext(g, input);   // 0.40.2: all three in one press
     expect(built(l)).toBe(4); expect(bigOf(g)).toBeNull();   // driftwood is done
     give(g, 'driftwood'); expect(bigOf(g)).toBeNull();
     g.wood.carried.length = 0; give(g, 'frond'); expect(bigOf(g)).toBeNull();   // the roof branches come before the fronds
@@ -278,7 +279,7 @@ describe('upgrades', () => {
   });
   it('the ring: 8 stones from his hands (two at a time), each used up; the ring holds a fire only when whole', () => {
     const { g, input, l } = home();
-    for (let k = 0; k < 8; k++) { if (!g.wood.stones.length) give(g, 'stone', 2); const n = g.wood.stones.length; buildNext(g, input); expect(g.wood.stones.length).toBe(n - 1); expect(g.leantos.has(l, 'ring')).toBe(k === 7); }
+    for (let k = 0; k < 8; k += 2) { give(g, 'stone', 2); buildNext(g, input); expect(g.wood.stones.length).toBe(0); expect(g.leantos.has(l, 'ring')).toBe(k === 6); }   // 0.40.2: both stones in one press
     expect(g.leantos.ring(g.leantos.list[0].x + Math.sin(0) * 2.2, g.leantos.list[0].z + 2.2)).toBe(true);
   });
   it('the cost of an upgrade in rest is UP_COST over its parts', () => {
@@ -304,7 +305,7 @@ describe('old saves and saving', () => {
     expect(UP_ORDER.every(k => g.leantos.has(g.leantos.list[1], k))).toBe(true);
   });
   it('a half-built site is saved and loaded again, piece for piece', () => {
-    const { g, input } = FLAT(0.7); give(g, 'driftwood'); buildNext(g, input); give(g, 'driftwood', 2); buildNext(g, input); buildNext(g, input);
+    const { g, input } = FLAT(0.7); give(g, 'driftwood'); buildNext(g, input); give(g, 'driftwood', 2); buildNext(g, input);
     const s = JSON.parse(serialise(g.state())); expect(s.leantos.list[0]).toMatchObject({ heading: 0.7 }); expect(s.leantos.list[0].progress).toBeCloseTo(3 / 15, 9);
     const back = parseSave(serialise(g.state()), 1337), g2 = createGame(w, spawn, back);
     expect(g2.state()).toEqual(g.state()); expect(built(g2.leantos.list[0])).toBe(3); expect(nextKind(g2.leantos.list[0])).toBe('driftwood');

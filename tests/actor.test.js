@@ -467,7 +467,7 @@ describe('0.38.1 "Trace": what he did, facts only', () => {
     const laid = notes.find(x => /^laid/.test(x || ''));
     expect(laid).toMatch(/^laid 1 piece down: a branch on a new pile here \(pile\d+\)$/);
     const id = laid.match(/\((pile\d+)\)/)[1], q = a.menu().places.find(x => x.id === id);
-    expect(q).toBeTruthy(); expect(q.what).toMatch(/^his pile of 1 branches \(laid \d\d:\d\d\)$/);
+    expect(q).toBeTruthy(); expect(q.what).toMatch(/^his pile of 1 branch \(laid \d\d:\d\d\)$/);
     expect(g.wood.state().piles.some(x => Number.isFinite(x.laid))).toBe(true);
   }, 60000);
   it('NOW says the room left under his arm', () => {

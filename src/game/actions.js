@@ -15,7 +15,7 @@
  * when a step starts, not here.
  *
  * Exports:
- *   PLAN_MINUTES (60, 0.37.6; was 30), PLAN_STEPS (8), NEARBY (15 m), PER_KIND (3), WANDER_MAX (60), WAIT_MAX (60), FISH_MIN (5), FISH_MAX (60), PLAN_GRACE (80, 0.37.6; was 40)
+ *   PLAN_MINUTES (60, 0.37.6; was 30), PLAN_STEPS (12, 0.40.2; was 8), NEARBY (15 m), PER_KIND (3), WANDER_MAX (60), WAIT_MAX (60), FISH_MIN (5), FISH_MAX (60), PLAN_GRACE (80, 0.37.6; was 40)
  *   DIRS                         the eight directions of a wander, and of the places' bearings
  *   DO, USE                      kind -> { what, secs }: the plain words of an action and its seconds of real time (null: it lasts until it ends by itself, the sleep)
  *   gameMinutes(secs) -> number  real seconds (a game day is DAY_SECONDS) as game minutes; realSecs(minutes) the other way round
@@ -45,7 +45,7 @@ import { WALK_SPEED } from './movement.js';
 /** The answer "not yet" of a chooser (game/actor): no plan is ready, he waits and the chooser is asked again on the next step (0.38.0: was in game/intent, which is gone). */
 export const WAIT = Object.freeze({ wait: true });
 export const PLAN_MINUTES = 60;   // the user (2026-11-17): a plan covers at most half an hour of game time; 0.37.6 "Free hands" (the user, 2026-11-18): an hour
-export const PLAN_STEPS = 8;
+export const PLAN_STEPS = 12;   // 0.40.2 "Armful" (the user, 2026-11-19): was 8; three loose pieces fetched and built in take 10 steps, the minutes bound a plan already
 export const NEARBY = 15;         // metres: a place this close is `nearby` (no real walk)
 export const PER_KIND = 3;        // the nearest places of each kind on the menu (all the nearby ones too, up to NEARBY_MAX)
 export const NEARBY_MAX = 5;
@@ -73,8 +73,8 @@ export const DO = Object.freeze({
   light:     { what: 'light the pile beside him (fire drill, uses fibre)', secs: DRILL_TIME },
   sleep:     { what: 'lie down to sleep until he wakes (a plan of its own, the only step)', secs: null },
   buildHere: { what: 'start a lean-to here with the driftwood he carries', secs: PIECE_TIME },
-  buildIn:   { what: 'build a piece he carries into the lean-to', secs: PIECE_TIME },
-  upgrade:   { what: 'build a piece he carries into his home (walls, bed, ring, hut; a part of the hut takes three times as long, about 15 min)', secs: PIECE_TIME },
+  buildIn:   { what: 'build the pieces he carries into the lean-to, one after another, as long as the next one he carries is the one it needs (the minutes are for each piece)', secs: PIECE_TIME },
+  upgrade:   { what: 'build the pieces he carries into his home (walls, bed, ring, hut), one after another, as long as the next one he carries is one it needs (the minutes are for each piece; a part of the hut takes three times as long, about 15 min)', secs: PIECE_TIME },
   makeSpear: { what: 'make a spear (the branch he carries, a stone beside him)', secs: SPEAR_TIME },
   takeSpear: { what: 'take up the spear', secs: STOOP },
   laySpear:  { what: 'lay the spear down', secs: STOOP },

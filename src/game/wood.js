@@ -58,7 +58,7 @@
  *   - 0.31 "Axe": logs (game/logs, `timber: true`, kind 'log') are timber from felled trees. One is carried alone on the shoulder (`wood.log`; `take` refuses it unless nothing at all is carried, and refuses everything
  *     else while a log is carried; `load()` counts it as 1 but game/game slows him by LOG_WALK and LOG_STRIDE, not by CARRY_SLOW), lies loose on the ground until picked up, and is laid down only on log piles
  *     (kind 'log', at most PILE_MAX, never mixed, compact solid core like the driftwood piles). A log is never wet, never fuel, never lost: the sea does not cover it for picking up and the flood does not take a log pile.
- *     From a log pile `take` lifts the top log. `createWood(world, saved, branches, fronds, stones, logs)`; `wood.state()` carries `log: id`.
+ *     From a log pile `take` lifts the top log; 0.40.2 "Armful": the topmost dry one (game/logs `seasoned`) first, the top one when all are green. `createWood(world, saved, branches, fronds, stones, logs)`; `wood.state()` carries `log: id`.
  * Pure data on a world (world/vegetation `tile.drift`); no DOM, no Three.js.
  * The rain writes `t` on the world's own start logs and branches; createWood sets back what an earlier game on the same world object left, so games one after the other behave like on fresh worlds.
  *
@@ -134,7 +134,7 @@
  * logsNear(world, x, z, reach) -> the first logs of the tiles within reach of (x, z)
  * distToLog(log, x, z) -> { d, x, z }  distance to the log's axis and the nearest point on it
  *
- * Depends on: core/noise, world/constants, game/tide (seaLevel), game/branches, game/fronds, game/stones, game/logs (ids only)
+ * Depends on: core/noise, world/constants, game/tide (seaLevel), game/branches, game/fronds, game/stones, game/logs (ids, `seasoned`)
  */
 import { mulberry32, hashInt } from '../core/noise.js';
 import { HALF, T, NT } from '../world/constants.js';
@@ -142,7 +142,7 @@ import { FIRST_HIGH, PERIOD, RANGE, seaLevel } from './tide.js';
 import { BRANCH_ID0 } from './branches.js';
 import { FROND_ID0 } from './fronds.js';
 import { STONE_ID0, STONE_MAX } from './stones.js';
-import { LOG_ID0 } from './logs.js';
+import { LOG_ID0, seasoned } from './logs.js';
 
 export const CARRY_MAX = 3;
 export { STONE_MAX };
@@ -297,7 +297,11 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     if (timber) {
       if (load() > 0) return 0;
       if (thing.kind === 'log') { if (!logs || !logs.take(thing.log)) return 0; wood.log = thing.log; }
-      else { const p = thing.pile; if (!wood.piles.includes(p) || !p.logs.length) return 0; wood.log = p.logs.pop(); if (!p.logs.length) wood.piles.splice(wood.piles.indexOf(p), 1); }
+      else {   // 0.40.2 "Armful": from a pile of logs a dry one first (game/logs `seasoned`), the top one when none is
+        const p = thing.pile; if (!wood.piles.includes(p) || !p.logs.length) return 0;
+        let i = p.logs.length - 1; while (i >= 0 && !seasoned(p.logs[i], total)) i--;
+        wood.log = p.logs.splice(i >= 0 ? i : p.logs.length - 1, 1)[0]; if (!p.logs.length) wood.piles.splice(wood.piles.indexOf(p), 1);
+      }
       wood.version++; return 1;
     }
     const stone = thing.kind === 'log' ? !!thing.log.stone : wood.piles.includes(thing.pile) && thing.pile.kind === 'stone';   // stones are carried apart from the wood

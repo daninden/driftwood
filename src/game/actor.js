@@ -70,6 +70,10 @@
  * followed when the chooser counted it itself.
  * The menu also has `light`: { dark, hours (until dusk by day, until dawn in the dark), torch: { minutes left } | null, planted: [{ dist, dir, minutes }] (torches in the ground within 40 m), lit (he stands in firelight) }.
  *
+ * 0.40.2 "Armful": a "go" to a loose piece (driftwood, a branch, a frond, a stone, a felled log) sets input.pickWant to its id until the next walk or the plan's end, so "pickup" takes that piece and
+ * not a nearer one (game/game); a trunk in the hut's way (or where a lean-to would go) is named by its id ("a tree trunk (tree12)"), and the trunks in a hut's way are always on the menu
+ * (`hutTreeBlocks`); a refused "use" says why (`useWhy`: lying down, busy, a torch, water, nothing of that kind carried, no fire for a crab), after waiting up to 20 s for a bend to end;
+ * a pile of one piece is "1 log", "1 branch".
  * 0.40.0 "Belt": a felled log says whether it is still green or dry for the hut (game/logs `seasoned`), a log pile how many of its logs are; a refused hut part with a green log says when it is dry.
  * Depends on: game/actions (also WAIT), game/dark, game/logs, game/fish, game/path, game/route, game/movement, game/water, game/wood, game/felled, game/leanto, game/clock, world/constants
  */
@@ -144,8 +148,10 @@ export function createActor(world, game, opts = {}) {
     const d = Math.round(dist(b, l)), where = d < 1 ? 'at the lean-to' : `${d} m ${dirOf(b.x - l.x, b.z - l.z)} of the lean-to`;
     const pile = b.what === 'pile' ? W.piles.filter(q => dist(q, b) < 1).sort((u, v) => dist(u, b) - dist(v, b))[0] : null;   // 0.38.2: which pile, by its id
     const fixed = b.what === 'tree' ? 'fell it' : b.what === 'rock' || b.what === 'leanto' ? 'it cannot be moved' : b.what === 'pile' ? 'carry it away' : b.what === 'burnt' ? 'the ashes fade within two days' : 'once the fire has burnt out, its ashes fade within two days';
-    return `the hut has no room here: ${pile ? `his ${pileWhat(pile).replace(/^his /, '')} (${placeId('pile', pile)})` : HUT_IN_WAY[b.what] || 'something'} ${where} stands in its way; ${fixed}`;
+    return `the hut has no room here: ${inWay(b, pile)} ${where} stands in its way; ${fixed}`;
   }
+  // 0.40.2 "Armful": the thing in the way in words, a pile or a trunk by its id (a trunk 2 m from the lean-to was not on the menu, and the hut stood blocked for two days)
+  const inWay = (b, pile) => (pile ? `his ${pileWhat(pile).replace(/^his /, '')} (${placeId('pile', pile)})` : b.what === 'tree' && Number.isInteger(b.tree) ? `a tree trunk (${placeId('tree', { id: b.tree })})` : HUT_IN_WAY[b.what] || 'something');
 
   function homeWay(site) {   // 0.40.1 "Clear": what keeps a place for a home from fitting now, in words (game `siteBlock`, then `homeBlock`)
     const b = game.siteBlock(site) || game.homeBlock(site);
@@ -154,7 +160,7 @@ export function createActor(world, game, opts = {}) {
     const d = Math.round(dist(b, site)), where = d < 1 ? 'right there' : `${d} m ${dirOf(b.x - site.x, b.z - site.z)} of it`;
     const pile = b.what === 'pile' ? W.piles.filter(q => dist(q, b) < 1).sort((u, v) => dist(u, b) - dist(v, b))[0] : null;
     const fixed = b.what === 'pile' ? 'carry it away, or choose another place' : b.what === 'fire' || b.what === 'burnt' ? 'ashes fade within two days after a fire burns out; choose another place' : 'choose another place';
-    return `${pile ? `his ${pileWhat(pile).replace(/^his /, '')} (${placeId('pile', pile)})` : HUT_IN_WAY[b.what] || 'something'} ${where} ${b.what === 'tree' || b.what === 'rock' ? 'stands' : 'lies'} where the lean-to would go; ${fixed}`;
+    return `${inWay(b, pile)} ${where} ${b.what === 'tree' || b.what === 'rock' ? 'stands' : 'lies'} where the lean-to would go; ${fixed}`;
   }
 
   // ---------- what he knows round him ----------
@@ -179,7 +185,7 @@ export function createActor(world, game, opts = {}) {
   const dryText = l => { const t = dryAt(l); return `${Math.floor(t) === clock.day ? 'today' : `day ${dayNo(Math.floor(t))}`} ${clockText(t)}`; };
   const clockText = t => { const m = Math.floor(((t % 1) + 1) % 1 * 1440 + 1e-9) % 1440, pad = n => String(n).padStart(2, '0'); return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; };
   const laidText = q => (Number.isFinite(q.laid) ? ` (laid ${Math.floor(q.laid) === clock.day ? '' : `day ${dayNo(Math.floor(q.laid))} `}${clockText(q.laid)})` : '');   // 0.38.1 "Trace": when he last laid on it
-  const pileWhat = q => `his pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : q.logs.every(wet) ? 'wet driftwood' : `driftwood (${q.logs.filter(l => !wet(l)).length} dry, ${q.logs.filter(wet).length} wet)`) : q.kind === 'branch' ? 'branches' : q.kind === 'frond' ? 'fronds' : q.kind === 'stone' ? 'stones' : `logs${logsDry(q)}`}${laidText(q)}`;
+  const pileWhat = q => `his pile of ${q.logs.length} ${q.kind === 'driftwood' ? (q.logs.every(l => !wet(l)) ? 'dry driftwood' : q.logs.every(wet) ? 'wet driftwood' : `driftwood (${q.logs.filter(l => !wet(l)).length} dry, ${q.logs.filter(wet).length} wet)`) : q.kind === 'branch' ? (q.logs.length === 1 ? 'branch' : 'branches') : q.kind === 'frond' ? (q.logs.length === 1 ? 'frond' : 'fronds') : q.kind === 'stone' ? (q.logs.length === 1 ? 'stone' : 'stones') : `${q.logs.length === 1 ? 'log' : 'logs'}${logsDry(q)}`}${laidText(q)}`;   // 0.40.2: "1 log", not "1 logs"
   const logsDry = q => { const g = q.logs.filter(l => !seasoned(l, clock.total)); return !g.length ? ', dry for the hut' : g.length === q.logs.length ? `, still green (the first dry for the hut about ${dryText(g.reduce((a, b) => (dryAt(a) <= dryAt(b) ? a : b)))})` : ` (${q.logs.length - g.length} dry for the hut, ${g.length} still green)`; };   // 0.40.0
   const fireWhat = f => {   // 0.37.4: how long it still burns
     const ring = !!game.leantos.ring(f.x, f.z), burning = game.fire.strength(f) > 0;
@@ -246,6 +252,12 @@ export function createActor(world, game, opts = {}) {
     const ht = game.hutTrees(c), m = v => `${Math.round(v)} m`;
     return `a place for a home (the lean-to and later the hut fit here): ${Number.isFinite(water) ? `fresh water ${m(water)} away` : 'no fresh water he knows near'}, ${Number.isFinite(shore) ? `the shore ${m(shore)}` : 'the shore far'}, ${trees} tree${trees === 1 ? '' : 's'} within 20 m; ${ht ? `${ht} tree${ht === 1 ? ' stands' : 's stand'} where the hut will go (fell ${ht === 1 ? 'it' : 'them'} for the hut)` : "the hut's ground is clear of trees"}`;
   }
+  /** 0.40.2 "Armful": the trunks that keep a hut from being begun (game `hutBlock` of each finished lean-to ready for it): always on the menu, by the id its reason names. */
+  function hutTreeBlocks() {
+    const ids = new Set();
+    for (const l of game.leantos.list) if (hutReady(l) && !hutBegun(l)) { const b = game.hutBlock(l); if (b && b.what === 'tree' && Number.isInteger(b.tree)) ids.add(b.tree); }
+    return ids;
+  }
   function candidates() {   // every thing he knows within SCAN_R, by kind: [{ kind, ref, x, z, what }]
     const out = [], R = SCAN_R, near = q => Math.hypot(q.x - p.x, q.z - p.z) <= R && known.has(q.x, q.z), anywhere = q => known.has(q.x, q.z);   // water, fires and lean-tos he knows are on the menu however far
     for (const q of waterAll) if (anywhere(q)) out.push({ kind: 'water', ref: q, x: q.x, z: q.z, what: 'fresh river water' });
@@ -255,8 +267,9 @@ export function createActor(world, game, opts = {}) {
     for (const l of game.leantos.list) if (anywhere(l)) out.push({ kind: 'leanto', ref: l, x: l.x, z: l.z, what: leantoWhat(l) });
     for (const l of game.logs.near(p.x, p.z, R)) if (near(l)) out.push({ kind: 'log', ref: l, x: l.x, z: l.z, what: logWhat(l) });
     if (game.spear.at && near(game.spear.at)) out.push({ kind: 'spear', ref: game.spear.at, x: game.spear.at.x, z: game.spear.at.z, what: 'his spear, lying' });
-    if (game.axe.has()) for (const t of tilesNear(p.x, p.z, 60)) for (const list of LISTS) t[list].forEach((tree, index) => {
-      const id = treeId(t, list, index); if (game.felled.has(id) || !near(tree) || Math.hypot(tree.x - p.x, tree.z - p.z) > 60) return;
+    const blocks = hutTreeBlocks();
+    if (game.axe.has() || blocks.size) for (const t of tilesNear(p.x, p.z, 60)) for (const list of LISTS) t[list].forEach((tree, index) => {
+      const id = treeId(t, list, index); if (game.felled.has(id) || !near(tree) || Math.hypot(tree.x - p.x, tree.z - p.z) > 60 || (!game.axe.has() && !blocks.has(id))) return;
       const k = sizeKind(list, tree); out.push({ kind: 'tree', ref: { id, x: tree.x, z: tree.z, r: trunkRadius(tree, k) }, x: tree.x, z: tree.z, what: `a standing ${k === 'palm' ? 'palm' : k === 'pine' ? 'pine' : 'tree'}` });
     });
     for (const h of homeSpots()) out.push({ kind: 'homespot', ref: h, x: h.x, z: h.z, what: homeWhat(h) });   // 0.39.0
@@ -290,6 +303,7 @@ export function createActor(world, game, opts = {}) {
       const pool = kind === 'water' ? spaced(list, 20) : list;   // river points lie every few metres: a few spread out
       const close = c => Math.round(c.dist) <= NEARBY, nearby = pool.filter(close).slice(0, NEARBY_MAX), rest = pool.filter(c => !close(c));
       const pick = [...nearby, ...rest].slice(0, Math.max(PER_KIND, nearby.length));
+      if (kind === 'tree') { const blocks = hutTreeBlocks(); for (const c of pool) if (blocks.has(c.ref.id) && !pick.includes(c)) pick.push(c); }   // 0.40.2: the trunk in the hut's way, however far down the list
       for (const c of pick) {
         const r = c.dist < 1.5 ? null : path.find(p, c);   // 0.37.5 "Ways": the walk's minutes from the length of its route (the path's cost in paced seconds was about four times the real walk)
         const always = kind === 'fire' || kind === 'leanto';   // 0.37.8 "Firelight": his fires and lean-tos are always on the menu; a route to the middle of a fire in the ring by the hut can fail (a fire vanished from the menu while it burned), then the straight line counts, as a later walk of a plan
@@ -450,6 +464,7 @@ export function createActor(world, game, opts = {}) {
     }
     if (pl.kind === 'crabs') return yield* walk(r.hole.x, r.hole.z, { stop: 1.0, maxSecs: limit });
     if (pl.kind === 'homespot') { const w = yield* walk(r.x, r.z, { stop: 0.3, maxSecs: limit }); if (w.ok) inp.siteYaw = r.heading; return w; }   // 0.39.0: a "buildHere" there opens the lean-to that way
+    if ((pl.kind === 'log' || ['driftwood', 'branch', 'frond', 'stone'].includes(pl.kind)) && Number.isFinite(r.id)) inp.pickWant = r.id;   // 0.40.2 "Armful": "pickup" takes this one, not a nearer piece
     let w = yield* walk(r.x, r.z, { tap: true, stop: 0.4, until: () => offeredHere(pl), maxSecs: limit });   // a loose thing: until the action button offers it
     if (w.ok && !offeredHere(pl)) w = yield* walk(r.x, r.z, { stop: 0.2, maxSecs: 20 });
     if (!w.ok) return w;
@@ -614,12 +629,26 @@ export function createActor(world, game, opts = {}) {
     }
     return { ok: true, note: `no fish in ${minutes} minutes` };
   }
+  // 0.40.2 "Armful": why game `use` refused, in words (the tests of `use`; "he cannot do that now" said nothing)
+  function useWhy(kind) {
+    const berryLike = kind === 'berries' || kind === 'banana';
+    if (game.sleep.asleep || p.lie > 0) return 'he is lying down';
+    if (p.work || p.queued || p.stoop > 0) return 'he is still busy with something else';
+    if (!berryLike && game.fire.torch) return 'a torch is in his hand: plant it first';
+    if (!berryLike && terrainAt(world, p.x, p.z, game.sea).depth > 0.05) return 'he stands in water';
+    if (kind === 'nut' && !game.shells.nuts) return 'he carries no coconut';
+    if (kind === 'water' && !game.shells.full()) return 'he has no full shell';
+    if (kind === 'berries' && !game.berries.carried.length) return 'he carries no berries';
+    if (kind === 'banana' && !game.bananas.carried.length) return 'he carries no banana';
+    if (kind === 'crab') return 'he needs a fire with flames beside him (within about a metre of its edge)';
+    return 'he cannot do that now';
+  }
   function* useThing(kind) {
     const before = snapshot(), row = kind === 'crab' ? (game.crabs.carried.length || !game.fish.carried.length ? 'crab' : 'fish') : kind;   // 0.38.2: "crab" eats a carried crab, or a fish when he has no crab (game `use` roasts either)
     if (kind === 'crab' && !game.crabs.carried.length && !game.fish.carried.length) return { ok: false, reason: 'he carries no crab or fish' };
     idle(); inp.sit = false;
-    for (let t = 0; t < 60 && busy(); t++) yield;   // 0.37.5: he finishes a bend or gets up first (a use while he still stooped failed)
-    if (!game.use(row, inp)) return { ok: false, reason: kind === 'crab' ? 'he needs a fire with flames beside him (within about a metre of its edge)' : game.fire.torch ? 'a torch is in his hand: plant it first' : terrainAt(world, p.x, p.z, game.sea).depth > 0.05 ? 'he stands in water' : 'he cannot do that now' };
+    for (let t = 0; t < 200 && busy(); t++) yield;   // 0.37.5: he finishes a bend or gets up first (a use while he still stooped failed); 0.40.2: up to 20 s
+    if (!game.use(row, inp)) return { ok: false, reason: useWhy(kind) };
     emit('act', { kind: 'use:' + kind });
     yield; yield* waitIdle();
     return changed(before, snapshot()) ? { ok: true } : { ok: false, reason: 'nothing came of it' };
@@ -633,7 +662,7 @@ export function createActor(world, game, opts = {}) {
   }
   function* runStep(s, places) {
     const k = stepKind(s);
-    if (k === 'go' || k === 'wander') inp.siteYaw = undefined;   // 0.39.0: the way of a place for a home holds only where he stands at it
+    if (k === 'go' || k === 'wander') { inp.siteYaw = undefined; inp.pickWant = undefined; }   // 0.39.0: the way of a place for a home holds only where he stands at it (0.40.2: the piece he walked to too)
     if (k === 'go') {
       const pl = places.find(q => q.id === s.go);
       if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, stepMinutes(s, places)); if (!ok.ok) return { ok: false, reason: ok.reason }; }   // 0.37.2: the dark rule, when the walk starts (0.37.8: no walk without light)
@@ -692,7 +721,7 @@ export function createActor(world, game, opts = {}) {
     }
     return 'done';
   }
-  function end(reason) { inp.siteYaw = undefined; gen = null; actor.plan = null; actor.stepIndex = -1; why = reason; idle(); inp.sit = false; }
+  function end(reason) { inp.siteYaw = undefined; inp.pickWant = undefined; gen = null; actor.plan = null; actor.stepIndex = -1; why = reason; idle(); inp.sit = false; }
   // 0.38.3 "Steady": rain stops the work he is doing (as walking off does), and the record says so
   const WORK_WORDS = { husk: 'husking the coconut', sip: 'drinking from a shell', roast: 'roasting', build: 'building', upgrade: 'building', drill: 'drilling a fire', fell: 'felling the tree', dig: 'digging', fish: 'fishing', make: 'making the tool', drink: 'going to drink', fill: 'going to fill a shell' };
   function stopWork() {

@@ -172,7 +172,7 @@ describe('building the hut piece by piece', () => {
 
   it('takes only the kind the next part needs: no branch at the log stage, no log at the branch stage', () => {
     const { g, input, l } = homeGame(); give(g, 'log'); buildNext(g, input);
-    g.wood.log = null; give(g, 'branch'); expect(bigOf(g)).toBeNull();
+    g.wood.log = null; give(g, 'branch'); expect(bigOf(g)).toBeNull(); g.wood.carried.length = 0;   // (0.40.2: a branch still under his arm would go in after the 12th log)
     for (let k = 1; k < 12; k++) { give(g, 'log'); buildNext(g, input); }
     expect(built(l, 'hut')).toBe(12); g.wood.carried.length = 0; give(g, 'log'); expect(bigOf(g)).toBeNull(); g.wood.log = null;
     give(g, 'frond'); expect(bigOf(g)).toBeNull();   // the roof frame comes before the fronds

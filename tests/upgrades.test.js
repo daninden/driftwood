@@ -184,10 +184,12 @@ describe('the upgrades: when they can be built (0.32: from pieces he holds, no p
 });
 
 describe('building an upgrade', () => {
-  it('a piece a press: 4 seconds of kneeling, the frond used up, the walls grow by a sixth; all 6 in 24 seconds, the rest it costs', () => {
+  it('4 seconds of kneeling a piece, the frond used up, the walls grow by a sixth; 0.40.2 "Armful": one press builds in every frond he holds, all 6 in 24 seconds, the rest it costs', () => {
     const g = holding(camp(), 'frond', 3), input = makeInput(), t0 = g.clock.total, awake0 = g.sleep.awake, l = g.leantos.list[0];
     buildNext(g, input); expect(g.wood.carried.length).toBe(2); expect(l.up.walls).toBeCloseTo(1 / 6, 9);
-    holding(g, 'frond', 3, 5); for (let k = 1; k < 6; k++) buildNext(g, input);
+    expect(g.player.work).toMatchObject({ kind: 'upgrade' });   // the next frond goes in at once
+    run(g, input, 2 * PIECE_TIME); expect(g.player.work).toBeNull(); expect(g.wood.carried.length).toBe(0); expect(l.up.walls).toBeCloseTo(3 / 6, 9);
+    holding(g, 'frond', 3, 5); buildNext(g, input); run(g, input, 2 * PIECE_TIME);
     expect(l.up.walls).toBe(1); expect(g.leantos.has(l, 'walls')).toBe(true); expect(g.wood.carried.length).toBe(0);
     expect(g.sleep.awake - awake0 - (g.clock.total - t0)).toBeCloseTo(UP_COST, 1);
     expect(bigOf(holding(g, 'frond'))).toBeNull();   // built once
@@ -204,7 +206,8 @@ describe('building an upgrade', () => {
     for (let k = 0; k < 4; k++) { holding(g, 'frond'); buildNext(g, input); }
     expect(g.leantos.list[0].up.bed).toBe(1); expect(g.wood.carried.length).toBe(0);
     const r = camp(), i2 = makeInput(); holding(r, 'stone', 2);
-    for (let k = 0; k < 8; k++) { if (!r.wood.stones.length) holding(r, 'stone', 2, 20); buildNext(r, i2); }
+    run(r, i2, 0); buildNext(r, i2); run(r, i2, PIECE_TIME); expect(r.wood.stones.length).toBe(0);   // 0.40.2: both stones in one press
+    for (let k = 2; k < 8; k++) { holding(r, 'stone', 1, 20 + k); buildNext(r, i2); }
     expect(r.leantos.list[0].up.ring).toBe(1);
   });
   it('works with F too', () => {

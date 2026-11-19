@@ -2,6 +2,19 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.40.2 "Armful" — 2026-11-19
+
+Agreed with the user 2026-11-19: during the AI test game on 0.40.1 the user saw him fetch the branches for the lean-to one at a time ("optie 1 + 2"), and after the test game's findings "a t/m d"; while it was built the user asked that his thoughts never name the menu's ids.
+
+- **Twelve steps:** a plan has at most 12 steps (was 8). Three loose branches fetched and built in took 10 steps (a walk and a pick-up for each, the walk back, a build for each), so he brought one or two at a time; six plans of the test game were refused for it. The hour still bounds a plan.
+- **An armful built in at once:** one "buildIn" or "upgrade" (and "build here") builds in every piece he carries that is next, one after another, four seconds each (a part of the hut twelve), until the next part needs a kind he does not carry or, for "buildIn", the lean-to is finished. Walking off stops it; the pieces not yet built in stay under his arm.
+- **The piece he walked to:** a "pickup" after a walk to a branch, a frond, driftwood, a stone or a felled log takes that piece, not a nearer one (in the test game a felled log lying beside a branch was shouldered instead, seven failed steps and loops of one-log piles). From a pile of logs he takes a dry log first.
+- **The trunk by its name:** "the hut has no room here: a tree trunk (tree12) 2 m north of the lean-to stands in its way; fell it", and that tree is always on the menu (also without an axe). In the test game the hut stood blocked for about two days because the trunk had no name and was not on the menu. A trunk where a lean-to would go is named the same way.
+- **Why eating failed:** a refused eat or drink says why: he is lying down, still busy, has a torch in his hand, stands in water, or carries nothing of that kind ("he cannot do that now" said nothing); he waits up to 20 seconds for a bend to end first.
+- **Plain words:** the rules ask for his thought and his lessons in plain words, never a menu id such as driftwood1 or pile3 (his own notes may still use them).
+- **Small:** a pile of one piece is "1 log", "1 branch", not "1 logs".
+- **Tests:** `tests/armful.test.js` (several pieces in one press and where it stops, walking off, an upgrade that goes on, 12 steps, the wanted piece, the dry log first, the trunk by its id and on the menu, the reason of a refused use, the rules text); `tests/site.test.js`, `tests/upgrades.test.js`, `tests/hut.test.js` and `tests/actor.test.js` follow the new building and the singular.
+
 ## 0.40.1 "Clear" — 2026-11-19
 
 Agreed with the user 2026-11-19 after an AI log on 0.40.0: he laid his stones on two places for a home, the menu kept offering both, and about fifteen requests in two game minutes walked to them and failed with "something now stands in the way".
