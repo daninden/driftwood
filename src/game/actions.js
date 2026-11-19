@@ -22,8 +22,10 @@
  *   dirOf(dx, dz) -> one of DIRS
  *   stepMinutes(step, places, from?) -> number | null   the estimate of one step (null: no estimate, unknown place or kind); 0.37.5: a `go` from `from` (the place of the go before it in the plan) is legMinutes(from, place)
  *   legMinutes(a, b), METRES_PER_MINUTE, LEG_DETOUR, LEG_SLACK   (0.37.5 "Ways") a walk between two places of a plan: the straight line x 1.3 at the walking pace with the menu's slack; about 1.9 m a game minute
- *   stepText(step, places) -> string             a step in plain words, for logs and the panel
+ *   stepText(step, places) -> string             a step in plain words, for logs and the panel (0.40.5: an unknown step shows what was written)
+ *   shortStep(step), notAStep(step, n)           (0.40.5 "Form") a step as written, short; the reason a step is not a step: what was written, the five forms, the right form when its key is an action ({"sleep": true}: write {"do": "sleep"})
  *   checkPlan(plan, places) -> { ok, steps, minutes, claimed, reason }   plan: [step] or { steps: [step], minutes? }; ok false with a plain reason when it cannot be followed (0.37.2: a sleep or a fishing not alone, fishing without 5 to 60 minutes)
+ *     0.40.5 "Form": a refused sleep says to answer with {"do": "sleep"} alone.
  *     0.37.4 "Lessons": `minutes` is the chooser's own count of the plan (claimed). 0.37.8 "Firelight": PLAN_MINUTES is the size a plan is asked to have; a plan of several
  *     steps is refused only when the chooser's count or the game's is over PLAN_GRACE (so a walk and an hour of felling fit).
  *
@@ -132,7 +134,22 @@ export function stepText(s, places) {
   if (k === 'wait') return `wait for ${s.wait} minutes (awake)`;
   if (k === 'do') return s.do === 'fish' && Number.isFinite(s.minutes) ? `fish with the spear for up to ${s.minutes} minutes` : DO[s.do] ? DO[s.do].what : String(s.do);
   if (k === 'use') return USE[s.use] ? USE[s.use].what : String(s.use);
-  return 'an unknown step';
+  return 'an unknown step ' + shortStep(s);
+}
+
+/** 0.40.5 "Form": a step as the chooser wrote it, short (for the reason of a refused step and the panel). */
+export function shortStep(s) {
+  let t; try { t = JSON.stringify(s); } catch (e) { t = String(s); }
+  t = t === undefined ? String(s) : t;
+  return t.length > 60 ? t.slice(0, 57) + '...' : t;
+}
+
+/** 0.40.5 "Form": why a step is not a step: what was written, the five forms, and the right form when its key is an action or a thing he carries ({"sleep": true} -> {"do": "sleep"}). */
+export function notAStep(s, n) {
+  const keys = s && typeof s === 'object' ? Object.keys(s) : [];
+  const act = keys.find(k => DO[k]), thing = keys.find(k => USE[k]);
+  const hint = act ? ` (write {"do": "${act}"})` : thing ? ` (write {"use": "${thing}"})` : '';
+  return `step ${n} ${shortStep(s)} is not a step${hint}: a step is {"go": "<place id>"}, {"wander": "<direction>", "minutes": n}, {"do": "<action>"}, {"use": "<thing>"} or {"wait": n}`;
 }
 
 /** Can the plan be followed? It checks the steps (known kinds and places, sensible minutes), the sleep and the fishing alone, and the time: at most PLAN_GRACE (0.37.8; PLAN_MINUTES before) unless it is one step alone.
@@ -145,7 +162,7 @@ export function checkPlan(plan, places) {
   let minutes = 0, at = null;   // at (0.37.5): the place the last `go` led to (a later walk counts from there); null at the start and after a wander
   for (let i = 0; i < list.length; i++) {
     const s = list[i], k = stepKind(s), n = i + 1;
-    if (!k) return { ok: false, steps: [], minutes: 0, reason: `step ${n} is not a step` };
+    if (!k) return { ok: false, steps: [], minutes: 0, reason: notAStep(s, n) };
     let step;
     if (k === 'go') { if (!placeOf(places, s.go)) return { ok: false, steps: [], minutes: 0, reason: `step ${n}: no place "${s.go}" on the menu` }; step = { go: s.go }; }
     else if (k === 'wander') {
@@ -166,7 +183,7 @@ export function checkPlan(plan, places) {
         step.minutes = m;
       }
     } else { if (!USE[s.use]) return { ok: false, steps: [], minutes: 0, reason: `step ${n}: "${s.use}" is not something to eat or drink` }; step = { use: s.use }; }
-    if (step.do === 'sleep' && list.length > 1) return { ok: false, steps: [], minutes: 0, reason: 'sleep must be the only step of its plan (he sleeps until he wakes; the next plan follows)' };
+    if (step.do === 'sleep' && list.length > 1) return { ok: false, steps: [], minutes: 0, reason: 'sleep must be the only step of its plan (he sleeps until he wakes; the next plan follows): answer with {"do": "sleep"} as its only step' };
     if (step.do === 'fish' && list.length > 1) return { ok: false, steps: [], minutes: 0, reason: 'fishing must be the only step of its plan (walk to the water in a plan of its own first)' };
     if (typeof s.say === 'string' && s.say.trim()) step.say = s.say.trim();
     minutes += stepMinutes(step, places, at);

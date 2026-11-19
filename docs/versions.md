@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.40.5 "Form" — 2026-11-19
+
+Agreed with the user 2026-11-19 ("ja, bouw 1 en 2") after an AI log on 0.40.4 (gemini-3.5-flash-lite): at 21:04 on day 3 the model wanted him to sleep through the night, but its step was not a step the game knows (most likely `{"sleep": ...}` instead of `{"do": "sleep"}`). The game refused it with only "step 1 is not a step", and the panel showed "an unknown step". The rules wrote the sleep as a bare word ("sleep" is a plan of its own), and the refusal of a sleep together with other steps did not show its form either.
+
+- **The sleep rule shows its form:** "Sleep is a plan of its own: {"do": "sleep"}, its only step."; a sleep refused for not being alone says "answer with {"do": "sleep"} as its only step".
+- **A step that is not a step says what was wrong:** what was written (short), the five forms of a step, and the right form when its key is an action or a thing he carries: `step 1 {"sleep":true} is not a step (write {"do": "sleep"}): a step is {"go": "<place id>"}, {"wander": "<direction>", "minutes": n}, {"do": "<action>"}, {"use": "<thing>"} or {"wait": n}`. The AI log shows "an unknown step" with what was written.
+- Not built (proposed, not agreed): reading such a step as the action anyway.
+
 ## 0.40.4 "Ring" — 2026-11-19
 
 Agreed with the user 2026-11-19 ("ja, bouw maar, met de tijdslimiet erbij") after an AI log on 0.40.3 in which he seemed to hang at 17:56 on day 3: he kept picking wood up and laying it down again, wanting to light a fire. His pile of 6 dry driftwood already lay in his stone ring, ready to light; the model took 3 pieces from it to carry them "to the ring", tried to light with the pile down to 3 ("not offered here", no reason), laid them back, and did it again. Before that it tried "lay" six times with nothing to lay (the stone already lay on its pile), also with no reason.

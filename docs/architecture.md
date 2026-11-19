@@ -193,6 +193,12 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Form (0.40.5)
+
+- **A step that is not a step:** `game/actions` `notAStep(step, n)` is the reason `checkPlan` gives: `shortStep(step)` (the step as JSON, at most 60 characters), the five forms, and `(write {"do": "<key>"})` when a key of the step is a `DO` kind, else `(write {"use": "<key>"})` for a `USE` kind. `stepText` of an unknown step is "an unknown step " + `shortStep`. A sleep not alone: the reason ends "answer with {"do": "sleep"} as its only step".
+- **The rule:** `ai/actPrompt` `actFixed`, the sleep line shows `{"do": "sleep"}`.
+- **Tests:** `tests/actor.test.js` (the sleep in `checkPlan`, a step that is not a step).
+
 ### Ring (0.40.4)
 
 - **The ring on the menu:** `game/actor` `ringNote(pile)` (after `pileWhat` in the menu's candidates only; a pile in a hut's way keeps its short name): a driftwood or branch pile within `RING_R` of a finished ring's middle (`ringOf`) is "in the stone ring of leanto<n>" with "ready to light where it lies" at `FIRE_MIN` pieces or more, else how many it needs; one in `leantos.noFire` says it cannot be lit. `ringHolds(leanto)` adds what a finished ring holds: his fire (burning or embers), his pile by its id (`ringPile`), or that it is empty.

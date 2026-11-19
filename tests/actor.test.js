@@ -10,7 +10,7 @@ import { WAIT } from '../src/game/actions.js';
 import { checkPlan, stepMinutes, stepText, gameMinutes, realSecs, dirOf, DIRS, DO, USE, PLAN_MINUTES, PLAN_STEPS, PLAN_GRACE, legMinutes, METRES_PER_MINUTE, NEARBY, FISH_MIN, FISH_MAX } from '../src/game/actions.js';
 import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn, FIRE_LIGHT, TORCH_LIGHT } from '../src/game/dark.js';
 import { DUSK, DAWN } from '../src/game/sleep.js';
-import { lightText, menuText, buildActMessages, actState, armText } from '../src/ai/actPrompt.js';
+import { lightText, menuText, buildActMessages, actState, armText, actFixed } from '../src/ai/actPrompt.js';
 import { dryness } from '../src/game/wood.js';
 import { snapshotOf } from '../src/ai/prompt.js';
 import { TORCH_DRY } from '../src/game/fire.js';
@@ -73,7 +73,19 @@ describe('the steps and the plan check (game/actions)', () => {
     for (const list of [[{ go: 'water1' }, { do: 'sleep' }], [{ do: 'sleep' }, { do: 'drink' }]]) {
       const c = checkPlan(list, places);
       expect(c.ok).toBe(false); expect(c.reason).toMatch(/sleep must be the only step/);
+      expect(c.reason).toContain('answer with {"do": "sleep"} as its only step');   // 0.40.5 "Form"
     }
+  });
+  it('a step that is not a step says what was written, the five forms and the right one (0.40.5 "Form")', () => {
+    const c = checkPlan([{ sleep: true }], places);
+    expect(c.ok).toBe(false);
+    expect(c.reason).toContain('step 1 {"sleep":true} is not a step (write {"do": "sleep"})');
+    expect(c.reason).toMatch(/\{"go": "<place id>"\}.*\{"wait": n\}/);
+    expect(checkPlan([{ go: 'water1' }, { nut: 1 }], places).reason).toContain('step 2 {"nut":1} is not a step (write {"use": "nut"})');
+    const odd = checkPlan([{ action: 'x'.repeat(100) }], places).reason;
+    expect(odd).toMatch(/^step 1 \{"action":"x+\.\.\. is not a step: a step is/);
+    expect(stepText({ sleep: true }, places)).toBe('an unknown step {"sleep":true}');
+    expect(actFixed('Dave')).toContain('Sleep is a plan of its own: {"do": "sleep"}, its only step.');
   });
   it('fishing needs its minutes (5 to 60), is the only step of its plan, and its estimate is its minutes (0.37.2)', () => {
     const c = checkPlan([{ do: 'fish', minutes: 45 }], places);

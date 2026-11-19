@@ -25,6 +25,7 @@
  *
  * 0.39.0 "Landfall": the fixed part says a lean-to starts only where the whole home can stand (game `homeFits`), that a home stays where it is begun, and that the menu lists the places for a home he has seen.
  * 0.40.1 "Clear": the fixed part says a pile or a fire laid on a place for a home blocks it (lay material a few steps beside it).
+ * 0.40.5 "Form": the sleep rule shows its form, {"do": "sleep"}.
  * 0.40.2 "Armful": one "buildIn" or "upgrade" builds in every carried piece that is next (was ONE); at most PLAN_STEPS (12, was 8) steps; his thought ("say") and a lesson are in plain words, never a menu id (driftwood1, pile3).
  * 0.38.1 "Trace": NOW says the room left under his arm (`armText`); the records and the menu's piles say what he took and laid (game/actor).
  * 0.37.10 "Body": the NOW block says where thirst and hunger stand and what they do to him now, what comes next and in how many hours (`bodyText`: thirsty and slower,
@@ -109,7 +110,7 @@ export function actFixed(name) {
     '  {"use": "<thing>"}: eat or drink something he carries, anywhere. Things:',
     useLines(),
     `  {"wait": n}: wait where he is for 1 to ${WAIT_MAX} minutes. He stays awake: waiting does not rest him, only "sleep" does.`,
-    '- "sleep" is a plan of its own: its only step. He sleeps until he wakes, then you are asked again.',
+    '- Sleep is a plan of its own: {"do": "sleep"}, its only step. He sleeps until he wakes, then you are asked again.',
     `- Fishing is a plan of its own too: {"do": "fish", "minutes": n} with n from ${FISH_MIN} to ${FISH_MAX} game minutes, the only step. He needs the spear in his hand; he walks into the shallows near him if he does not stand in them, and strikes again and again until he catches a fish or the minutes are up (no fish then is a normal end, not an error). You choose how long.`,
     `- A place within ${NEARBY} m is marked "nearby". A place's "can do there" says what the action button would offer standing there, with what he holds now.`,
     '- You are asked for the next plan only when this one is done, when a step failed (you get the reason), when rain starts, when he collapsed and when he wakes. Nothing overrules you: what you choose has its consequences.',

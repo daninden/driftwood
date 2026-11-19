@@ -24,7 +24,7 @@ describe('the request and the answer (ai/actPrompt)', () => {
     const f = actFixed('Robin');
     expect(f).toContain('Robin'); expect(actFixed('')).toContain('the castaway');
     for (const k of Object.keys(DO)) expect(f).toContain(`"${k}"`);
-    expect(f).toContain(`${PLAN_MINUTES} game minutes`); expect(f).toMatch(/"say"/); expect(f).toMatch(/"sleep" is a plan of its own/);
+    expect(f).toContain(`${PLAN_MINUTES} game minutes`); expect(f).toMatch(/"say"/); expect(f).toMatch(/Sleep is a plan of its own: \{"do": "sleep"\}/);
     expect(f).toMatch(/Walking in the dark/); expect(f).toMatch(/burning torch/); expect(f).toMatch(/"plant"/); expect(f).toMatch(/Fishing is a plan of its own/); expect(f).toMatch(/"minutes": n/);
   });
   it('the rules name what the AI test game of 0.37.6 found missing (0.37.7 "Reasons"): the fibre cap, the nap, where a fire is fed, the hut\'s room', () => {
