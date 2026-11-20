@@ -1,5 +1,5 @@
 // 0.40.2 "Armful" (agreed with the user 2026-11-19 after the AI test game on 0.40.1): one "buildIn" or "upgrade" builds in every piece he holds that is next (game/game `moreWork`),
-// a plan has at most 12 steps (game/actions PLAN_STEPS), "pickup" takes the piece named (input.take since 0.41.0, input.pickWant before), a pile of logs gives a dry log first (game/wood take),
+// a plan of up to 12 steps is asked for (game/actions PLAN_STEPS; 0.43.1: not refused over it), "pickup" takes the piece named (input.take since 0.41.0, input.pickWant before), a pile of logs gives a dry log first (game/wood take),
 // the trunk in the hut's way is named by its id and is always on the menu (game/actor), a refused "use" says why (game/actor `useWhy`), "1 log" not "1 logs", and the rules ask for
 // plain words in his thought and his lessons (ai/actPrompt). Seed 1337.
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -83,12 +83,12 @@ describe('one "buildIn" builds in every piece he holds that is next (game/game)'
   });
 });
 
-describe('a plan of up to 12 steps (game/actions)', () => {
-  it('12 steps are followed, 13 are refused', () => {
+describe('a plan of up to 12 steps is asked for (game/actions)', () => {
+  it('12 steps are followed, and 0.43.1 "Loose": 13 too (the number is only asked for)', () => {
     expect(PLAN_STEPS).toBe(12);
     const places = [];
     expect(checkPlan(Array.from({ length: 12 }, () => ({ wait: 1 })), places).ok).toBe(true);
-    expect(checkPlan(Array.from({ length: 13 }, () => ({ wait: 1 })), places).reason).toBe('the plan has 13 steps, at most 12');
+    expect(checkPlan(Array.from({ length: 13 }, () => ({ wait: 1 })), places).ok).toBe(true);
   });
 });
 

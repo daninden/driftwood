@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.43.1 "Loose" — 2026-11-20
+
+Agreed with the user 2026-11-20 ("alleen de begrenzing verwijderen, 12 stappen en 80 minuten mag wel mee in het verzoek, maar enig plan wat toch langer is niet negeren"): a plan over 80 minutes or over 12 steps was refused and cost another request while the game stood still (three times in a row at 19:10 in an AI log on 0.42.1).
+
+- `game/actions` `checkPlan` no longer refuses a plan for its size: neither over `PLAN_GRACE` (80 minutes, by the model's count or the game's) nor over `PLAN_STEPS` (12). The request still asks for about 60 minutes, at most 80, and at most 12 steps; the model's count and the game's still go back to it ("you counted 46 minutes, the game counted about 57"). Every other check stays (unknown steps and places, the sleep and the fishing alone).
+- **Tests:** `tests/actor.test.js`, `tests/armful.test.js`.
+- **Next:** 0.43.2 "Mouth" (was 0.43.1).
+
 ## 0.43.0 "Hearth" — 2026-11-20
 
 Agreed with the user 2026-11-20 ("akkoord, 6 stenen, Hearth eerst en daarna Mouth") after an AI log on 0.42.1 (gemini-3.5-flash-lite): he never made a fire. The model took the stone ring for a step of the fire ("Two more stones will finish the fire ring, and then we can get a fire going"), the stones lay up to an hour's walk away, night fell, and no firewood was ever gathered. The user liked the fire in the ring and chose to make the ring the start of the home: the fire has its place from the first day, a possibility and not a condition.
@@ -12,7 +20,7 @@ Agreed with the user 2026-11-20 ("akkoord, 6 stenen, Hearth eerst en daarna Mout
 - **The request:** a begun home on the menu says how many stones the ring has and what it and the lean-to still need; the home line in NOW is in building order; the rules say a home begins with its ring, that a fire needs no ring and is made anywhere else just as well, and the empty ring says that four pieces of dry driftwood or branches in it and "light" make a fire there; the actions' words follow.
 - **Drawing:** the ring has 6 stones and stands on its own before the lean-to.
 - **Tests:** `tests/site.test.js`, `tests/upgrades.test.js` and the other home tests follow the new order; `tests/hearthFirst.test.js`.
-- **Next:** 0.43.1 "Mouth" (was numbered 0.42.2).
+- **Next:** 0.43.1 "Mouth" (was numbered 0.42.2; then 0.43.2 after "Loose").
 
 ## 0.42.1 "Kindling" — 2026-11-20
 

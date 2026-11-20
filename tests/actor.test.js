@@ -41,23 +41,23 @@ describe('the steps and the plan check (game/actions)', () => {
     expect(c.minutes).toBeCloseTo(12 + gameMinutes(DO.drink.secs) + 2 * gameMinutes(DO.fill.secs), 1);
     expect(checkPlan({ steps: [{ use: 'nut' }, { wait: 10 }] }, places).ok).toBe(true);
   });
-  it('more than PLAN_GRACE is refused, unless it is one step alone (0.37.8: the hour is the size, not the limit)', () => {
+  it('0.43.1 "Loose": a plan over PLAN_GRACE is followed too (the size is only asked for)', () => {
     const c = checkPlan([{ take: 'drift1' }, { go: 'water1' }, { wait: 30 }], places);
-    expect(c.ok).toBe(false); expect(c.reason).toMatch(/at most 80/);
+    expect(c.ok).toBe(true); expect(c.minutes).toBeGreaterThan(80);
     expect(checkPlan([{ go: 'far1' }], places).ok).toBe(true);
     expect(checkPlan([{ wander: 'north', minutes: 60 }], places).ok).toBe(true);
     expect(checkPlan([{ wander: 'north', minutes: 60 }, { do: 'drink' }], places).ok).toBe(true);   // 61 minutes: within the margin
-    expect(checkPlan([{ wander: 'north', minutes: 60 }, { wait: 30 }], places).ok).toBe(false);
+    expect(checkPlan([{ wander: 'north', minutes: 60 }, { wait: 30 }], places).ok).toBe(true);
   });
 
-  it('the chooser\'s own count (0.37.4; 0.37.8): a plan is refused only when its count or the game\'s is over 80', () => {
+  it('the chooser\'s own count (0.37.4) goes back with the plan; 0.43.1 "Loose": no count refuses a plan', () => {
     expect(PLAN_GRACE).toBe(80);
     const steps = [{ wait: 40 }, { wait: 30 }];   // the game counts 70
     expect(checkPlan(steps, places).ok).toBe(true);   // no count of its own: the game's 70 is within 80
     const ok = checkPlan({ steps, minutes: 55 }, places); expect(ok.ok).toBe(true); expect(ok.claimed).toBe(55); expect(ok.minutes).toBe(70);
-    const over = checkPlan({ steps: [{ wait: 50 }, { wait: 40 }], minutes: 55 }, places); expect(over.ok).toBe(false); expect(over.reason).toMatch(/game counts about 90 minutes \(you counted 55\)/);
+    const over = checkPlan({ steps: [{ wait: 50 }, { wait: 40 }], minutes: 55 }, places); expect(over.ok).toBe(true); expect(over.minutes).toBe(90); expect(over.claimed).toBe(55);
     expect(checkPlan({ steps, minutes: 70 }, places).ok).toBe(true);   // counted 70: within the margin
-    const said = checkPlan({ steps, minutes: 85 }, places); expect(said.ok).toBe(false); expect(said.reason).toMatch(/you counted 85 minutes, at most 80/);
+    const said = checkPlan({ steps, minutes: 85 }, places); expect(said.ok).toBe(true); expect(said.claimed).toBe(85);
     expect(checkPlan({ steps: [{ go: 'water1' }, { do: 'drink' }], minutes: 61 }, places).ok).toBe(true);   // the plan Gemini sent 16 times (a walk and an hour of felling: counted 61)
   });
 
@@ -106,7 +106,7 @@ describe('the steps and the plan check (game/actions)', () => {
     expect(checkPlan([{ wait: 500 }], places).ok).toBe(false);
     expect(checkPlan([], places).ok).toBe(false);
     expect(checkPlan(null, places).ok).toBe(false);
-    expect(checkPlan(Array.from({ length: PLAN_STEPS + 1 }, () => ({ do: 'feed' })), places).ok).toBe(false);
+    expect(checkPlan(Array.from({ length: PLAN_STEPS + 1 }, () => ({ do: 'feed' })), places).ok).toBe(true);   // 0.43.1 "Loose": more steps than asked for are followed too
     expect(checkPlan([{ say: 'hello' }], places).ok).toBe(false);
   });
   it('every step has plain words and an estimate', () => {
@@ -195,12 +195,15 @@ describe('following a plan (game/actor)', () => {
     expect(asks[1].why).toBe('failed'); expect(asks[1].last.reason).toMatch(/not offered here/);
     expect(a.recent.some(r => r.kind === 'step' && r.outcome === 'failed')).toBe(true);
   });
-  it('a plan that is too long is not followed: it is remembered as rejected and the chooser is asked again', () => {
+  it('a plan that cannot be followed is remembered as rejected and the chooser is asked again; 0.43.1 "Loose": a long one is followed', () => {
     const g = fresh(), asks = [];
-    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return asks.length === 1 ? [{ wait: 50 }, { wait: 40 }] : null; } });
+    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return asks.length === 1 ? [{ wait: 5 }, { upgrade: '' }] : null; } });
     run(g, a, 1);
     expect(a.stats.rejected).toBe(1); expect(a.stats.plans).toBe(0);
-    expect(asks[1].why).toBe('rejected'); expect(asks[1].last.reason).toMatch(/at most 80/);
+    expect(asks[1].why).toBe('rejected'); expect(asks[1].last.reason).toMatch(/is not a step/);
+    const h = fresh(), b = createActor(w, h, { chooser: () => (b.stats.plans ? null : [{ wait: 50 }, { wait: 40 }]) });
+    run(h, b, 1);
+    expect(b.stats.rejected).toBe(0); expect(b.stats.plans).toBe(1);   // 90 minutes: over the 80 asked for, followed all the same
   });
   it('the menu\'s walk minutes are at the pace he has now: three pieces under his arm make a walk about half as long again (0.37.8)', () => {
     const g = fresh(), empty = createActor(w, g, {}).menu().places.filter(q => q.dist > 30);

@@ -34,7 +34,7 @@
  *     0.41.0 "Hands": a `take` names a loose piece or a pile on the menu (count 1 to PILE_MAX, for a pile), a `lay` a kind of LAY_KINDS (count 1 to CARRY_MAX) and "here" or a place on the menu;
  *     {"do": "pickup"} and {"do": "lay"} are refused with the right form.
  *     0.37.4 "Lessons": `minutes` is the chooser's own count of the plan (claimed). 0.37.8 "Firelight": PLAN_MINUTES is the size a plan is asked to have; a plan of several
- *     steps is refused only when the chooser's count or the game's is over PLAN_GRACE (so a walk and an hour of felling fit).
+ *     steps is refused only when the chooser's count or the game's is over PLAN_GRACE (so a walk and an hour of felling fit). 0.43.1 "Loose": not refused at all any more (the size is only asked for).
  *
  * WAIT (0.38.0)          the chooser's "not yet"
  *
@@ -55,14 +55,14 @@ import { CARRY_MAX, PILE_MAX } from './wood.js';
 /** The answer "not yet" of a chooser (game/actor): no plan is ready, he waits and the chooser is asked again on the next step (0.38.0: was in game/intent, which is gone). */
 export const WAIT = Object.freeze({ wait: true });
 export const PLAN_MINUTES = 60;   // the user (2026-11-17): a plan covers at most half an hour of game time; 0.37.6 "Free hands" (the user, 2026-11-18): an hour
-export const PLAN_STEPS = 12;   // 0.40.2 "Armful" (the user, 2026-11-19): was 8; three loose pieces fetched and built in take 10 steps, the minutes bound a plan already
+export const PLAN_STEPS = 12;   // 0.40.2 "Armful" (the user, 2026-11-19): was 8; three loose pieces fetched and built in take 10 steps. 0.43.1 "Loose": only asked for, never refused
 export const NEARBY = 15;         // metres: a place this close is `nearby` (no real walk)
 export const PER_KIND = 3;        // the nearest places of each kind on the menu (all the nearby ones too, up to NEARBY_MAX)
 export const NEARBY_MAX = 5;
 export const WANDER_MAX = 60, WAIT_MAX = 60;   // game minutes a wander or a wait may last
 export const FISH_MIN = 5, FISH_MAX = 60;       // game minutes a fishing may last (chosen by the model, 0.37.2)
 export const LEG_DETOUR = 1.3, LEG_SLACK = 1.25;   // 0.37.5 "Ways": a walk from one place of the plan to the next: the straight line made a little longer for the way round, and the slack of the menu's walks
-export const PLAN_GRACE = 80;     // 0.37.8 "Firelight": a plan of several steps is followed up to this, by the chooser's count or the game's (0.37.4 "Lessons": only the game's count, when the chooser counted PLAN_MINUTES or less) (the user, 2026-11-17: 40 for 30; 0.37.6: 80 for 60)
+export const PLAN_GRACE = 80;     // 0.37.8 "Firelight": a plan of several steps is followed up to this, by the chooser's count or the game's (0.37.4 "Lessons": only the game's count, when the chooser counted PLAN_MINUTES or less) (the user, 2026-11-17: 40 for 30; 0.37.6: 80 for 60)   // 0.43.1 "Loose" (the user, 2026-11-20): only asked for in the request, a longer plan is followed
 
 export const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 
@@ -181,12 +181,12 @@ export function notAStep(s, n) {
   return `step ${n} ${shortStep(s)} is not a step${hint}: ${FORMS}`;
 }
 
-/** Can the plan be followed? It checks the steps (known kinds and places, sensible minutes), the sleep and the fishing alone, and the time: at most PLAN_GRACE (0.37.8; PLAN_MINUTES before) unless it is one step alone.
+/** Can the plan be followed? It checks the steps (known kinds and places, sensible minutes) and the sleep and the fishing alone. 0.43.1 "Loose" (the user, 2026-11-20): the size of a plan
+ *  (PLAN_STEPS steps, PLAN_GRACE minutes) is only asked for, never refused: a longer plan is followed as it is (its `minutes` and `claimed` still go back to the chooser).
  *  Whether an action is possible is not known beforehand (it depends on where he stands then): that is checked when the step starts (game/actor). */
 export function checkPlan(plan, places) {
   const list = Array.isArray(plan) ? plan : plan && Array.isArray(plan.steps) ? plan.steps : null;
   if (!list || !list.length) return { ok: false, steps: [], minutes: 0, reason: 'the plan has no steps' };
-  if (list.length > PLAN_STEPS) return { ok: false, steps: [], minutes: 0, reason: `the plan has ${list.length} steps, at most ${PLAN_STEPS}` };
   const steps = [];
   let minutes = 0, at = null;   // at (0.37.5): the place the last `go` led to (a later walk counts from there); null at the start and after a wander
   for (let i = 0; i < list.length; i++) {
@@ -236,9 +236,5 @@ export function checkPlan(plan, places) {
   }
   minutes = Math.round(minutes * 10) / 10;
   const raw = plan && !Array.isArray(plan) ? Number(plan.minutes) : NaN, claimed = Number.isFinite(raw) && raw >= 0 ? Math.round(raw) : null;   // 0.37.4: the chooser's own count
-  if (steps.length > 1) {   // 0.37.8 "Firelight": the hour is the size of a plan, not its limit; refused only over PLAN_GRACE, by the chooser's count or the game's
-    if (claimed !== null && claimed > PLAN_GRACE) return { ok: false, steps: [], minutes, claimed, reason: `you counted ${claimed} minutes, at most ${PLAN_GRACE} (a longer step must be a plan of its own)` };
-    if (minutes > PLAN_GRACE) return { ok: false, steps: [], minutes, claimed, reason: `the game counts about ${Math.round(minutes)} minutes${claimed !== null ? ` (you counted ${claimed})` : ''}, at most ${PLAN_GRACE} (a longer step must be a plan of its own)` };
-  }
   return { ok: true, steps, minutes, claimed, reason: null };
 }

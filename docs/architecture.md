@@ -308,7 +308,7 @@ After the AI test game on 0.37.8 and the user's own game (the hut on day 2, no e
 
 After the AI test game on 0.37.7 and a Gemini game of the user's. Only full AI play changes.
 - **The dark:** `game/dark` `walkLight` returns `{ ok, reason }` again (no `slow`, no `DARK_PACE`): without light the walk is refused; `game/actor` sets no pace.
-- **The plan limit:** `game/actions` `checkPlan` refuses a plan of several steps only when `claimed` or the game's count is over `PLAN_GRACE` (80); `PLAN_MINUTES` (60) is the size the request asks for.
+- **The plan limit:** `game/actions` `checkPlan` refuses a plan of several steps only when `claimed` or the game's count is over `PLAN_GRACE` (80); `PLAN_MINUTES` (60) is the size the request asks for. 0.43.1 "Loose": no longer refused at all, neither over `PLAN_GRACE` nor over `PLAN_STEPS`; both stay in the request as the size asked for, and `minutes` / `claimed` still go back to the model.
 - **Notes:** `ai/actPrompt` `parseActPlan(text, old)`: a whole number n in `notes` is note n of `old` (the planner passes its notes).
 - **Copy log:** `render/aiPanel` `playLogText({ entries, model, days })` (pure) when the AI is on with a key and `play` is there; else `logText` as before.
 - **The menu:** `game/actor` `paceNow()` (load by `CARRY_SLOW` / `LOG_WALK`, times `sleep.speed()`, `thirst.speed()`, `hunger.speed()`, as `game/game` update) divides the route's metres; `WALK_SLACK` 1.1; fires and lean-tos without a route get the straight line x `LEG_DETOUR`.
