@@ -65,7 +65,7 @@ describe('the request and the answer (ai/actPrompt)', () => {
     expect(fireText([{ id: 'fire2', state: 'burning', hours: 3, ring: true, dist: 4, dir: 'south' }, { id: 'fire1', state: 'cold', dist: 9, dir: 'east' }])).toBe('Fire: fire2 in the stone ring, 4 m south, burns about 3 more hours.');
     const u = buildActMessages({ name: '', state: { day: 2, time: 0.17, thirst: 0.8, hunger: 0.8, awake: 0, carries: {}, home: { leanto: 100, walls: 100, bed: 100, ring: 0, hut: 0 } }, menu: { ...MENU, fires: [] }, ask: { why: 'done' }, recent: [], notes: [] })[1].content;
     expect(u).toContain('Very thirsty at 1 day'); expect(u).not.toContain('he can drink now');
-    expect(u).toMatch(/Home: lean-to 100%.*\nFire: he has no fire\./);
+    expect(u).toMatch(/Home: stone ring 0%, lean-to 100%.*\nFire: he has no fire\./);   // 0.43.0: in building order
     const f = actFixed('');
     expect(f).toContain('very thirsty from 1: his rest runs out twice as fast'); expect(f).toContain('the fire drill tires him 1.5 times as much'); expect(f).toContain('hunger has no collapse of its own');
   });

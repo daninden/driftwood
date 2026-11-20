@@ -48,7 +48,7 @@ export function snapshotOf(game, camp = null) {
     torch: !!n(() => g.fire.torch, false),
   };
   const lts = n(() => g.leantos.list, []);
-  const l = lts.reduce((a, b) => (!a || (b.progress || 0) + (b.hut || 0) > (a.progress || 0) + (a.hut || 0) ? b : a), null);
+  const l = lts.reduce((a, b) => (!a || (b.progress || 0) + (b.hut || 0) + ((b.up && b.up.ring) || 0) > (a.progress || 0) + (a.hut || 0) + ((a.up && a.up.ring) || 0) ? b : a), null);   // 0.43.0: the ring counts (a home begins with it)
   const home = l ? { leanto: pct(l.progress), walls: pct(l.up && l.up.walls), bed: pct(l.up && l.up.bed), ring: pct(l.up && l.up.ring), hut: pct(l.hut) } : null;
   const c = camp || {};
   const daylight = clock.time == null || !(clock.time >= DAWN && clock.time < DUSK) ? 0 : (DUSK - clock.time) * 24;
@@ -77,7 +77,7 @@ export function stateText(s, o = {}) {
   if (!(c.fibre > 0)) has.push('no fibre');   // 0.42.1 "Kindling": also when he has none (a fire needs a tuft)
   for (const [k, label] of [['spear', 'a spear'], ['axe', 'the axe at his belt'], ['torch', 'a torch'], ['log', 'a log on his shoulder']]) if (c[k]) has.push(label);   // 0.37.5: the log too
   const h = s.home, t = s.tide;
-  const home = !h ? 'no shelter yet' : `lean-to ${h.leanto}%, walls ${h.walls}%, bed ${h.bed}%, stone ring ${h.ring}%, hut ${h.hut}%`;
+  const home = !h ? 'no home yet' : `stone ring ${h.ring}%, lean-to ${h.leanto}%, walls ${h.walls}%, bed ${h.bed}%, hut ${h.hut}%`;   // 0.43.0 "Hearth": in the order they are built
   return [
     `Day ${s.day}, ${hhmm(s.time)}. Weather: ${s.raining ? 'raining' : 'dry'}. ${s.daylight > 0 ? `About ${d1(s.daylight)} hours of daylight left (dusk about ${hhmm(DUSK)}).` : 'It is dark.'}`,
     ...(o.body ? [o.body] : [`Thirst: ${d1(s.thirst)} days. Hunger: ${d1(s.hunger)} days. Awake for ${d1(s.awake)} days.`]),

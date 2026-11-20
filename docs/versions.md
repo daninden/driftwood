@@ -2,6 +2,18 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.43.0 "Hearth" — 2026-11-20
+
+Agreed with the user 2026-11-20 ("akkoord, 6 stenen, Hearth eerst en daarna Mouth") after an AI log on 0.42.1 (gemini-3.5-flash-lite): he never made a fire. The model took the stone ring for a step of the fire ("Two more stones will finish the fire ring, and then we can get a fire going"), the stones lay up to an hour's walk away, night fell, and no firewood was ever gathered. The user liked the fire in the ring and chose to make the ring the start of the home: the fire has its place from the first day, a possibility and not a condition.
+
+- **The order of a home:** stone ring (6 stones, was 8), then the lean-to behind it (4 driftwood, 6 branches, 5 fronds, as before), then walls and bed (in any order), then the hut. `game/leanto` `stageOf`: 'ring', 'leanto', then the upgrades; the ring is no upgrade any more (`UP_ORDER` walls, bed), its progress stays in `l.up.ring`.
+- **Starting a home:** "buildHere" with a stone in his hands, where the whole home fits (the ring's middle must also be dry ground); the first stone lies 0.8 m in front of him, the lean-to's place is fixed at once (its middle 1.4 m behind him, its open side towards the ring), the ground is cleared. The other stones go in with "buildIn" from within 1.6 m of the ring's middle. Driftwood starts nothing any more.
+- **A finished ring works without its lean-to:** a fire in it burns 1.5 times as long and the rain does not put it out; within 8 m only the fire in the ring (as before, now from the ring's last stone on).
+- **The request:** a begun home on the menu says how many stones the ring has and what it and the lean-to still need; the home line in NOW is in building order; the rules say a home begins with its ring, that a fire needs no ring and is made anywhere else just as well, and the empty ring says that four pieces of dry driftwood or branches in it and "light" make a fire there; the actions' words follow.
+- **Drawing:** the ring has 6 stones and stands on its own before the lean-to.
+- **Tests:** `tests/site.test.js`, `tests/upgrades.test.js` and the other home tests follow the new order; `tests/hearthFirst.test.js`.
+- **Next:** 0.43.1 "Mouth" (was numbered 0.42.2).
+
 ## 0.42.1 "Kindling" — 2026-11-20
 
 Agreed with the user 2026-11-20 ("A en B, C ook") after an AI log on 0.42.0 (gemini-3.5-flash-lite): soaked at landfall he still chose the lean-to over a fire. The request made the lean-to concrete (what it still needs, `buildHere` and `buildIn` on the menu) and the fire abstract ("Fire: he has no fire."; `light` never on the menu without a pile and fibre; the recipe only in the long fixed part).

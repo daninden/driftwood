@@ -103,7 +103,7 @@ import { dryness, LOG_WALK, CARRY_SLOW, CARRY_MAX, STONE_MAX, PILE_MAX } from '.
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
 import { seasoned, dryAt, SEASON_DAYS } from './logs.js';
 import { CELL as KNOWN_CELL, NC as KNOWN_NC } from './known.js';
-import { standFor, HUT_KEEP, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, ringCentre, RING_R, RING_NOFIRE } from './leanto.js';
+import { standFor, HUT_KEEP, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, ringCentre, RING_R, RING_NOFIRE, stageOf } from './leanto.js';
 import { fireOutlook, full as fireFull, BURN, TORCH_DRY, FIRE_MIN } from './fire.js';
 import { TIRED_AT, SLEEP_AFTER, NIGHT_AFTER } from './sleep.js';
 import { WAIT, PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, LEG_DETOUR, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
@@ -220,8 +220,9 @@ export function createActor(world, game, opts = {}) {
     return runs.map(r => kindPlural(r.k, r.n)).join(', then ');
   };
   const leantoWhat = l => {   // 0.37.4: how far it is and what it needs next (0.37.6: all it still needs, counted)
+    if (stageOf(l) === 'ring') return `his home, begun: its stone ring has ${built(l, 'ring')} of ${partsOf('ring').length} stones; it still needs ${stillNeeds(l, 'ring')}, then the lean-to behind it (${stillNeeds({ progress: 0 }, 'leanto')})`;   // 0.43.0 "Hearth": the ring first
     const next = nextKind(l, 'leanto');
-    if (next) return `his lean-to, begun: ${built(l, 'leanto')} of ${partsOf('leanto').length} parts; it still needs ${stillNeeds(l, 'leanto')}`;
+    if (next) return `his lean-to${built(l, 'leanto') ? ', begun' : ' (its stone ring is finished, the lean-to not begun)'}: ${built(l, 'leanto')} of ${partsOf('leanto').length} parts; it still needs ${stillNeeds(l, 'leanto')}`;
     const up = UP_ORDER.map(w => [w, nextKind(l, w)]).find(([, k]) => k);
     if (up) return `his lean-to, finished; the ${up[0]} still need${up[0] === 'walls' ? '' : 's'} ${stillNeeds(l, up[0])}`;
     if (hutDone(l)) return 'his hut, finished';   // 0.37.5: the hut too
@@ -231,7 +232,7 @@ export function createActor(world, game, opts = {}) {
   };
   // ---------- 0.40.4 "Ring": what lies in his stone ring, and the piles beside it that cannot be lit ----------
   const fuelKind = q => q.kind === 'driftwood' || q.kind === 'branch';
-  const ringOf = (x, z) => game.leantos.list.find(l => l.progress >= 1 && game.leantos.has(l, 'ring') && Math.hypot(ringCentre(l).x - x, ringCentre(l).z - z) <= RING_R) || null;   // the lean-to whose finished ring (x, z) lies in
+  const ringOf = (x, z) => game.leantos.list.find(l => game.leantos.has(l, 'ring') && Math.hypot(ringCentre(l).x - x, ringCentre(l).z - z) <= RING_R) || null;   // the lean-to whose finished ring (x, z) lies in
   const ringPile = l => { const c = ringCentre(l); return W.piles.find(q => q.logs.length && fuelKind(q) && Math.hypot(q.x - c.x, q.z - c.z) <= RING_R) || null; };
   const ringNote = q => {   // a pile on the menu: in the ring (ready to light, or how many it still needs), or beside the ring where no fire can be lit
     if (!fuelKind(q)) return '';
@@ -240,11 +241,11 @@ export function createActor(world, game, opts = {}) {
     return game.leantos.noFire(q.x, q.z) ? ` (within ${RING_NOFIRE} m of his stone ring but not in it: it cannot be lit; only the fire in the ring)` : '';
   };
   const ringHolds = l => {   // a lean-to with a finished ring: what the ring holds now
-    if (!(l.progress >= 1 && game.leantos.has(l, 'ring'))) return '';
+    if (!game.leantos.has(l, 'ring')) return '';
     const c = ringCentre(l), f = game.fire.fires.find(q => Math.hypot(q.x - c.x, q.z - c.z) <= RING_R && (game.fire.strength(q) > 0 || q.embers > 0.005));
     if (f) return `; his fire is in its stone ring (${game.fire.strength(f) > 0 ? 'burning' : 'embers'})`;
     const q = ringPile(l);
-    return q ? `; its stone ring holds his pile ${placeId('pile', q)} (${q.logs.length} piece${q.logs.length === 1 ? '' : 's'}${q.logs.length >= FIRE_MIN ? ', ready to light' : `, a fire needs ${FIRE_MIN}`})` : `; its stone ring is empty (wood laid down in it lies in its middle)`;
+    return q ? `; its stone ring holds his pile ${placeId('pile', q)} (${q.logs.length} piece${q.logs.length === 1 ? '' : 's'}${q.logs.length >= FIRE_MIN ? ', ready to light' : `, a fire needs ${FIRE_MIN}`})` : `; its stone ring is empty (wood laid down in it lies in its middle: ${FIRE_MIN} pieces of dry driftwood or branches there, then "light", make a fire in it)`;
   };
   // ---------- 0.39.0 "Landfall": the places for a home he has seen (until he has begun one) ----------
   const HOME_GRID = 6, HOME_APART = 15, HOME_R = 120;
@@ -283,7 +284,7 @@ export function createActor(world, game, opts = {}) {
     let trees = 0;
     for (const t of tilesNear(c.x, c.z, 20)) for (const list of LISTS) t[list].forEach((tree, index) => { if (!game.felled.has(treeId(t, list, index)) && Math.hypot(tree.x - c.x, tree.z - c.z) <= 20) trees++; });
     const ht = game.hutTrees(c), m = v => `${Math.round(v)} m`;
-    return `a place for a home (the lean-to and later the hut fit here): ${Number.isFinite(water) ? `fresh water ${m(water)} away` : 'no fresh water he knows near'}, ${Number.isFinite(shore) ? `the shore ${m(shore)}` : 'the shore far'}, ${trees} tree${trees === 1 ? '' : 's'} within 20 m; ${ht ? `${ht} tree${ht === 1 ? ' stands' : 's stand'} where the hut will go (fell ${ht === 1 ? 'it' : 'them'} for the hut)` : "the hut's ground is clear of trees"}`;
+    return `a place for a home (its stone ring, the lean-to behind it and later the hut fit here): ${Number.isFinite(water) ? `fresh water ${m(water)} away` : 'no fresh water he knows near'}, ${Number.isFinite(shore) ? `the shore ${m(shore)}` : 'the shore far'}, ${trees} tree${trees === 1 ? '' : 's'} within 20 m; ${ht ? `${ht} tree${ht === 1 ? ' stands' : 's stand'} where the hut will go (fell ${ht === 1 ? 'it' : 'them'} for the hut)` : "the hut's ground is clear of trees"}`;
   }
   /** 0.40.2 "Armful": the trunks that keep a hut from being begun (game `hutBlock` of each finished lean-to ready for it): always on the menu, by the id its reason names. */
   function hutTreeBlocks() {
@@ -538,7 +539,7 @@ export function createActor(world, game, opts = {}) {
     if (!game.fire.torch && !game.fibre.carried) return LACK_TEXT.needFibre;
     const q = (W.findAll(p.x, p.z, BESIDE_FIRE, 'pile').find(c => fuelKind(c.pile)) || {}).pile;
     if (!q) {
-      const inRing = game.leantos.list.map(l => (l.progress >= 1 && game.leantos.has(l, 'ring') ? ringPile(l) : null)).find(Boolean);
+      const inRing = game.leantos.list.map(l => (game.leantos.has(l, 'ring') ? ringPile(l) : null)).find(Boolean);
       return `no pile of driftwood or branches beside him (within about a metre of its edge)${inRing ? `; the pile in his stone ring is ${placeId('pile', inRing)}` : ''}`;
     }
     const id = placeId('pile', q), held = W.carried.filter(l => (q.kind === 'branch' ? l.branch : !l.branch && !l.frond)).length;   // what would go on this pile
@@ -603,7 +604,7 @@ export function createActor(world, game, opts = {}) {
     if (kind === 'torch' && game.spear.hand && W.carried.length) return 'the spear and the wood under his arm fill his hands';
     if ((kind === 'buildIn' || kind === 'upgrade' || kind === 'buildHere' || kind === 'makeSpear' || kind === 'makeAxe') && (game.spear.hand || game.fire.torch)) return `that needs both hands: the ${game.spear.hand ? 'spear' : 'torch'} is in one ("${game.spear.hand ? 'laySpear' : 'plant'}" first)`;
     if (kind === 'buildHere') {   // 0.39.0 "Landfall"
-      if (!W.carried.some(l => !l.branch && !l.frond)) return 'he needs driftwood under his arm to start a lean-to';
+      if (!W.stones.length) return 'he needs a stone in his hands to start a home: its stone ring comes first, the lean-to is built behind it once the ring is finished';   // 0.43.0 "Hearth"
       if (!(game.spear.hand || game.fire.torch) && !terrainAt(world, p.x, p.z, game.sea).depth) return 'no home fits here: the lean-to and later the hut round it need level ground that stays dry at high water, with no boulder or other lean-to in the hut\'s room and nothing touching the lean-to\'s walls; the menu lists the places for a home he has seen';
     }
     if (kind === 'laySpear' && !game.spear.hand) return 'the spear is not in his hand';
@@ -612,7 +613,7 @@ export function createActor(world, game, opts = {}) {
       if (l && hutReady(l) && !hutDone(l) && hutKind(l) === 'log' && W.log && !seasoned(W.log, clock.total)) return `the log on his shoulder is still green: a felled log dries ${SEASON_DAYS} days before it goes into the hut (this one about ${dryText(W.log)})`;   // 0.40.0
       if (l && hutReady(l) && !hutDone(l)) { const hk = hutKind(l); if (hk === 'log' && !hutBegun(l) && !game.hutFits(l)) return hutWay(l); if (hk) return `the hut needs ${hk === 'log' ? 'a log on his shoulder' : kindWord(hk)} next`; }
       if (l) {
-        const need = nextKind(l, 'leanto') || UP_ORDER.map(w => nextKind(l, w)).find(Boolean);
+        const st = stageOf(l), need = st ? nextKind(l, st) : UP_ORDER.map(w => nextKind(l, w)).find(Boolean);   // 0.43.0 "Hearth": the ring's stones first
         if (need) return `it needs ${need === 'branch' ? 'a branch' : need === 'frond' ? 'a frond' : need === 'stone' ? 'a stone' : need === 'log' ? 'a log' : 'a piece of driftwood'} next`;
       }
     }

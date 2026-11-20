@@ -44,7 +44,7 @@ function scene({ pile = 0, kind = 'driftwood', fire, carried = [], fragment = 0,
   if (fragment) piles.push({ x: C.x - 0.95, z: C.z, kind: 'driftwood', logs: ids(logs, 60, fragment) });
   if (side) piles.push({ x: C.x + side.dx, z: C.z + side.dz, kind: 'driftwood', logs: ids(logs, 30, side.n) });
   const lts = [];
-  if (lean) lts.push({ id: 0, x: C.x - 1.9, z: C.z, heading: Math.PI / 2, progress: 1 });   // its open side faces +x: the pile stands 1.9 m from its middle, 0.95 m beyond the front tips; its side wall at r = 0.92 is the near one
+  if (lean) lts.push({ id: 0, x: C.x - 1.9, z: C.z, heading: Math.PI / 2, progress: 1, up: { ring: 1 } });   // its open side faces +x: the pile stands 1.9 m from its middle, 0.95 m beyond the front tips; its side wall at r = 0.92 is the near one
   if (leanto) lts.push(leanto);
   const g = createGame(w, at(C.x + Math.sin(a) * R, C.z + Math.cos(a) * R), {
     wood: { carried, piles }, fibre: { carried: fibre },
@@ -146,7 +146,7 @@ describe('building a piece into a half-built lean-to (0.32: a piece in his arms,
   for (const [name, extra] of [['alone', {}], ['a small pile beside it', { fragment: 1 }]]) {
     it(`${name}: from all 8 sides`, () => {
       for (let dir = 0; dir < 8; dir++) {
-        const lt = { id: 0, x: C.x, z: C.z, heading: Math.PI / 3, progress: 2 / 15 };
+        const lt = { id: 0, x: C.x, z: C.z, heading: Math.PI / 3, progress: 2 / 15, up: { ring: 1 } };
         const g = scene({ leanto: lt, carried: ids(logs, 80, 1), dir, fragment: extra.fragment || 0 }), lean = g.leantos.list[0], label = `${name} dir ${dir}`;
         const p = planFor(g, 'buildIn', lean);
         expect(p, label).not.toBeNull();
@@ -158,7 +158,7 @@ describe('building a piece into a half-built lean-to (0.32: a piece in his arms,
     }, 120000);
   }
   it('with the wrong kind in his arms (a frond at the driftwood stage) there is nothing to stand for: no spot is offered', () => {
-    const lt = { id: 0, x: C.x, z: C.z, heading: Math.PI / 3, progress: 2 / 15 }, g = scene({ leanto: lt, carried: ids(fronds, 0, 1), dir: 2 });
+    const lt = { id: 0, x: C.x, z: C.z, heading: Math.PI / 3, progress: 2 / 15, up: { ring: 1 } }, g = scene({ leanto: lt, carried: ids(fronds, 0, 1), dir: 2 });
     expect(planFor(g, 'buildIn', g.leantos.list[0])).toBeNull();
   });
 });
@@ -167,7 +167,7 @@ describe('upgrading a finished lean-to (a frond in his arms for the walls)', () 
   for (const [name, extra] of [['alone', {}], ['a small pile beside it', { fragment: 1 }]]) {
     it(`${name}: from all 8 sides`, () => {
       for (let dir = 0; dir < 8; dir++) {
-        const lt = { id: 0, x: C.x, z: C.z, heading: Math.PI / 3, progress: 1 };
+        const lt = { id: 0, x: C.x, z: C.z, heading: Math.PI / 3, progress: 1, up: { ring: 1 } };
         const g = scene({ leanto: lt, carried: ids(fronds, 0, 1), dir, fragment: extra.fragment || 0 }), lean = g.leantos.list[0], label = `${name} dir ${dir}`;
         const p = planFor(g, 'upgrade', lean);
         expect(p, label).not.toBeNull();
@@ -192,7 +192,7 @@ describe('no spot at all is an honest null', () => {
 
 describe('clicking (game.update on a player target)', () => {
   const click = (g, target, secs = 20) => { const i = makeInput(); i.target = target; for (let t = 0; t < secs && i.target; t += DT) g.update(i, DT); return i; };
-  const lt = () => ({ id: 0, x: C.x - 2.5, z: C.z, heading: 0, progress: 1 });
+  const lt = () => ({ id: 0, x: C.x - 2.5, z: C.z, heading: 0, progress: 1, up: { ring: 1 } });
   it('a click on a pile behind a lean-to goes round it to a spot beside the pile, and acts on nothing', () => {
     const g = createGame(w, at(C.x - 7, C.z), { wood: { carried: [], piles: [{ x: C.x, z: C.z, kind: 'driftwood', logs: ids(logs, 0, 4) }] }, leantos: { list: [lt()], nextId: 1 }, sleep: { awake: 0.05 } });
     click(g, { x: C.x, z: C.z, tap: true });

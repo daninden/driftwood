@@ -12,6 +12,10 @@
  *     BUILD_COST days of rest, as before), UP_COST / parts for an upgrade. A site is started with the first piece in his arms on a place where a lean-to fits
  *     (`siteAt`): its open side faces the camera at that moment, the middle lies SITE_AT (1.4 m) behind him. An upgrade is started the same way, beside a
  *     finished lean-to, with a fitting piece (`upgradeFor(l, kind)`: walls with a frond first, then bed (a branch, or a frond once its branches are in), ring with a stone).
+ *   - 0.43.0 "Hearth" (the user, 2026-11-20): a home begins with its stone ring, 6 stones (was 8, an upgrade). `start` makes the record at the first stone (the lean-to's place fixed
+ *     already: its middle at (x, z), the ring RING_AT in front of its open side); the lean-to's parts are built only once the ring is finished (`stageOf`: 'ring', 'leanto', then null), and
+ *     the walls and the bed (UP_ORDER) after that. The ring's progress stays in `l.up.ring` (HOME_PARTS: what l.up holds). A finished ring counts with or without its lean-to: a fire in it burns
+ *     longer, rain does not put it out, and within RING_NOFIRE of it the fire is lit only in the ring (`ring`, `ringMiddle`, `noFire`). The ring's stones are built in from within RING_REACH of its middle.
  *   - progress 0..1 is built parts / 15; 1 is finished (`built(l)` is the count). The shelter effects (sleeping, rain, dry wood, the stone ring) count only
  *     when finished, as before; the collision circles (game/obstacles) stand from the first roof branch (`solid(l)`).
  *     heading is the direction towards the camera when the site was started: the open side faces that way. It
@@ -44,11 +48,12 @@
  * hutReady(l), hutDone(l), hutBegun(l), hutKind(l)   a finished lean-to with all three upgrades; its hut finished; begun; the kind of the hut's next part (null unless hutReady and not done)
  * inHutBox(l, x, z, m = 0) -> true when (x, z) lies within the hut's walls (shrunk by m; negative m grows the box)
  * PIECE_TIME, BUILD_COST, UP_COST, SLEEP_R, REACH, SITE_AT, SITE_APART
- * UPGRADES { walls, bed, ring } -> { steps }   (the number of parts), UP_ORDER, UP_REACH, UP_TIME (all of an upgrade), WALLS_WOOD, WALLS_FIRE, RING_AT, RING_R, RING_NOFIRE
+ * UPGRADES { walls, bed } -> { steps }   (the number of parts), UP_ORDER (walls, bed), HOME_PARTS (ring, walls, bed: the keys of l.up), UP_REACH, UP_TIME (all of an upgrade), WALLS_WOOD, WALLS_FIRE, RING_AT, RING_R, RING_NOFIRE, RING_REACH
+ * ringDone(l), stageOf(l) -> 'ring' | 'leanto' | null   0.43.0: the ring finished; the stage of the home being built before the upgrades
  * partsOf(what) -> the list of kinds; pieceCost(what) -> days of rest one piece costs
  * built(l, what = 'leanto') -> number of parts built; nextKind(l, what = 'leanto') -> the kind the next part needs, or null when that site is finished
- * upgradeFor(l, kind) -> 'walls' | 'bed' | 'ring' | null   the upgrade of finished lean-to l a carried piece of that kind would go into (the first in UP_ORDER whose next part is of that kind)
- * pieceFor(l, kind) -> 'leanto' | 'walls' | 'bed' | 'ring' | null   what a piece of that kind builds at l: the lean-to itself while it is unfinished, else its upgrade
+ * upgradeFor(l, kind) -> 'walls' | 'bed' | null   the upgrade of finished lean-to l a carried piece of that kind would go into (the first in UP_ORDER whose next part is of that kind)
+ * pieceFor(l, kind) -> 'ring' | 'leanto' | 'walls' | 'bed' | 'hut' | null   what a piece of that kind builds at l: the stage of `stageOf` while there is one, else an upgrade or the hut
  * solid(l) -> true when the lean-to has collision (its roof is begun: 5 parts)
  * siteAt(px, pz, heading) -> { x, z, heading }   the lean-to started by someone standing at (px, pz) with the camera at heading: SITE_AT behind him
  * standFor(c) -> { x, z }   the spot where one stands to start the site c = { x, z, heading } (the inverse of siteAt)
@@ -58,7 +63,7 @@
  *   leantos.list              [{ id, x, z, heading, progress, up? }]
  *   leantos.version           goes up when one is added or taken, or an upgrade starts or finishes (progress alone does not change it)
  *   leantos.start(x, z, heading) -> the new lean-to, no part built
- *   leantos.build(l, what = 'leanto') -> the kind of the part that was built in, or null when that site was finished already (a lean-to that is not finished takes no upgrade; what 'hut' needs `hutReady`; the version goes up with the hut's first part and its last)
+ *   leantos.build(l, what = 'leanto') -> the kind of the part that was built in, or null when that site was finished already or it is not its turn (0.43.0: the ring, then the lean-to, then the upgrades; what 'hut' needs `hutReady`; the version goes up with the hut's first part and its last)
  *   leantos.unfinished(x, z, reach) -> the nearest half-built lean-to whose centre is within reach, or null
  *   leantos.shelter(x, z) -> true when a finished lean-to's centre is within SLEEP_R
  *   leantos.has(l, what) -> true when lean-to l has that upgrade finished (l.up: { walls, bed, ring } progress 0..1, optional)
@@ -67,7 +72,7 @@
  *   leantos.nearFinished(x, z, reach) -> the nearest finished lean-to whose centre is within reach, or null
  *   leantos.dry(x, z, 'wood' | 'fire') -> true when wood (or a fire and torches) there stays dry (0.33: also inside a finished hut): within WOOD_SHELTER / FIRE_SHELTER of a finished
  *     lean-to, or WALLS_WOOD / WALLS_FIRE when that one has side walls
- *   leantos.ring(x, z) -> true when (x, z) is within RING_R of the middle of a finished lean-to's finished stone ring
+ *   leantos.ring(x, z) -> true when (x, z) is within RING_R of the middle of a finished stone ring (0.43.0: with or without its lean-to)
  *   leantos.ringMiddle(x, z) -> { x, z } | null   (0.36.2 "Ground") the middle of that ring (the nearest one when two overlap), or null when (x, z) is in none: a fuel pile laid in the ring lies exactly there (game/game)
  *   leantos.inHut(x, z) -> the lean-to whose finished hut holds (x, z) inside its walls (0.33), or null
  *   leantos.noFire(x, z) -> true when (x, z) lies in the ring of no fire (0.31.1 "Milk"; 0.33: or in or within half a metre of a finished hut's walls): more than RING_R but at most RING_NOFIRE (3.5 m until 0.33.3, 8 m from 0.33.4 "One hearth") from the middle of a finished lean-to's finished stone ring. A fire cannot be lit there (game/game `lightable`) and a fire already there is not fed (game/game `actionsAt`: no 'feed'; it burns out): beside a ring the fire is the one in the ring.
@@ -86,7 +91,7 @@ export const PARTS = {
   leanto: [...rep('driftwood', 4), ...rep('branch', 6), ...rep('frond', 5)],   // two posts, the ridge pole, the sill; roof branches; roof fronds
   walls: rep('frond', 6),
   bed: [...rep('branch', 4), ...rep('frond', 4)],   // two rails (with their legs), two slats; fronds
-  ring: rep('stone', 8),
+  ring: rep('stone', 6),   // 0.43.0 "Hearth": the first stage of a home (was 8 stones, an upgrade)
   hut: [...rep('log', 4), ...rep('log', 8), ...rep('branch', 8), ...rep('frond', 12)],   // corner posts; low walls; the roof frame (two beams, six rafters); the roof fronds (0.33 "Hut")
 };
 export const PIECE_TIME = 4;
@@ -97,8 +102,9 @@ export const SLEEP_R = 1;
 export const REACH = 1.7;
 export const SITE_AT = 1.4, SITE_APART = 3.2;   // the middle of a new site lies this far behind him; no two sites closer than SITE_APART
 
-export const UPGRADES = { walls: { steps: PARTS.walls.length }, bed: { steps: PARTS.bed.length }, ring: { steps: PARTS.ring.length } };
-export const UP_ORDER = ['walls', 'bed', 'ring'];
+export const UPGRADES = { walls: { steps: PARTS.walls.length }, bed: { steps: PARTS.bed.length } };
+export const UP_ORDER = ['walls', 'bed'];   // 0.43.0 "Hearth": the ring is no upgrade any more but the first stage of a home
+export const HOME_PARTS = ['ring', 'walls', 'bed'];   // what l.up holds (the ring's progress too)
 export const UP_REACH = 2.2, UP_TIME = 30, UP_COST = BUILD_COST / 2;
 /** 0.33 "Hut": the measures in the lean-to's frame (f along the heading, r across): the walls stand on the rectangle back..front by -half..half (3 m by 2.5 m); the opening in the front wall is |r| < door. */
 export const HUT = { back: -1.65, front: 0.85, half: 1.5, door: 0.6 };
@@ -113,7 +119,8 @@ export const HUT_WALL_LOGS = [
 ];
 export const HUT_FRAME_N = 8, HUT_FRONDS_N = 12;
 export const HUT_REACH = 2.6;
-export const WALLS_WOOD = 2.5, WALLS_FIRE = 3, RING_AT = 2.2, RING_R = 1, RING_NOFIRE = 8;   // 0.33.4: 8 m (was 3.5): Dave's site is 5, 6.2 or 7.5 m from his fire and the ring RING_AT to the side, so the old fire lies sqrt(r^2 + RING_AT^2) = 5.46, 6.58 or 7.82 m from the ring's middle: always inside
+export const WALLS_WOOD = 2.5, WALLS_FIRE = 3, RING_AT = 2.2, RING_R = 1, RING_NOFIRE = 8;
+export const RING_REACH = 1.6;   // 0.43.0 "Hearth": a stone is built into the ring from within this distance of its middle   // 0.33.4: 8 m (was 3.5): Dave's site is 5, 6.2 or 7.5 m from his fire and the ring RING_AT to the side, so the old fire lies sqrt(r^2 + RING_AT^2) = 5.46, 6.58 or 7.82 m from the ring's middle: always inside
 
 export const partsOf = what => PARTS[what];
 export const pieceCost = what => (what === 'leanto' ? BUILD_COST : what === 'hut' ? HUT_COST : UP_COST) / PARTS[what].length;
@@ -125,11 +132,14 @@ export function upgradeFor(l, kind) {
   return UP_ORDER.find(what => nextKind(l, what) === kind) || null;
 }
 const upDone = (l, what) => !!l.up && l.up[what] >= 1;
-export const hutReady = l => !!l && l.progress >= 1 && UP_ORDER.every(k => upDone(l, k));
+/** 0.43.0 "Hearth": a home begins with its stone ring; the lean-to is built only once the ring is finished. */
+export const ringDone = l => !!l && upDone(l, 'ring');
+export const stageOf = l => !l ? null : !ringDone(l) ? 'ring' : l.progress < 1 ? 'leanto' : null;   // the part of the home being built before the upgrades: 'ring', 'leanto', or null (both finished)
+export const hutReady = l => !!l && l.progress >= 1 && ringDone(l) && UP_ORDER.every(k => upDone(l, k));
 export const hutDone = l => !!l && (l.hut || 0) >= 1;
 export const hutBegun = l => !!l && built(l, 'hut') > 0;
 export const hutKind = l => hutReady(l) && !hutDone(l) ? nextKind(l, 'hut') : null;
-export const pieceFor = (l, kind) => !l ? null : l.progress < 1 ? (nextKind(l) === kind ? 'leanto' : null) : upgradeFor(l, kind) || (hutKind(l) === kind ? 'hut' : null);
+export const pieceFor = (l, kind) => { if (!l) return null; const st = stageOf(l); return st ? (nextKind(l, st) === kind ? st : null) : upgradeFor(l, kind) || (hutKind(l) === kind ? 'hut' : null); };
 /** Is (x, z) within the walls of l's hut (a box back..front by -half..half, shrunk by m on every side; a negative m grows it)? Pure geometry, whether or not the hut stands. */
 export function inHutBox(l, x, z, m = 0) {
   const dx = x - l.x, dz = z - l.z, f = dx * Math.sin(l.heading) + dz * Math.cos(l.heading), r = dx * Math.cos(l.heading) - dz * Math.sin(l.heading);
@@ -172,20 +182,22 @@ export function createLeantos(w, saved) {
     const q = Math.max(0, Math.min(1, p)); return q >= 1 ? 1 : Math.floor(q * n + 1e-6) / n;
   }
   function cleanUp(up) {   // the upgrades saved with a lean-to: known ones only, progress 0..1 in whole parts
-    const out = {}; if (up && typeof up === 'object') for (const k of UP_ORDER) if (Number.isFinite(up[k]) && up[k] > 0) { const q = whole(up[k], PARTS[k].length); if (q > 0) out[k] = q; }
+    const out = {}; if (up && typeof up === 'object') for (const k of HOME_PARTS) if (Number.isFinite(up[k]) && up[k] > 0) { const q = whole(up[k], PARTS[k].length); if (q > 0) out[k] = q; }
     return Object.keys(out).length ? { up: out } : {};
   }
   function cleanHut(l) {   // 0.33: a hut's progress in whole parts; only a lean-to that was a home (finished, all upgrades) has one
-    const q = Number.isFinite(l.hut) ? whole(l.hut, PARTS.hut.length) : 0, ok = l.progress >= 1 && UP_ORDER.every(k => Number.isFinite(l.up && l.up[k]) && l.up[k] >= 1);
+    const q = Number.isFinite(l.hut) ? whole(l.hut, PARTS.hut.length) : 0, ok = l.progress >= 1 && HOME_PARTS.every(k => Number.isFinite(l.up && l.up[k]) && l.up[k] >= 1);
     return q > 0 && ok ? { hut: q } : {};
   }
   function upgraded(l, what, p) {
-    if (!UPGRADES[what]) return;
+    if (!HOME_PARTS.includes(what)) return;
     const was = (l.up && l.up[what]) || 0; l.up = { ...(l.up || {}), [what]: Math.max(0, Math.min(1, p)) };
     if ((was <= 0 && p > 0) || (was < 1 && p >= 1)) leantos.version++;
   }
   function build(l, what = 'leanto') {   // the next part of a site is built in
-    if (!leantos.list.includes(l) || !PARTS[what] || (what !== 'leanto' && l.progress < 1) || (what === 'hut' && !hutReady(l))) return null;
+    if (!leantos.list.includes(l) || !PARTS[what]) return null;
+    const st = stageOf(l);   // 0.43.0 "Hearth": the ring first, then the lean-to, then the upgrades and the hut
+    if (st ? what !== st : what === 'ring' || what === 'leanto' || (what === 'hut' && !hutReady(l))) return null;
     const n = PARTS[what].length, k = built(l, what); if (k >= n) return null;
     const kind = PARTS[what][k], p = k + 1 >= n ? 1 : (k + 1) / n;
     if (what === 'leanto') { l.progress = p; if (k + 1 === 5 || p >= 1) leantos.version++; }
@@ -193,7 +205,7 @@ export function createLeantos(w, saved) {
     else upgraded(l, what, p);
     return kind;
   }
-  function start(x, z, heading) {
+  function start(x, z, heading) {   // 0.43.0 "Hearth": a new home, nothing built: its stone ring comes first (ringCentre), the lean-to at (x, z)
     const l = { id: nextId++, x, z, heading, progress: 0 };
     leantos.list.push(l); leantos.version++; return l;
   }
@@ -214,14 +226,14 @@ export function createLeantos(w, saved) {
     const base = kind === 'fire' ? FIRE_SHELTER : WOOD_SHELTER, wide = kind === 'fire' ? WALLS_FIRE : WALLS_WOOD;
     return leantos.list.some(l => l.progress >= 1 && (Math.hypot(l.x - x, l.z - z) <= (has(l, 'walls') ? wide : base) || (hutDone(l) && inHutBox(l, x, z, 0))));   // 0.33: and inside a finished hut
   }
-  function ringMiddle(x, z) {
+  function ringMiddle(x, z) {   // 0.43.0 "Hearth": a finished ring counts with or without its lean-to
     let best = null, bd = RING_R;
-    for (const l of leantos.list) { if (l.progress < 1 || !has(l, 'ring')) continue; const c = ringCentre(l), d = Math.hypot(c.x - x, c.z - z); if (d <= bd) { bd = d; best = c; } }
+    for (const l of leantos.list) { if (!has(l, 'ring')) continue; const c = ringCentre(l), d = Math.hypot(c.x - x, c.z - z); if (d <= bd) { bd = d; best = c; } }
     return best;
   }
   function ring(x, z) { return ringMiddle(x, z) !== null; }
   function noFire(x, z) {
-    return leantos.list.some(l => { if (l.progress < 1 || !has(l, 'ring')) return false; const c = ringCentre(l), d = Math.hypot(c.x - x, c.z - z); return d > RING_R && d <= RING_NOFIRE; }) || leantos.list.some(l => hutDone(l) && inHutBox(l, x, z, -0.5));   // 0.33: and in or at a finished hut: no fire inside
+    return leantos.list.some(l => { if (!has(l, 'ring')) return false; const c = ringCentre(l), d = Math.hypot(c.x - x, c.z - z); return d > RING_R && d <= RING_NOFIRE; }) || leantos.list.some(l => hutDone(l) && inHutBox(l, x, z, -0.5));   // 0.33: and in or at a finished hut: no fire inside
   }
   function inHut(x, z) {   // the finished hut whose walls hold (x, z), or null (0.33)
     return leantos.list.find(l => hutDone(l) && inHutBox(l, x, z, 0.05)) || null;

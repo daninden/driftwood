@@ -8,7 +8,7 @@ import { createGame } from '../src/game/game.js';
 import { branchesOfTile } from '../src/game/branches.js';
 import { frondsOfTile } from '../src/game/fronds.js';
 import { stonesOfTile } from '../src/game/stones.js';
-import { keepFree, PARTS, PIECE_TIME, BUILD_COST, UP_COST, SITE_AT, SITE_APART, UP_ORDER, UPGRADES, createLeantos, built, nextKind, upgradeFor, pieceFor, solid, siteAt, standFor, pieceCost } from '../src/game/leanto.js';
+import { ringCentre, keepFree, PARTS, PIECE_TIME, BUILD_COST, UP_COST, SITE_AT, SITE_APART, UP_ORDER, UPGRADES, createLeantos, built, nextKind, upgradeFor, pieceFor, solid, siteAt, standFor, pieceCost } from '../src/game/leanto.js';
 import { FIRST_HIGH, PERIOD } from '../src/game/tide.js';
 import { serialise, parseSave } from '../src/save.js';
 import { leantoParts, leantoFronds, wallFronds, bedParts, ringStones, ROOF_N, FROND_N, WALL_N, BED_N, RING_N } from '../src/render/leanto.js';
@@ -44,15 +44,17 @@ const give = (g, kind, n = 1) => { for (let i = 0; i < n; i++) (kind === 'stone'
 // 0.40.2 "Armful": one press builds in every piece he holds that is next, so it waits until he is done
 const buildNext = (g, input) => { const o = bigOf(g); expect(o).not.toBeNull(); g.act(o); run(g, input, PIECE_TIME + 0.5); for (let i = 0; i < 20 && g.player.work; i++) run(g, input, PIECE_TIME); return o; };
 const FLAT = (yaw = 0.8) => { const g = createGame(w, spawn, { sleep: { awake: 0.1 } }); return { g, input: makeInput({ yaw }) }; };
-const finishedAt = (x, z, up) => ({ list: [{ id: 0, x, z, heading: 0, progress: 1, ...(up ? { up } : {}) }], nextId: 1 });
+const finishedAt = (x, z, up) => ({ list: [{ id: 0, x, z, heading: 0, progress: 1, up: { ring: 1, ...(up || {}) } }], nextId: 1 });   // 0.43.0 "Hearth": a finished lean-to stands behind a finished ring
+// 0.43.0 "Hearth": a home begins with its stone ring; the lean-to tests start a home with a stone and finish its ring at once
+const startHome = (g, input) => { give(g, 'stone'); buildNext(g, input); const l = g.leantos.list[g.leantos.list.length - 1]; l.up = { ...(l.up || {}), ring: 1 }; return l; };
 
 describe('the recipe: one visible part, one gathered piece', () => {
-  it('a lean-to is 4 driftwood, 6 branches and 5 fronds (15 pieces); walls 6 fronds; a bed 4 branches then 4 fronds; a ring 8 stones', () => {
+  it('a lean-to is 4 driftwood, 6 branches and 5 fronds (15 pieces); walls 6 fronds; a bed 4 branches then 4 fronds; a ring 6 stones', () => {
     expect(PARTS.leanto).toEqual([...Array(4).fill('driftwood'), ...Array(6).fill('branch'), ...Array(5).fill('frond')]);
     expect(PARTS.walls).toEqual(Array(6).fill('frond'));
     expect(PARTS.bed).toEqual([...Array(4).fill('branch'), ...Array(4).fill('frond')]);
-    expect(PARTS.ring).toEqual(Array(8).fill('stone'));
-    expect(UPGRADES.walls.steps).toBe(6); expect(UPGRADES.bed.steps).toBe(8); expect(UPGRADES.ring.steps).toBe(8);
+    expect(PARTS.ring).toEqual(Array(6).fill('stone'));
+    expect(UPGRADES.walls.steps).toBe(6); expect(UPGRADES.bed.steps).toBe(8); expect(UPGRADES.ring).toBeUndefined(); expect(UP_ORDER).toEqual(['walls', 'bed']);
   });
   it('the drawing shows exactly the parts: every step of progress adds one visible part, and the counts are the recipe', () => {
     const l = { id: 1, x: spawn.x, z: spawn.z, heading: 0.5, progress: 0 }, H = w.H;
@@ -69,8 +71,8 @@ describe('the recipe: one visible part, one gathered piece', () => {
     for (let k = 0; k <= 8; k++) {
       const p = k === 8 ? 1 : k / 8, b = bedParts(H, l, p);
       expect(new Set(b.sticks.map(s => s.part)).size + b.fronds.length).toBe(k);   // a rail (with its legs) is one part, a slat is one, a frond is one
-      expect(ringStones(H, l, p).length).toBe(k);
     }
+    for (let k = 0; k <= 6; k++) expect(ringStones(H, l, k === 6 ? 1 : k / 6).length).toBe(k);
   });
   it('whole parts only: the rest cost of a lean-to is BUILD_COST in all, of an upgrade UP_COST', () => {
     expect(pieceCost('leanto') * 15).toBeCloseTo(BUILD_COST, 9);
@@ -81,11 +83,13 @@ describe('the recipe: one visible part, one gathered piece', () => {
 
 describe('the rules of a site (pure)', () => {
   it('built, nextKind and pieceFor follow the order', () => {
-    const l = { progress: 0 };
+    const l = { progress: 0 };   // 0.43.0 "Hearth": the ring first
+    expect(nextKind(l, 'ring')).toBe('stone'); expect(pieceFor(l, 'stone')).toBe('ring'); expect(pieceFor(l, 'driftwood')).toBeNull();
+    l.up = { ring: 5 / 6 }; expect(pieceFor(l, 'stone')).toBe('ring'); l.up = { ring: 1 }; expect(pieceFor(l, 'stone')).toBeNull();
     expect(nextKind(l)).toBe('driftwood'); expect(pieceFor(l, 'driftwood')).toBe('leanto'); expect(pieceFor(l, 'branch')).toBeNull();
     l.progress = 4 / 15; expect(built(l)).toBe(4); expect(nextKind(l)).toBe('branch'); expect(pieceFor(l, 'driftwood')).toBeNull(); expect(pieceFor(l, 'branch')).toBe('leanto');
     l.progress = 10 / 15; expect(nextKind(l)).toBe('frond'); l.progress = 14 / 15; expect(built(l)).toBe(14); expect(nextKind(l)).toBe('frond');
-    l.progress = 1; expect(nextKind(l)).toBeNull(); expect(pieceFor(l, 'frond')).toBe('walls'); expect(pieceFor(l, 'branch')).toBe('bed'); expect(pieceFor(l, 'stone')).toBe('ring'); expect(pieceFor(l, 'driftwood')).toBeNull();
+    l.progress = 1; expect(nextKind(l)).toBeNull(); expect(pieceFor(l, 'frond')).toBe('walls'); expect(pieceFor(l, 'branch')).toBe('bed'); expect(pieceFor(l, 'stone')).toBeNull(); expect(pieceFor(l, 'driftwood')).toBeNull();
   });
   it('a frond goes to the walls first, then to the bed once its four branches are in, a branch to the bed', () => {
     const l = { progress: 1, up: {} };
@@ -102,9 +106,10 @@ describe('the rules of a site (pure)', () => {
   it('is solid from the first roof branch on', () => {
     expect(solid({ progress: 4 / 15 })).toBe(false); expect(solid({ progress: 5 / 15 })).toBe(true); expect(solid({ progress: 1 })).toBe(true);
   });
-  it('build() adds one part at a time, refuses an upgrade of an unfinished lean-to and a finished site', () => {
+  it('build() adds one part at a time, the ring first, refuses an upgrade of an unfinished lean-to and a finished site', () => {
     const lt = createLeantos(w), l = lt.start(0, 0, 0);
-    expect(lt.build(l, 'walls')).toBeNull();
+    expect(lt.build(l, 'walls')).toBeNull(); expect(lt.build(l)).toBeNull();   // 0.43.0 "Hearth": no lean-to before the ring
+    const r6 = []; for (let i = 0; i < 6; i++) r6.push(lt.build(l, 'ring')); expect(r6).toEqual(PARTS.ring); expect(lt.has(l, 'ring')).toBe(true); expect(lt.build(l, 'ring')).toBeNull();
     const kinds = []; for (let i = 0; i < 15; i++) kinds.push(lt.build(l));
     expect(kinds).toEqual(PARTS.leanto); expect(l.progress).toBe(1); expect(lt.build(l)).toBeNull();
     const w6 = []; for (let i = 0; i < 6; i++) w6.push(lt.build(l, 'walls')); expect(w6).toEqual(PARTS.walls); expect(lt.has(l, 'walls')).toBe(true); expect(lt.build(l, 'walls')).toBeNull();
@@ -112,34 +117,35 @@ describe('the rules of a site (pure)', () => {
   });
 });
 
-describe('starting a site with driftwood in the arms', () => {
-  it('offers "build here" (a lean-to icon) with driftwood under his arm, and not with a branch, a frond, a stone or nothing', () => {
+describe('starting a home with a stone in his hands (0.43.0 "Hearth": its ring first)', () => {
+  it('offers "build here" with a stone in his hands, and not with driftwood, a branch, a frond or nothing', () => {
     const { g } = FLAT();
     expect(bigOf(g)).toBeNull();
     give(g, 'branch'); expect(bigOf(g) && bigOf(g).kind).not.toBe('buildHere');
     g.wood.carried.length = 0; give(g, 'frond'); expect(bigOf(g) && bigOf(g).kind).not.toBe('buildHere');
-    g.wood.carried.length = 0; give(g, 'stone'); expect(bigOf(g) && bigOf(g).kind).not.toBe('buildHere');
-    g.wood.stones.length = 0; give(g, 'driftwood');
-    const o = bigOf(g); expect(o).toMatchObject({ kind: 'buildHere', what: 'leanto', piece: 'driftwood' });
+    g.wood.carried.length = 0; give(g, 'driftwood'); expect(bigOf(g) && bigOf(g).kind).not.toBe('buildHere');
+    g.wood.carried.length = 0; give(g, 'stone');
+    const o = bigOf(g); expect(o).toMatchObject({ kind: 'buildHere', what: 'ring', piece: 'stone' });
   });
-  it('builds the first piece at once: the site appears after PIECE_TIME, with the open side to the camera and the middle SITE_AT behind him; the piece is used up', () => {
-    const { g, input } = FLAT(1.0); give(g, 'driftwood', 2);
+  it('builds the first stone at once: the home appears after PIECE_TIME, the place of the lean-to fixed (open side to the camera, the middle SITE_AT behind him); the stone is used up', () => {
+    const { g, input } = FLAT(1.0); give(g, 'stone', 2);
     const px = g.player.x, pz = g.player.z;
     const H = [0, 1, 2, 3, 4, 5, 6, 7].map(i => 1.0 + i * Math.PI / 4).find(h => g.homeFits(siteAt(px, pz, h)));   // 0.39.0: the camera's way, else the first of the eight where the whole home fits
     input.big = true; run(g, input, 1);
-    expect(g.player.work).toMatchObject({ kind: 'build' }); expect(g.leantos.list.length).toBe(0); expect(g.wood.carried.length).toBe(2);   // kneeling: nothing yet
+    expect(g.player.work).toMatchObject({ kind: 'build' }); expect(g.leantos.list.length).toBe(0); expect(g.wood.stones.length).toBe(2);   // kneeling: nothing yet
     run(g, input, PIECE_TIME);
-    expect(g.player.work).toMatchObject({ kind: 'build' }); expect(g.wood.carried.length).toBe(1); expect(g.leantos.list.length).toBe(1);   // 0.40.2: the second piece goes in at once
+    expect(g.player.work).toMatchObject({ kind: 'build' }); expect(g.wood.stones.length).toBe(1); expect(g.leantos.list.length).toBe(1);   // 0.40.2: the second stone goes in at once
     const l = g.leantos.list[0];
     expect(H).toBeDefined(); expect(l.heading).toBeCloseTo(H, 9); expect(l.x).toBeCloseTo(px - Math.sin(H) * SITE_AT, 5); expect(l.z).toBeCloseTo(pz - Math.cos(H) * SITE_AT, 5);
-    expect(built(l)).toBe(1); expect(l.progress).toBeCloseTo(1 / 15, 9);
+    expect(built(l, 'ring')).toBe(1); expect(l.progress).toBe(0); expect(built(l)).toBe(0);
+    run(g, input, PIECE_TIME + 0.5); expect(built(l, 'ring')).toBe(2); expect(g.wood.stones.length).toBe(0);
   });
   it('takes the heading from the starting view when the input has none', () => {
-    const g = createGame(w, spawn); give(g, 'driftwood'); const input = makeInput({ big: true }); run(g, input, PIECE_TIME + 1);
+    const g = createGame(w, spawn); give(g, 'stone'); const input = makeInput({ big: true }); run(g, input, PIECE_TIME + 1);
     expect(g.leantos.list[0].heading).toBe(YAW); expect(g.yaw()).toBe(YAW);
   });
   it('works with F too', () => {
-    const { g, input } = FLAT(); give(g, 'driftwood'); input.hold = { key: true }; run(g, input, PIECE_TIME + 1);
+    const { g, input } = FLAT(); give(g, 'stone'); input.hold = { key: true }; run(g, input, PIECE_TIME + 1);
     expect(g.leantos.list.length).toBe(1);
   });
   it('is not offered in the water, on wet sand of the flood, or where a pile, a trunk or another site is in the way', () => {
@@ -162,9 +168,9 @@ describe('starting a site with driftwood in the arms', () => {
 
 describe('building the lean-to piece by piece', () => {
   it('builds all 15 parts in order: driftwood, then branches, then fronds, each in PIECE_TIME, a part per press', () => {
-    const { g, input } = FLAT(0.6); const t0 = g.clock.total, a0 = g.sleep.awake;
+    const { g, input } = FLAT(0.6); startHome(g, input); const t0 = g.clock.total, a0 = g.sleep.awake;
     give(g, 'driftwood');
-    buildNext(g, input);   // buildHere
+    buildNext(g, input);   // the first driftwood, behind the finished ring
     const l = g.leantos.list[0];
     for (let k = 1; k < 15; k++) {
       const kind = PARTS.leanto[k];
@@ -181,7 +187,7 @@ describe('building the lean-to piece by piece', () => {
     expect(bigOf(g)).toBeNull();
   });
   it('takes only the kind the next part needs: a branch is not built in at the driftwood stage, driftwood not at the branch stage', () => {
-    const { g, input } = FLAT(); give(g, 'driftwood'); buildNext(g, input);
+    const { g, input } = FLAT(); startHome(g, input); give(g, 'driftwood'); buildNext(g, input);
     const l = g.leantos.list[0];
     g.wood.carried.length = 0; give(g, 'branch');
     expect(bigOf(g)).toBeNull();
@@ -194,12 +200,12 @@ describe('building the lean-to piece by piece', () => {
     buildNext(g, input); expect(g.wood.carried.map(p => !!p.frond)).toEqual(before.filter(f => f));   // the branch went, the frond stayed
   });
   it('builds in from the arm even when a different piece lies on top', () => {
-    const { g, input } = FLAT(); give(g, 'driftwood'); buildNext(g, input);
+    const { g, input } = FLAT(); startHome(g, input); give(g, 'driftwood'); buildNext(g, input);
     give(g, 'driftwood'); give(g, 'frond'); give(g, 'branch');   // the frond and the branch are on top
     buildNext(g, input); expect(built(g.leantos.list[0])).toBe(2); expect(g.wood.carried.length).toBe(2); expect(g.wood.carried.every(p => p.frond || p.branch)).toBe(true);
   });
   it('is stopped by walking: nothing is built and the piece is kept; he can start the part again', () => {
-    const { g, input } = FLAT(); give(g, 'driftwood'); buildNext(g, input);
+    const { g, input } = FLAT(); startHome(g, input); give(g, 'driftwood'); buildNext(g, input);
     const l = g.leantos.list[0]; give(g, 'driftwood');
     input.big = true; run(g, input, 2); expect(g.player.work).toMatchObject({ kind: 'build' });
     input.up = true; g.update(input, 1 / 30); input.up = false;
@@ -208,11 +214,11 @@ describe('building the lean-to piece by piece', () => {
     g.player.x = l.x + Math.sin(l.heading) * 1.2; g.player.z = l.z + Math.cos(l.heading) * 1.2;
     buildNext(g, input); expect(built(l)).toBe(2); expect(g.wood.carried.length).toBe(0);
     // an interrupted first piece makes no site at all
-    const h = FLAT(); give(h.g, 'driftwood'); h.input.big = true; run(h.g, h.input, 2); h.input.up = true; h.g.update(h.input, 1 / 30); h.input.up = false; run(h.g, h.input, PIECE_TIME + 1);
-    expect(h.g.leantos.list.length).toBe(0); expect(h.g.wood.carried.length).toBe(1);
+    const h = FLAT(); give(h.g, 'stone'); h.input.big = true; run(h.g, h.input, 2); h.input.up = true; h.g.update(h.input, 1 / 30); h.input.up = false; run(h.g, h.input, PIECE_TIME + 1);
+    expect(h.g.leantos.list.length).toBe(0); expect(h.g.wood.stones.length).toBe(1);
   });
   it('builds in from beside the lean-to when he walks to it first: the icon walks to a spot within reach', () => {
-    const { g, input } = FLAT(); give(g, 'driftwood'); buildNext(g, input);
+    const { g, input } = FLAT(); startHome(g, input); give(g, 'driftwood'); buildNext(g, input);
     const l = g.leantos.list[0]; give(g, 'driftwood');
     g.player.x = l.x + Math.sin(l.heading) * 1.65; g.player.z = l.z + Math.cos(l.heading) * 1.65;
     expect(bigOf(g)).toMatchObject({ kind: 'buildIn' });
@@ -222,7 +228,7 @@ describe('building the lean-to piece by piece', () => {
     expect(stand).toBeTruthy(); expect(Math.hypot(stand.x - l.x, stand.z - l.z)).toBeLessThanOrEqual(1.7);
   });
   it('a route planned before the lean-to turned solid does not go through its walls afterwards (the fine links are made again when the circles appear)', () => {
-    const { g, input } = FLAT(); give(g, 'driftwood'); buildNext(g, input);
+    const { g, input } = FLAT(); startHome(g, input); give(g, 'driftwood'); buildNext(g, input);
     const l = g.leantos.list[0], f = (d, r = 0) => ({ x: l.x + Math.sin(l.heading) * d + Math.cos(l.heading) * r, z: l.z + Math.cos(l.heading) * d - Math.sin(l.heading) * r });
     const finder = createPath(w, { obstacles: g.movement.obstacles }), a = f(1.4), b = f(-2.6, 0.3);   // from in front of the opening to a place behind the back wall
     const inside = rt => rt.pts.some(q => { const u = (q.x - l.x) * Math.sin(l.heading) + (q.z - l.z) * Math.cos(l.heading), v = (q.x - l.x) * Math.cos(l.heading) - (q.z - l.z) * Math.sin(l.heading); return u < 1 && u > -1 && Math.abs(v) < 0.9; });
@@ -234,7 +240,7 @@ describe('building the lean-to piece by piece', () => {
     expect(rt.pts.length).toBe(fresh.pts.length);
   });
   it('has the shelter effects only when finished, and the walls (collision) from the first roof branch', () => {
-    const { g, input } = FLAT(); give(g, 'driftwood'); buildNext(g, input);
+    const { g, input } = FLAT(); startHome(g, input); give(g, 'driftwood'); buildNext(g, input);
     const l = g.leantos.list[0], camp = () => g.movement.obstacles.camp.refresh().circles.filter(c => c.g.kind === 'leanto').length;
     for (let k = 1; k < 15; k++) {
       const kind = PARTS.leanto[k]; give(g, kind); buildNext(g, input);
@@ -244,7 +250,7 @@ describe('building the lean-to piece by piece', () => {
     }
   });
   it('keeps its region free of wood while it grows: a pile is laid beside it, never in its walls or in front of the opening', () => {
-    const { g, input } = FLAT(); give(g, 'driftwood'); buildNext(g, input);
+    const { g, input } = FLAT(); startHome(g, input); give(g, 'driftwood'); buildNext(g, input);
     const l = g.leantos.list[0];
     g.player.x = l.x + Math.sin(l.heading) * 1.3; g.player.z = l.z + Math.cos(l.heading) * 1.3; g.player.heading = l.heading + Math.PI;
     g.wood.carried.length = 0; give(g, 'driftwood'); expect(g.wood.drop(g.player.x, g.player.z, g.player.heading, false, null, (x, z, rs) => keepFree(l).touches(x, z, rs === undefined ? 0.65 : rs + 0.3))).toBe(true);
@@ -254,13 +260,13 @@ describe('building the lean-to piece by piece', () => {
 
 describe('upgrades', () => {
   const home = (up) => { const g = createGame(w, { x: spawn.x + 1.7, z: spawn.z, y: w.H(spawn.x + 1.7, spawn.z) }, { leantos: finishedAt(spawn.x, spawn.z, up), sleep: { awake: 0.1 } }); return { g, input: makeInput({ yaw: 0 }), l: g.leantos.list[0] }; };
-  it('a frond starts the walls, a branch the bed, a stone the ring; driftwood starts nothing', () => {
+  it('a frond starts the walls, a branch the bed; driftwood and a stone start nothing (0.43.0: the ring is the home\'s first part)', () => {
     const { g } = home();
     give(g, 'driftwood'); expect(bigOf(g)).toBeNull();
     g.wood.carried.length = 0; give(g, 'frond'); expect(bigOf(g)).toMatchObject({ kind: 'upgrade', what: 'walls', piece: 'frond' });
     g.wood.carried.length = 0; give(g, 'branch'); expect(bigOf(g)).toMatchObject({ kind: 'upgrade', what: 'bed', piece: 'branch' });
-    g.wood.carried.length = 0; give(g, 'stone'); expect(bigOf(g)).toMatchObject({ kind: 'upgrade', what: 'ring', piece: 'stone' });
-    g.wood.stones.length = 0; g.player.x = spawn.x + 2.5; give(g, 'stone'); expect(bigOf(g)).toBeNull();   // beyond UP_REACH
+    g.wood.carried.length = 0; give(g, 'stone'); expect(bigOf(g) && ['upgrade', 'buildIn'].includes(bigOf(g).kind)).toBeFalsy();
+    g.wood.stones.length = 0; g.player.x = spawn.x + 2.5; give(g, 'frond'); expect(bigOf(g)).toBeNull();   // beyond UP_REACH
   });
   it('the walls: 6 fronds, 6 presses; wood dries wider only when all are in', () => {
     const { g, input, l } = home();
@@ -277,10 +283,12 @@ describe('upgrades', () => {
     for (let k = 0; k < 4; k++) { give(g, 'frond'); expect(bigOf(g)).toMatchObject({ what: 'bed', piece: 'frond' }); buildNext(g, input); }
     expect(g.leantos.has(l, 'bed')).toBe(true); give(g, 'branch'); expect(bigOf(g)).toBeNull();
   });
-  it('the ring: 8 stones from his hands (two at a time), each used up; the ring holds a fire only when whole', () => {
-    const { g, input, l } = home();
-    for (let k = 0; k < 8; k += 2) { give(g, 'stone', 2); buildNext(g, input); expect(g.wood.stones.length).toBe(0); expect(g.leantos.has(l, 'ring')).toBe(k === 6); }   // 0.40.2: both stones in one press
-    expect(g.leantos.ring(g.leantos.list[0].x + Math.sin(0) * 2.2, g.leantos.list[0].z + 2.2)).toBe(true);
+  it('the ring: 6 stones from his hands (two at a time), each used up; the ring holds a fire only when whole, with no lean-to yet', () => {
+    const { g, input } = FLAT(0.9);
+    for (let k = 0; k < 6; k += 2) { give(g, 'stone', 2); buildNext(g, input); expect(g.wood.stones.length).toBe(0); expect(g.leantos.has(g.leantos.list[0], 'ring')).toBe(k === 4); }   // 0.40.2: both stones in one press
+    const l = g.leantos.list[0], c = ringCentre(l);
+    expect(l.progress).toBe(0); expect(g.leantos.ring(c.x, c.z)).toBe(true); expect(g.leantos.noFire(c.x + 3, c.z)).toBe(true);
+    give(g, 'stone'); expect(bigOf(g) && bigOf(g).kind === 'buildIn').toBeFalsy();   // the ring is done: a stone fits nowhere
   });
   it('the cost of an upgrade in rest is UP_COST over its parts', () => {
     const { g, input } = home(); const t0 = g.clock.total, a0 = g.sleep.awake;
@@ -305,7 +313,7 @@ describe('old saves and saving', () => {
     expect(UP_ORDER.every(k => g.leantos.has(g.leantos.list[1], k))).toBe(true);
   });
   it('a half-built site is saved and loaded again, piece for piece', () => {
-    const { g, input } = FLAT(0.7); give(g, 'driftwood'); buildNext(g, input); give(g, 'driftwood', 2); buildNext(g, input);
+    const { g, input } = FLAT(0.7); startHome(g, input); give(g, 'driftwood'); buildNext(g, input); give(g, 'driftwood', 2); buildNext(g, input);
     const s = JSON.parse(serialise(g.state())); expect(s.leantos.list[0]).toMatchObject({ heading: 0.7 }); expect(s.leantos.list[0].progress).toBeCloseTo(3 / 15, 9);
     const back = parseSave(serialise(g.state()), 1337), g2 = createGame(w, spawn, back);
     expect(g2.state()).toEqual(g.state()); expect(built(g2.leantos.list[0])).toBe(3); expect(nextKind(g2.leantos.list[0])).toBe('driftwood');
@@ -326,7 +334,7 @@ describe('the flood', () => {
     const h = at0(high); h.update(makeInput(), 0.1); expect(h.leantos.list.map(l => l.id)).toEqual([2]);
   });
   it('a site taken by the flood in the middle of kneeling is not built into, and the piece is kept', () => {
-    const { g, input } = FLAT(); give(g, 'driftwood'); buildNext(g, input); give(g, 'driftwood');
+    const { g, input } = FLAT(); startHome(g, input); give(g, 'driftwood'); buildNext(g, input); give(g, 'driftwood');
     input.big = true; run(g, input, 1); expect(g.player.work).toMatchObject({ kind: 'build' });
     g.leantos.list.length = 0; run(g, input, PIECE_TIME);
     expect(g.player.work).toBeNull(); expect(g.wood.carried.length).toBe(1);

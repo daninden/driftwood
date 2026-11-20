@@ -33,7 +33,7 @@
 import { canStand, obstaclesNear, BODY } from './movement.js';
 import { pileVisibleRadius, pileSolidRadius, PILE_JOIN } from './wood.js';
 import { FIRE_R, HUT_R } from './obstacles.js';
-import { HUT_REACH, REACH as LEANTO_REACH, hutReady, hutDone, inHutBox } from './leanto.js';
+import { HUT_REACH, REACH as LEANTO_REACH, RING_REACH, hutReady, hutDone, inHutBox, stageOf, ringCentre } from './leanto.js';
 import { FELL_REACH } from './axe.js';
 
 export const TOL = 0.12, CLEAR = 0.06;
@@ -72,7 +72,7 @@ export function createStand(game, world, { BESIDE = 1.2 } = {}) {
       case 'add': return { x: obj.x, z: obj.z, rim: pileSolidRadius(obj) + BODY, reach: PILE_JOIN };
       case 'upgrade': return { x: obj.x, z: obj.z, rim: 0, reach: HUT_REACH };   // (0.33: the hut is built from a little further out; what `offered` says decides, the reach only bounds the search)
       case 'fell': return { x: obj.x, z: obj.z, rim: obj.r + BODY, reach: obj.r + FELL_REACH };
-      case 'buildIn': return { x: obj.x, z: obj.z, rim: 0, reach: LEANTO_REACH };
+      case 'buildIn': { if (stageOf(obj) === 'ring') { const c = ringCentre(obj); return { x: c.x, z: c.z, rim: 0, reach: RING_REACH }; } return { x: obj.x, z: obj.z, rim: 0, reach: LEANTO_REACH }; }   // 0.43.0 "Hearth": the ring's stones from beside the ring
     }
     return null;
   }

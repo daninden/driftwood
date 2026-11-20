@@ -21,7 +21,7 @@ beforeAll(async () => {
 const lt = (x, z, up = { ring: 1 }) => ({ id: 0, x, z, heading: 0.7, progress: 1, up });
 
 describe('the zone where no fire is lit (game/leanto)', () => {
-  it('is more than the ring (1 m) and at most 8 m from its middle, only for a finished lean-to with a finished ring', () => {
+  it('is more than the ring (1 m) and at most 8 m from its middle, only for a finished ring (0.43.0: with or without its lean-to)', () => {
     const l = lt(spawn.x, spawn.z), rc = ringCentre(l), mk = list => { const s = createLeantos(); s.list.push(...list); return s; };
     const s = mk([l]);
     expect(RING_NOFIRE).toBe(8);   // 0.33.4: was 3.5
@@ -30,7 +30,7 @@ describe('the zone where no fire is lit (game/leanto)', () => {
     expect(s.noFire(rc.x + RING_NOFIRE + 0.1, rc.z)).toBe(false);                                           // further out: unaffected
     expect(mk([lt(spawn.x, spawn.z, {})]).noFire(rc.x + 2, rc.z)).toBe(false);                              // no ring yet
     expect(mk([lt(spawn.x, spawn.z, { ring: 0.5 })]).noFire(rc.x + 2, rc.z)).toBe(false);                   // an unfinished ring
-    expect(mk([{ ...l, progress: 0.5 }]).noFire(rc.x + 2, rc.z)).toBe(false);                              // an unfinished lean-to
+    expect(mk([{ ...l, progress: 0.5 }]).noFire(rc.x + 2, rc.z)).toBe(true);                               // 0.43.0 "Hearth": a finished ring counts before its lean-to is finished
   });
 });
 

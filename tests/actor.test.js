@@ -255,7 +255,7 @@ describe('following a plan (game/actor)', () => {
   });
   it('the menu names a lean-to by its number with what it needs next, and a fire with its hours (0.37.4)', () => {
     const g = fresh(), a = createActor(w, g, { chooser: () => null });
-    g.leantos.list.push({ id: 1, x: g.player.x + 3, z: g.player.z, heading: 0, progress: 4 / 15 }); g.leantos.version++;
+    g.leantos.list.push({ id: 1, x: g.player.x + 3, z: g.player.z, heading: 0, progress: 4 / 15, up: { ring: 1 } }); g.leantos.version++;
     g.fire.fires.push({ id: 7, x: g.player.x - 2, z: g.player.z, fuel: 2 * 2.5 / 24, embers: 0.5, lit: g.clock.total, fed: 2 }); g.fire.version++;
     const m = a.menu(), l = m.places.find(q => q.kind === 'leanto'), f = m.places.find(q => q.kind === 'fire');
     expect(l.id).toBe('leanto1'); expect(l.what).toMatch(/4 of 15 parts; it still needs 6 branches, then 5 fronds/);   // 0.37.6: all it still needs, counted

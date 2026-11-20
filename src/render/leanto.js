@@ -54,13 +54,13 @@ import { stickMatrix, mat4 } from './geometry.js';
 import { outlineMat } from './materials.js';
 import { disposeGroup } from './nearTile.js';
 import { DRIFT, BRANCH, STONE, P } from './palette.js';
-import { UP_ORDER, ringCentre, built, hutDone, inHutBox, HUT, HUT_POSTS, HUT_WALL_LOGS, HUT_FRAME_N, HUT_FRONDS_N } from '../game/leanto.js';
+import { HOME_PARTS, PARTS, ringCentre, built, hutDone, inHutBox, HUT, HUT_POSTS, HUT_WALL_LOGS, HUT_FRAME_N, HUT_FRONDS_N } from '../game/leanto.js';
 import { addRound } from './timber.js';
 import { veiled, VEIL_SHARE } from './veil.js';
 
 export const STEPS = 60;
 export const POST_H = 1.35, WIDTH = 2.0, DEPTH = 1.5, ROOF_N = 6, FROND_N = 5;
-export const WALL_N = 3, BED_N = 4, RING_N = 8, RING_RADIUS = 0.42;
+export const WALL_N = 3, BED_N = 4, RING_N = PARTS.ring.length, RING_RADIUS = 0.42;   // 0.43.0 "Hearth": 6 stones (was 8)
 const POST_R = 0.08, RIDGE_R = 0.065, ROOF_R = 0.05;
 const PARTS_N = 15, DRIFT_N = 4;   // parts of a lean-to (game/leanto PARTS) and how many of them are driftwood
 const partsAt = (p, n) => Math.min(n, Math.floor(clamp01(p) * n + 1e-6));   // whole parts built at a progress
@@ -300,7 +300,7 @@ export function createLeantoView(scene, w, kit, leantos) {
   const free = v => { drop(v); if (v.mats) for (const m of Object.values(v.mats)) m.dispose(); };
   function update(player, dt = 0) {
     for (const l of leantos.list) {
-      const key = Math.floor(l.progress * STEPS + 1e-9) + ':' + l.heading + ':' + UP_ORDER.map(k => Math.floor(((l.up && l.up[k]) || 0) * STEPS + 1e-9)).join() + ':' + built(l, 'hut');
+      const key = Math.floor(l.progress * STEPS + 1e-9) + ':' + l.heading + ':' + HOME_PARTS.map(k => Math.floor(((l.up && l.up[k]) || 0) * STEPS + 1e-9)).join() + ':' + built(l, 'hut');
       let v = views.get(l);
       if (!v || v.key !== key) {
         if (!v) v = { veil: { value: 0 }, mats: null, group: null, roof: null, key: '' };

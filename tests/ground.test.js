@@ -219,12 +219,12 @@ describe('the first piece of a lean-to clears the ground (the player)', () => {
     const gs = g.state(); gs.wood = st;
     ({ g, input } = siteGame(S1, gs));
     before = loose(g, S1);
-    give(g, 'driftwood'); expect(bigOf(g)).toMatchObject({ kind: 'buildHere', what: 'leanto' });
+    give(g, 'stone'); expect(bigOf(g)).toMatchObject({ kind: 'buildHere', what: 'ring' });   // 0.43.0 "Hearth": a home begins with its ring's first stone
     expect(g.ground.list.length).toBe(0);
     buildNext(g, input);
   });
   it('adds one region and records what it moved', () => {
-    expect(g.leantos.list.length).toBe(1); expect(built(g.leantos.list[0])).toBe(1);
+    expect(g.leantos.list.length).toBe(1); expect(built(g.leantos.list[0], 'ring')).toBe(1); expect(built(g.leantos.list[0])).toBe(0);
     expect(g.ground.list.length).toBe(1); expect(g.ground.list[0]).toMatchObject({ x: S1.x, z: S1.z, hut: 0 });
     expect(g.ground.last).toMatchObject({ x: S1.x, z: S1.z, hut: 0, stuck: 0 }); expect(g.ground.last.moved).toBeGreaterThanOrEqual(6);
   });
@@ -240,8 +240,8 @@ describe('the first piece of a lean-to clears the ground (the player)', () => {
     for (const t of tilesAround(S1.x, S1.z)) for (const c of g.fibre.groundCocos(t)) expect(g.ground.covers(c.x, c.z, 0.12)).toBe(false);
   });
   it('is not done again by the second piece, and a building elsewhere adds a second region', () => {
-    const v = g.ground.version; give(g, 'driftwood'); buildNext(g, input);
-    expect(built(g.leantos.list[0])).toBe(2); expect(g.ground.version).toBe(v); expect(g.ground.list.length).toBe(1);
+    const v = g.ground.version; g.wood.stones.push(piece(950, { stone: true, len: 0.26 })); buildNext(g, input);   // (a stone of its own id: give() would repeat the first one's)
+    expect(built(g.leantos.list[0], 'ring')).toBe(2); expect(g.ground.version).toBe(v); expect(g.ground.list.length).toBe(1);
   });
   it('is saved with the island and kept across a reload: the same bushes gone, the same stones where they were put, never grown back', () => {
     const text = serialise(g.state()), s = parseSave(text, 1337); expect(s).not.toBeNull(); expect(s.ground.list.length).toBe(1);
@@ -263,7 +263,7 @@ describe('a lean-to site with two berry bushes, and a banana plant', () => {
   it('berry bushes: their handfuls are gone with the bushes, a nearby bush outside the region still bears', () => {
     const { g, input } = siteGame(S2), ps = tilesAround(S2.x, S2.z).flatMap(t => g.berries.plantsIn(t)).filter(p => keepFree(S2).touches(p.x, p.z, p.r)), out = tilesAround(S2.x, S2.z).flatMap(t => g.berries.plantsIn(t)).filter(p => !keepFree(S2).touches(p.x, p.z, p.r));
     expect(ps.length).toBe(2); for (const p of ps) expect(g.berries.bearing(p)).toBe(true);
-    give(g, 'driftwood'); buildNext(g, input);
+    give(g, 'stone'); buildNext(g, input);
     for (const p of ps) { expect(g.berries.bearing(p)).toBe(false); expect(g.berries.pick(p, 1)).toBe(false); }
     for (const p of out.filter(q => !g.ground.bushGone(q.bush))) expect(g.berries.bearing(p)).toBe(true);
   });
@@ -271,7 +271,7 @@ describe('a lean-to site with two berry bushes, and a banana plant', () => {
     const { g, input } = siteGame(BANANA_SITE), ps = tilesAround(BANANA_SITE.x, BANANA_SITE.z).flatMap(t => g.bananas.plantsIn(t)).filter(p => keepFree(BANANA_SITE).touches(p.x, p.z, p.r));
     expect(ps.length).toBe(1); expect(g.bananas.bearing(ps[0])).toBe(true); expect(g.bananas.gone(ps[0])).toBe(false);
     expect(g.siteFits(BANANA_SITE)).toBe(true); expect(g.homeBlock(BANANA_SITE)).toMatchObject({ what: 'ground', steep: true }); expect(g.homeFits(BANANA_SITE)).toBe(false);
-    give(g, 'driftwood'); input.siteYaw = BANANA_SITE.heading; run(g, input, 0.1);
+    give(g, 'stone'); input.siteYaw = BANANA_SITE.heading; run(g, input, 0.1);
     const o = bigOf(g); if (o && o.kind === 'buildHere') expect(keepFree(o.site).touches(ps[0].x, ps[0].z, ps[0].r)).toBe(false);
     expect(g.bananas.gone(ps[0])).toBe(false);
   });

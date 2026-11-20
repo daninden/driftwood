@@ -161,6 +161,9 @@
  *   whose next part is of a kind he holds) and big kind 'upgrade' (`what`: 'walls', 'bed' or 'ring': beside a finished lean-to, within UP_REACH, whose next part of that upgrade is of a kind he holds; walls before bed before ring).
  *   Each wins over 'light'. The icon builds at once where he stands ('buildHere') or after a walk to beside the lean-to; he kneels PIECE_TIME seconds (work kind 'build' for the lean-to, 'upgrade' for an upgrade), then the
  *   piece is used up and the next part of the site appears (`leantos.build`); the rest cost is `pieceCost` a piece. Walking off before the end builds nothing and keeps the piece. A new site is started at the end of the first piece's kneeling (it must still fit).
+ *   0.43.0 "Hearth" (the user, 2026-11-20): a home begins with its stone ring (6 stones). 'buildHere' needs a stone in his hands (`what` 'ring'; the offer's x, z are the ring's middle, the lean-to's middle
+ *   SITE_AT behind him as before; the ring's middle must be dry ground too, `siteBlock`); 'buildIn' builds the ring's stones from within RING_REACH of its middle (`what` 'ring') until it is finished, then the
+ *   lean-to (`what` 'leanto'), always the stage game/leanto `stageOf` names; 'upgrade' is the walls, the bed and the hut. The ground is cleared at the ring's first stone.
  *   0.40.2 "Armful" (the user, 2026-11-19): one 'buildHere', 'buildIn' or 'upgrade' builds in every piece he holds that is next, one after another (`moreWork`: the same choice as `arrive`, a new
  *   PIECE_TIME, or HUT_PIECE_TIME, for each), until the next part needs a kind he does not hold; a 'buildIn' stops when the lean-to is finished. Walking off stops it after the pieces built so far.
  *   A coconut is always offered for 'husk'; the tuft comes only when there is room for it (game/fibre husk).
@@ -213,7 +216,7 @@ import { createFronds } from './fronds.js';
 import { createStones } from './stones.js';
 import { createGround, findSpot, MOVE_FAR } from './ground.js';
 import { createForage, BERRIES, BANANAS, BERRY_FOOD, BANANA_FOOD } from './forage.js';
-import { createLeantos, keepFree, built, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, PIECE_TIME, HUT_PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH, hutReady, hutDone, hutBegun, hutKind, inHutBox, HUT, HUT_REACH } from './leanto.js';
+import { createLeantos, keepFree, built, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, RING_REACH, stageOf, ringCentre, PIECE_TIME, HUT_PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH, hutReady, hutDone, hutBegun, hutKind, inHutBox, HUT, HUT_REACH } from './leanto.js';
 import { YAW } from '../core/view.js';
 import { createThirst } from './thirst.js';
 import { createHunger } from './hunger.js';
@@ -418,6 +421,7 @@ export function createGame(world, spawn, opts = {}) {
     const other = leantos.list.find(l => Math.hypot(l.x - c.x, l.z - c.z) < SITE_APART);
     if (other) return { what: 'leanto', x: other.x, z: other.z };
     for (const [f, r] of [[LEANTO_BACK, -LEANTO_SIDE], [LEANTO_BACK, LEANTO_SIDE], [LEANTO_FRONT, -LEANTO_SIDE], [LEANTO_FRONT, LEANTO_SIDE]]) { const q = leantoPoint(c, f, r); if (wet(terrainAt(world, q.x, q.z, game.sea))) return { what: 'ground', x: q.x, z: q.z }; }
+    const rc = ringCentre(c); if (!dry(rc.x, rc.z)) return { what: 'ground', x: rc.x, z: rc.z };   // 0.43.0 "Hearth": the stone ring, the home's first part, stands on dry ground too
     const keep = keepFree(c), hyp = leantoCircles(c), hits = o => hyp.some(h => Math.hypot(h.x - o.x, h.z - o.z) < h.r + o.r) || keep.touches(o.x, o.z, o.r);
     for (const o of naturalNear(c.x, c.z)) if (hits(o)) return o.tree !== undefined ? { what: 'tree', x: o.x, z: o.z, tree: o.tree } : { what: 'rock', x: o.x, z: o.z };
     for (const o of movement.obstacles.camp.near(c.x, c.z, 4.5)) if (hits(o)) return { what: o.g.kind, x: o.g.x, z: o.g.z };
@@ -491,7 +495,9 @@ export function createGame(world, spawn, opts = {}) {
     let best = null, bd = Infinity;
     for (const l of leantos.list) {
       const d = Math.hypot(l.x - px, l.z - pz);
-      if (l.progress < 1) { if (d <= LEANTO_REACH && have.has(nextKind(l)) && d < bd) { bd = d; best = { kind: 'buildIn', what: 'leanto', piece: nextKind(l), leanto: l, x: l.x, z: l.z }; } continue; }
+      const st = stageOf(l);   // 0.43.0 "Hearth": the stone ring first (from beside it), then the lean-to
+      if (st === 'ring') { const c = ringCentre(l), dr = Math.hypot(c.x - px, c.z - pz); if (dr <= RING_REACH && have.has(nextKind(l, 'ring')) && dr < bd) { bd = dr; best = { kind: 'buildIn', what: 'ring', piece: 'stone', leanto: l, x: c.x, z: c.z }; } continue; }
+      if (st === 'leanto') { if (d <= LEANTO_REACH && have.has(nextKind(l)) && d < bd) { bd = d; best = { kind: 'buildIn', what: 'leanto', piece: nextKind(l), leanto: l, x: l.x, z: l.z }; } continue; }
       if (d >= bd) continue;
       const what = d <= UP_REACH ? UP_ORDER.find(k => have.has(nextKind(l, k))) : null;
       if (what) { bd = d; best = { kind: 'upgrade', what, piece: nextKind(l, what), leanto: l, x: l.x, z: l.z }; continue; }
@@ -500,14 +506,14 @@ export function createGame(world, spawn, opts = {}) {
     }
     return best;
   }
-  function siteHere(px, pz) {   // a new lean-to he could start now: driftwood under his arm and a place where one fits, the middle a step behind him, the open side to the camera
-    if (wet(hereAt(px, pz)) || !handsFree() || !piecesHeld().has(PARTS.leanto[0])) return null;
+  function siteHere(px, pz) {   // a new home he could start now: a stone in his hands (0.43.0 "Hearth": its ring comes first) and a place where one fits, the lean-to's middle a step behind him, the open side to the camera
+    if (wet(hereAt(px, pz)) || !handsFree() || !piecesHeld().has(PARTS.ring[0])) return null;
     const key = `${px.toFixed(2)},${pz.toFixed(2)},${viewYaw.toFixed(3)},${siteYaw},${leantos.version},${felled.list.length},${Math.round(game.sea * 100)},${wood.version},${spear.at ? 1 : 0}`;
     if (hereMemo && hereMemo.key === key) return hereMemo.v;
     let v = null;   // 0.39.0 "Landfall": the way asked for (input.siteYaw, game/actor at a place for a home), the camera's, then the eight ways round: the first where the whole home fits
     for (const h of [...(siteYaw === null ? [] : [siteYaw]), viewYaw, ...Array.from({ length: 7 }, (_, i) => viewYaw + (i + 1) * Math.PI / 4)]) {
       const c = siteAt(px, pz, h);
-      if (homeFits(c)) { v = { kind: 'buildHere', what: 'leanto', piece: PARTS.leanto[0], site: c, x: c.x, z: c.z }; break; }
+      if (homeFits(c)) { const rc = ringCentre(c); v = { kind: 'buildHere', what: 'ring', piece: PARTS.ring[0], site: c, x: rc.x, z: rc.z }; break; }
     }
     hereMemo = { key, v };
     return v;
@@ -714,8 +720,8 @@ export function createGame(world, spawn, opts = {}) {
     if (a.kind === 'buildHere' || a.kind === 'buildIn' || a.kind === 'upgrade') {   // 0.32: kneel PIECE_TIME seconds, then the piece is built in (finish)
       const lt = a.leanto && leantos.list.includes(a.leanto) ? a.leanto : null;
       const have = piecesHeld(); let what = null;
-      if (a.kind === 'buildHere') what = homeFits(a.site) && have.has(PARTS.leanto[0]) ? 'leanto' : null;
-      else if (lt && a.kind === 'buildIn') what = lt.progress < 1 && have.has(nextKind(lt)) ? 'leanto' : null;
+      if (a.kind === 'buildHere') what = homeFits(a.site) && have.has(PARTS.ring[0]) ? 'ring' : null;
+      else if (lt && a.kind === 'buildIn') { const st = stageOf(lt); what = st && have.has(nextKind(lt, st)) ? st : null; }
       else if (lt && lt.progress >= 1) what = UP_ORDER.find(k => have.has(nextKind(lt, k))) || (hutPiece(lt, have) ? 'hut' : null);
       if (what && !wet(here())) { work = { kind: a.kind === 'upgrade' ? 'upgrade' : 'build', t: 0, dur: what === 'hut' ? HUT_PIECE_TIME : PIECE_TIME, thing: lt, site: a.kind === 'buildHere' ? a.site : null, what }; face(a); notifyAction(a.kind === 'upgrade' ? 'upgrade' : 'build'); }
       else stoop();
@@ -734,8 +740,9 @@ export function createGame(world, spawn, opts = {}) {
   function moreWork(wk, lt) {
     if (wet(here()) || !leantos.list.includes(lt)) return;
     const have = piecesHeld();
-    const what = wk.what === 'leanto' ? (lt.progress < 1 && have.has(nextKind(lt)) ? 'leanto' : null)
-      : lt.progress >= 1 ? UP_ORDER.find(k => have.has(nextKind(lt, k))) || (hutPiece(lt, have) ? 'hut' : null) : null;
+    const st = stageOf(lt);   // 0.43.0 "Hearth": a 'build' goes on within its stage (the ring's stones stop when the ring is finished, the lean-to's pieces when it is)
+    const what = wk.kind === 'build' ? (st === wk.what && have.has(nextKind(lt, st)) ? st : null)
+      : !st ? UP_ORDER.find(k => have.has(nextKind(lt, k))) || (hutPiece(lt, have) ? 'hut' : null) : null;
     if (!what) return;
     work = { kind: wk.kind, t: 0, dur: what === 'hut' ? HUT_PIECE_TIME : PIECE_TIME, thing: lt, site: null, what };
     notifyAction(wk.kind === 'upgrade' ? 'upgrade' : 'build');
@@ -745,14 +752,14 @@ export function createGame(world, spawn, opts = {}) {
     if (wk.kind === 'upgrade' || wk.kind === 'build') {   // 0.32: the next part of the site is built in with the piece that fits (a new site: started first, if the lean-to still fits)
       let lt = wk.thing;
       if (wk.site) {
-        if (wet(here()) || !homeFits(wk.site) || !piecesHeld().has(PARTS.leanto[0])) return;
+        if (wet(here()) || !homeFits(wk.site) || !piecesHeld().has(PARTS.ring[0])) return;
         lt = leantos.start(wk.site.x, wk.site.z, wk.site.heading);
       } else if (!leantos.list.includes(lt)) return;
-      const kind = wk.what === 'leanto' ? nextKind(lt) : nextKind(lt, wk.what);
+      const kind = nextKind(lt, wk.what), st = stageOf(lt);
       if (wk.what === 'hut' && !hutBegun(lt) && !hutFits(lt)) return;   // 0.33: the first part of a hut only if it still fits
-      if (!kind || (wk.what !== 'leanto' && lt.progress < 1) || !takePiece(kind)) { if (wk.site) leantos.list.splice(leantos.list.indexOf(lt), 1); return; }
+      if (!kind || (st ? wk.what !== st : wk.what === 'ring' || wk.what === 'leanto') || !takePiece(kind)) { if (wk.site) leantos.list.splice(leantos.list.indexOf(lt), 1); return; }
       leantos.build(lt, wk.what);
-      if ((wk.what === 'leanto' && built(lt) === 1) || (wk.what === 'hut' && built(lt, 'hut') === 1)) clearGround(lt);   // 0.36.2: the first piece of the lean-to, the first part of the hut
+      if ((wk.what === 'ring' && built(lt, 'ring') === 1) || (wk.what === 'hut' && built(lt, 'hut') === 1)) clearGround(lt);   // 0.36.2: the home's first piece (0.43.0: the ring's first stone), the first part of the hut
       moreWork(wk, lt);
       return;
     }

@@ -62,8 +62,10 @@ describe('rule (b) is gone (0.32 "Piece by piece"): piles, however big, no longe
     for (const k of ['build', 'buildHere', 'buildIn', 'upgrade']) expect(offers(g, k), k).toBe(false);
     expect(offers(g, 'light')).toBe(true);
   });
-  it('the lean-to is begun with a piece of driftwood in his arms instead', () => {
+  it('a home is begun with a stone in his hands instead (0.43.0 "Hearth": its ring first), not with driftwood', () => {
     const g = createGame(w, at(C.x, C.z), { wood: { carried: [], piles: [] } }); g.wood.carried.push({ ...logs[40] }); delete g.wood.carried[0].t;
+    expect(offers(g, 'buildHere')).toBe(false);
+    g.wood.carried.length = 0; g.wood.stones.push({ id: 990001, x: C.x, y: 1, z: C.z, len: 0.2, a: 0, rad: 0.1, stone: true });
     expect(offers(g, 'buildHere')).toBe(true);
   });
 });

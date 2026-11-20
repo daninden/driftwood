@@ -31,7 +31,7 @@ const makeInput = (o = {}) => {
   return i;
 };
 const drift = () => w.tiles.flatMap(t => t.drift)[0];
-const withDrift = g => { g.wood.carried.push({ ...drift() }); return g; };
+const withDrift = g => { g.wood.stones.push({ id: 990101 + g.wood.stones.length, x: 0, y: 1, z: 0, len: 0.26, a: 0, rad: 0.1, stone: true }); return g; };   // 0.43.0 "Hearth": a home begins with a stone in his hands (the name kept from when it was driftwood)
 const buildHereOf = g => g.action().options.find(o => o.kind === 'buildHere') || (g.action().tap && g.action().tap.kind === 'buildHere' ? g.action().tap : null);
 
 describe('where a whole home can stand (game/game homeBlock, homeFits)', () => {
@@ -115,7 +115,7 @@ describe('the places for a home on the menu (game/actor)', () => {
     for (let i = 1; i < hs.length; i++) expect(hs[i].dist).toBeGreaterThanOrEqual(hs[i - 1].dist);
     for (const h of hs) {
       expect(h.id).toMatch(/^homespot\d+$/); expect(g.known.has(h.x, h.z)).toBe(true);
-      expect(h.what).toMatch(/^a place for a home \(the lean-to and later the hut fit here\): /);
+      expect(h.what).toMatch(/^a place for a home \(its stone ring, the lean-to behind it and later the hut fit here\): /);
       expect(h.what).toMatch(/fresh water \d+ m away|no fresh water he knows near/); expect(h.what).toMatch(/the shore (\d+ m|far)/); expect(h.what).toMatch(/\d+ trees? within 20 m/);
     }
     for (let i = 0; i < hs.length; i++) for (let j = i + 1; j < hs.length; j++) expect(Math.hypot(hs[i].x - hs[j].x, hs[i].z - hs[j].z)).toBeGreaterThanOrEqual(15 - 1e-6);
@@ -137,7 +137,7 @@ describe('the places for a home on the menu (game/actor)', () => {
     expect(g.homeFits({ x: Math.round(l.x / 6) * 6, z: Math.round(l.z / 6) * 6, heading: l.heading })).toBe(false);   // (now taken by the lean-to itself)
     expect(a.input.siteYaw).toBeUndefined();   // the way holds only while he stands at it (the plan is over)
   });
-  it('a refused "buildHere" says why: without driftwood, and where no home fits (here: other lean-tos within the hut\'s room, whichever way it opens)', () => {
+  it('a refused "buildHere" says why: without a stone, and where no home fits (here: other lean-tos within the hut\'s room, whichever way it opens)', () => {
     const tryAt = (wood) => {
       const g = createGame(w, spawn, { sleep: { awake: 0.1 }, player: { x: FITS.x, z: FITS.z, heading: Math.PI }, leantos: { list: [[3, 0], [-3, 0], [0, 3], [0, -3]].map(([dx, dz], id) => ({ id, x: FITS.x + dx, z: FITS.z + dz, heading: Math.atan2(dx, dz), progress: 1 })), nextId: 4 } });   // four finished lean-tos round him: no home fits within his step aside
       if (wood) withDrift(g); g.known.visit(FITS.x, FITS.z);
@@ -147,7 +147,7 @@ describe('the places for a home on the menu (game/actor)', () => {
       return { g, asks };
     };
     const none = tryAt(false);
-    expect(none.asks[1].why).toBe('failed'); expect(none.asks[1].last.reason).toMatch(/needs driftwood under his arm/);
+    expect(none.asks[1].why).toBe('failed'); expect(none.asks[1].last.reason).toMatch(/needs a stone in his hands to start a home/);
     const crowded = tryAt(true);
     expect(crowded.g.leantos.list.length).toBe(4); expect(crowded.asks[1].why).toBe('failed'); expect(crowded.asks[1].last.reason).toMatch(/no home fits here/);
   });

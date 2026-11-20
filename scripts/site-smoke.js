@@ -1,4 +1,4 @@
-// Visual smoke of 0.32 "Piece by piece": a lean-to site at several stages (one piece, the frame, the roof branches, the fronds, finished) and a finished lean-to with the walls, the bed and the ring at
+// Visual smoke of 0.32 "Piece by piece" (0.43.0 "Hearth": the stone ring first, alone): a home at several stages (one stone, the ring, one post, the frame, the roof branches, the fronds, finished) and a finished lean-to with the walls, the bed and the ring at
 // several stages. Run `npm run build` first.
 // Usage: node scripts/site-smoke.js [outDir]   (default: the current directory; files site-*.png)
 // The pieces are put into his arms and the game's own arc option is pressed for each one (build here, build in, upgrade), then the figure stands to the side so that the shelter can be seen.
@@ -70,14 +70,14 @@ try {
   };
   const stage = async (kind, n) => { let last = null; for (let i = 0; i < n; i++) last = await page.evaluate(k => window.__build(k), kind); return last; };
   const state = () => page.evaluate(() => { const l = window.__driftwood.game.leantos.list[0]; return l && { progress: +l.progress.toFixed(3), up: l.up }; });
-  // the lean-to: 1 driftwood (build here), then 3 more, 3 roof branches, 3 more, 2 fronds, 3 more
-  const seq = [['driftwood', 1, 'site-1-one-post.png'], ['driftwood', 2, 'site-2-two-posts-and-ridge.png'], ['driftwood', 1, 'site-3-frame-with-sill.png'], ['branch', 3, 'site-4-three-roof-branches.png'], ['branch', 3, 'site-5-roof-branches.png'], ['frond', 2, 'site-6-two-fronds.png'], ['frond', 3, 'site-7-finished.png']];
+  // 0.43.0 "Hearth": the ring first (1 stone with build here, then 2, then 3: 6 stones), then the lean-to behind it: 1 driftwood, then 3 more, 3 roof branches, 3 more, 2 fronds, 3 more
+  const seq = [['stone', 1, 'site-0a-one-stone.png'], ['stone', 2, 'site-0b-three-stones.png'], ['stone', 3, 'site-0c-ring.png'], ['driftwood', 1, 'site-1-one-post.png'], ['driftwood', 2, 'site-2-two-posts-and-ridge.png'], ['driftwood', 1, 'site-3-frame-with-sill.png'], ['branch', 3, 'site-4-three-roof-branches.png'], ['branch', 3, 'site-5-roof-branches.png'], ['frond', 2, 'site-6-two-fronds.png'], ['frond', 3, 'site-7-finished.png']];
   for (const [kind, n, name] of seq) {
     console.log(kind, n, await stage(kind, n), JSON.stringify(await state()));
     await shot(name);
   }
-  // upgrades: walls 3 then 6, the bed's frame 4 and its fronds 4, the ring 4 then 8
-  for (const [kind, n, name] of [['frond', 3, 'site-8-walls-3.png'], ['frond', 3, 'site-9-walls-6.png'], ['branch', 4, 'site-10-bed-frame.png'], ['frond', 4, 'site-11-bed-done.png'], ['stone', 4, 'site-12-ring-4.png'], ['stone', 4, 'site-13-ring-8.png']]) {
+  // upgrades: walls 3 then 6, the bed's frame 4 and its fronds 4
+  for (const [kind, n, name] of [['frond', 3, 'site-8-walls-3.png'], ['frond', 3, 'site-9-walls-6.png'], ['branch', 4, 'site-10-bed-frame.png'], ['frond', 4, 'site-11-bed-done.png']]) {
     console.log(kind, n, await stage(kind, n), JSON.stringify(await state()));
     await shot(name); await side(name.replace('.png', '-side.png'));
   }

@@ -9,19 +9,21 @@ import { createGame, REACH } from '../src/game/game.js';
 import { createActor } from '../src/game/actor.js';
 import { branchesOfTile } from '../src/game/branches.js';
 import { frondsOfTile } from '../src/game/fronds.js';
+import { stonesOfTile } from '../src/game/stones.js';
 import { PIECE_TIME, built, nextKind } from '../src/game/leanto.js';
 import { checkPlan, PLAN_STEPS } from '../src/game/actions.js';
 import { actFixed, buildLessonMessages } from '../src/ai/actPrompt.js';
 import { walkFirstDay } from './helpers/scene.js';
 
 if (!globalThis.window) globalThis.window = new EventTarget();
-let w, spawn, drift, branches, fronds;
+let w, spawn, drift, branches, fronds, stones;
 beforeAll(async () => {
   w = await generateWorld(1337); spawn = startSpot(w);
   const d = o => Math.hypot(o.x - spawn.x, o.z - spawn.z), by = (a, b) => d(a) - d(b);
   drift = w.tiles.flatMap(t => t.drift).sort(by);
   branches = w.tiles.flatMap(t => t.trees.length ? branchesOfTile(w, t) : []).sort(by);
   fronds = w.tiles.flatMap(t => frondsOfTile(w, t)).sort(by);
+  stones = w.tiles.flatMap(t => stonesOfTile(w, t)).sort(by);
 }, 120000);
 
 const makeInput = (o = {}) => {
@@ -39,10 +41,11 @@ let used = 0;
 const SRC = { driftwood: () => drift, branch: () => branches, frond: () => fronds };
 const give = (g, kind, n = 1) => { for (let i = 0; i < n; i++) g.wood.carried.push({ ...SRC[kind]()[used++ % 40 + 3] }); };
 const press = (g, input) => { const o = bigOf(g); expect(o).not.toBeNull(); g.act(o); run(g, input, 0.2); return o; };
-const lean = () => {   // a lean-to begun where he stands (one driftwood in), as tests/site
+const lean = () => {   // a lean-to begun where he stands (one driftwood in), as tests/site (0.43.0 "Hearth": its ring first, one stone, then finished at once)
   const g = createGame(w, spawn, { sleep: { awake: 0.1 } }), input = makeInput({ yaw: 0.8 });
+  g.wood.stones.push({ ...stones[3] }); press(g, input); run(g, input, PIECE_TIME + 0.5);
+  expect(g.leantos.list.length).toBe(1); g.leantos.list[0].up = { ring: 1 };
   give(g, 'driftwood'); press(g, input); run(g, input, PIECE_TIME + 0.5);
-  expect(g.leantos.list.length).toBe(1);
   return { g, input, l: g.leantos.list[0] };
 };
 
@@ -74,7 +77,7 @@ describe('one "buildIn" builds in every piece he holds that is next (game/game)'
   });
   it('an "upgrade" goes on with the next upgrade that wants what he holds (walls, then the bed)', () => {
     const { g, input, l } = lean();
-    l.progress = 1; l.up = { walls: 4 / 6 }; g.leantos.version++;
+    l.progress = 1; l.up = { ring: 1, walls: 4 / 6 }; g.leantos.version++;
     give(g, 'frond', 3); expect(press(g, input)).toMatchObject({ kind: 'upgrade' }); run(g, input, 3 * PIECE_TIME + 0.5);
     expect(l.up.walls).toBe(1); expect(g.wood.carried.length).toBe(1);   // the bed wants its four branches before its fronds
   });
