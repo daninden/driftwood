@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.43.4 "Give up" — 2026-11-20
+
+Agreed with the user 2026-11-20 ("A en B") after watching him try to reach a piece of wood, get stuck, and keep at it for a long time before he gave up.
+
+- **A. Sooner given up, per walk** (`game/route`): a walk ends as stuck when the route left has not got 0.5 m shorter in 8 s (`NO_GAIN_M`, `NO_GAIN_SECS`) while he is not busy (within the arrival distance it counts as arrived). The stall check (less than 0.15 m in 0.7 s) did not see him sliding to and fro or creeping along a slope, so only the walk's time limit (the walk's minutes x 3 + 30 s, over a minute for a longer walk) ended it. A new plan of the route starts the count again.
+- **B. Not chosen again at once** (`game/actor`): a loose thing (driftwood, a branch, a frond, a stone, a coconut, a bush) or a felled log that a `go` or a `take` could not get to (stuck, no way, far too long, could not reach it) is left off the menu for 6 game hours (`UNREACHED_HOURS`), and the failed step says so ("…; driftwood4 is left off the menu for 6 hours"). The model chose the same piece again after each failure.
+- **Tests:** `tests/giveUp.test.js`.
+- **Next:** 0.43.5 "Mouth" (was 0.43.4).
+
 ## 0.43.3 "Feed" — 2026-11-20
 
 Agreed with the user 2026-11-20 ("ja") after watching him lay wood beside his fire instead of on it, and light a new pile beside glowing embers instead of putting wood on them.

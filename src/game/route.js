@@ -10,6 +10,9 @@
  *   - No progress: less than STALL_MOVE (0.15 m) in STALL_SECS (0.7 s) while not busy closes the blocked segment (the plan edge, or for a shortcut the
  *     points ahead that he could have pulled to, which are then no longer pulled to) and plans again from where he stands. After MAX_REPLANS (3) such stalls the route is
  *     'unreachable' (reason 'stuck'). No hand steering.
+ *   - No gain (0.43.4 "Give up"): when the route left (`remaining`) has not become NO_GAIN_M (0.5 m) shorter in NO_GAIN_SECS (8 s) while not busy, the walk ends: as
+ *     arrived within the arrival distance of a stall, else 'unreachable' (reason 'stuck'). It catches what the stall check cannot: sliding to and fro, or creeping along a slope,
+ *     more than STALL_MOVE in every STALL_SECS but never nearer. A new plan (a replan or a drift) starts the count again.
  *   - A change of the camp (the finder's `campKey`) is checked against the rest of the route only (one pass of segment tests); it replans only when a
  *     segment is closed now. A pile laid behind him costs nothing. A big displacement (more than DRIFT, 8 m from the next point) replans too.
  *
@@ -24,14 +27,14 @@
  *
  * Depends on: game/path (the finder given), game/walk (through the finder)
  */
-export const STRING = 4, SIGHT = 6, PASSED = 0.3, STALL_SECS = 0.7, STALL_MOVE = 0.15, MAX_REPLANS = 3, DRIFT = 8, LOOK = 0.2, ARRIVED = 0.15;
+export const STRING = 4, SIGHT = 6, PASSED = 0.3, STALL_SECS = 0.7, STALL_MOVE = 0.15, MAX_REPLANS = 3, DRIFT = 8, LOOK = 0.2, ARRIVED = 0.15, NO_GAIN_SECS = 8, NO_GAIN_M = 0.5;
 
 export function createRoute(finder, from, goal, { stop = 1, tap = false, near = 0, maxExp } = {}) {
   const r = {
     state: 'going', reason: null, pts: [], index: 0, replans: 0, stalls: 0, drifts: 0, closed: new Set(), noShort: new Set(), update,
   };
   // r.index: the first route point not yet passed; aim: the point he walks to (r.index, or a later one he sees from here)
-  let cum = [], key = null, aim = 0, lookAt = -1, t = 0, prog = { x: from.x, z: from.z, t: 0 };
+  let cum = [], key = null, aim = 0, lookAt = -1, t = 0, prog = { x: from.x, z: from.z, t: 0 }, gain = { best: Infinity, t: 0 };   // gain: the least route left so far and when it last got NO_GAIN_M shorter
 
   function plan(at) {
     const res = finder.find(at, goal, { maxExp, closed: r.closed });
@@ -39,6 +42,7 @@ export function createRoute(finder, from, goal, { stop = 1, tap = false, near = 
     r.pts = res.pts; r.index = 0; aim = 0; lookAt = -1; cum = [0];
     for (let i = 1; i < r.pts.length; i++) cum.push(cum[i - 1] + Math.hypot(r.pts[i].x - r.pts[i - 1].x, r.pts[i].z - r.pts[i - 1].z));
     key = finder.campKey ? finder.campKey() : null;
+    gain = { best: Infinity, t };
     return true;
   }
   const dist = (p, q) => Math.hypot(q.x - p.x, q.z - p.z);
@@ -99,8 +103,16 @@ export function createRoute(finder, from, goal, { stop = 1, tap = false, near = 
         if (finder.clear(p, q)) { aim = j; break; }
       }
     }
-    const q = r.pts[aim];
-    return { target: { x: q.x, z: q.z }, final: aim === last, state: 'going', remaining: cum[last] - cum[aim] + dist(p, q), stalled };
+    const q = r.pts[aim], remaining = cum[last] - cum[aim] + dist(p, q);
+    // no gain: the route left has not got shorter for a while (0.43.4 "Give up")
+    if (busy) gain.t = t;
+    else if (remaining < gain.best - NO_GAIN_M) gain = { best: remaining, t };
+    else if (t - gain.t >= NO_GAIN_SECS) {
+      r.stalls++;
+      if (d <= (tap ? near : ARRIVED)) { r.state = 'arrived'; return done(); }
+      fail('stuck'); return done(true);
+    }
+    return { target: { x: q.x, z: q.z }, final: aim === last, state: 'going', remaining, stalled };
   }
   return r;
 }

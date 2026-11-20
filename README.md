@@ -213,6 +213,8 @@ With the axe at his belt and both hands free, stand beside a tree (any tree: pal
 
 A log is heavy. He picks it up with nothing else in his arms or hands and carries it alone on his shoulder, slowly, and he cannot run with it. Laid down, it goes on a pile of logs, at most twelve in a pile, never mixed with other wood; from a pile he takes a dry log first, if there is one. Logs never rot, never burn and the sea does not take them, and he cannot put them on the fire or use them for the lean-to. They are timber for the hut (see *The hut*). A freshly felled log is green: it has to dry for two days (wherever it lies) before it can go into the hut, so the hut is something for later days.
 
+**When he cannot get there.** If he gets no nearer to where he is going for a few seconds, he gives up that walk. A piece of wood or another loose thing he could not get to is left out of what he can choose for about six hours of game time, so he goes for something else.
+
 **In the dark.** He walks only with a burning torch in his hand (taken from a fire with flames, which costs the fire half a piece of wood; it burns about two hours, twice as fast in rain), or between places that both lie in the light of a burning fire or of a torch stuck in the ground; without light he stays where he is. A walk that would end after dusk counts too. Sleeping and fishing are plans of their own: he sleeps until he wakes, and fishes for the minutes the model chooses until he catches a fish.
 
 ## Controls

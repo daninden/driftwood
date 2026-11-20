@@ -23,6 +23,7 @@
  *   actor.plan -> { steps, minutes, at, menu, say, why } | null      the plan being followed (menu: the menu it was chosen from; its place ids hold for the whole plan; say: the chooser's thought for it)
  *   actor.stepIndex, actor.waiting, actor.why             the running step, whether he waits for a plan, why the next plan is (or was last) asked
  *   actor.recent -> [record]                      the last RECENT_MAX records { day, time, kind ('step' | 'plan' | 'rejected' | 'interrupt'), what, outcome ('done' | 'failed' | ...), reason }
+ *   UNREACHED_HOURS (6)                           0.43.4: how long a loose thing he could not get to stays off the menu
  *   actor.stats                                   { plans, rejected, steps, done, failed, interrupts, waits (steps with no plan) }
  *
  * The steps (game/actions): `go` walks to a place of the plan's menu: a pile or a fire to a standing spot where the game offers its action (game/stand), river water until
@@ -84,6 +85,8 @@
  * (`hutTreeBlocks`); a refused "use" says why (`useWhy`: lying down, busy, a torch, water, nothing of that kind carried, no fire for a crab), after waiting up to 20 s for a bend to end;
  * a pile of one piece is "1 log", "1 branch".
  * 0.40.0 "Belt": a felled log says whether it is still green or dry for the hut (game/logs `seasoned`), a log pile how many of its logs are; a refused hut part with a green log says when it is dry.
+ * 0.43.4 "Give up": a loose thing (or a felled log) that a `go` or a `take` could not get to (stuck, no way, far too long, could not reach it: REACH_FAIL) is left off the menu for
+ * UNREACHED_HOURS game hours (`giveUp`, `unreachedAt`; not saved), and the failed step's reason says so.
  * 0.43.3 "Feed": a `lay` of firewood "at" his fire, or at a ring whose fire burns or glows (`fireOf`), goes on the fire (`layOnFire`: one `feed` a piece, `input.feed` the kind; the rest beside it);
  * the menu says how wood goes on a fire and that no second fire is lit in a ring with one in it.
  * 0.43.2 "One fire": a pile in a finished stone ring counts all the firewood in the ring (`ringPiles`, `ringWood`; its `fuel` is the ring's dry pieces and it is marked `inRing`), and the lean-to says
@@ -114,6 +117,8 @@ import { WAIT, PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, LEG_DE
 
 const BESIDE_FIRE = 1.2;          // game BESIDE: a fire this close (from its edge) is beside him
 export const RECENT_MAX = 20;
+export const UNREACHED_HOURS = 6;   // 0.43.4 "Give up": a loose thing he could not get to stays off the menu this many game hours
+const REACH_FAIL = /stuck on the way|took far too long|no way there|could not reach|could not get to it|no spot he can stand/;   // the reasons that mean he could not get to it
 export const SCAN_R = 150;          // metres round him in which the menu looks for places he knows
 export const FISH_WALK = 40;        // metres: how far from where he stands a fishing looks for the shallows (known ground only)
 export const walkMinutes = metres => Math.max(1, Math.ceil(gameMinutes(metres / WALK_SPEED * WALK_SLACK)));   // 0.37.5: a walk of that many metres of route in game minutes (with a little slack)
@@ -303,14 +308,22 @@ export function createActor(world, game, opts = {}) {
     for (const l of game.leantos.list) if (hutReady(l) && !hutBegun(l)) { const b = game.hutBlock(l); if (b && b.what === 'tree' && Number.isInteger(b.tree)) ids.add(b.tree); }
     return ids;
   }
+  // 0.43.4 "Give up": the loose things (and felled logs) a "go" or a "take" could not get to, with when (clock.total); off the menu for UNREACHED_HOURS, so the next plan chooses another
+  const unreachedAt = new WeakMap();
+  const unreached = o => { const t = unreachedAt.get(o); return t !== undefined && clock.total - t < UNREACHED_HOURS / 24; };
+  function giveUp(pl, r) {
+    if (r.ok || !pl || !(LOOSE[pl.kind] || pl.kind === 'log') || !REACH_FAIL.test(r.reason || '')) return r;
+    unreachedAt.set(pl.ref, clock.total);
+    return { ...r, reason: `${r.reason}; ${pl.id} is left off the menu for ${UNREACHED_HOURS} hours` };
+  }
   function candidates() {   // every thing he knows within SCAN_R, by kind: [{ kind, ref, x, z, what }]
     const out = [], R = SCAN_R, near = q => Math.hypot(q.x - p.x, q.z - p.z) <= R && known.has(q.x, q.z), anywhere = q => known.has(q.x, q.z);   // water, fires and lean-tos he knows are on the menu however far
     for (const q of waterAll) if (anywhere(q)) out.push({ kind: 'water', ref: q, x: q.x, z: q.z, what: 'fresh river water' });
-    for (const t of tilesNear(p.x, p.z, R)) for (const [kind, L] of Object.entries(LOOSE)) for (const o of L.list(t)) if (near(o)) out.push({ kind, ref: o, x: o.x, z: o.z, what: L.what(o) });
+    for (const t of tilesNear(p.x, p.z, R)) for (const [kind, L] of Object.entries(LOOSE)) for (const o of L.list(t)) if (near(o) && !unreached(o)) out.push({ kind, ref: o, x: o.x, z: o.z, what: L.what(o) });
     for (const q of W.piles) if (q.logs.length && near(q)) out.push({ kind: 'pile', ref: q, x: q.x, z: q.z, what: pileWhat(q) + ringNote(q) });
     for (const f of game.fire.fires) if (anywhere(f)) out.push({ kind: 'fire', ref: f, x: f.x, z: f.z, what: fireWhat(f) });
     for (const l of game.leantos.list) if (anywhere(l)) out.push({ kind: 'leanto', ref: l, x: l.x, z: l.z, what: leantoWhat(l) + ringHolds(l) });
-    for (const l of game.logs.near(p.x, p.z, R)) if (near(l)) out.push({ kind: 'log', ref: l, x: l.x, z: l.z, what: logWhat(l) });
+    for (const l of game.logs.near(p.x, p.z, R)) if (near(l) && !unreached(l)) out.push({ kind: 'log', ref: l, x: l.x, z: l.z, what: logWhat(l) });
     if (game.spear.at && near(game.spear.at)) out.push({ kind: 'spear', ref: game.spear.at, x: game.spear.at.x, z: game.spear.at.z, what: 'his spear, lying' });
     const blocks = hutTreeBlocks();
     if (game.axe.has() || blocks.size) for (const t of tilesNear(p.x, p.z, 60)) for (const list of LISTS) t[list].forEach((tree, index) => {
@@ -738,9 +751,9 @@ export function createActor(world, game, opts = {}) {
     const d = yield* walkFor(pl, stepMinutes({ go: s.take }, places)); if (!d.ok) return d;
     inp.take = pl.kind === 'pile' ? { pile: pl.ref, ...(Number.isFinite(s.count) ? { count: s.count } : {}) } : { id: pl.ref.id };
     const w = yield* goTo(pl, pl.kind === 'pile' ? 'take' : null);
-    if (!w.ok) return w;
+    if (!w.ok) return giveUp(pl, w);
     const r = yield* doAction('pickup');
-    if (!r.ok) return r.reason === 'not offered here' ? { ok: false, reason: `he could not reach ${pl.id} to pick it up` } : r;
+    if (!r.ok) return r.reason === 'not offered here' ? giveUp(pl, { ok: false, reason: `he could not reach ${pl.id} to pick it up` }) : r;
     return r;
   }
   /** 0.41.1 "Straight": where he stands to lay material beside a place for a home: just outside the room the whole home keeps free (HUT_KEEP), on a side or
@@ -816,7 +829,7 @@ export function createActor(world, game, opts = {}) {
     if (k === 'go') {
       const pl = places.find(q => q.id === s.go);
       if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, stepMinutes(s, places)); if (!ok.ok) return { ok: false, reason: ok.reason }; }   // 0.37.2: the dark rule, when the walk starts (0.37.8: no walk without light)
-      return yield* goTo(pl);
+      return giveUp(pl, yield* goTo(pl));
     }
     if (k === 'wander') { const ok = walkOk(null, s.minutes); if (!ok.ok) return { ok: false, reason: ok.reason }; return yield* wander(s.wander, s.minutes); }
     if (k === 'do') return s.do === 'fish' ? yield* fishFor(s.minutes) : yield* doAction(s.do);
