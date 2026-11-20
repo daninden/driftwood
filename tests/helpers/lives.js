@@ -14,7 +14,7 @@ export const LIVES = [{ seed: 1337, know: true }, { seed: 2024, know: true }, { 
 const STUCK = /got stuck on the way|took far too long/;
 
 export function runLife(world, spawn, { days = 10, know = true, dt = 0.1 } = {}) {
-  const game = createGame(world, spawn, {});
+  const game = createGame(world, spawn, {});   // 0.42.0 "Wet": he starts soaked, as in a new game
   if (know) walkFirstDay(world, game, spawn);
   game.known.visit(spawn.x, spawn.z);
   const r = { day: 0, days, errors: [], maxThirst: 0, maxHunger: 0, collapses: 0, sleeps: 0, stuck: 0, steps: 0, failed: 0, plans: 0 };

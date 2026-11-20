@@ -6,7 +6,7 @@
  * Exports:
  *   whoName(name) -> string            the name the player gave, made safe for a system text (game/castaway cleanName; quotes, braces, backticks, backslashes and angle brackets dropped), or ''
  *   hhmm(time) -> 'HH:MM'              a time of day 0..1 as the island's clock
- *   snapshotOf(game, camp?) -> state   a plain description of the situation: { day, time, raining, daylight (hours to dusk, 0 at night), thirst, hunger, awake, carries, home (per part in %),
+ *   snapshotOf(game, camp?) -> state   a plain description of the situation: { day, time, raining, daylight (hours to dusk, 0 at night), thirst, hunger, wet (0.42.0: 0 dry .. 1 soaked), awake, carries, home (per part in %),
  *                                      tide (tideNow), strip (camp.stripWood: wet driftwood he knows on the tide strip), fromHome (metres from his home, game/camp), camp (game/camp camp()) }
  *                                      (fromHome and camp are for the logbook; the request does not tell them: every fire and lean-to is on the menu)
  *   stateText(state, { body, fire }?) -> string   the state as lines of text (`body`: the thirst, hunger and awake lines of ai/actPrompt; `fire`: his fires, after the home line)
@@ -55,7 +55,7 @@ export function snapshotOf(game, camp = null) {
   const fromHome = n(() => { const h = c.home(), p = g.player; return h ? Math.hypot(p.x - h.x, p.z - h.z) : null; }, null);
   return {
     day: clock.day == null ? 0 : clock.day, time: clock.time == null ? 0 : clock.time, raining: n(() => g.rain, 0) > 0.05, daylight, fromHome,
-    thirst: n(() => g.thirst.days), hunger: n(() => g.hunger.days), awake: n(() => g.sleep.awake), carries, home,
+    thirst: n(() => g.thirst.days), hunger: n(() => g.hunger.days), wet: n(() => g.wet.level, 0), awake: n(() => g.sleep.awake), carries, home,
     tide: n(() => tideNow(clock.total), null), strip: n(() => c.stripWood(), null), camp: n(() => c.camp(), null),
   };
 }

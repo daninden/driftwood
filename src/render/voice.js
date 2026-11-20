@@ -37,6 +37,7 @@ export const PHRASES = {
   fibreIntent: ['I need some fibre for the fire.', 'I need fibre to start a fire.', 'A fire needs some fibre.', 'I should find some fibre.'],
   foodReserve: ['Not much food left for later.', 'I should keep some food for later.', 'I want something in reserve.', 'A nut for later would be good.'],
   wetwood: ['This wood needs a dry place.', 'This wood is too wet to burn.', 'It should dry somewhere higher.', 'The sea will take this wood.'],
+  wet: ["I'm still soaked.", 'My clothes are wet through.', 'I need to dry off.', 'A fire would dry me out.'],   // 0.42.0 "Wet": now and then while he is wet (main)
   explore: ['There may be something useful further on.', 'I wonder what is further along.', 'I should look around a little.', 'Perhaps something useful lies ahead.'],
   spearIntent: ['I need a spear to fish.', 'A spear might catch a fish.', 'I could make a spear.', 'I want to try fishing.'],
   fishIntent: ['There may be fish in the shallows.', 'I could try for a fish.', 'Perhaps a fish today.', 'A fish would be a good meal.'],

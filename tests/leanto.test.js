@@ -188,7 +188,7 @@ describe('the drawing of a lean-to', () => {
 });
 
 describe('sleeping under a lean-to', () => {
-  const shelterGame = (o = {}) => createGame(w, spawn, { sleep: { awake: 1.5 }, leantos: { list: [{ id: 0, x: spawn.x + 0.5, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 }, ...o });
+  const shelterGame = (o = {}) => createGame(w, spawn, { wet: { level: 0 }, sleep: { awake: 1.5 }, leantos: { list: [{ id: 0, x: spawn.x + 0.5, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 }, ...o });
   const sleepOut = g => { const i = makeInput(); let n = 0; run(g, i, 3); while ((g.sleep.asleep || g.sleep.lie > 0) && n++ < 6000) g.update(i, 1 / 30); return g; };
   it('counts only within a metre of the centre of a finished one', () => {
     const l = createLeantos(w, { list: [{ id: 0, x: 0, z: 0, heading: 0, progress: 1 }, { id: 1, x: 10, z: 0, heading: 0, progress: 0.5 }] });
@@ -199,7 +199,7 @@ describe('sleeping under a lean-to', () => {
     expect(g.sleep.slept * 24).toBeCloseTo(4, 0); expect(g.sleep.slept).toBeCloseTo(SHELTER_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.47); expect(g.sleep.rest()).toBeLessThan(0.55);
   });
   it('outside it the cold sleep is three hours, about 33 % rested from empty (it takes off half a day)', () => {
-    const g = sleepOut(createGame(w, spawn, { sleep: { awake: 1.5 }, leantos: { list: [{ id: 0, x: spawn.x + 3, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } }));
+    const g = sleepOut(createGame(w, spawn, { wet: { level: 0 }, sleep: { awake: 1.5 }, leantos: { list: [{ id: 0, x: spawn.x + 3, z: spawn.z, heading: 0, progress: 1 }], nextId: 1 } }));
     expect(g.sleep.slept).toBeCloseTo(COLD_SLEEP, 1); expect(g.sleep.rest()).toBeGreaterThan(0.32); expect(g.sleep.rest()).toBeLessThan(0.35);
   });
   it('a half-built one gives nothing', () => {

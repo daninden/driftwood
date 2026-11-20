@@ -61,15 +61,17 @@
  *     shelter true: he sleeps under a lean-to (see above); or { walls, bed, hut }: under one with those upgrades (0.27) or in its finished hut (0.33)
  *     thirst: { drain, faint } from game/thirst: drain (default 1) is how many
  *     times as fast the rest runs out while awake; faint true collapses him
- *     into sleep like exhaustion (on dry ground only), at any tiredness
+ *     into sleep like exhaustion (on dry ground only), at any tiredness; chill true (0.42.0 "Wet": wet, no fire
+ *     close by) makes a sleep rest him WET_REST (game/wet) as fast
  *   sleep.state() -> { awake, asleep, left, slept, nap }   plain, for saving (nap missing: not a nap)
  *   saved: such a state, to start from
  *
  * Pure; no DOM, no Three.js.
  *
- * Depends on: game/clock
+ * Depends on: game/clock, game/wet (WET_REST)
  */
 import { DAY_SECONDS } from './clock.js';
+import { WET_REST } from './wet.js';
 
 export const AWAKE_MAX = 1.5, TIRED_AT = 2 / 3, TIRED_SLOW = 0.60;
 export const SLEEP_DAYS = 8 / 24, SPEED = 20, EASE = 1.5, LIE = 1.1;
@@ -110,7 +112,7 @@ export function createSleep(saved) {
     warp = Math.min(1, Math.max(0, warp + (lying ? 1 : -1) * dt / EASE));
     const e = warp * warp * (3 - 2 * warp), gameDt = dt * (1 + (SPEED - 1) * e), days = gameDt / DAY_SECONDS;
     if (sleep.asleep) {
-      sleep.awake = Math.max(0, sleep.awake - days * REST_RATE * (warm ? (shelter ? SHELTER_REST : 1) : (shelter ? (shelter.hut ? HUT_REST : 1) : COLD_REST)) * (shelter && shelter.bed && !(shelter.hut && !warm) ? BED_REST : 1) * (sleep.nap ? NAP_REST : 1));
+      sleep.awake = Math.max(0, sleep.awake - days * REST_RATE * (warm ? (shelter ? SHELTER_REST : 1) : (shelter ? (shelter.hut ? HUT_REST : 1) : COLD_REST)) * (shelter && shelter.bed && !(shelter.hut && !warm) ? BED_REST : 1) * (sleep.nap ? NAP_REST : 1) * (thirst.chill ? WET_REST : 1));
       if (lying) { left -= days; sleep.slept += days; if (left <= 0 || (!warm && !(shelter && shelter.hut) && sleep.slept >= (shelter ? (shelter.walls ? WALLS_SLEEP : SHELTER_SLEEP) : COLD_SLEEP))) sleep.wake(); }
     } else {
       sleep.awake += days * (thirst.drain || 1);

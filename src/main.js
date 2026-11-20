@@ -41,6 +41,7 @@
  * next to it the drop #thirst (render/thirstMark, in #needs) shows how thirsty
  * he is and the half coconut #hunger (render/hungerMark) how hungry, and the row #carry (render/carryMark) what he carries loose (only shown).
  * Each time one of those marks changes, its drawing is shown for a moment above the castaway (render/gestureMark, 0.34 "Gestures"; fed after the frame is drawn, with the camera).
+ * 0.42.0 "Wet": while he is wet (game/wet above a third) a thought about it is offered every WET_EVERY real seconds (voice.announce('wet')).
  * All ink marks take their colour from `--ink` on <html>, which render/ink
  * turns pale at night (from sky.day).
  *
@@ -121,6 +122,7 @@ import { createDayLine, createWakeLine, WAKE_TIME } from './render/nameLines.js'
 import { createInk } from './render/ink.js';
 import { createSoundMark } from './render/soundMark.js';
 import { createVoice } from './render/voice.js';
+const WET_EVERY = 150;   // 0.42.0 "Wet": real seconds between his thoughts about being wet (at most; the voice's quiet rule may skip one)
 import { createSound } from './audio/sound.js';
 import { createMixer } from './audio/mix.js';
 import { createSoundSwitch, isSoundKey } from './audio/pref.js';
@@ -198,6 +200,7 @@ async function boot() {
   let name = saved && typeof saved.name === 'string' ? saved.name : '';   // set from the start screen below when asked
   const startDay = saved && Number.isInteger(saved.startDay) ? saved.startDay : (saved ? 0 : game.clock.day);   // day 1 is the day the game started
   let wasAsleep = game.sleep.asleep;
+  let wetSaid = performance.now() / 1000 - WET_EVERY / 2;   // 0.42.0 "Wet": when a wet line was last offered (real seconds)
   const carrySt = {};   // the counts of what he carries, filled in place each frame
   const show = info => {
     const now = performance.now() / 1000, day = dayNumber(game.clock.day, startDay);
@@ -206,6 +209,7 @@ async function boot() {
     who.update(dayLine(name, day), now);
     if (wasAsleep && !game.sleep.asleep) { wakes.show(wakeLine(name, day), now); voice.hold(now + WAKE_TIME); }   // any end of a sleep
     wasAsleep = game.sleep.asleep;
+    if (game.wet.level > 0.33 && !game.sleep.asleep && now - wetSaid > WET_EVERY) { wetSaid = now; voice.announce('wet', game.clock.time); }   // 0.42.0 "Wet": now and then a thought while he is wet
     wakes.update(now);
     return info;
   };

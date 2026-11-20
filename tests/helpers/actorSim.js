@@ -62,6 +62,7 @@ export function lifeChooser(game) {
       const k = first(m, 'coconut') || first(m, 'berries'); if (k && may(k)) return walk(k, [{ do: k.kind === 'coconut' ? 'husk' : 'berries' }]);
       if (!k && !night) { const o = out(); if (o) return o; }
     }
+    if (game.sleep.awake > 1.2 && has(m, 'sleep')) return [{ do: 'sleep' }];   // 0.42.0 "Wet": worn out (wet, his rest runs out faster), he lies down before he drops
     if (night) return has(m, 'sleep') ? [{ do: 'sleep' }] : [{ wait: 20 }];
     if (c.driftwood >= 2) return [{ lay: 'driftwood' }];
     const d = m.places.find(q => q.kind === 'driftwood' && /dry/.test(q.what));

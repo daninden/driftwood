@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.42.0 "Wet" — 2026-11-20
+
+Agreed with the user 2026-11-20 ("akkoord, bouw eerst 0.41.1 en daarna 0.42.0"): he was too set on building and should first make a fire and see to food. A real reason in the game, not advice: he washes ashore wet and has to dry.
+
+- **Soaked at landfall:** a new game starts with him soaked (game/wet, level 1). Rain wets him through in about 30 minutes unless he stands where his lean-to keeps wood dry; wading in the sea or a river soaks him in about 15.
+- **Drying:** by a burning fire or its glowing embers (within 3 m, `fire.warm`) in about 1 hour; by day in dry weather without a fire in about 5 hours; at night without a fire not at all.
+- **What it does:** while wet his rest runs out 1.5 times as fast (multiplied with thirst and hunger), and a sleep while wet without a fire rests him 75% as fast (game/sleep `chill`).
+- **The request:** a rule in the fixed part, and a line in NOW after hunger: soaked, wet or damp, and how long a fire and the sun need to dry him (`wetText`); "Wet: he is dry." when dry.
+- **On screen:** his shirt, shorts and hat are darker while wet (render/hero, up to 35%); now and then (every 150 real seconds at most, above a third wet) a thought: "I'm still soaked." and the like (render/voice `wet`). Nothing else.
+- **Tests:** `tests/wet.test.js`. Tests that measure rest or pace exactly start dry (`wet: { level: 0 }`). The ten-day lives start soaked; their fake chooser (`tests/helpers/actorSim` `lifeChooser`) now lies down when he is worn out (over 1.2 days awake), as he fell asleep where he stood once on island 2024.
+
 ## 0.41.1 "Straight" — 2026-11-20
 
 Agreed with the user 2026-11-20 after an AI log on 0.41.0: before any lean-to stood he gathered branches and fronds, laid them "at" a place for a home, and so blocked it (since 0.40.1 a blocked place leaves the menu); he moved his piles from place to place six times in the first morning. The user: what he picks up he builds in at once; only firewood is gathered.

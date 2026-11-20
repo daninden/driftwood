@@ -73,7 +73,7 @@ function findSpot() {
 // a game with the player standing beside the finished home (in front of its opening), arms empty
 function homeGame(extra = {}, o = {}) {
   const s = findSpot(), l = { ...s, ...extra }, px = s.x + Math.sin(s.heading) * 2.0, pz = s.z + Math.cos(s.heading) * 2.0;
-  const g = createGame(w, { x: px, z: pz, y: w.H(px, pz) }, { sleep: { awake: 0.1 }, ...o, leantos: o.leantos || home(l.x, l.z, l.heading, extra.hut ? { hut: extra.hut } : {}) });
+  const g = createGame(w, { x: px, z: pz, y: w.H(px, pz) }, { wet: { level: 0 }, sleep: { awake: 0.1 }, ...o, leantos: o.leantos || home(l.x, l.z, l.heading, extra.hut ? { hut: extra.hut } : {}) });
   return { g, input: makeInput({ yaw: 0.8 }), l: g.leantos.list[0] };
 }
 const kneel = (g, input) => { for (let t = 0; t < 8 && !g.player.work; t += 1 / 30) g.update(input, 1 / 30); };   // wait until he has walked to his spot and kneels

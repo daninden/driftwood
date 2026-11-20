@@ -42,6 +42,7 @@
  *
  * SIL_OPACITY   opacity of the silhouette (0..1)
  * SIT, sitEase(f), sitPose(f)   the sitting pose at full, its easing and the angles at a transition value f (pure; tests/hero.test.js)
+ * 0.42.0 "Wet": while he is wet (player.wet, game/wet) his shirt, shorts and hat are darker, up to WET_DARK when soaked.
  * createHero(scene) -> { group, update(player, wadeDepth, load?), flame(out) }
  *   update copies position and heading from the player state
  *   (game/movement) and animates the walk cycle from player.phase. In water
@@ -74,6 +75,7 @@ export const SIL_OPACITY = 0.8;
 export const HANG = 0.3;   // his head hangs forward this much (radians) when he is about to collapse from thirst
 export const SIT = { hip: -2.0, knee: 1.05, lean: 0.14, drop: 0.25, arm: -0.95, head: -0.2, spread: 0.16 };   // 0.29.2: the sitting pose at full: thighs forward and up (hip), shins back down (knee), body forward over the knees, seat down on the ground (metres), arms forward, head up to look out, knees a little apart (spread)
 export const LEAN = 0.10;   // forward lean per carried piece, radians (three pieces: about 17 degrees), from the hips
+const WET_DARK = 0.35;   // 0.42.0 "Wet": soaked, his shirt, shorts and hat are this much darker
 const silMat = new THREE.MeshBasicMaterial({
   color: HERO.silhouette, opacity: SIL_OPACITY, depthFunc: THREE.GreaterDepth, depthWrite: false,
   blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
@@ -92,6 +94,12 @@ export function sitPose(f) {
 export function createHero(scene) {
   const group = new THREE.Group(), body = new THREE.Group(); group.add(body); body.scale.setScalar(0.62);
   const shirt = toon(HERO.shirt), shorts = toon(HERO.shorts), skin = toon(HERO.skin), hair = toon(HERO.hair), hatM = toon(HERO.hat);
+  const dry = [shirt, shorts, hatM].map(m => [m, m.color.clone()]);   // 0.42.0 "Wet": the dry colours, darkened while he is wet
+  let wetShown = -1;
+  function setWet(v) {
+    const q = Math.round(Math.min(1, Math.max(0, +v || 0)) * 20) / 20; if (q === wetShown) return; wetShown = q;
+    for (const [m, c] of dry) m.color.copy(c).multiplyScalar(1 - WET_DARK * q);
+  }
   const part = (parent, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); const o = new THREE.Mesh(geo, outlineMat); o.scale.setScalar(1.12); m.add(o); return m; };
   const box = (parent, w, h, d, mat, x, y, z) => part(parent, new THREE.BoxGeometry(w, h, d), mat, x, y, z);
   const HIP = 0.48, upper = new THREE.Group(); upper.position.y = HIP; body.add(upper);   // bends at the hips
@@ -198,7 +206,7 @@ export function createHero(scene) {
   }
 
   function update(p, wade = 0, load = [], log = null) {
-    setLoad(load); setLog(log); clock += 1 / 60;
+    setLoad(load); setLog(log); setWet(p.wet); clock += 1 / 60;
     const wk = p.work, kneel = wk && wk.kind !== 'fish' && wk.kind !== 'fell' ? Math.min(1, wk.f * (wk.kind === 'drill' || wk.kind === 'build' ? 14 : wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip' || wk.kind === 'dig' ? 4 : wk.kind === 'roast' ? 6 : 2.5) / 0.4) : 0, drilling = !!wk && wk.kind === 'drill', drinking = !!wk && (wk.kind === 'drink' || wk.kind === 'fill' || wk.kind === 'sip');
     const holding = !!p.spear && !(p.lie > 0), fishing = holding && !!wk && wk.kind === 'fish';   // 0.30.17: he stands and peers, then strikes in the last third
     const holdingAxe = !!p.axe && !(p.lie > 0) && !holding, chopping = holdingAxe && !!wk && wk.kind === 'fell', shoulder = !!log && !(p.lie > 0);   // 0.31: the axe in his hand, chopping, a log on his shoulder

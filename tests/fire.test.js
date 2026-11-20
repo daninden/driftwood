@@ -270,7 +270,7 @@ describe('a burning fire', () => {
 describe('sleeping by the fire', () => {
   const sleepFor = (g, s) => { g.sleep.start(); run(g, makeInput(), s); };
   it('is short and cold without a fire: he wakes after three hours, a third rested', () => {
-    const g = createGame(w, spawn, { sleep: { awake: 1.45 } });
+    const g = createGame(w, spawn, { wet: { level: 0 }, sleep: { awake: 1.45 } });
     sleepFor(g, 40);
     expect(g.sleep.asleep).toBe(false);
     expect(g.sleep.slept).toBeGreaterThan(COLD_SLEEP * 0.95); expect(g.sleep.slept).toBeLessThan(COLD_SLEEP * 1.2);
