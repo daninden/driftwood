@@ -46,12 +46,12 @@ describe('the menu says what lies in his stone ring', () => {
     const pl = m.places.find(q => q.kind === 'pile');
     expect(pl.what).toMatch(/^his pile of 6 dry driftwood.* in the stone ring of leanto1: ready to light where it lies/);
     const lt = m.places.find(q => q.kind === 'leanto');
-    expect(lt.what).toContain(`its stone ring holds his pile ${pl.id} (6 pieces, ready to light)`);
+    expect(lt.what).toContain(`its stone ring holds his pile ${pl.id} (6 pieces of firewood, ready to light)`);   // 0.43.2: of firewood
   });
   it('a pile of 3 in the ring says it needs 4; an empty ring says it is empty', () => {
     const { g } = scene({ piles: [c => pile(3, c.x, c.z)] });
     const m = createActor(w, g, { chooser: () => null }).menu();
-    expect(m.places.find(q => q.kind === 'pile').what).toContain('in the stone ring of leanto1: a fire needs at least 4 pieces (lay more on it here)');
+    expect(m.places.find(q => q.kind === 'pile').what).toContain('in the stone ring of leanto1: a fire needs at least 4 pieces in the ring (lay more here)');   // 0.43.2 "One fire"
     const e = scene().g, m2 = createActor(w, e, { chooser: () => null }).menu();
     expect(m2.places.find(q => q.kind === 'leanto').what).toContain('its stone ring is empty');
   });

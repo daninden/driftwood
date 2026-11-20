@@ -194,6 +194,11 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### One fire (0.43.2)
+
+- `game/game` `hearthOf(pile)`: in a finished stone ring (`leantos.ringMiddle`) every pile of driftwood or branches within `RING_R` of the middle; `lightable`, `arrive` ('light', 'kindle'), `finish` (the drill) and `lackAt` count their logs together, and a fire lit there takes all of them and stands at the ring's middle. Outside a ring: the pile alone, where it lies.
+- `game/actor` `ringPiles`, `ringWood`, `ringDry`: the menu's piles in the ring count the whole ring (`fuel`, `inRing`), the lean-to names its ring's piles; `ai/actPrompt` `kindlingText` says "in the stone ring, with all the firewood there"; the fire rule says it counts together. `game/actions` `DO.buildIn` no longer names the ring (the model built firewood into the lean-to "straight into the ring"). `ai/config` `AI_MODELS`: `gemini-3.1-flash-lite` first.
+
 ### Hearth (0.43.0)
 
 - **The order of a home** (`game/leanto`): `stageOf(l)` is `'ring'` until the ring's 6 stones are in (`PARTS.ring`, was 8), then `'leanto'` until its 15 parts are in, then `null`; `pieceFor`, `build` and `game/game` (`siteIn`, `arrive`, `moreWork`, `finish`) follow it, so a piece goes only into the stage whose turn it is. `UP_ORDER` is `walls`, `bed`; the ring's progress stays in `l.up.ring` (`HOME_PARTS`: the keys of `l.up`, also for saving and the drawing's key). `hutReady` needs the ring, the lean-to, the walls and the bed.

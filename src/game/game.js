@@ -184,6 +184,8 @@
  * 0.33.1 "Hearth": the middle of a finished stone ring takes a fuel pile despite the keep-free apron of the lean-to or hut (tested against the pile's own circle only) and CAMP_GAP (`blockedAt`: otherwise only a solid that really overlaps refuses it).
  * 0.37.5 "Ways": `actionAt` keeps 'laySpear' among the arc's options whenever it is offered (three nearer small things pushed it out, against the design).
  * 0.33.4 "One hearth": the no-fire zone round a finished stone ring is RING_NOFIRE (8 m, was 3.5) from the ring's middle, and 'feed' is not offered for a fire that lies in it (leantos.noFire): a fire beside the ring that burned before the ring was built is not fed and burns out, for the player and for Dave; the fire in the ring itself (and any fire away from the ring) is fed as before. Torches are unchanged (a torch can still be taken from such a fire while it burns).
+ * 0.43.2 "One fire": in a finished stone ring all the firewood is one fire (`hearthOf`): every pile of driftwood or branches within RING_R of the ring's middle counts towards FIRE_MIN together, and
+ *   lighting one of them (drill or torch) burns them all as one fire in the ring's middle. Outside a ring a pile is a fire of its own, where it lies.
  * 0.31.1 "Milk": 'light' (and 'kindle') is not offered for a pile that lies more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring (leantos.noFire): beside a ring a fire is lit only in the ring itself; a pile elsewhere is unaffected. It is not started either when the pile moved there meanwhile (no fibre is used).
  * 0.31 "Axe" (game/axe, game/felled, game/logs): small kinds `makeAxe` (no axe exists, no spear or torch in hand, exactly one branch under his arm and nothing else, a loose stone within REACH or a pile of stones within BESIDE, a tuft of fibre,
  *   dry ground: work kind 'makeAxe', AXE MAKE_TIME of kneeling; the branch, the stone and the tuft are all used up; after 'lay', before `makeSpear`, so the arc) and `fell` ({ kind: 'fell', tree } with the nearest standing trunk of game/felled `nearest` within FELL_REACH (0.7 m from its edge), the axe made and both hands free (`canFell`: no spear, torch, stones or log), dry ground; nearest-wins with the other small actions, so it is
@@ -216,7 +218,7 @@ import { createFronds } from './fronds.js';
 import { createStones } from './stones.js';
 import { createGround, findSpot, MOVE_FAR } from './ground.js';
 import { createForage, BERRIES, BANANAS, BERRY_FOOD, BANANA_FOOD } from './forage.js';
-import { createLeantos, keepFree, built, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, RING_REACH, stageOf, ringCentre, PIECE_TIME, HUT_PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH, hutReady, hutDone, hutBegun, hutKind, inHutBox, HUT, HUT_REACH } from './leanto.js';
+import { createLeantos, keepFree, built, nextKind, siteAt, pieceCost, PARTS, UP_ORDER, UP_REACH, RING_REACH, RING_R, stageOf, ringCentre, PIECE_TIME, HUT_PIECE_TIME, SITE_APART, BUILD_COST, REACH as LEANTO_REACH, hutReady, hutDone, hutBegun, hutKind, inHutBox, HUT, HUT_REACH } from './leanto.js';
 import { YAW } from '../core/view.js';
 import { createThirst } from './thirst.js';
 import { createHunger } from './hunger.js';
@@ -373,18 +375,28 @@ export function createGame(world, spawn, opts = {}) {
   const plantBeside = () => { const s = plantBesideSpot(); return !!s && fire.plant(s.x, s.z); };
 
   const fuelPile = (px, pz) => wood.findAll(px, pz, BESIDE, 'pile').find(c => c.pile.kind === 'driftwood' || c.pile.kind === 'branch') || null;   // 0.31: a pile of logs is timber for later: never lit, never counted for lack; 0.38.2 "True": only driftwood and branches burn (a pile of stones or fronds was lit)
+  /** 0.43.2 "One fire": in a finished stone ring all the firewood is one fire: every pile of driftwood or branches within the ring (leantos.ringMiddle) counts together and burns together,
+   *  in the ring's middle. hearthOf(pile) -> { piles, logs, x, z } (outside a ring: that pile alone, where it lies). */
+  const isFuel = q => q.logs.length && (q.kind === 'driftwood' || q.kind === 'branch');
+  function hearthOf(pile) {
+    const m = leantos.ringMiddle(pile.x, pile.z);
+    if (!m) return { piles: [pile], logs: pile.logs, x: pile.x, z: pile.z };
+    const piles = wood.piles.filter(q => isFuel(q) && Math.hypot(q.x - m.x, q.z - m.z) <= RING_R);
+    if (!piles.includes(pile)) piles.push(pile);
+    return { piles, logs: piles.flatMap(q => q.logs), x: m.x, z: m.z };
+  }
   function lightable(px, pz) {   // the pile beside him he could light now, with the torch or with fibre
     if (wet(hereAt(px, pz)) || (!fire.torch && !fibre.carried)) return null;
     const p = fuelPile(px, pz);
     if (p && leantos.noFire(p.pile.x, p.pile.z)) return null;   // 0.31.1: beside a stone ring a fire is lit only in the ring itself
-    return p && p.pile.logs.length >= FIRE_MIN ? { kind: 'light', pile: p.pile, torch: !!fire.torch } : null;
+    return p && hearthOf(p.pile).logs.length >= FIRE_MIN ? { kind: 'light', pile: p.pile, torch: !!fire.torch } : null;   // 0.43.2: in the ring, all its firewood counts
   }
   /** 0.30.20 "Words": what is missing for an action that is almost possible at (px, pz) (pure, game/lack): 'needSpear', 'spearAway', 'needFibre', 'needMoreWood' or null. */
   function lackAt(px = player.x, pz = player.z) {
     if (sleep.asleep || sleep.lie > 0 || work) return null;
     const t = hereAt(px, pz), pile = fuelPile(px, pz);
     if (!fishableAt(t) && pile && (siteIn(px, pz) || siteHere(px, pz))) return null;   // a piece could be built in here: that is the offer
-    return lackOf({ fishable: fishableAt(t) && !fish.full(), hand: spear.hand, spear: spear.has(), pileLogs: pile ? pile.pile.logs.length : null, dry: !wet(t), fibre: fibre.carried > 0, torch: !!fire.torch, load: wood.load() });
+    return lackOf({ fishable: fishableAt(t) && !fish.full(), hand: spear.hand, spear: spear.has(), pileLogs: pile ? hearthOf(pile.pile).logs.length : null, dry: !wet(t), fibre: fibre.carried > 0, torch: !!fire.torch, load: wood.load() });
   }
   // 0.32 "Piece by piece": a site is built piece by piece with what he carries (game/leanto). The kinds he has: driftwood, branches and fronds under his arm, stones in his hands.
   let viewYaw = YAW;   // the camera's yaw at the last update (input.yaw): the way the open side of a new lean-to faces; the mind may write it before it presses
@@ -728,10 +740,11 @@ export function createGame(world, spawn, opts = {}) {
       return;
     }
     if (a.kind === 'kindle') {
-      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && !leantos.noFire(a.pile.x, a.pile.z) && !wet(here()) && fire.kindle(a.pile.x, a.pile.z, a.pile.logs, meanDry(a.pile.logs), clock.total)) { wood.takePile(a.pile); notifyAction('kindle'); }
+      const h = wood.piles.includes(a.pile) ? hearthOf(a.pile) : null;   // 0.43.2 "One fire": every pile in the ring, lit in its middle
+      if (h && h.logs.length >= FIRE_MIN && !leantos.noFire(a.pile.x, a.pile.z) && !wet(here()) && fire.kindle(h.x, h.z, h.logs, meanDry(h.logs), clock.total)) { for (const q of h.piles) wood.takePile(q); notifyAction('kindle'); }
       stoop();
     } else if (a.kind === 'light') {
-      if (wood.piles.includes(a.pile) && a.pile.logs.length >= FIRE_MIN && fibre.carried && !leantos.noFire(a.pile.x, a.pile.z) && !wet(here())) { work = { kind: 'drill', t: 0, dur: DRILL_TIME, thing: a.pile }; notifyAction('light'); }
+      if (wood.piles.includes(a.pile) && hearthOf(a.pile).logs.length >= FIRE_MIN && fibre.carried && !leantos.noFire(a.pile.x, a.pile.z) && !wet(here())) { work = { kind: 'drill', t: 0, dur: DRILL_TIME, thing: a.pile }; notifyAction('light'); }
     }
     if (work) face(a);
   }
@@ -784,8 +797,9 @@ export function createGame(world, spawn, opts = {}) {
     if (wk.kind === 'make') { if (makeable(player.x, player.z) && wood.giveOne(l => !!l.branch)) spear.make(); return; }   // the branch is used up, the stone stays
     if (wk.kind === 'fish') { if (spear.hand && fishableAt(here())) fish.fishTry(clock.total); return; }
     const pile = wk.thing; if (!wood.piles.includes(pile) || leantos.noFire(pile.x, pile.z) || !fibre.use()) return;
-    const lit = fire.attempt(pile.x, pile.z, pile.logs, meanDry(pile.logs), sleep.tired(), clock.total);
-    if (lit) wood.takePile(pile);
+    const h = hearthOf(pile);   // 0.43.2 "One fire": in the ring all its firewood goes into one fire, in the ring's middle
+    const lit = fire.attempt(h.x, h.z, h.logs, meanDry(h.logs), sleep.tired(), clock.total);
+    if (lit) for (const q of h.piles) wood.takePile(q);
   }
 
   /** 0.31 "Axe": the tree falls, away from him. Its trunk becomes a log (a giant gives 2 or 3 sections), its crown leaves loose branches (a palm: fronds and nuts), all lying where game/felled `plan` puts them. */

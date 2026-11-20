@@ -4,7 +4,7 @@
  *
  * AI_URL          the chat endpoint (OpenAI-compatible, Google AI Studio)
  * AI_MODELS_URL   the list of models the key can use (the start screen checks a key with it; the panel's "list models" button)
- * AI_MODELS       the models in order of preference (two free Gemini models, then Gemma 4; ai/client folds the system message into the first user message for 'gemma-' ids); a request goes to the first whose budget allows and that is not paused
+ * AI_MODELS       the models in order of preference (two free Gemini models, 3.1 first since 0.43.2 for its speed, then Gemma 4; ai/client folds the system message into the first user message for 'gemma-' ids); a request goes to the first whose budget allows and that is not paused
  * AI_BUDGET       the budget PER MODEL { perMin, perDay }, a little under Google's free-tier limits as AI Studio shows them (0.36.4: gemini-3.5-flash-lite and gemini-3.1-flash-lite 14 a minute and 480 a day, gemma-4-31b-it 28 a minute and 14,000 a day). The day is the Pacific-time day, as Google counts it
  * AI_BUDGET_DEFAULT   the budget of a model that is not in AI_BUDGET (tests, a changed list)
  * AI_TIMEOUT      ms before a request is given up
@@ -19,7 +19,7 @@
  */
 export const AI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 export const AI_MODELS_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/models';
-export const AI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it'];
+export const AI_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemma-4-31b-it'];   // 0.43.2 (the user, 2026-11-20): 3.1 first: it answered in 1 to 4 s where 3.5 took 7 to 11
 export const AI_BUDGET = {
   'gemini-3.5-flash-lite': { perMin: 14, perDay: 480 },   // Google's free tier: 15 a minute, 500 a day
   'gemini-3.1-flash-lite': { perMin: 14, perDay: 480 },   // the same

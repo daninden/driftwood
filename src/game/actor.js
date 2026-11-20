@@ -84,6 +84,8 @@
  * (`hutTreeBlocks`); a refused "use" says why (`useWhy`: lying down, busy, a torch, water, nothing of that kind carried, no fire for a crab), after waiting up to 20 s for a bend to end;
  * a pile of one piece is "1 log", "1 branch".
  * 0.40.0 "Belt": a felled log says whether it is still green or dry for the hut (game/logs `seasoned`), a log pile how many of its logs are; a refused hut part with a green log says when it is dry.
+ * 0.43.2 "One fire": a pile in a finished stone ring counts all the firewood in the ring (`ringPiles`, `ringWood`; its `fuel` is the ring's dry pieces and it is marked `inRing`), and the lean-to says
+ * which piles its ring holds and how many pieces they make together.
  * 0.40.4 "Ring": a pile of driftwood or branches on the menu says when it lies in a lean-to's finished stone ring ("in the stone ring of leanto1: ready to light where it lies",
  * or how many pieces it still needs) or within RING_NOFIRE of it but not in it (it cannot be lit); a lean-to with a finished ring says what the ring holds (his fire, a pile by its id,
  * or nothing); a refused "light" says why (`lightWhy`: water, no fibre or torch, no pile beside him (and which pile lies in the ring), a pile beside the ring, a pile under FIRE_MIN
@@ -233,19 +235,22 @@ export function createActor(world, game, opts = {}) {
   // ---------- 0.40.4 "Ring": what lies in his stone ring, and the piles beside it that cannot be lit ----------
   const fuelKind = q => q.kind === 'driftwood' || q.kind === 'branch';
   const ringOf = (x, z) => game.leantos.list.find(l => game.leantos.has(l, 'ring') && Math.hypot(ringCentre(l).x - x, ringCentre(l).z - z) <= RING_R) || null;   // the lean-to whose finished ring (x, z) lies in
-  const ringPile = l => { const c = ringCentre(l); return W.piles.find(q => q.logs.length && fuelKind(q) && Math.hypot(q.x - c.x, q.z - c.z) <= RING_R) || null; };
+  const ringPiles = l => { const c = ringCentre(l); return W.piles.filter(q => q.logs.length && fuelKind(q) && Math.hypot(q.x - c.x, q.z - c.z) <= RING_R); };   // 0.43.2 "One fire": every pile of firewood in the ring
+  const ringPile = l => ringPiles(l)[0] || null;
+  const ringWood = l => ringPiles(l).reduce((n, q) => n + q.logs.length, 0);   // 0.43.2: all the firewood in the ring counts together and burns together
+  const ringDry = l => ringPiles(l).reduce((n, q) => n + (q.kind === 'branch' ? q.logs.length : q.logs.filter(x => !wet(x)).length), 0);
   const ringNote = q => {   // a pile on the menu: in the ring (ready to light, or how many it still needs), or beside the ring where no fire can be lit
     if (!fuelKind(q)) return '';
     const l = ringOf(q.x, q.z);
-    if (l) return ` in the stone ring of ${placeId('leanto', l)}: ${q.logs.length >= FIRE_MIN ? 'ready to light where it lies ("light" beside it; taking wood from it makes it too small)' : `a fire needs at least ${FIRE_MIN} pieces (lay more on it here)`}`;
+    if (l) { const n = ringWood(l), all = ringPiles(l).length > 1 ? ` (all the firewood in the ring counts together: ${n} pieces)` : ''; return ` in the stone ring of ${placeId('leanto', l)}${all}: ${n >= FIRE_MIN ? 'ready to light where it lies ("light" beside it; all the firewood in the ring burns as one fire in its middle; taking wood from it makes it too small)' : `a fire needs at least ${FIRE_MIN} pieces in the ring (lay more here)`}`; }   // 0.43.2 "One fire"
     return game.leantos.noFire(q.x, q.z) ? ` (within ${RING_NOFIRE} m of his stone ring but not in it: it cannot be lit; only the fire in the ring)` : '';
   };
   const ringHolds = l => {   // a lean-to with a finished ring: what the ring holds now
     if (!game.leantos.has(l, 'ring')) return '';
     const c = ringCentre(l), f = game.fire.fires.find(q => Math.hypot(q.x - c.x, q.z - c.z) <= RING_R && (game.fire.strength(q) > 0 || q.embers > 0.005));
     if (f) return `; his fire is in its stone ring (${game.fire.strength(f) > 0 ? 'burning' : 'embers'})`;
-    const q = ringPile(l);
-    return q ? `; its stone ring holds his pile ${placeId('pile', q)} (${q.logs.length} piece${q.logs.length === 1 ? '' : 's'}${q.logs.length >= FIRE_MIN ? ', ready to light' : `, a fire needs ${FIRE_MIN}`})` : `; its stone ring is empty (wood laid down in it lies in its middle: ${FIRE_MIN} pieces of dry driftwood or branches there, then "light", make a fire in it)`;
+    const ps = ringPiles(l), n = ringWood(l);   // 0.43.2 "One fire": all its piles of firewood together
+    return ps.length ? `; its stone ring holds his ${ps.length === 1 ? `pile ${placeId('pile', ps[0])}` : `piles ${ps.map(q => placeId('pile', q)).join(' and ')}`} (${n} piece${n === 1 ? '' : 's'} of firewood${n >= FIRE_MIN ? ', ready to light' : `, a fire needs ${FIRE_MIN}`})` : `; its stone ring is empty (wood laid down in it lies in its middle: ${FIRE_MIN} pieces of dry driftwood or branches there, then "light", make a fire in it)`;
   };
   // ---------- 0.39.0 "Landfall": the places for a home he has seen (until he has begun one) ----------
   const HOME_GRID = 6, HOME_APART = 15, HOME_R = 120;
@@ -348,7 +353,7 @@ export function createActor(world, game, opts = {}) {
         const mins = walkMinutes(len / paceNow());   // 0.37.8: at the pace he walks with now (his load, tired, thirsty, hungry), as game/game
         const notNow = takeable ? null : holdWhy(kind, c.ref);   // 0.40.0: why what lies there cannot be taken up with what he holds now
         places.push({ id: placeId(kind, c.ref), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
-          minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers, ...(notNow ? { notNow } : {}), ...(kind === 'pile' ? { fuel: c.ref.kind === 'branch' ? c.ref.logs.length : c.ref.kind === 'driftwood' ? c.ref.logs.filter(l => !wet(l)).length : 0 } : {}) });   // 0.42.1 "Kindling": a pile's dry pieces that burn (ai/actPrompt `fireText`)
+          minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers, ...(notNow ? { notNow } : {}), ...(kind === 'pile' ? { ...(fuelKind(c.ref) && ringOf(c.ref.x, c.ref.z) ? { inRing: true } : {}), fuel: fuelKind(c.ref) && ringOf(c.ref.x, c.ref.z) ? ringDry(ringOf(c.ref.x, c.ref.z)) : c.ref.kind === 'branch' ? c.ref.logs.length : c.ref.kind === 'driftwood' ? c.ref.logs.filter(l => !wet(l)).length : 0 } : {})   /* 0.43.2: a pile in the ring: the dry firewood of the whole ring */ });   // 0.42.1 "Kindling": a pile's dry pieces that burn (ai/actPrompt `fireText`)
       }
     }
     places.sort((a, b) => a.dist - b.dist);

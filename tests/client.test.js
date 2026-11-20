@@ -171,16 +171,16 @@ describe('0.36.4 "Hindsight": the models, a budget per model, Gemma', () => {
   const body = x => JSON.parse(x.init.body);
 
   it('the list is two Gemini models, then Gemma 4, each with its own budget just under Google\'s free tier', () => {
-    expect(AI_MODELS).toEqual(['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it']);
+    expect(AI_MODELS).toEqual(['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemma-4-31b-it']);   // 0.43.2: 3.1 first (faster)
     expect(AI_BUDGET).toEqual({ 'gemini-3.5-flash-lite': { perMin: 14, perDay: 480 }, 'gemini-3.1-flash-lite': { perMin: 14, perDay: 480 }, 'gemma-4-31b-it': { perMin: 28, perDay: 14000 } });
   });
   it('the status gives every model its own budget', () => {
     const { c } = make();
-    expect(c.status().models.map(m => [m.model, m.perMin, m.perDay])).toEqual([['gemini-3.5-flash-lite', 14, 480], ['gemini-3.1-flash-lite', 14, 480], ['gemma-4-31b-it', 28, 14000]]);
+    expect(c.status().models.map(m => [m.model, m.perMin, m.perDay])).toEqual([['gemini-3.1-flash-lite', 14, 480], ['gemini-3.5-flash-lite', 14, 480], ['gemma-4-31b-it', 28, 14000]]);
   });
   it('a model whose day is spent is passed over for the next one, which has its own count', async () => {
-    const { c, calls } = make({ [KEY_NAME]: KEY, [COUNT_NAME + '.gemini-3.5-flash-lite']: JSON.stringify({ day: pacificDay(T0), n: 480 }) });
-    await c.send([]); expect(body(calls[0]).model).toBe('gemini-3.1-flash-lite');
+    const { c, calls } = make({ [KEY_NAME]: KEY, [COUNT_NAME + '.gemini-3.1-flash-lite']: JSON.stringify({ day: pacificDay(T0), n: 480 }) });
+    await c.send([]); expect(body(calls[0]).model).toBe('gemini-3.5-flash-lite');
     expect(c.status().models.map(m => m.today)).toEqual([480, 1, 0]);
   });
   it('when both Gemini models are spent for the day the request goes to Gemma', async () => {

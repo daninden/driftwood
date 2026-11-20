@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.43.2 "One fire" — 2026-11-20
+
+Agreed with the user 2026-11-20 ("akkoord, bouw beide, en zet 3.1 als eerste model") after two AI logs on 0.43.0 (gemini flash-lite): in one he lit a fire beside the stones of his ring, in the other he built his firewood into the lean-to.
+
+- **In the ring all the firewood is one fire** (`game/game` `hearthOf`): driftwood and branches lie on piles of their own, so the ring may hold two; every pile of firewood within the ring (1 m of its middle) counts together towards FIRE_MIN, and lighting one (drill or torch) burns them all as one fire in the ring's middle. *Why:* one driftwood lay in the ring's middle and three branches beside it, still within the ring; only the branches were lit and the fire burned beside the stones. Outside a ring a pile is a fire of its own, as before.
+- **The menu:** a pile in the ring says the firewood of the whole ring counts together and how many pieces that is, its `fuel` (for the fire line) is the ring's dry pieces; the lean-to names all the piles its ring holds; the fire rule says so.
+- **"buildIn" no longer names the ring:** "build the pieces he carries into the part of his home being built (the menu says what his home still needs) …; firewood is not built in: it is laid down in the ring". *Why:* with the old words ("into his home's stone ring or, once the ring is finished, its lean-to") the model built two pieces of firewood "straight into the ring", and they went into the lean-to.
+- **`gemini-3.1-flash-lite` is the first model** (then `gemini-3.5-flash-lite`, then Gemma 4): in both logs 3.1 answered in 1 to 4 s, 3.5 in 7 to 11 s.
+- **Tests:** `tests/hearthFirst.test.js`, `tests/ring.test.js`, `tests/client.test.js`.
+- **Next:** 0.43.3 "Mouth".
+
 ## 0.43.1 "Loose" — 2026-11-20
 
 Agreed with the user 2026-11-20 ("alleen de begrenzing verwijderen, 12 stappen en 80 minuten mag wel mee in het verzoek, maar enig plan wat toch langer is niet negeren"): a plan over 80 minutes or over 12 steps was refused and cost another request while the game stood still (three times in a row at 19:10 in an AI log on 0.42.1).

@@ -12,6 +12,7 @@ import { createActor } from '../src/game/actor.js';
 import { createLeantos, stageOf, ringDone, hutReady, PARTS, PIECE_TIME, RING_REACH, ringCentre, standFor } from '../src/game/leanto.js';
 import { FIRE_MIN, BURN, RING_BURN } from '../src/game/fire.js';
 import { stonesOfTile } from '../src/game/stones.js';
+import { branchesOfTile } from '../src/game/branches.js';
 import { actFixed } from '../src/ai/actPrompt.js';
 import { stateText } from '../src/ai/prompt.js';
 import { DO } from '../src/game/actions.js';
@@ -19,12 +20,13 @@ import { walkFirstDay } from './helpers/scene.js';
 
 if (!globalThis.window) globalThis.window = new EventTarget();
 
-let w, spawn, drift, stones;
+let w, spawn, drift, stones, branches;
 beforeAll(async () => {
   w = await generateWorld(1337); spawn = startSpot(w);
   const d = o => Math.hypot(o.x - spawn.x, o.z - spawn.z), by = (a, b) => d(a) - d(b);
   drift = w.tiles.flatMap(t => t.drift).sort(by);
   stones = w.tiles.flatMap(t => stonesOfTile(w, t)).sort(by);
+  branches = w.tiles.flatMap(t => t.trees.length ? branchesOfTile(w, t) : []).sort(by);
 }, 120000);
 
 const makeInput = (o = {}) => {
@@ -118,5 +120,42 @@ describe('the request', () => {
     expect(stateText({ day: 1, time: 0.4, home: { ring: 50, leanto: 0, walls: 0, bed: 0, hut: 0 }, carries: {} })).toContain('Home: stone ring 50%, lean-to 0%, walls 0%, bed 0%, hut 0%.');
     expect(stateText({ day: 1, time: 0.4, home: null, carries: {} })).toContain('Home: no home yet.');
     expect(DO.buildHere.what).toMatch(/with a stone he carries: its stone ring comes first/); expect(DO.upgrade.what).toMatch(/\(walls, bed, hut\)/);
+  });
+});
+
+describe('0.43.2 "One fire": in the ring all the firewood is one fire', () => {
+  const ringScene = () => {
+    const lt = { id: 0, x: spawn.x, z: spawn.z, heading: 0.4, progress: 1, up: { ring: 1 } }, c = ringCentre(lt);
+    const g = createGame(w, spawn, { sleep: { awake: 0.1 }, leantos: { list: [lt], nextId: 1 } });
+    const side = { x: c.x + Math.cos(0.4) * 0.85, z: c.z - Math.sin(0.4) * 0.85 };   // across the ring, 0.85 m from its middle (within RING_R)
+    g.wood.piles.push({ x: c.x, z: c.z, kind: 'driftwood', logs: [{ ...drift[8] }] }, { x: side.x, z: side.z, kind: 'branch', logs: [0, 1, 2].map(i => ({ ...branches[10 + i] })) });
+    g.wood.version++;
+    return { g, c, side };
+  };
+  it('one driftwood and three branches in the ring are enough; the fire burns in the middle and takes both piles', () => {
+    const { g, c, side } = ringScene();
+    g.player.x = side.x + 0.9; g.player.z = side.z; g.player.y = w.H(g.player.x, g.player.z);
+    g.fire.torch = { left: 0.1 };   // the torch lights a dry pile at once (no chance as with the drill)
+    const o = g.action().options.find(x => x.kind === 'light'); expect(o).toBeTruthy();
+    g.act(o); run(g, makeInput(), 6);
+    expect(g.fire.fires.length).toBe(1); expect(g.wood.piles.length).toBe(0);
+    expect(g.fire.fires[0].x).toBeCloseTo(c.x, 6); expect(g.fire.fires[0].z).toBeCloseTo(c.z, 6); expect(g.fire.fires[0].fed).toBe(4);
+  });
+  it('outside a ring a pile is a fire of its own: three branches are not enough', () => {
+    const g = createGame(w, spawn, { sleep: { awake: 0.1 } });
+    g.wood.piles.push({ x: spawn.x + 0.9, z: spawn.z, kind: 'branch', logs: [0, 1, 2].map(i => ({ ...branches[20 + i] })) }); g.wood.version++;
+    g.fire.torch = { left: 0.1 };
+    expect(g.action().options.find(x => x.kind === 'light')).toBeFalsy();
+  });
+  it('the menu counts the firewood of the whole ring', () => {
+    const { g } = ringScene(); walkFirstDay(w, g, spawn); g.known.visit(spawn.x, spawn.z);
+    const m = createActor(w, g, { chooser: () => null }).menu(), piles = m.places.filter(q => q.kind === 'pile');
+    expect(piles.length).toBe(2);
+    for (const q of piles) { expect(q.inRing).toBe(true); expect(q.fuel).toBe(4); expect(q.what).toMatch(/all the firewood in the ring counts together: 4 pieces\): ready to light/); }
+    expect(m.places.find(q => q.kind === 'leanto').what).toMatch(/its stone ring holds his piles pile\d and pile\d \(4 pieces of firewood, ready to light\)/);
+  });
+  it('the words: buildIn no longer names the ring, and the fire rule says the firewood in the ring counts together', () => {
+    expect(DO.buildIn.what).not.toMatch(/stone ring/); expect(DO.buildIn.what).toMatch(/firewood is not built in: it is laid down in the ring/);
+    expect(actFixed('')).toContain('all of it counts together');
   });
 });

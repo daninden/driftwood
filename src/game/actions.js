@@ -81,7 +81,7 @@ export const DO = Object.freeze({
   light:     { what: 'light the pile beside him (fire drill, uses fibre)', secs: DRILL_TIME },
   sleep:     { what: 'lie down to sleep until he wakes (a plan of its own, the only step)', secs: null },
   buildHere: { what: 'start a new home here with a stone he carries: its stone ring comes first, the lean-to behind it later', secs: PIECE_TIME },
-  buildIn:   { what: 'build the pieces he carries into his home\'s stone ring or, once the ring is finished, its lean-to, one after another, as long as the next one he carries is the one it needs (the minutes are for each piece)', secs: PIECE_TIME },
+  buildIn:   { what: 'build the pieces he carries into the part of his home being built (the menu says what his home still needs), one after another, as long as the next one he carries is the one it needs (the minutes are for each piece); firewood is not built in: it is laid down in the ring', secs: PIECE_TIME },   // 0.43.2: no ring in the words (the model built its firewood into the lean-to, "straight into the ring")
   upgrade:   { what: 'build the pieces he carries into his finished lean-to (walls, bed, hut), one after another, as long as the next one he carries is one it needs (the minutes are for each piece; a part of the hut takes three times as long, about 15 min)', secs: PIECE_TIME },
   makeSpear: { what: 'make a spear (the branch he carries, a stone beside him)', secs: SPEAR_TIME },
   takeSpear: { what: 'take up the spear', secs: STOOP },
