@@ -216,5 +216,5 @@ describe('the download button', () => {
     saveTextFile('driftwood-log-1-day2.jsonl', '{"a":1}\n', { doc, url });
     expect(made[0]).toMatchObject({ tag: 'a', href: 'blob:x', download: 'driftwood-log-1-day2.jsonl', attached: true }); expect(clicked).toBe(1); expect(removed).toBe(1);
   });
-  it('the version is a 0.36 or later release with a name (the exact one is asserted in tests/devPanel.test.js)', () => { expect(VERSION).toMatch(/^0\.(36|37|38|39|40)\.\d+$/); expect(NAME.length).toBeGreaterThan(2); });
+  it('the version is a 0.36 or later release with a name (the exact one is asserted in tests/devPanel.test.js)', () => { expect(VERSION).toMatch(/^0\.(3[6-9]|4\d)\.\d+$/); expect(NAME.length).toBeGreaterThan(2); });
 });

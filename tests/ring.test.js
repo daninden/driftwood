@@ -90,9 +90,9 @@ describe('a refused "light" says why', () => {
 describe('a refused "lay" with nothing to lay says so', () => {
   it('nothing under his arm, no stones, no log', () => {
     const { g } = scene({ from: c => ({ x: c.x + 5, z: c.z + 5 }) });
-    const { last } = follow(g, [{ do: 'lay' }]);
+    const { last } = follow(g, [{ lay: 'driftwood' }]);
     expect(last.outcome).toBe('failed');
-    expect(last.reason).toContain('he carries nothing to lay down: nothing under his arm, no stones in his hands, no log; fibre, coconuts, shells, berries, crabs and fish stay with him');
+    expect(last.reason).toBe('he carries no driftwood (he carries nothing to lay down)');   // 0.41.0 "Hands": a lay names its kind
   });
 });
 

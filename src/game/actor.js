@@ -16,8 +16,9 @@
  *   actor.step(dt)                                one step of the hands (call before game.update(actor.input, dt))
  *   actor.menu() -> menu                          what he could do now (pure but for the path searches; no state changes):
  *                                                   { here: [{ id, what }], uses: [{ id, what }], places: [place], fires: [fire], dirs, carries, light, minutes: PLAN_MINUTES }
+ *                                                   (carries.dryDriftwood, 0.41.0: how much of the driftwood he carries is dry enough to burn)
  *                                                   fire (0.37.10 "Body"): { id, state: 'burning' | 'embers' | 'cold', hours (left while burning), ring, dist, dir }: every fire of his on the menu
- *                                                   place: { id, kind, what, x, z, dist, dir, minutes, nearby, offers: [kind], notNow? } (offers: what the action button would offer standing there, with what he holds now; 0.40.0 notNow: why what lies there cannot be taken up with what he holds, `holdWhy`)
+ *                                                   place: { id, kind, what, x, z, dist, dir, minutes, nearby, offers: [kind], notNow? } (offers: what the action button would offer standing there, with what he holds now, a pickup of it as 'take' (0.41.0); 0.40.0 notNow: why what lies there cannot be taken up with what he holds, `holdWhy`)
  *   actor.plan -> { steps, minutes, at, menu, say, why } | null      the plan being followed (menu: the menu it was chosen from; its place ids hold for the whole plan; say: the chooser's thought for it)
  *   actor.stepIndex, actor.waiting, actor.why             the running step, whether he waits for a plan, why the next plan is (or was last) asked
  *   actor.recent -> [record]                      the last RECENT_MAX records { day, time, kind ('step' | 'plan' | 'rejected' | 'interrupt'), what, outcome ('done' | 'failed' | ...), reason }
@@ -51,7 +52,7 @@
  * neither; a pile in the hut's way is named by its id; driftwood is "wet" only when too wet to burn (under TORCH_DRY, was 0.95); a pile's lay day is the request's (`dayNo`).
  * 0.38.1 "Trace": a place keeps its id as long as it exists (`placeId`: the n-th thing of its kind he came to know, by the thing's own id where it has one; fires and lean-tos too), so branch4
  * is the same branch in every request (not kept across a reload); his piles say "his pile of ..." with when he last laid on it (pile.laid, set by game/game: "laid 08:44", "laid day 2 08:44" on
- * another day); a done "pickup" or "lay" step's record says what it took or laid and what he carries after it ("picked up 1 branch; now under his arm: 1 driftwood, 1 branch, 1 frond (3 of 3)",
+ * another day); a done "take" or "lay" step's record (0.41.0; "pickup" and "lay" before) says what it took or laid and what he carries after it ("picked up 1 branch; now under his arm: 1 driftwood, 1 branch, 1 frond (3 of 3)",
  * "laid 3 pieces down: 2 branches on a new pile here (pile7); a frond on his pile of fronds here (pile2, now 4)"), in the record's reason.
  * 0.37.9 "Far": the menu's `island` { across (metres), seen (% of the island's land cells of game/known) }; a pile of driftwood says how many pieces are dry and how many wet.
  * 0.37.8 "Firelight": no walk in the dark without light again (game/dark; the half pace of 0.37.6 is gone); a walk's minutes are at the pace he has now (`paceNow`: his load,
@@ -65,14 +66,19 @@
  * 0.37.5 "Ways": a place's minutes come from the length of the route (`walkMinutes`: metres / WALK_SPEED with WALK_SLACK; the path's paced cost was about four times the real walk);
  * more reasons (`whyNot`: dig, drink when not thirsty, lay, the tool not in hand, the hut's next part or no room for it); a lean-to with walls, bed and ring tells the hut's parts
  * and whether it has room; `use` waits until he stands still and says a torch or water stands in the way.
- * 0.37.4 "Lessons": a failed action says why in plain words where the game knows (`whyNot`: the lack of the fire or the spear only for 'light' and 'fish'; for 'pickup' the
+ * 0.37.4 "Lessons": a failed action says why in plain words where the game knows (`whyNot`: the lack of the fire or the spear only for 'light' and 'fish'; for 'pickup' (a take) the
  * spear in hand, a log, a torch with other wood, taking from a pile with something under his arm, full arms; for 'buildIn' / 'upgrade' the kind the lean-to needs next).
  * 'light' is done only when a fire burns within 3 m afterwards (the drill uses the fibre either way). Fires and lean-tos keep their number on the menu (fire<n>, leanto<n>; since 0.38.1 every place keeps its id); a fire says its pieces and hours left, a lean-to its parts and what it needs next. The menu's `count` is { claimed, minutes } of the last plan
  * followed when the chooser counted it itself.
  * The menu also has `light`: { dark, hours (until dusk by day, until dawn in the dark), torch: { minutes left } | null, planted: [{ dist, dir, minutes }] (torches in the ground within 40 m), lit (he stands in firelight) }.
  *
- * 0.40.2 "Armful": a "go" to a loose piece (driftwood, a branch, a frond, a stone, a felled log) sets input.pickWant to its id until the next walk or the plan's end, so "pickup" takes that piece and
- * not a nearer one (game/game); a trunk in the hut's way (or where a lean-to would go) is named by its id ("a tree trunk (tree12)"), and the trunks in a hut's way are always on the menu
+ * 0.41.0 "Hands": the steps `take` and `lay` (game/actions; "pickup" and "lay" are no `do` actions any more). A `take` fails at once when the thing is gone or his hands are no room for it
+ * (`holdWhy`), keeps the dark rule of a walk, sets input.take ({ id } of a loose piece, { pile, count? } of a pile) for that step, walks there (a pile's 'take' standing spot of game/stand) and
+ * presses the pickup the game then offers for that thing alone. A `lay` fails at once when he carries nothing of that kind (saying what he carries) or the pile named is full; it sets input.lay
+ * ({ kind, count?, pile? | toward? }) and lays down there: on a pile of that kind from its 'layOn' standing spot (what does not fit stays with him, and the record says so), beside any other place
+ * of the menu (he walks to about 1.6 m of it and a NEW pile goes down on its side), or where he stands ("here"). A count above what he carries lays what he carries (the record says so).
+ * The record of a done take or lay says what was taken or laid where and what he carries after it, as before. The lay-downs the game makes on its own still lay everything.
+ * 0.40.2 "Armful" (input.pickWant, the piece a "go" led to, is gone in 0.41.0: a `take` names it); a trunk in the hut's way (or where a lean-to would go) is named by its id ("a tree trunk (tree12)"), and the trunks in a hut's way are always on the menu
  * (`hutTreeBlocks`); a refused "use" says why (`useWhy`: lying down, busy, a torch, water, nothing of that kind carried, no fire for a crab), after waiting up to 20 s for a bend to end;
  * a pile of one piece is "1 log", "1 branch".
  * 0.40.0 "Belt": a felled log says whether it is still green or dry for the hut (game/logs `seasoned`), a log pile how many of its logs are; a refused hut part with a green log says when it is dry.
@@ -90,7 +96,7 @@ import { canStand, terrainAt, WALK_SPEED } from './movement.js';
 import { fishableAt, FISH_DEPTH } from './fish.js';
 import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
 import { freshWater } from './water.js';
-import { dryness, LOG_WALK, CARRY_SLOW, CARRY_MAX, STONE_MAX } from './wood.js';
+import { dryness, LOG_WALK, CARRY_SLOW, CARRY_MAX, STONE_MAX, PILE_MAX } from './wood.js';
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
 import { seasoned, dryAt, SEASON_DAYS } from './logs.js';
 import { CELL as KNOWN_CELL, NC as KNOWN_NC } from './known.js';
@@ -332,9 +338,10 @@ export function createActor(world, game, opts = {}) {
         const always = kind === 'fire' || kind === 'leanto';   // 0.37.8 "Firelight": his fires and lean-tos are always on the menu; a route to the middle of a fire in the ring by the hut can fail (a fire vanished from the menu while it burned), then the straight line counts, as a later walk of a plan
         if (c.dist >= 1.5 && !r && !always) continue;
         let len = 0, q0 = p; if (r) for (const q of r.pts) { len += Math.hypot(q.x - q0.x, q.z - q0.z); q0 = q; } else if (c.dist >= 1.5) len = c.dist * LEG_DETOUR;
-        const offers = [...new Set(game.offersAt(c.x, c.z).map(o => o.kind))].filter(k => DO[k]);
+        const all = game.offersAt(c.x, c.z).map(o => o.kind), takeable = all.includes('pickup');
+        const offers = [...new Set(all.map(k => (k === 'pickup' ? 'take' : k)))].filter(k => DO[k] || k === 'take' || k === 'lay');   // 0.41.0 "Hands": a pickup there is a "take" of it
         const mins = walkMinutes(len / paceNow());   // 0.37.8: at the pace he walks with now (his load, tired, thirsty, hungry), as game/game
-        const notNow = offers.includes('pickup') ? null : holdWhy(kind, c.ref);   // 0.40.0: why what lies there cannot be taken up with what he holds now
+        const notNow = takeable ? null : holdWhy(kind, c.ref);   // 0.40.0: why what lies there cannot be taken up with what he holds now
         places.push({ id: placeId(kind, c.ref), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
           minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers, ...(notNow ? { notNow } : {}) });
       }
@@ -349,7 +356,7 @@ export function createActor(world, game, opts = {}) {
     if (game.bananas.carried.length) uses.push('banana');
     if (game.crabs.carried.length || game.fish.carried.length) uses.push('crab');
     const fires = places.filter(q => q.kind === 'fire').map(q => fireInfo(q));   // 0.37.10 "Body": every fire of his, also when none burns (the request says so)
-    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, fires, dirs: DIRS.slice(), carries: carries(), light: lightInfo(), island: islandInfo(), minutes: PLAN_MINUTES, count: lastCount };
+    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, fires, dirs: DIRS.slice(), carries: { ...carries(), dryDriftwood: W.carried.filter(l => !l.branch && !l.frond && !wet(l)).length }, light: lightInfo(), island: islandInfo(), minutes: PLAN_MINUTES, count: lastCount };
     menuMemo = { t: now, m };
     return m;
   }
@@ -463,11 +470,11 @@ export function createActor(world, game, opts = {}) {
     if (LOOSE[pl.kind]) return tilesNear(r.x, r.z, 1).some(t => LOOSE[pl.kind].list(t).includes(r));
     return true;
   }
-  function* goTo(pl) {
+  function* goTo(pl, standKind = null) {   // standKind (0.41.0): the standing spot of a pile for a take ('take') or a lay on it ('layOn')
     if (!stillThere(pl)) return { ok: false, reason: pl.kind === 'homespot' ? (game.leantos.list.length ? 'he has begun a home already' : `that place no longer fits a home: ${homeWay(pl.ref.site)}`) : `${pl.what} is gone` };
     const r = pl.ref, limit = realSecs(pl.minutes) * 3 + 30;
     if (pl.kind === 'pile') {
-      const kind = W.load() === 0 ? 'take' : 'add';
+      const kind = standKind || (W.load() === 0 ? 'take' : 'add');
       const g = yield* goStand(kind, r, limit);
       if (g.ok) return g;
       return yield* walk(r.x, r.z, { stop: 1.4, maxSecs: limit });
@@ -487,7 +494,6 @@ export function createActor(world, game, opts = {}) {
     }
     if (pl.kind === 'crabs') return yield* walk(r.hole.x, r.hole.z, { stop: 1.0, maxSecs: limit });
     if (pl.kind === 'homespot') { const w = yield* walk(r.x, r.z, { stop: 0.3, maxSecs: limit }); if (w.ok) inp.siteYaw = r.heading; return w; }   // 0.39.0: a "buildHere" there opens the lean-to that way
-    if ((pl.kind === 'log' || ['driftwood', 'branch', 'frond', 'stone'].includes(pl.kind)) && Number.isFinite(r.id)) inp.pickWant = r.id;   // 0.40.2 "Armful": "pickup" takes this one, not a nearer piece
     let w = yield* walk(r.x, r.z, { tap: true, stop: 0.4, until: () => offeredHere(pl), maxSecs: limit });   // a loose thing: until the action button offers it
     if (w.ok && !offeredHere(pl)) w = yield* walk(r.x, r.z, { stop: 0.2, maxSecs: 20 });
     if (!w.ok) return w;
@@ -701,9 +707,61 @@ export function createActor(world, game, opts = {}) {
     inp.sit = false;
     return { ok: true };
   }
+  // ---------- 0.41.0 "Hands": take that thing, lay that down there ----------
+  const KIND_HELD = { driftwood: () => W.carried.filter(l => !l.branch && !l.frond).length, branch: () => W.carried.filter(l => l.branch).length, frond: () => W.carried.filter(l => l.frond).length, stone: () => W.stones.length, log: () => (W.log ? 1 : 0) };
+  const heldText = () => { const c = carries(); return c.log ? 'a log on his shoulder' : [...ARM, ['stones', 'stone']].filter(([k]) => c[k] > 0).map(([k, w]) => `${c[k]} ${c[k] === 1 ? w : k}`).join(', ') || 'nothing to lay down'; };
+  function* walkFor(pl, minutes) {   // the dark rule of a walk to a place (0.37.2), as a `go`
+    if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, minutes); if (!ok.ok) return { ok: false, reason: ok.reason }; }
+    return { ok: true };
+  }
+  function* takeStep(s, places) {
+    const pl = places.find(q => q.id === s.take);
+    if (!pl) return { ok: false, reason: `no place "${s.take}"` };
+    if (!stillThere(pl)) return { ok: false, reason: `${pl.what} is gone` };
+    const hold = holdWhy(pl.kind, pl.ref); if (hold) return { ok: false, reason: `he cannot take it up now: ${hold}` };
+    const d = yield* walkFor(pl, stepMinutes({ go: s.take }, places)); if (!d.ok) return d;
+    inp.take = pl.kind === 'pile' ? { pile: pl.ref, ...(Number.isFinite(s.count) ? { count: s.count } : {}) } : { id: pl.ref.id };
+    const w = yield* goTo(pl, pl.kind === 'pile' ? 'take' : null);
+    if (!w.ok) return w;
+    const r = yield* doAction('pickup');
+    if (!r.ok) return r.reason === 'not offered here' ? { ok: false, reason: `he could not reach ${pl.id} to pick it up` } : r;
+    return r;
+  }
+  function* layStep(s, places) {
+    const kind = s.lay, have = KIND_HELD[kind] ? KIND_HELD[kind]() : 0;
+    if (!have) return { ok: false, reason: `he carries no ${kind === 'driftwood' ? 'driftwood' : kind}${kind === 'log' ? ' on his shoulder' : ''} (he carries ${heldText()})` };
+    const count = Number.isFinite(s.count) ? Math.min(s.count, have) : null, fewer = Number.isFinite(s.count) && s.count > have ? `he carried only ${have}` : null;
+    const pl = s.at === undefined ? null : places.find(q => q.id === s.at);
+    if (s.at !== undefined && !pl) return { ok: false, reason: `no place "${s.at}"` };
+    if (pl && !stillThere(pl)) return { ok: false, reason: `${pl.what} is gone` };
+    const onPile = pl && pl.kind === 'pile' && pl.ref.kind === kind ? pl.ref : null;
+    if (onPile && onPile.logs.length >= PILE_MAX) return { ok: false, reason: `${pl.id} is full (${PILE_MAX} pieces): lay it beside it ("at" another place) or on another pile` };
+    if (pl) {
+      const d = yield* walkFor(pl, stepMinutes({ go: s.at }, places)); if (!d.ok) return d;
+      const limit = realSecs(pl.minutes) * 3 + 30;
+      inp.lay = { kind, ...(count ? { count } : {}), ...(onPile ? { pile: onPile } : { toward: { x: pl.x, z: pl.z } }) };
+      let w;
+      if (onPile) { w = yield* goStand('layOn', onPile, limit); if (!w.ok) w = yield* walk(onPile.x, onPile.z, { stop: 1.0, maxSecs: limit }); }
+      else {
+        const r = pl.ref, at = pl.kind === 'crabs' ? r.hole : pl.kind === 'leanto' ? standFor(r) : pl;
+        w = yield* walk(at.x, at.z, { stop: pl.kind === 'tree' ? r.r + 1.2 : pl.kind === 'leanto' ? 0.5 : 1.6, maxSecs: limit });
+      }
+      if (!w.ok) return w;
+    } else inp.lay = { kind, ...(count ? { count } : {}) };
+    const room0 = onPile ? PILE_MAX - onPile.logs.length : Infinity;
+    const r = yield* doAction('lay');
+    if (!r.ok) return r;
+    const left = KIND_HELD[kind](), notes = [];
+    if (fewer) notes.push(fewer);
+    if (onPile && left > 0 && room0 < (count || have)) notes.push(`${pl.id} had room for only ${room0}: the rest stays with him`);
+    return notes.length ? { ok: true, note: notes.join('; ') } : r;
+  }
   function* runStep(s, places) {
     const k = stepKind(s);
-    if (k === 'go' || k === 'wander') { inp.siteYaw = undefined; inp.pickWant = undefined; }   // 0.39.0: the way of a place for a home holds only where he stands at it (0.40.2: the piece he walked to too)
+    if (k === 'go' || k === 'wander' || k === 'take' || k === 'lay') inp.siteYaw = undefined;   // 0.39.0: the way of a place for a home holds only where he stands at it
+    inp.take = undefined; inp.lay = undefined;   // 0.41.0 "Hands": what a take or a lay names holds for that step only
+    if (k === 'take') return yield* takeStep(s, places);
+    if (k === 'lay') return yield* layStep(s, places);
     if (k === 'go') {
       const pl = places.find(q => q.id === s.go);
       if (pl && dist(pl, p) >= 1.5) { const ok = walkOk(pl, stepMinutes(s, places)); if (!ok.ok) return { ok: false, reason: ok.reason }; }   // 0.37.2: the dark rule, when the walk starts (0.37.8: no walk without light)
@@ -754,11 +812,11 @@ export function createActor(world, game, opts = {}) {
       const s = plan.steps[i], what = stepText(s, plan.menu.places);
       actor.stepIndex = i;
       emit('step', { i, what });
-      const tracked = s.do === 'pickup' || s.do === 'lay', c0 = carries(), piles0 = pilesNow();
+      const tracked = s.take !== undefined || s.lay !== undefined, c0 = carries(), piles0 = pilesNow();
       mark = { piles0 };
       const r = yield* runStep(s, plan.menu.places);
       mark = null;
-      if (r.ok && tracked) { const n = carryNote(s.do, c0, piles0); if (n) r.note = n; }
+      if (r.ok && tracked) { const n = carryNote(s.take !== undefined ? 'pickup' : 'lay', c0, piles0); if (n) r.note = join(n, r.note); }
       if (!tracked) { const a = autoLaid(piles0); if (a) { if (r.ok) r.note = join(a, r.note); else r.reason = join(r.reason, a); } }
       stats.steps++;
       if (r.ok && s.do === 'sleep') { stats.done++; last = remember('step', what, 'done', r.note || null); emit('step-end', { i, what, outcome: 'done' }); return 'woke'; }
@@ -767,7 +825,7 @@ export function createActor(world, game, opts = {}) {
     }
     return 'done';
   }
-  function end(reason) { inp.siteYaw = undefined; inp.pickWant = undefined; gen = null; actor.plan = null; actor.stepIndex = -1; why = reason; idle(); inp.sit = false; }
+  function end(reason) { inp.siteYaw = undefined; inp.take = undefined; inp.lay = undefined; gen = null; actor.plan = null; actor.stepIndex = -1; why = reason; idle(); inp.sit = false; }
   // 0.38.3 "Steady": rain stops the work he is doing (as walking off does), and the record says so
   const WORK_WORDS = { husk: 'husking the coconut', sip: 'drinking from a shell', roast: 'roasting', build: 'building', upgrade: 'building', drill: 'drilling a fire', fell: 'felling the tree', dig: 'digging', fish: 'fishing', make: 'making the tool', drink: 'going to drink', fill: 'going to fill a shell' };
   function stopWork() {

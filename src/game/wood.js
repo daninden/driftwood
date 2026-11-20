@@ -86,8 +86,11 @@
  *     that kind alone; ok(log): only loose pieces it accepts (game/game: wood while the arm has room, stones while the hands have)
  *   wood.findAll(x, z, reach, only?) -> [thing]   (0.30.3 "Routes") every pile within reach, nearest first (only: 'pile' by default, 'log' for loose pieces, 'any' for both), the larger pile first among equals
  *   wood.joinTarget(x, z, kind) -> pile | null   the pile that wood of that kind laid down at (x, z) joins (the nearest of its kind with room within PILE_JOIN of its middle)
- *   wood.take(thing, total?) -> number of pieces picked up (0 when the hands are full);
- *     total: the days on the clock, for when a branch taken from the ground grows back
+ *   wood.take(thing, total?, count?) -> number of pieces picked up (0 when the hands are full);
+ *     total: the days on the clock, for when a branch taken from the ground grows back; count (0.41.0 "Hands"): from a pile at most that many (default: as many as there is room for);
+ *     from a pile of driftwood or branches the driest pieces first (the top one among equals), from the others the top ones
+ *   wood.dropSome(kind, count, x, z, heading, on?, wetAt?, blockedAt?, snap?) -> pieces laid (0.41.0 "Hands"): the top `count` carried pieces of one kind (all of it without a count);
+ *     on.pile: on that pile only (its kind, up to PILE_MAX; the rest stays carried), on.fresh: on a new pile only (in the way of heading), else as `drop` lays that kind
  *   wood.consume(pile, n) -> the top n pieces of a pile, taken off the island (to build, game/leanto)
  *   wood.drop(x, z, heading, inWater?, wetAt?, blockedAt?, snap?) -> true when something was laid down (0.36.2 "Ground": snap(x, z) -> { x, z } | null gives the place a NEW pile of fuel
  *     (driftwood or branches) is laid at instead when its spot lies in a finished stone ring: the ring's exact middle, so the fire burns in the middle of the ring; used only when that place is free: dry,
@@ -219,7 +222,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
   let sea = -Infinity;   // the current sea level (tideUpdate)
   const washedIds = new Set();   // ids of the wood washed up since the start (saved in full, with its t)
   const soaked = new Map();   // id -> log: wood the rain wet that is not saved with the washed-up wood (start wood, branches)
-  const wood = { carried: [], stones: [], log: null, load, tideUpdate, drying, rain, piles: [], version: 0, dirty: new Set(), fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, near, find, findAll, joinTarget, take, drop, washUp, flood, takePile, giveOne, giveStone, giveLog, consume, relocate, state };
+  const wood = { carried: [], stones: [], log: null, load, tideUpdate, drying, rain, piles: [], version: 0, dirty: new Set(), fresh: [], washes: 0, tide: -Infinity, onBeach, beachLogs, near, find, findAll, joinTarget, take, drop, dropSome, washUp, flood, takePile, giveOne, giveStone, giveLog, consume, relocate, state };
   const special = id => id >= LOG_ID0 ? (logs ? logs.piece(id) : null) : id >= STONE_ID0 ? (stones ? stones.piece(id) : null) : id >= FROND_ID0 ? (fronds ? fronds.piece(id) : null) : (branches ? branches.piece(id) : null);   // a branch, frond or stone by its id
   function load() { return wood.carried.length + wood.stones.length + (wood.log ? 1 : 0); }   // pieces under his arm and in his hands: each slows him
   const homeTile = l => homeOf.has(l.id) ? homeOf.get(l.id) : tileOf(l.x, l.z);
@@ -290,7 +293,7 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     return pile;
   }
 
-  function take(thing, total = 0) {
+  function take(thing, total = 0, count = null) {
     if (!thing) return 0;
     const timber = thing.kind === 'log' ? !!thing.log.timber : wood.piles.includes(thing.pile) && thing.pile.kind === 'log';   // 0.31: a log is carried alone: nothing else in his arms or hands, one at a time
     if (wood.log) return 0;   // a log on the shoulder fills his arms
@@ -316,7 +319,12 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
       hold.push(l); wood.version++; return 1;
     }
     const p = thing.pile; if (!wood.piles.includes(p)) return 0;
-    const got = p.logs.splice(Math.max(0, p.logs.length - room)).reverse();
+    const n = Math.min(room, Number.isFinite(count) && count > 0 ? Math.floor(count) : room, p.logs.length);
+    let got;
+    if (p.kind === 'driftwood' || p.kind === 'branch') {   // 0.41.0 "Hands": fuel the driest first (the top one among equals), the rest of the pile in its order
+      const order = p.logs.map((l, i) => i).sort((a, b) => dryness(p.logs[b], total) - dryness(p.logs[a], total) || b - a), pick = new Set(order.slice(0, n));
+      got = [...pick].map(i => p.logs[i]); for (let i = p.logs.length - 1; i >= 0; i--) if (pick.has(i)) p.logs.splice(i, 1);
+    } else got = p.logs.splice(p.logs.length - n).reverse();
     hold.push(...got);
     if (!p.logs.length) wood.piles.splice(wood.piles.indexOf(p), 1);
     wood.version++; return got.length;
@@ -336,11 +344,31 @@ export function createWood(w, saved, branches = null, fronds = null, stones = nu
     wood.version++; return true;
   }
 
-  // lay pieces of one kind on the nearest pile of that kind with room, then on new piles; returns the pieces that found no place (bottom first)
-  function layKind(kind, mine, x, z, heading, wetAt, blockedAt, snap = null) {
+  // 0.41.0 "Hands": lay down `count` pieces of one kind (the top ones; all of that kind without count): on.pile: on that pile (of that kind, as many as it has room for);
+  // on.fresh: always a new pile (in the direction of heading, never joining one); neither: as `drop` lays that kind. Returns the number laid (0: nothing of that kind, or no room)
+  function dropSome(kind, count, x, z, heading, on = {}, wetAt = null, blockedAt = null, snap = null) {
+    const hold = kind === 'stone' ? wood.stones : kind === 'log' ? (wood.log ? [wood.log] : []) : wood.carried.filter(l => kindOf(l) === kind);
+    if (!hold.length) return 0;
+    const n = Math.min(hold.length, Number.isFinite(count) && count > 0 ? Math.floor(count) : hold.length), mine = hold.slice(hold.length - n);   // bottom first, the top n
+    let rest;
+    if (on.pile) {
+      const p = on.pile; if (!wood.piles.includes(p) || p.kind !== kind) return 0;
+      const room = PILE_MAX - p.logs.length, pieces = [...mine].reverse(), put = pieces.splice(0, Math.max(0, room));
+      p.logs.push(...put); rest = pieces.reverse();
+    } else rest = layKind(kind, mine, x, z, heading, wetAt, blockedAt, snap, !!on.fresh);
+    const laid = mine.filter(l => !rest.includes(l));
+    if (!laid.length) return 0;
+    if (kind === 'stone') wood.stones = wood.stones.filter(l => !laid.includes(l));
+    else if (kind === 'log') wood.log = null;
+    else wood.carried = wood.carried.filter(l => !laid.includes(l));
+    wood.version++; return laid.length;
+  }
+
+  // lay pieces of one kind on the nearest pile of that kind with room, then on new piles; returns the pieces that found no place (bottom first); fresh (0.41.0): only on a new pile
+  function layKind(kind, mine, x, z, heading, wetAt, blockedAt, snap = null, fresh = false) {
     let close = null, cd = PILE_JOIN;   // close: the nearest pile of any kind or fullness
-    for (const p of wood.piles) { const d = Math.hypot(p.x - x, p.z - z); if (d < cd) { cd = d; close = p; } }
-    const pile = joinTarget(x, z, kind);   // the nearest that can take more
+    if (!fresh) for (const p of wood.piles) { const d = Math.hypot(p.x - x, p.z - z); if (d < cd) { cd = d; close = p; } }
+    const pile = fresh ? null : joinTarget(x, z, kind);   // the nearest that can take more
     const pieces = [...mine].reverse();
     if (pile) pile.logs.push(...pieces.splice(0, PILE_MAX - pile.logs.length));
     if (pieces.length) {   // a new pile: a step in front, or right next to the pile that was full

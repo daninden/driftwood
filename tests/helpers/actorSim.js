@@ -30,9 +30,9 @@ export function needsChooser(game) {
       const k = first(m, 'coconut'); if (k && may(k)) return walk(k, [{ do: 'husk' }]);
     }
     if (night) return has(m, 'sleep') ? [{ do: 'sleep' }] : [{ wait: 20 }];
-    if (c.driftwood >= 2) return [{ do: 'lay' }];   // 0.37.5: the actor steps aside to where the game offers it
+    if (c.driftwood >= 2) return [{ lay: 'driftwood' }];   // 0.37.5: the actor steps aside to where the game offers it
     const d = m.places.find(q => q.kind === 'driftwood' && /dry/.test(q.what));
-    if (d && may(d)) return walk(d, [{ do: 'pickup' }]);
+    if (d && may(d)) return d.minutes > 25 ? [{ go: d.id }] : [{ take: d.id }];   // 0.41.0 "Hands": a take walks there itself
     return [{ wait: 20 }];
   };
 }
@@ -63,9 +63,9 @@ export function lifeChooser(game) {
       if (!k && !night) { const o = out(); if (o) return o; }
     }
     if (night) return has(m, 'sleep') ? [{ do: 'sleep' }] : [{ wait: 20 }];
-    if (c.driftwood >= 2) return [{ do: 'lay' }];
+    if (c.driftwood >= 2) return [{ lay: 'driftwood' }];
     const d = m.places.find(q => q.kind === 'driftwood' && /dry/.test(q.what));
-    if (d && may(d)) return walk(d, [{ do: 'pickup' }]);
+    if (d && may(d)) return d.minutes > 25 ? [{ go: d.id }] : [{ take: d.id }];   // 0.41.0 "Hands": a take walks there itself
     if (!first(m, 'water') || !(first(m, 'coconut') || first(m, 'berries'))) { const o = out(); if (o) return o; }
     return [{ wait: 20 }];
   };

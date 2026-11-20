@@ -13,7 +13,7 @@
  *     null is an honest "unreachable" (the caller marks the object bad instead of idling and trying other sides).
  *   - Arrival: only when `offered` is true at his real position (the follower's stop and the action being offered are two different things).
  *
- * Kinds (obj): 'take' (a pile: the arc's pickup names it), 'add' (a pile: wood laid down joins it and lay is what is offered), 'light' (a pile: the light action for it, not shadowed by build),
+ * Kinds (obj): 'take' (a pile: the arc's pickup names it), 'add' (a pile: wood laid down joins it and lay is what is offered), 'layOn' (0.41.0 "Hands": a pile within BESIDE of its edge, where lay is offered: game/game input.lay names it), 'light' (a pile: the light action for it, not shadowed by build),
  * 'feed' (a fire: feeding goes on it), 'buildIn' (a half-built lean-to: 0.32, a piece he holds is built into it), 'upgrade' (a finished lean-to; 0.33: also its hut, whose parts are built from within HUT_REACH), 'fell' (0.31 "Axe": a standing tree `{ id, x, z, r }` of game/felled, offered while the axe is in his hand within FELL_REACH of its trunk's edge), 'nearPile' and 'nearFire' (only beside the pile or fire,
  * for a click: wood.find / fire.find within BESIDE name it). No reach and no radius is changed: the standing points live inside the reaches of game/game.
  *
@@ -54,6 +54,7 @@ export function createStand(game, world, { BESIDE = 1.2 } = {}) {
     switch (kind) {
       case 'take': return offers.some(o => o.kind === 'pickup' && o.thing && o.thing.kind === 'pile' && o.thing.pile === obj);
       case 'add': return offers.some(o => o.kind === 'lay') && wood.joinTarget(x, z, obj.kind) === obj;
+      case 'layOn': return offers.some(o => o.kind === 'lay') && Math.hypot(obj.x - x, obj.z - z) - pileVisibleRadius(obj) <= BESIDE;   // 0.41.0 "Hands": input.lay names this pile
       case 'light': return offers.some(o => o.kind === 'light' && o.pile === obj);
       case 'feed': return offers.some(o => o.kind === 'feed' && o.fire === obj);
       case 'buildIn': return offers.some(o => o.kind === 'buildIn' && o.leanto === obj);   // 0.32: obj is a half-built lean-to (a new site is started where he stands: game/leanto `standFor`)
@@ -67,7 +68,7 @@ export function createStand(game, world, { BESIDE = 1.2 } = {}) {
   function geometry(kind, obj) {
     switch (kind) {
       case 'feed': case 'nearFire': return { x: obj.x, z: obj.z, rim: FIRE_R, reach: 0.5 + BESIDE };
-      case 'take': case 'light': case 'nearPile': return { x: obj.x, z: obj.z, rim: pileSolidRadius(obj) + BODY, reach: pileVisibleRadius(obj) + BESIDE };
+      case 'take': case 'light': case 'nearPile': case 'layOn': return { x: obj.x, z: obj.z, rim: pileSolidRadius(obj) + BODY, reach: pileVisibleRadius(obj) + BESIDE };
       case 'add': return { x: obj.x, z: obj.z, rim: pileSolidRadius(obj) + BODY, reach: PILE_JOIN };
       case 'upgrade': return { x: obj.x, z: obj.z, rim: 0, reach: HUT_REACH };   // (0.33: the hut is built from a little further out; what `offered` says decides, the reach only bounds the search)
       case 'fell': return { x: obj.x, z: obj.z, rim: obj.r + BODY, reach: obj.r + FELL_REACH };

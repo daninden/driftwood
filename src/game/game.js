@@ -65,8 +65,12 @@
  *   game.siteBlock(c)           0.40.1 "Clear": what keeps a lean-to from starting at site c (the test of `siteFits`): { what: 'ground'|'leanto'|'tree'|'rock'|'pile'|'fire'|'burnt', x, z } or null (pure)
  *   game.hutBlock(l)            0.37.7 "Reasons": what keeps the hut from fitting round l (the first thing `hutFits` finds): { what: 'ground'|'leanto'|'tree'|'rock'|'pile'|'fire'|'burnt', x, z, steep?, tree? } or null (pure);
  *                               0.40.2 "Armful": a trunk (in siteBlock too) carries `tree`, its id (game/felled), so game/actor can name it
- *   input.pickWant              0.40.2 "Armful": the id of the loose piece game/actor walked to (a branch, a frond, driftwood, a stone, a felled log): 'pickup' takes that one when it is within REACH
- *                               and he has room for it, not a nearer thing (a felled log lying beside a branch was taken instead)
+ *   input.take                  0.41.0 "Hands" (was input.pickWant of 0.40.2): { id } (a loose piece: driftwood, a branch, a frond, a stone, a felled log) or { pile, count? } (a pile of game/wood): while it is set,
+ *                               'pickup' is offered for that thing alone (within REACH of a piece, within BESIDE of a pile's edge, when he has room for it), and from a pile it takes at most count pieces
+ *                               (game/wood `take`: the driest fuel first)
+ *   input.lay                   0.41.0 "Hands": { kind, count?, pile?, toward?: { x, z } }: while it is set, 'lay' lays down only `count` pieces of that kind (all of it without count): on `pile`
+ *                               (within BESIDE of its edge, its kind, as many as it has room for), else on a new pile in front of him, on the side of `toward` (never joining a pile), else
+ *                               (neither) as a plain 'lay' lays that kind. The lay-downs the game makes on its own (before drinking, filling, felling, a tool, sleeping) still lay everything
  *   game.lackAt(x?, z?)         0.30.20: what is missing for an action that is almost possible there (default: where he stands): 'needSpear' | 'spearAway' | 'needFibre' | 'needMoreWood' | null (pure, game/lack; the voice says it)
  *   game.onAction(listener)     optional presentation notification when a deliberate action is accepted; listeners receive { kind, x, z }, alter no game state and are not saved
  *   game.weather                the schedule of showers (game/weather); game.rain: the intensity of the rain now, 0..1 (0.21:
@@ -119,7 +123,7 @@
  *     water within 0.8 m, game/water; wood is laid down and a torch stuck in
  *     the ground first, then he kneels DRINK_TIME and is no longer thirsty),
  *     and only when none of those is near 'plant' (a torch in his hand is stuck in the ground in front of
- *     him) or 'lay' (everything carried goes down at his feet, on a pile close
+ *     him) or 'lay' (everything carried goes down at his feet, on a pile close (0.41.0: with input.lay only what it names, see there)
  *     by or as a new pile; not in water) or the carried bites. A full fire (game/fire FUEL_MAX) takes
  *     no more wood: nothing is offered to lay on it. Big kinds, never the main one: 'light' (a
  *     pile of at least FIRE_MIN beside him, on dry ground, with a torch in
@@ -198,7 +202,7 @@
 import { BODY, createPlayer, moveIntent, stepPlayer, terrainAt, canOccupy, canStand, nearestStandable, weariStride, paceOf, paceStride, obstaclesNear } from './movement.js';
 import { createClock, DAY_SECONDS } from './clock.js';
 import { createKnown } from './known.js';
-import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, PILE_NEXT, LOG_WALK, LOG_STRIDE, dryness, pileSolidRadius, kindOf } from './wood.js';
+import { createWood, CARRY_SLOW, CARRY_STRIDE, CARRY_MAX, STONE_MAX, PILE_NEXT, LOG_WALK, LOG_STRIDE, dryness, pileSolidRadius, pileVisibleRadius, kindOf } from './wood.js';
 import { seaLevel, highWaters } from './tide.js';
 import { createSleep, isNight } from './sleep.js';
 import { createFibre } from './fibre.js';
@@ -296,6 +300,17 @@ export function createGame(world, spawn, opts = {}) {
     if (ok) for (const q of wood.piles) if (!before.has(q) || q.logs.length > before.get(q)) q.laid = clock.total;   // 0.38.1 "Trace": when he last laid something on it
     return ok;
   };
+  /** 0.41.0 "Hands": input.lay: `count` pieces of one kind, on that pile (within BESIDE of its edge), or on a new pile on the side of `toward`, or as `lay` lays that kind. Number laid. */
+  const layReach = q => Math.hypot(q.x - player.x, q.z - player.z) - pileVisibleRadius(q) <= BESIDE;
+  function laySome(w) {
+    if (wet(here())) return 0;
+    if (w.pile && (!wood.piles.includes(w.pile) || !layReach(w.pile))) return 0;
+    const heading = w.toward ? Math.atan2(w.toward.x - player.x, w.toward.z - player.z) : player.heading;
+    const before = new Map(wood.piles.map(q => [q, q.logs.length]));
+    const n = wood.dropSome(w.kind, w.count, player.x, player.z, heading, { pile: w.pile || null, fresh: !w.pile && !!w.toward }, (x, z) => wet(terrainAt(world, x, z, game.sea)), blockedAt, leantos.ringMiddle);
+    if (n) for (const q of wood.piles) if (!before.has(q) || q.logs.length > before.get(q)) q.laid = clock.total;
+    return n;
+  }
   const meanDry = logs => logs.reduce((s, l) => s + dryness(l, clock.total), 0) / Math.max(1, logs.length);
   const face = th => { player.heading = Math.atan2(th.x - player.x, th.z - player.z) || player.heading; };
   const fuel = l => !l.frond && dryness(l, clock.total) >= TORCH_DRY;   // a frond never burns
@@ -368,7 +383,7 @@ export function createGame(world, spawn, opts = {}) {
   }
   // 0.32 "Piece by piece": a site is built piece by piece with what he carries (game/leanto). The kinds he has: driftwood, branches and fronds under his arm, stones in his hands.
   let viewYaw = YAW;   // the camera's yaw at the last update (input.yaw): the way the open side of a new lean-to faces; the mind may write it before it presses
-  let pickWant = null;   // 0.40.2 "Armful": input.pickWant, the loose piece game/actor walked to (its id): 'pickup' takes that one first
+  let takeWant = null, layWant = null;   // 0.41.0 "Hands": input.take and input.lay (game/actor): the very thing to take up, and what to lay down where
   let siteYaw = null;   // 0.39.0: input.siteYaw, the way game/actor asks a new lean-to to open (at a place for a home of the menu); tried before the camera's
   const piecesHeld = () => { const ks = new Set(wood.carried.map(kindOf)); if (wood.stones.length) ks.add('stone'); if (wood.log && seasoned(wood.log, clock.total)) ks.add('log'); return ks; };   // 0.40.0: a green log is no piece of the hut yet
   const handsFree = () => !fire.torch && !spear.hand;   // 0.40.0 "Belt": the axe at his belt takes no hand
@@ -538,11 +553,15 @@ export function createGame(world, spawn, opts = {}) {
     const cands = [];   // what else he could do; the nearest first
     {   // 0.37.6 "Free hands": what he can take up follows from his two hands (`room`): wood under the arm beside a tool or a torch, stones only with no tool and no torch, a log only with nothing else
       const room = l => wood.log ? false : l.timber ? load === 0 && !torch && !tool : l.stone ? !torch && !tool && wood.stones.length < STONE_MAX : !(torch && tool) && wood.carried.length < CARRY_MAX;
-      const wanted = pickWant === null ? null : wood.find(px, pz, REACH, 'log', l => l.id === pickWant && room(l));   // 0.40.2 "Armful": the piece he walked to, before a nearer one
-      const log = wanted || wood.find(px, pz, REACH, 'log', room);
-      const pile = wood.findAll(px, pz, BESIDE, 'pile').find(q => room(pileSample(q.pile))) || null;   // 0.37.6: with something under his arm he can still take from a pile, as long as there is room
-      if (log) cands.push({ d: wanted ? -1 : log.d, a: { kind: 'pickup', thing: log } });
-      if (pile) cands.push({ d: pile.d, a: { kind: 'pickup', thing: pile } });
+      if (takeWant) {   // 0.41.0 "Hands": that thing and nothing else
+        const w = takeWant, thing = Number.isFinite(w.id) ? wood.find(px, pz, REACH, 'log', l => l.id === w.id && room(l)) : w.pile ? wood.findAll(px, pz, BESIDE, 'pile').find(q => q.pile === w.pile && room(pileSample(q.pile))) || null : null;
+        if (thing) cands.push({ d: -1, a: { kind: 'pickup', thing, ...(thing.kind === 'pile' && Number.isFinite(w.count) ? { count: w.count } : {}) } });
+      } else {
+        const log = wood.find(px, pz, REACH, 'log', room);
+        const pile = wood.findAll(px, pz, BESIDE, 'pile').find(q => room(pileSample(q.pile))) || null;   // 0.37.6: with something under his arm he can still take from a pile, as long as there is room
+        if (log) cands.push({ d: log.d, a: { kind: 'pickup', thing: log } });
+        if (pile) cands.push({ d: pile.d, a: { kind: 'pickup', thing: pile } });
+      }
     }
     const coco = fibre.find(px, pz, REACH);   // 0.27.1: always husked (a tuft when there is room); at the end he eats it when hungry (or with two carried already), else carries it
     if (coco) cands.push({ d: coco.d, a: { kind: 'husk', thing: coco } });
@@ -654,7 +673,7 @@ export function createGame(world, spawn, opts = {}) {
   function press(a, input) {   // a short press of the action button
     input.clearTarget();
     if (a.thing && a.kind !== 'drink' && a.kind !== 'fill') face(a.thing);
-    if (a.kind === 'pickup') { if (wood.take(a.thing, clock.total)) { stoop(PICK_TIME); notifyAction('pickup'); } }
+    if (a.kind === 'pickup') { if (wood.take(a.thing, clock.total, a.count)) { stoop(PICK_TIME); notifyAction('pickup'); } }
     else if (a.kind === 'husk') { work = { kind: 'husk', t: 0, dur: a.thing ? HUSK_TIME : EAT_TIME, thing: a.thing ? a.thing.coco : null }; notifyAction(a.thing ? 'husk' : 'eatNut'); }   // no thing: a carried nut (already husked: EAT_TIME)
     else if (a.kind === 'berries' || a.kind === 'bananas') {
       const f = a.kind === 'berries' ? berries : bananas;
@@ -683,7 +702,7 @@ export function createGame(world, spawn, opts = {}) {
     else if (a.kind === 'drink' || a.kind === 'fill') {
       if (wood.load() || fire.torch) { const torch = !!fire.torch, planted = !torch || plantBeside(), laid = planted && (!wood.load() || lay(player.heading + Math.PI)); if (planted && laid) { stoop(torch && !wood.carried.length ? STOOP : PICK_TIME); queued = a.kind; } }   // hands first (the torch in the ground, the wood laid down: 0.37.6 both), then drink or fill
       else drink(a.thing, a.kind);
-    } else if (a.kind === 'lay') { if (lay(player.heading)) { stoop(PICK_TIME); notifyAction('lay'); } }
+    } else if (a.kind === 'lay') { if (layWant ? laySome(layWant) : lay(player.heading)) { stoop(PICK_TIME); notifyAction('lay'); } }
     else if (a.kind === 'plant') { if (plantTorch()) { stoop(); notifyAction('plant'); } }
   }
 
@@ -782,7 +801,8 @@ export function createGame(world, spawn, opts = {}) {
   function update(input, dt) {
     if (Number.isFinite(input.yaw)) viewYaw = input.yaw;   // 0.32: the way a new lean-to opens, read before anything is offered or pressed
     siteYaw = Number.isFinite(input.siteYaw) ? input.siteYaw : null;
-    pickWant = Number.isFinite(input.pickWant) ? input.pickWant : null;
+    takeWant = input.take && typeof input.take === 'object' ? input.take : null;
+    layWant = input.lay && typeof input.lay === 'object' ? input.lay : null;
     const wantWake = input.takeWake ? input.takeWake() : false, light = input.takeLight ? input.takeLight() : false;
     const pressed = input.takeAction ? input.takeAction() : null, idx = input.takeChoice ? input.takeChoice() : null;
     let pick = null;   // what the button, a key 1 to 3, an icon of the arc or act() chose, looked at before anything changes

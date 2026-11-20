@@ -42,7 +42,7 @@ describe('the steps and the plan check (game/actions)', () => {
     expect(checkPlan({ steps: [{ use: 'nut' }, { wait: 10 }] }, places).ok).toBe(true);
   });
   it('more than PLAN_GRACE is refused, unless it is one step alone (0.37.8: the hour is the size, not the limit)', () => {
-    const c = checkPlan([{ go: 'drift1' }, { do: 'pickup' }, { go: 'water1' }, { wait: 30 }], places);
+    const c = checkPlan([{ take: 'drift1' }, { go: 'water1' }, { wait: 30 }], places);
     expect(c.ok).toBe(false); expect(c.reason).toMatch(/at most 80/);
     expect(checkPlan([{ go: 'far1' }], places).ok).toBe(true);
     expect(checkPlan([{ wander: 'north', minutes: 60 }], places).ok).toBe(true);
@@ -455,7 +455,7 @@ describe('a life with a fixed fake chooser (tests/helpers/actorSim)', () => {
     expect(r.actor.stats.plans).toBeGreaterThan(100);
     expect(r.actor.stats.failed).toBeLessThan(r.actor.stats.done / 10);
     const done = r.events.filter(e => e.type === 'step-end' && e.outcome === 'done').map(e => e.what);
-    expect(done).toContain(DO.drink.what); expect(done).toContain(DO.husk.what); expect(done).toContain(DO.sleep.what); expect(done).toContain(DO.pickup.what);
+    expect(done).toContain(DO.drink.what); expect(done).toContain(DO.husk.what); expect(done).toContain(DO.sleep.what); expect(done.some(x => /^pick up a piece of dry driftwood \(driftwood\d+\)$/.test(x))).toBe(true);
     expect(r.actor.recent.length).toBeLessThanOrEqual(20);
   }, 120000);
 });
@@ -472,7 +472,7 @@ describe('0.38.1 "Trace": what he did, facts only', () => {
   });
   it('a pick-up and a lay-down say what they took and laid and what he carries after; his new pile says when he laid it', () => {
     const g = fresh(); let n = 0;
-    const a = createActor(w, g, { chooser: m => { if (n++) return null; const b = m.places.find(q => q.kind === 'branch'); return [{ go: b.id }, { do: 'pickup' }, { do: 'lay' }]; } });
+    const a = createActor(w, g, { chooser: m => { if (n++) return null; const b = m.places.find(q => q.kind === 'branch'); return [{ take: b.id }, { lay: 'branch' }]; } });
     run(g, a, 90);
     const notes = a.recent.filter(r => r.kind === 'step' && r.outcome === 'done').map(r => r.reason);
     expect(notes).toContain('picked up 1 branch; now under his arm: 1 branch (1 of 3)');
@@ -508,7 +508,7 @@ describe('0.38.2 "True": facts that hold', () => {
   });
   it('a lay-down the game makes on its own is told in that step: drinking with a branch under his arm', () => {
     const g = fresh(); let n = 0;
-    const a = createActor(w, g, { chooser: m => { if (n++) return null; const b = m.places.find(q => q.kind === 'branch'), r = m.places.find(q => q.kind === 'water'); return [{ go: b.id }, { do: 'pickup' }, { go: r.id }, { do: 'drink' }]; } });
+    const a = createActor(w, g, { chooser: m => { if (n++) return null; const b = m.places.find(q => q.kind === 'branch'), r = m.places.find(q => q.kind === 'water'); return [{ take: b.id }, { go: r.id }, { do: 'drink' }]; } });
     run(g, a, 240);
     const d = a.recent.find(r => r.kind === 'step' && /drink/.test(r.what));
     expect(d && d.outcome).toBe('done');

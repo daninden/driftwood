@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.41.0 "Hands" — 2026-11-20
+
+Agreed with the user 2026-11-20 ("akkoord bouw maar"): picking up and laying down were too vague and led to strange situations. The model said where he walked and the game decided what he picked up there (sometimes more lay there than was meant), and a lay laid everything down at his feet.
+
+- **Take that:** a new step `{"take": "<place id>", "count": n}`: he walks to that piece of driftwood, branch, frond, stone, log or pile of the menu and picks up exactly that, nothing lying nearer; from a pile `count` pieces (without it as many as he has room for), driftwood and branches the driest first. It fails at once when the thing is gone or his hands have no room for it.
+- **Lay that there:** a new step `{"lay": "<kind>", "count": n, "at": "<place id>"}`: only that kind, `count` pieces (without it all of it); on the pile named (a full pile fails; what does not fit on a nearly full one stays with him), as a new pile beside any other place of the menu, or `"here"` (the default). Everything else stays in his arms.
+- **No more `do: pickup` and `do: lay`:** they are refused with the right form; the menu's "can do there" says `take`.
+- **Dry or wet:** the arm line says how much of the driftwood he carries is dry.
+- **Unchanged on purpose:** the lay-downs the game makes on its own (before drinking, filling, felling, making a tool, when he lies down to sleep or collapses) still lay everything down.
+- **Tests:** `tests/hands.test.js` (the steps and their refusals, a count from a pile driest first, laying one kind on a pile or a new pile, the actor taking the piece and the pile named and laying on the pile named, beside a place and here, a full pile and a kind he does not carry); the older tests and the fake chooser use the new steps.
+
 ## 0.40.5 "Form" — 2026-11-19
 
 Agreed with the user 2026-11-19 ("ja, bouw 1 en 2") after an AI log on 0.40.4 (gemini-3.5-flash-lite): at 21:04 on day 3 the model wanted him to sleep through the night, but its step was not a step the game knows (most likely `{"sleep": ...}` instead of `{"do": "sleep"}`). The game refused it with only "step 1 is not a step", and the panel showed "an unknown step". The rules wrote the sleep as a bare word ("sleep" is a plan of its own), and the refusal of a sleep together with other steps did not show its form either.

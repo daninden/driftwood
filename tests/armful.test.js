@@ -1,5 +1,5 @@
 // 0.40.2 "Armful" (agreed with the user 2026-11-19 after the AI test game on 0.40.1): one "buildIn" or "upgrade" builds in every piece he holds that is next (game/game `moreWork`),
-// a plan has at most 12 steps (game/actions PLAN_STEPS), "pickup" after a "go" takes the piece he walked to (input.pickWant), a pile of logs gives a dry log first (game/wood take),
+// a plan has at most 12 steps (game/actions PLAN_STEPS), "pickup" takes the piece named (input.take since 0.41.0, input.pickWant before), a pile of logs gives a dry log first (game/wood take),
 // the trunk in the hut's way is named by its id and is always on the menu (game/actor), a refused "use" says why (game/actor `useWhy`), "1 log" not "1 logs", and the rules ask for
 // plain words in his thought and his lessons (ai/actPrompt). Seed 1337.
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -84,12 +84,12 @@ describe('a plan of up to 12 steps (game/actions)', () => {
   it('12 steps are followed, 13 are refused', () => {
     expect(PLAN_STEPS).toBe(12);
     const places = [];
-    expect(checkPlan(Array.from({ length: 12 }, () => ({ do: 'pickup' })), places).ok).toBe(true);
-    expect(checkPlan(Array.from({ length: 13 }, () => ({ do: 'pickup' })), places).reason).toBe('the plan has 13 steps, at most 12');
+    expect(checkPlan(Array.from({ length: 12 }, () => ({ wait: 1 })), places).ok).toBe(true);
+    expect(checkPlan(Array.from({ length: 13 }, () => ({ wait: 1 })), places).reason).toBe('the plan has 13 steps, at most 12');
   });
 });
 
-describe('"pickup" takes the piece he walked to (input.pickWant)', () => {
+describe('"pickup" takes the piece named (input.take, 0.41.0; input.pickWant in 0.40.2)', () => {
   const pair = () => {   // two fallen branches and a spot from which both are within REACH, the first nearer
     const g = createGame(w, spawn);
     for (let i = 0; i < 1500; i++) for (let j = i + 1; j < Math.min(1500, i + 40); j++) {
@@ -103,7 +103,7 @@ describe('"pickup" takes the piece he walked to (input.pickWant)', () => {
     }
     return null;
   };
-  it('a nearer piece is offered without it; with it, the wanted one', () => {
+  it('a nearer piece is offered without it; with it, the wanted one and nothing else', () => {
     const q = pair(); expect(q).toBeTruthy();
     const { a, b, x, z } = q;
     const g = createGame(w, { x, z, y: w.H(x, z) }, { sleep: { awake: 0.1 } });
@@ -111,16 +111,17 @@ describe('"pickup" takes the piece he walked to (input.pickWant)', () => {
     const near = pick(); expect(near).toBeTruthy();
     const other = near.thing.log.id === a.id ? b : a;
     expect(g.wood.find(x, z, REACH, 'log', l => l.id === other.id)).toBeTruthy();   // the other one is within reach too
-    const input = makeInput({ pickWant: other.id }); g.update(input, 0);
+    const input = makeInput({ take: { id: other.id } }); g.update(input, 0);
     expect(pick().thing.log.id).toBe(other.id);
-    g.update(makeInput(), 0); expect(pick().thing.log.id).toBe(near.thing.log.id);   // gone with the next walk
+    expect(g.actions().filter(o => o.kind === 'pickup')).toHaveLength(1);
+    g.update(makeInput(), 0); expect(pick().thing.log.id).toBe(near.thing.log.id);   // gone with the next step
   });
-  it('the actor sets it on a "go" to a loose piece and clears it on the next walk', () => {
+  it('the actor sets it on a "take" of a loose piece', () => {
     const g = createGame(w, spawn, { sleep: { awake: 0.1 } }); walkFirstDay(w, g, spawn); g.known.visit(spawn.x, spawn.z);
     let n = 0, target = null;
-    const a = createActor(w, g, { chooser: m => { if (n++) return null; target = m.places.find(q => q.kind === 'driftwood' || q.kind === 'branch'); return [{ go: target.id }]; } });
+    const a = createActor(w, g, { chooser: m => { if (n++) return null; target = m.places.find(q => q.kind === 'driftwood' || q.kind === 'branch'); return [{ take: target.id }]; } });
     let seen = null;
-    for (let i = 0; i < 1500 && !seen; i++) { a.step(0.1); g.update(a.input, 0.1); if (Number.isFinite(a.input.pickWant)) seen = a.input.pickWant; }
+    for (let i = 0; i < 1500 && !seen; i++) { a.step(0.1); g.update(a.input, 0.1); if (a.input.take && Number.isFinite(a.input.take.id)) seen = a.input.take.id; }
     expect(seen).toBe(target.ref.id);
   });
 });
