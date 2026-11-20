@@ -19,7 +19,7 @@
  *   actRecentText(recent) -> string                   game/actor's records as lines
  *   buildActMessages({ name, state, menu, ask, recent, notes, lessons }) -> [{ role: 'system', content }, { role: 'user', content }]
  *   armText(carries) -> string                       0.38.1 "Trace": "Under his arm: 2 of 3." (in NOW, after what he carries)
- *   bodyText(state) -> string (0.37.10: thirst, hunger, wet (0.42.0), awake), wetText(state) -> string (0.42.0 "Wet": how wet he is and how long he needs to dry), awakeText(state) -> string (0.40.3: awake, tired, when he falls asleep, whether he may lie down now), fireText(fires) -> string (0.37.10: his fires, or that none burns)
+ *   bodyText(state) -> string (0.37.10: thirst, hunger, wet (0.42.0), awake), wetText(state) -> string (0.42.0 "Wet": how wet he is and how long he needs to dry), awakeText(state) -> string (0.40.3: awake, tired, when he falls asleep, whether he may lie down now), fireText(fires, menu?) -> string (0.37.10: his fires, or that none burns; 0.42.1 "Kindling": with the menu, what a new fire still needs, `kindlingText(menu)`)
  *   parseActPlan(text, old?) -> { ok, steps, say, notes, error }   the first JSON object of the text (code fences allowed); `steps` as given (checked later), `notes` [text] | null
  *                                (0.37.8: a whole number n in `notes` keeps note n of `old`, his notes before)
  *
@@ -109,6 +109,7 @@ export function actFixed(name) {
     'HOW TO PLAN',
     '- Building material (driftwood, branches, fronds, stones, logs for the home) is taken only when the next part of a home needs that kind, and built in straight away: never stocked on piles or carried round. Before a lean-to is begun only its driftwood is needed. Only firewood (dry driftwood or branches for a fire) is gathered on a pile ahead.',
     '- There is no hurry: the home takes days. A day is also for water, food, his fire and looking round the island.',
+    `- Before dusk he wants a fire: it gives him a whole night of sleep, dries him and roasts his food. Branches burn too (a pile of ${FIRE_MIN} branches lights as well as driftwood), so a first fire can be made of branches and the driftwood can go to the lean-to.`,
     `- A plan is a short list of steps of about ${PLAN_MINUTES} game minutes: add up the minutes of every step (an action's minutes are in the list below; a walk's minutes on the menu count from where he stands now, so a second walk in the same plan counts from the place before: he walks about ${Math.round(METRES_PER_MINUTE * 10) / 10} m in a game minute, a little more on a winding way; a sleep counts 0, a fishing its minutes) and give your sum as "minutes". A plan of several steps is refused only when your count or the game's is over ${PLAN_GRACE} minutes; you are told when your count was off. Bundle small things that belong together ("go to the river, drink, fill the shells"). A walk or a wander longer than that is a plan of its own. At most ${PLAN_STEPS} steps.`,
     `- Kinds of step:`,
     '  {"go": "<place id>"}: walk to a place of the menu. Only ids that are on the menu now. A place keeps its id as long as it exists (branch4 is the same branch in every request).',
@@ -229,14 +230,27 @@ export function awakeText(s) {
 }
 
 /** 0.37.10 "Body": his fires (game/actor `menu().fires`), also when none burns. */
-export function fireText(fires) {
+export function fireText(fires, menu) {
   const list = Array.isArray(fires) ? fires : [];
-  if (!list.length) return 'Fire: he has no fire.';
   const burning = list.filter(f => f.state === 'burning'), embers = list.filter(f => f.state === 'embers');
   const where = f => `${f.id}${f.ring ? ' in the stone ring' : ''}, ${f.dist} m ${f.dir}`;
   if (burning.length) return `Fire: ${burning.map(f => `${where(f)}, burns about ${f.hours} more hours`).join('; ')}.`;
   if (embers.length) return `Fire: none of his burns; embers only at ${embers.map(where).join('; ')}.`;
-  return `Fire: none of his burns (${list.length === 1 ? 'one cold fire place' : `${list.length} cold fire places`}).`;
+  const head = !list.length ? 'Fire: he has no fire.' : `Fire: none of his burns (${list.length === 1 ? 'one cold fire place' : `${list.length} cold fire places`}).`;
+  return menu ? `${head} ${kindlingText(menu)}` : head;
+}
+
+/** 0.42.1 "Kindling": what a new fire still needs, as the lean-to's "still needs": a pile of FIRE_MIN dry pieces (the best pile he knows on the menu, with its `fuel`)
+ *  and a tuft of fibre (or a burning torch), with the nearest coconut to husk when he has no fibre; then "light" there. */
+export function kindlingText(menu) {
+  const m = menu || {}, c = m.carries || {}, places = Array.isArray(m.places) ? m.places : [];
+  const piles = places.filter(q => q.kind === 'pile' && q.fuel > 0).sort((a, b) => b.fuel - a.fuel || a.dist - b.dist), best = piles[0];
+  const pile = best ? (best.fuel >= FIRE_MIN ? `his pile ${best.id} (${best.dist} m ${best.dir}) has ${best.fuel} dry pieces: enough` : `his pile ${best.id} (${best.dist} m ${best.dir}) has ${best.fuel} of ${FIRE_MIN} dry pieces`)
+    : 'he has no pile of firewood yet';
+  const coco = places.filter(q => q.kind === 'coconut').sort((a, b) => a.dist - b.dist)[0];
+  const fibre = c.torch ? 'his burning torch lights it' : c.fibre > 0 ? `he carries ${c.fibre} tuft${c.fibre === 1 ? '' : 's'} of fibre`
+    : `he has no fibre: husk a coconut on the ground for it${coco ? ` (${coco.id}, ${coco.dist} m ${coco.dir}, is nearest)` : ' (he knows none now)'}`;
+  return `To light one he needs a pile of at least ${FIRE_MIN} pieces of dry driftwood or branches (${pile}) and a tuft of fibre (${fibre}); then "light" standing beside the pile.`;
 }
 
 /** 0.38.1 "Trace": the room under his arm ("Under his arm: 2 of 3."; a log on his shoulder takes everything). 0.40.0 "Belt": the stones in his hands too, and how much his load slows him
@@ -256,7 +270,7 @@ export function buildActMessages({ name, state, menu, ask, recent, notes, lesson
     askLine(ask) + (cl ? ' ' + cl : ''),
     '',
     'NOW',
-    stateText(actState(state, menu), { body: bodyText(state || {}), fire: fireText(menu && menu.fires), arm: armText(actState(state, menu).carries) }),
+    stateText(actState(state, menu), { body: bodyText(state || {}), fire: fireText(menu && menu.fires, menu || {}), arm: armText(actState(state, menu).carries) }),
     '',
     'WHAT HE DID LATELY',
     actRecentText(recent),

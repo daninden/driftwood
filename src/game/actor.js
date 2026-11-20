@@ -17,6 +17,7 @@
  *   actor.menu() -> menu                          what he could do now (pure but for the path searches; no state changes):
  *                                                   { here: [{ id, what }], uses: [{ id, what }], places: [place], fires: [fire], dirs, carries, light, minutes: PLAN_MINUTES }
  *                                                   (carries.dryDriftwood, 0.41.0: how much of the driftwood he carries is dry enough to burn)
+ *                                                   (a pile place has `fuel`, 0.42.1 "Kindling": its dry pieces that burn, for ai/actPrompt `kindlingText`)
  *                                                   fire (0.37.10 "Body"): { id, state: 'burning' | 'embers' | 'cold', hours (left while burning), ring, dist, dir }: every fire of his on the menu
  *                                                   place: { id, kind, what, x, z, dist, dir, minutes, nearby, offers: [kind], notNow? } (offers: what the action button would offer standing there, with what he holds now, a pickup of it as 'take' (0.41.0); 0.40.0 notNow: why what lies there cannot be taken up with what he holds, `holdWhy`)
  *   actor.plan -> { steps, minutes, at, menu, say, why } | null      the plan being followed (menu: the menu it was chosen from; its place ids hold for the whole plan; say: the chooser's thought for it)
@@ -346,7 +347,7 @@ export function createActor(world, game, opts = {}) {
         const mins = walkMinutes(len / paceNow());   // 0.37.8: at the pace he walks with now (his load, tired, thirsty, hungry), as game/game
         const notNow = takeable ? null : holdWhy(kind, c.ref);   // 0.40.0: why what lies there cannot be taken up with what he holds now
         places.push({ id: placeId(kind, c.ref), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
-          minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers, ...(notNow ? { notNow } : {}) });
+          minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers, ...(notNow ? { notNow } : {}), ...(kind === 'pile' ? { fuel: c.ref.kind === 'branch' ? c.ref.logs.length : c.ref.kind === 'driftwood' ? c.ref.logs.filter(l => !wet(l)).length : 0 } : {}) });   // 0.42.1 "Kindling": a pile's dry pieces that burn (ai/actPrompt `fireText`)
       }
     }
     places.sort((a, b) => a.dist - b.dist);

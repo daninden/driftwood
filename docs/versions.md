@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.42.1 "Kindling" — 2026-11-20
+
+Agreed with the user 2026-11-20 ("A en B, C ook") after an AI log on 0.42.0 (gemini-3.5-flash-lite): soaked at landfall he still chose the lean-to over a fire. The request made the lean-to concrete (what it still needs, `buildHere` and `buildIn` on the menu) and the fire abstract ("Fire: he has no fire."; `light` never on the menu without a pile and fibre; the recipe only in the long fixed part).
+
+- **A. What a new fire still needs:** with no fire burning and no embers, the fire line in NOW goes on like the lean-to's "still needs": a pile of at least 4 pieces of dry driftwood or branches (his pile with the most dry pieces, by id, distance and direction, with how many of 4 it has, or that he has no pile of firewood yet), a tuft of fibre (how many he carries, his burning torch, or that he has none: husk a coconut on the ground, the nearest by id), then "light" standing beside the pile (ai/actPrompt `kindlingText`; game/actor gives each pile on the menu its `fuel`, the dry pieces that burn).
+- **B. "no fibre":** "Carrying" says "no fibre" when he has none ("Carrying: 1 driftwood, no fibre."; "nothing (no fibre)").
+- **C. A planning rule:** "Before dusk he wants a fire: it gives him a whole night of sleep, dries him and roasts his food. Branches burn too (a pile of 4 branches lights as well as driftwood), so a first fire can be made of branches and the driftwood can go to the lean-to."
+- **Tests:** `tests/kindling.test.js`.
+
 ## 0.42.0 "Wet" — 2026-11-20
 
 Agreed with the user 2026-11-20 ("akkoord, bouw eerst 0.41.1 en daarna 0.42.0"): he was too set on building and should first make a fire and see to food. A real reason in the game, not advice: he washes ashore wet and has to dry.

@@ -9,7 +9,7 @@
  *   snapshotOf(game, camp?) -> state   a plain description of the situation: { day, time, raining, daylight (hours to dusk, 0 at night), thirst, hunger, wet (0.42.0: 0 dry .. 1 soaked), awake, carries, home (per part in %),
  *                                      tide (tideNow), strip (camp.stripWood: wet driftwood he knows on the tide strip), fromHome (metres from his home, game/camp), camp (game/camp camp()) }
  *                                      (fromHome and camp are for the logbook; the request does not tell them: every fire and lean-to is on the menu)
- *   stateText(state, { body, fire }?) -> string   the state as lines of text (`body`: the thirst, hunger and awake lines of ai/actPrompt; `fire`: his fires, after the home line)
+ *   stateText(state, { body, fire }?) -> string   the state as lines of text (`body`: the thirst, hunger and awake lines of ai/actPrompt; `fire`: his fires, after the home line; 0.42.1: "no fibre" in what he carries when he has none)
  *   tideNow(total) -> { level, name: 'high' | 'half' | 'low', falling, turn (the time of day of the next turn) }   pure, from game/tide; CRAB_TIDE the level of low water
  *   hoursTo(time, to) -> hours         from the time of day `time` until the next `to`
  *   noNumber(t), notesText(notes), clipLine(text, max)   a note without its leading list number; his notes as numbered lines ('(none yet)'); one line of text cut to `max` characters
@@ -74,13 +74,14 @@ const d1 = v => (Math.round((+v || 0) * 10) / 10).toFixed(1);
 export function stateText(s, o = {}) {
   const c = s.carries || {}, has = [];
   for (const [k, label] of [['driftwood', 'driftwood'], ['branches', 'branches'], ['fronds', 'fronds'], ['stones', 'stones'], ['fibre', 'fibre'], ['nuts', 'coconuts'], ['emptyShells', 'empty half shells'], ['fullShells', 'full half shells'], ['crabs', 'crabs'], ['fish', 'fish'], ['berries', 'handfuls of berries'], ['bananas', 'banana bunches']]) if (c[k] > 0) has.push(`${c[k]} ${label}`);
+  if (!(c.fibre > 0)) has.push('no fibre');   // 0.42.1 "Kindling": also when he has none (a fire needs a tuft)
   for (const [k, label] of [['spear', 'a spear'], ['axe', 'the axe at his belt'], ['torch', 'a torch'], ['log', 'a log on his shoulder']]) if (c[k]) has.push(label);   // 0.37.5: the log too
   const h = s.home, t = s.tide;
   const home = !h ? 'no shelter yet' : `lean-to ${h.leanto}%, walls ${h.walls}%, bed ${h.bed}%, stone ring ${h.ring}%, hut ${h.hut}%`;
   return [
     `Day ${s.day}, ${hhmm(s.time)}. Weather: ${s.raining ? 'raining' : 'dry'}. ${s.daylight > 0 ? `About ${d1(s.daylight)} hours of daylight left (dusk about ${hhmm(DUSK)}).` : 'It is dark.'}`,
     ...(o.body ? [o.body] : [`Thirst: ${d1(s.thirst)} days. Hunger: ${d1(s.hunger)} days. Awake for ${d1(s.awake)} days.`]),
-    `Carrying: ${has.length ? has.join(', ') : 'nothing'}.`,
+    `Carrying: ${has.filter(x => x !== 'no fibre').length ? has.join(', ') : 'nothing (no fibre)'}.`,
     ...(o.arm ? [o.arm] : []),
     `Home: ${home}.`,
     ...(o.fire ? [o.fire] : []),
