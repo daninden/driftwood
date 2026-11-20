@@ -84,6 +84,8 @@
  * (`hutTreeBlocks`); a refused "use" says why (`useWhy`: lying down, busy, a torch, water, nothing of that kind carried, no fire for a crab), after waiting up to 20 s for a bend to end;
  * a pile of one piece is "1 log", "1 branch".
  * 0.40.0 "Belt": a felled log says whether it is still green or dry for the hut (game/logs `seasoned`), a log pile how many of its logs are; a refused hut part with a green log says when it is dry.
+ * 0.43.3 "Feed": a `lay` of firewood "at" his fire, or at a ring whose fire burns or glows (`fireOf`), goes on the fire (`layOnFire`: one `feed` a piece, `input.feed` the kind; the rest beside it);
+ * the menu says how wood goes on a fire and that no second fire is lit in a ring with one in it.
  * 0.43.2 "One fire": a pile in a finished stone ring counts all the firewood in the ring (`ringPiles`, `ringWood`; its `fuel` is the ring's dry pieces and it is marked `inRing`), and the lean-to says
  * which piles its ring holds and how many pieces they make together.
  * 0.40.4 "Ring": a pile of driftwood or branches on the menu says when it lies in a lean-to's finished stone ring ("in the stone ring of leanto1: ready to light where it lies",
@@ -208,7 +210,8 @@ export function createActor(world, game, opts = {}) {
   const fireWhat = f => {   // 0.37.4: how long it still burns
     const ring = !!game.leantos.ring(f.x, f.z), burning = game.fire.strength(f) > 0;
     const o = burning ? fireOutlook({ fuel: f.fuel, ring }) : null;
-    return (burning ? `his fire, burning, about ${Math.max(1, Math.round(o.pieces))} piece${Math.round(o.pieces) === 1 ? '' : 's'} on it, about ${Math.round(o.hoursLeft * 2) / 2} hours left` : f.embers > 0.005 ? 'his fire, embers only' : 'his fire place, cold') + (ring ? ' (in the stone ring)' : '');
+    return (burning ? `his fire, burning, about ${Math.max(1, Math.round(o.pieces))} piece${Math.round(o.pieces) === 1 ? '' : 's'} on it, about ${Math.round(o.hoursLeft * 2) / 2} hours left` : f.embers > 0.005 ? 'his fire, embers only (wood put on it flames up again, no drill needed)' : 'his fire place, cold') + (ring ? ' (in the stone ring)' : '')
+      + (fireFull(f) ? '; it holds as much as it can' : '; dry driftwood or branches go on it with "feed" standing at it, or with a "lay" at it')   // 0.43.3 "Feed";
   };
   const fireInfo = q => {   // 0.37.10 "Body": a fire on the menu for the request's NOW: { id, state: 'burning' | 'embers' | 'cold', hours (left while burning), ring, dist, dir }
     const f = q.ref, ring = !!game.leantos.ring(f.x, f.z), burning = game.fire.strength(f) > 0;
@@ -234,6 +237,7 @@ export function createActor(world, game, opts = {}) {
   };
   // ---------- 0.40.4 "Ring": what lies in his stone ring, and the piles beside it that cannot be lit ----------
   const fuelKind = q => q.kind === 'driftwood' || q.kind === 'branch';
+  const ringFire = l => { const c = ringCentre(l); return game.fire.fires.find(f => Math.hypot(f.x - c.x, f.z - c.z) <= RING_R) || null; };
   const ringOf = (x, z) => game.leantos.list.find(l => game.leantos.has(l, 'ring') && Math.hypot(ringCentre(l).x - x, ringCentre(l).z - z) <= RING_R) || null;   // the lean-to whose finished ring (x, z) lies in
   const ringPiles = l => { const c = ringCentre(l); return W.piles.filter(q => q.logs.length && fuelKind(q) && Math.hypot(q.x - c.x, q.z - c.z) <= RING_R); };   // 0.43.2 "One fire": every pile of firewood in the ring
   const ringPile = l => ringPiles(l)[0] || null;
@@ -242,13 +246,15 @@ export function createActor(world, game, opts = {}) {
   const ringNote = q => {   // a pile on the menu: in the ring (ready to light, or how many it still needs), or beside the ring where no fire can be lit
     if (!fuelKind(q)) return '';
     const l = ringOf(q.x, q.z);
+    const lf = l && ringFire(l);
+    if (lf) return ` in the stone ring of ${placeId('leanto', l)}, where his fire ${placeId('fire', lf)} ${game.fire.strength(lf) > 0 ? 'burns' : 'glows'}: no second fire is lit there; this wood goes on the fire (take it up, then a "lay" at ${placeId('fire', lf)} or "feed" there)`;   // 0.43.3 "Feed"
     if (l) { const n = ringWood(l), all = ringPiles(l).length > 1 ? ` (all the firewood in the ring counts together: ${n} pieces)` : ''; return ` in the stone ring of ${placeId('leanto', l)}${all}: ${n >= FIRE_MIN ? 'ready to light where it lies ("light" beside it; all the firewood in the ring burns as one fire in its middle; taking wood from it makes it too small)' : `a fire needs at least ${FIRE_MIN} pieces in the ring (lay more here)`}`; }   // 0.43.2 "One fire"
     return game.leantos.noFire(q.x, q.z) ? ` (within ${RING_NOFIRE} m of his stone ring but not in it: it cannot be lit; only the fire in the ring)` : '';
   };
   const ringHolds = l => {   // a lean-to with a finished ring: what the ring holds now
     if (!game.leantos.has(l, 'ring')) return '';
     const c = ringCentre(l), f = game.fire.fires.find(q => Math.hypot(q.x - c.x, q.z - c.z) <= RING_R && (game.fire.strength(q) > 0 || q.embers > 0.005));
-    if (f) return `; his fire is in its stone ring (${game.fire.strength(f) > 0 ? 'burning' : 'embers'})`;
+    if (f) return `; his fire is in its stone ring (${game.fire.strength(f) > 0 ? 'burning' : 'embers'}; firewood laid at the ring goes on it)`;   // 0.43.3 "Feed"
     const ps = ringPiles(l), n = ringWood(l);   // 0.43.2 "One fire": all its piles of firewood together
     return ps.length ? `; its stone ring holds his ${ps.length === 1 ? `pile ${placeId('pile', ps[0])}` : `piles ${ps.map(q => placeId('pile', q)).join(' and ')}`} (${n} piece${n === 1 ? '' : 's'} of firewood${n >= FIRE_MIN ? ', ready to light' : `, a fire needs ${FIRE_MIN}`})` : `; its stone ring is empty (wood laid down in it lies in its middle: ${FIRE_MIN} pieces of dry driftwood or branches there, then "light", make a fire in it)`;
   };
@@ -747,6 +753,25 @@ export function createActor(world, game, opts = {}) {
       .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
     return spots[0] || { ...leantoPoint(site, 0, -S), out: leantoPoint(site, 0, -S - 3) };
   }
+  // 0.43.3 "Feed": firewood laid "at" his fire, or at the ring (a pile in it, the lean-to) while his fire burns or glows there, goes ON the fire as "feed" does
+  const fireOf = pl => {
+    if (pl.kind === 'fire') return game.fire.fires.includes(pl.ref) ? pl.ref : null;
+    const l = pl.kind === 'leanto' ? (game.leantos.has(pl.ref, 'ring') ? pl.ref : null) : pl.kind === 'pile' ? ringOf(pl.ref.x, pl.ref.z) : null;
+    return l ? ringFire(l) : null;
+  };
+  let fedCount = 0;   // the pieces the running lay step put on a fire (not "laid down" in its record)
+  function* layOnFire(f, kind, want, pl, places) {
+    const d = yield* walkFor(pl, stepMinutes({ go: pl.id }, places)); if (!d.ok) return d;
+    const w = yield* goStand('feed', f); if (!w.ok) return w;
+    const fid = placeId('fire', f), notes = [];
+    inp.feed = kind;
+    while (fedCount < want && offersNow().some(x => x.kind === 'feed')) { const r = yield* doAction('feed'); if (!r.ok) break; fedCount++; }
+    inp.feed = undefined;
+    if (fedCount) notes.push(`put ${kindPlural(kind, fedCount)} on his fire ${fid}${game.fire.fires.includes(f) && fireFull(f) ? ' (now full)' : ''}`);
+    const rest = Math.min(want - fedCount, KIND_HELD[kind]());   // wet wood, or what did not fit on a full fire, goes down beside it
+    if (rest > 0) { inp.lay = { kind, count: rest, toward: { x: f.x, z: f.z } }; const r = yield* doAction('lay'); if (r.ok) notes.push(`the rest (${game.fire.fires.includes(f) && fireFull(f) ? 'the fire was full' : 'not dry enough to burn'}) went down beside it`); }
+    return fedCount || rest > 0 ? { ok: true, note: notes.join('; ') } : { ok: false, reason: `nothing went on ${fid}` };
+  }
   function* layStep(s, places) {
     const kind = s.lay, have = KIND_HELD[kind] ? KIND_HELD[kind]() : 0;
     if (!have) return { ok: false, reason: `he carries no ${kind === 'driftwood' ? 'driftwood' : kind}${kind === 'log' ? ' on his shoulder' : ''} (he carries ${heldText()})` };
@@ -754,6 +779,8 @@ export function createActor(world, game, opts = {}) {
     const pl = s.at === undefined ? null : places.find(q => q.id === s.at);
     if (s.at !== undefined && !pl) return { ok: false, reason: `no place "${s.at}"` };
     if (pl && !stillThere(pl)) return { ok: false, reason: `${pl.what} is gone` };
+    const onFire = pl && (kind === 'driftwood' || kind === 'branch') ? fireOf(pl) : null;
+    if (onFire) { const r = yield* layOnFire(onFire, kind, count || have, pl, places); if (r.ok && fewer) r.note = join(fewer, r.note); return r; }
     const onPile = pl && pl.kind === 'pile' && pl.ref.kind === kind ? pl.ref : null;
     if (onPile && onPile.logs.length >= PILE_MAX) return { ok: false, reason: `${pl.id} is full (${PILE_MAX} pieces): lay it beside it ("at" another place) or on another pile` };
     if (pl) {
@@ -783,7 +810,7 @@ export function createActor(world, game, opts = {}) {
   function* runStep(s, places) {
     const k = stepKind(s);
     if (k === 'go' || k === 'wander' || k === 'take' || k === 'lay') inp.siteYaw = undefined;   // 0.39.0: the way of a place for a home holds only where he stands at it
-    inp.take = undefined; inp.lay = undefined;   // 0.41.0 "Hands": what a take or a lay names holds for that step only
+    inp.take = undefined; inp.lay = undefined; inp.feed = undefined; fedCount = 0;   // 0.41.0 "Hands": what a take or a lay names holds for that step only (0.43.3: the kind a feed puts on, too)
     if (k === 'take') return yield* takeStep(s, places);
     if (k === 'lay') return yield* layStep(s, places);
     if (k === 'go') {
@@ -808,7 +835,7 @@ export function createActor(world, game, opts = {}) {
       if (!got.length) return null;
       return c1.stones > c0.stones && !(c1.driftwood + c1.branches + c1.fronds) ? `picked up ${got.join(', ')}; now in his hands: ${c1.stones} stone${c1.stones === 1 ? '' : 's'} (${c1.stones} of ${STONE_MAX})` : `picked up ${got.join(', ')}; now under his arm: ${armNow(c1)}`;
     }
-    const laid = c0.driftwood + c0.branches + c0.fronds + c0.stones + (c0.log ? 1 : 0) - (c1.driftwood + c1.branches + c1.fronds + c1.stones + (c1.log ? 1 : 0));
+    const laid = c0.driftwood + c0.branches + c0.fronds + c0.stones + (c0.log ? 1 : 0) - (c1.driftwood + c1.branches + c1.fronds + c1.stones + (c1.log ? 1 : 0)) - fedCount;   // 0.43.3: what went on a fire is not laid down
     if (laid <= 0) return null;
     const where = layWhere(piles0);
     return `laid ${laid === 1 ? '1 piece' : `${laid} pieces`} down${where.length ? ': ' + where.join('; ') : ''}`;

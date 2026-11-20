@@ -194,6 +194,12 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Feed (0.43.3)
+
+- `game/actor` `layStep`: a `lay` of driftwood or branches "at" his fire, or at a pile in / the lean-to of a ring whose fire burns or glows (`fireOf`, `ringFire`), becomes `layOnFire`: to the fire's standing point (`goStand('feed')`), one `feed` per piece of that kind (`input.feed`, `game/game` `feedWant`: the kind the feed takes), the rest (wet, or the fire full) laid beside it; `fedCount` keeps the fed pieces out of the record's "laid down".
+- `game/game` `hearthOf`: a ring with a fire in it (burning or embers) gives no logs, so nothing is lit there (`lightable`, `arrive`, `finish` before the fibre is used).
+- The menu: a fire says how wood goes on it and that embers flame up again without the drill; a pile in a ring with a fire says no second fire is lit there; the lean-to says firewood laid at the ring goes on the fire; the fire rule says it.
+
 ### One fire (0.43.2)
 
 - `game/game` `hearthOf(pile)`: in a finished stone ring (`leantos.ringMiddle`) every pile of driftwood or branches within `RING_R` of the middle; `lightable`, `arrive` ('light', 'kindle'), `finish` (the drill) and `lackAt` count their logs together, and a fire lit there takes all of them and stands at the ring's middle. Outside a ring: the pile alone, where it lies.

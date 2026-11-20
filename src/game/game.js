@@ -184,6 +184,7 @@
  * 0.33.1 "Hearth": the middle of a finished stone ring takes a fuel pile despite the keep-free apron of the lean-to or hut (tested against the pile's own circle only) and CAMP_GAP (`blockedAt`: otherwise only a solid that really overlaps refuses it).
  * 0.37.5 "Ways": `actionAt` keeps 'laySpear' among the arc's options whenever it is offered (three nearer small things pushed it out, against the design).
  * 0.33.4 "One hearth": the no-fire zone round a finished stone ring is RING_NOFIRE (8 m, was 3.5) from the ring's middle, and 'feed' is not offered for a fire that lies in it (leantos.noFire): a fire beside the ring that burned before the ring was built is not fed and burns out, for the player and for Dave; the fire in the ring itself (and any fire away from the ring) is fed as before. Torches are unchanged (a torch can still be taken from such a fire while it burns).
+ * 0.43.3 "Feed": no fire is lit in a ring where his fire burns or glows (`hearthOf` gives no logs then); input.feed ('driftwood' | 'branch') is the kind a 'feed' puts on (game/actor's lay at a fire).
  * 0.43.2 "One fire": in a finished stone ring all the firewood is one fire (`hearthOf`): every pile of driftwood or branches within RING_R of the ring's middle counts towards FIRE_MIN together, and
  *   lighting one of them (drill or torch) burns them all as one fire in the ring's middle. Outside a ring a pile is a fire of its own, where it lies.
  * 0.31.1 "Milk": 'light' (and 'kindle') is not offered for a pile that lies more than RING_R but at most RING_NOFIRE (3.5 m) from the middle of a finished lean-to's finished stone ring (leantos.noFire): beside a ring a fire is lit only in the ring itself; a pile elsewhere is unaffected. It is not started either when the pile moved there meanwhile (no fibre is used).
@@ -381,6 +382,7 @@ export function createGame(world, spawn, opts = {}) {
   function hearthOf(pile) {
     const m = leantos.ringMiddle(pile.x, pile.z);
     if (!m) return { piles: [pile], logs: pile.logs, x: pile.x, z: pile.z };
+    if (fire.fires.some(f => Math.hypot(f.x - m.x, f.z - m.z) <= RING_R)) return { piles: [], logs: [], x: m.x, z: m.z, fire: true };   // 0.43.3 "Feed": his fire burns or glows in the ring: no second fire there (the wood goes on it)
     const piles = wood.piles.filter(q => isFuel(q) && Math.hypot(q.x - m.x, q.z - m.z) <= RING_R);
     if (!piles.includes(pile)) piles.push(pile);
     return { piles, logs: piles.flatMap(q => q.logs), x: m.x, z: m.z };
@@ -400,7 +402,7 @@ export function createGame(world, spawn, opts = {}) {
   }
   // 0.32 "Piece by piece": a site is built piece by piece with what he carries (game/leanto). The kinds he has: driftwood, branches and fronds under his arm, stones in his hands.
   let viewYaw = YAW;   // the camera's yaw at the last update (input.yaw): the way the open side of a new lean-to faces; the mind may write it before it presses
-  let takeWant = null, layWant = null;   // 0.41.0 "Hands": input.take and input.lay (game/actor): the very thing to take up, and what to lay down where
+  let takeWant = null, layWant = null, feedWant = null;   // 0.43.3 "Feed": input.feed, the kind ('driftwood' | 'branch') a feed puts on (game/actor's lay at a fire)   // 0.41.0 "Hands": input.take and input.lay (game/actor): the very thing to take up, and what to lay down where
   let siteYaw = null;   // 0.39.0: input.siteYaw, the way game/actor asks a new lean-to to open (at a place for a home of the menu); tried before the camera's
   const piecesHeld = () => { const ks = new Set(wood.carried.map(kindOf)); if (wood.stones.length) ks.add('stone'); if (wood.log && seasoned(wood.log, clock.total)) ks.add('log'); return ks; };   // 0.40.0: a green log is no piece of the hut yet
   const handsFree = () => !fire.torch && !spear.hand;   // 0.40.0 "Belt": the axe at his belt takes no hand
@@ -716,7 +718,7 @@ export function createGame(world, spawn, opts = {}) {
     else if (a.kind === 'takeSpear') { if (spear.take()) { stoop(); notifyAction('takeSpear'); } }
     else if (a.kind === 'laySpear') { if (!wet(here()) && spear.lay(player.x, player.z)) { stoop(); notifyAction('laySpear'); } }
     else if (a.kind === 'feed') {   // only a piece dry enough to burn goes on; wet wood stays in his arm
-      const l = wood.giveOne(fuel);
+      const l = wood.giveOne(q => fuel(q) && (!feedWant || kindOf(q) === feedWant));   // 0.43.3 "Feed": the kind a lay at the fire names
       if (l) { fire.feed(a.fire, dryness(l, clock.total), l.branch ? BRANCH_BURN : 1); stoop(PICK_TIME); notifyAction('feed'); }
     } else if (a.kind === 'torch') { if (a.fire ? fire.takeTorch(a.fire) : fire.pickTorch(a.torch)) { stoop(); notifyAction('torch'); } }
     else if (a.kind === 'drink' || a.kind === 'fill') {
@@ -796,8 +798,8 @@ export function createGame(world, spawn, opts = {}) {
     if (wk.kind === 'makeAxe') { if (makeableAxe(player.x, player.z) && useStone() && wood.giveOne(l => !!l.branch) && fibre.use()) axe.make(); return; }   // the branch, the stone and the tuft are all used up
     if (wk.kind === 'make') { if (makeable(player.x, player.z) && wood.giveOne(l => !!l.branch)) spear.make(); return; }   // the branch is used up, the stone stays
     if (wk.kind === 'fish') { if (spear.hand && fishableAt(here())) fish.fishTry(clock.total); return; }
-    const pile = wk.thing; if (!wood.piles.includes(pile) || leantos.noFire(pile.x, pile.z) || !fibre.use()) return;
-    const h = hearthOf(pile);   // 0.43.2 "One fire": in the ring all its firewood goes into one fire, in the ring's middle
+    const pile = wk.thing; if (!wood.piles.includes(pile) || leantos.noFire(pile.x, pile.z)) return;
+    const h = hearthOf(pile); if (h.logs.length < FIRE_MIN || !fibre.use()) return;   // 0.43.3: not when a fire burns or glows in the ring meanwhile (no fibre used)   // 0.43.2 "One fire": in the ring all its firewood goes into one fire, in the ring's middle
     const lit = fire.attempt(h.x, h.z, h.logs, meanDry(h.logs), sleep.tired(), clock.total);
     if (lit) for (const q of h.piles) wood.takePile(q);
   }
@@ -826,6 +828,7 @@ export function createGame(world, spawn, opts = {}) {
     siteYaw = Number.isFinite(input.siteYaw) ? input.siteYaw : null;
     takeWant = input.take && typeof input.take === 'object' ? input.take : null;
     layWant = input.lay && typeof input.lay === 'object' ? input.lay : null;
+    feedWant = input.feed === 'driftwood' || input.feed === 'branch' ? input.feed : null;
     const wantWake = input.takeWake ? input.takeWake() : false, light = input.takeLight ? input.takeLight() : false;
     const pressed = input.takeAction ? input.takeAction() : null, idx = input.takeChoice ? input.takeChoice() : null;
     let pick = null;   // what the button, a key 1 to 3, an icon of the arc or act() chose, looked at before anything changes

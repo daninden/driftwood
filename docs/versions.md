@@ -2,6 +2,16 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.43.3 "Feed" — 2026-11-20
+
+Agreed with the user 2026-11-20 ("ja") after watching him lay wood beside his fire instead of on it, and light a new pile beside glowing embers instead of putting wood on them.
+
+- **A lay at his fire is feeding:** a `lay` of driftwood or branches "at" his fire, or at his stone ring (a pile in it, the lean-to) while his fire burns or glows there, puts the dry pieces on the fire one by one, as "feed" does; wet pieces and what a full fire cannot take go down beside it. The record says "put 2 pieces of driftwood on his fire fire1".
+- **No second fire in a ring where one burns or glows** (`game/game` `hearthOf`): its firewood goes on the fire. A fix of 0.43.2, where a new fire could be lit on the spot of glowing embers.
+- **The menu:** a fire says dry driftwood or branches go on it with "feed" or a "lay" at it (or that it is full), and that embers flame up again without the drill; a pile in a ring with a fire says no second fire is lit there and its wood goes on the fire; the lean-to says firewood laid at the ring goes on the fire; the fire rule says it.
+- **Tests:** `tests/feed.test.js`.
+- **Next:** 0.43.4 "Mouth".
+
 ## 0.43.2 "One fire" — 2026-11-20
 
 Agreed with the user 2026-11-20 ("akkoord, bouw beide, en zet 3.1 als eerste model") after two AI logs on 0.43.0 (gemini flash-lite): in one he lit a fire beside the stones of his ring, in the other he built his firewood into the lean-to.
