@@ -72,6 +72,7 @@
  * followed when the chooser counted it itself.
  * The menu also has `light`: { dark, hours (until dusk by day, until dawn in the dark), torch: { minutes left } | null, planted: [{ dist, dir, minutes }] (torches in the ground within 40 m), lit (he stands in firelight) }.
  *
+ * 0.41.1 "Straight": a `lay` `at` a place for a home lays the new pile beside the room the whole home keeps free (`homeAside`), never on it.
  * 0.41.0 "Hands": the steps `take` and `lay` (game/actions; "pickup" and "lay" are no `do` actions any more). A `take` fails at once when the thing is gone or his hands are no room for it
  * (`holdWhy`), keeps the dark rule of a walk, sets input.take ({ id } of a loose piece, { pile, count? } of a pile) for that step, walks there (a pile's 'take' standing spot of game/stand) and
  * presses the pickup the game then offers for that thing alone. A `lay` fails at once when he carries nothing of that kind (saying what he carries) or the pile named is full; it sets input.lay
@@ -93,6 +94,7 @@ import { HALF, T, NT } from '../world/constants.js';
 import { createPath } from './path.js';
 import { createRoute } from './route.js';
 import { canStand, terrainAt, WALK_SPEED } from './movement.js';
+import { leantoPoint } from './obstacles.js';
 import { fishableAt, FISH_DEPTH } from './fish.js';
 import { walkLight, litAt, isDark, hoursToDusk, hoursToDawn } from './dark.js';
 import { freshWater } from './water.js';
@@ -100,7 +102,7 @@ import { dryness, LOG_WALK, CARRY_SLOW, CARRY_MAX, STONE_MAX, PILE_MAX } from '.
 import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
 import { seasoned, dryAt, SEASON_DAYS } from './logs.js';
 import { CELL as KNOWN_CELL, NC as KNOWN_NC } from './known.js';
-import { standFor, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, ringCentre, RING_R, RING_NOFIRE } from './leanto.js';
+import { standFor, HUT_KEEP, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, ringCentre, RING_R, RING_NOFIRE } from './leanto.js';
 import { fireOutlook, full as fireFull, BURN, TORCH_DRY, FIRE_MIN } from './fire.js';
 import { TIRED_AT, SLEEP_AFTER, NIGHT_AFTER } from './sleep.js';
 import { WAIT, PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, LEG_DETOUR, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
@@ -110,6 +112,7 @@ export const RECENT_MAX = 20;
 export const SCAN_R = 150;          // metres round him in which the menu looks for places he knows
 export const FISH_WALK = 40;        // metres: how far from where he stands a fishing looks for the shallows (known ground only)
 export const walkMinutes = metres => Math.max(1, Math.ceil(gameMinutes(metres / WALK_SPEED * WALK_SLACK)));   // 0.37.5: a walk of that many metres of route in game minutes (with a little slack)
+const ASIDE_GAP = 1.0;   // 0.41.1 "Straight": how far outside the home's free room he stands to lay material beside a place for a home
 const STOP = 0.12, SETTLE = 3, WALK_SLACK = 1.1, SETTLE_TICKS = 12, ASIDE = 3, IDLE_MAX = 300;   // IDLE_MAX (0.40.4): real seconds a step waits for him to finish his work (a felling is 50, a drill 14)   // the follower's stop at a standing point (as game/mind), and the walk's estimate made a little longer for the slower pace of a load
 
 export function createActor(world, game, opts = {}) {
@@ -727,6 +730,16 @@ export function createActor(world, game, opts = {}) {
     if (!r.ok) return r.reason === 'not offered here' ? { ok: false, reason: `he could not reach ${pl.id} to pick it up` } : r;
     return r;
   }
+  /** 0.41.1 "Straight": where he stands to lay material beside a place for a home: just outside the room the whole home keeps free (HUT_KEEP), on a side or
+   *  behind it, the standable spot nearest him; `out` is the way outward, so the new pile goes down further from the home. */
+  function homeAside(site) {
+    const S = HUT_KEEP.side + ASIDE_GAP, B = HUT_KEEP.back - ASIDE_GAP;
+    const spots = [[0, -S, 0, -S - 3], [0, S, 0, S + 3], [B, 0, B - 3, 0], [(HUT_KEEP.back) / 2, -S, (HUT_KEEP.back) / 2, -S - 3], [(HUT_KEEP.back) / 2, S, (HUT_KEEP.back) / 2, S + 3]]
+      .map(([f, r, fo, ro]) => ({ ...leantoPoint(site, f, r), out: leantoPoint(site, fo, ro) }))
+      .filter(q => { const t = terrainAt(world, q.x, q.z, game.sea); return canStand(world, q.x, q.z, game.sea) && !t.inRiver && t.y > game.sea + 0.05; })
+      .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
+    return spots[0] || { ...leantoPoint(site, 0, -S), out: leantoPoint(site, 0, -S - 3) };
+  }
   function* layStep(s, places) {
     const kind = s.lay, have = KIND_HELD[kind] ? KIND_HELD[kind]() : 0;
     if (!have) return { ok: false, reason: `he carries no ${kind === 'driftwood' ? 'driftwood' : kind}${kind === 'log' ? ' on his shoulder' : ''} (he carries ${heldText()})` };
@@ -742,7 +755,11 @@ export function createActor(world, game, opts = {}) {
       inp.lay = { kind, ...(count ? { count } : {}), ...(onPile ? { pile: onPile } : { toward: { x: pl.x, z: pl.z } }) };
       let w;
       if (onPile) { w = yield* goStand('layOn', onPile, limit); if (!w.ok) w = yield* walk(onPile.x, onPile.z, { stop: 1.0, maxSecs: limit }); }
-      else {
+      else if (pl.kind === 'homespot') {   // 0.41.1 "Straight": beside the home's room, never in it (a pile there would take the place off the menu)
+        const a = homeAside(pl.ref.site);
+        inp.lay = { ...inp.lay, toward: a.out };
+        w = yield* walk(a.x, a.z, { stop: 0.3, maxSecs: limit });
+      } else {
         const r = pl.ref, at = pl.kind === 'crabs' ? r.hole : pl.kind === 'leanto' ? standFor(r) : pl;
         w = yield* walk(at.x, at.z, { stop: pl.kind === 'tree' ? r.r + 1.2 : pl.kind === 'leanto' ? 0.5 : 1.6, maxSecs: limit });
       }

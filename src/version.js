@@ -6,9 +6,9 @@
  * list of versions, one line each, lives in docs/versions.md; keep VERSION
  * and NAME here (and "version" in package.json) in step with its last entry.
  *
- * Exports: VERSION ('0.41.0'), NAME ('Hands')
+ * Exports: VERSION ('0.41.1'), NAME ('Straight')
  *
  * Depends on: nothing
  */
-export const VERSION = '0.41.0';
-export const NAME = 'Hands';
+export const VERSION = '0.41.1';
+export const NAME = 'Straight';

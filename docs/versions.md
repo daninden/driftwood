@@ -2,6 +2,14 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.41.1 "Straight" — 2026-11-20
+
+Agreed with the user 2026-11-20 after an AI log on 0.41.0: before any lean-to stood he gathered branches and fronds, laid them "at" a place for a home, and so blocked it (since 0.40.1 a blocked place leaves the menu); he moved his piles from place to place six times in the first morning. The user: what he picks up he builds in at once; only firewood is gathered.
+
+- **The rule:** building material (driftwood, branches, fronds, stones, logs for the home) is taken only when the next part of a home needs that kind, and built in straight away, never stocked on piles or carried round; before a lean-to is begun only its driftwood is needed; only firewood is gathered on a pile ahead.
+- **Never on the spot:** a `lay` `at` a place for a home lays the new pile just outside the room the whole home keeps free (game/actor `homeAside`: on a side or behind it, about a metre beyond the hut's free room, the standable spot nearest him, the pile laid outward). The place stays on the menu. A fire there still blocks it.
+- Tests: `tests/straight.test.js`; `tests/clear.test.js` follows the new rule text.
+
 ## 0.41.0 "Hands" — 2026-11-20
 
 Agreed with the user 2026-11-20 ("akkoord bouw maar"): picking up and laying down were too vague and led to strange situations. The model said where he walked and the game decided what he picked up there (sometimes more lay there than was meant), and a lay laid everything down at his feet.

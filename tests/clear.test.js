@@ -64,7 +64,7 @@ describe('a place for a home that a pile now blocks (game/actor)', () => {
 });
 
 describe('the rules (ai/actPrompt)', () => {
-  it('say a pile or a fire on a place for a home blocks it', () => {
-    expect(actFixed('Dave')).toMatch(/a pile or a fire laid on a place for a home blocks it, so lay material a few steps beside it/);
+  it('say a fire on a place for a home blocks it, and a lay at it goes beside it (0.41.1 "Straight")', () => {
+    expect(actFixed('Dave')).toMatch(/a fire laid on a place for a home blocks it; a "lay" "at" a place for a home lays it beside the home's room/);
   });
 });
