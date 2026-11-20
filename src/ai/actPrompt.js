@@ -19,12 +19,14 @@
  *   actRecentText(recent) -> string                   game/actor's records as lines
  *   buildActMessages({ name, state, menu, ask, recent, notes, lessons }) -> [{ role: 'system', content }, { role: 'user', content }]
  *   armText(carries) -> string                       0.38.1 "Trace": "Under his arm: 2 of 3." (in NOW, after what he carries)
- *   bodyText(state) -> string (0.37.10: thirst, hunger, wet (0.42.0), awake), wetText(state) -> string (0.42.0 "Wet": how wet he is and how long he needs to dry), awakeText(state) -> string (0.40.3: awake, tired, when he falls asleep, whether he may lie down now), fireText(fires, menu?) -> string (0.37.10: his fires, or that none burns; 0.42.1 "Kindling": with the menu, what a new fire still needs, `kindlingText(menu)`)
+ *   bodyText(state) -> string (0.37.10: thirst, hunger, wet (0.42.0), awake), wetText(state) -> string (0.42.0 "Wet": how wet he is and how long he needs to dry), awakeText(state) -> string (0.40.3: awake, tired, when he falls asleep, whether he may lie down now), fireText(fires, menu?) -> string (0.37.10: his fires, or that none burns; 0.42.1 "Kindling": with the menu, what a new fire still needs, `kindlingText(menu)`; 0.43.5: and `firewoodText(menu.firewood)`), firewoodText(fw) -> string
  *   parseActPlan(text, old?) -> { ok, steps, say, notes, error }   the first JSON object of the text (code fences allowed); `steps` as given (checked later), `notes` [text] | null
  *                                (0.37.8: a whole number n in `notes` keeps note n of `old`, his notes before)
  *
  * 0.39.0 "Landfall": the fixed part says a lean-to starts only where the whole home can stand (game `homeFits`), that a home stays where it is begun, and that the menu lists the places for a home he has seen.
  * 0.43.3 "Feed": the fire rule says a lay at his fire (or at the ring with his fire in it) puts the wood on it, embers flame up again without the drill, and no second fire in the ring.
+ * 0.43.5 "Enough": the fire line of the request says the dry firewood on his piles in pieces and hours, and what the coming night takes (`firewoodText`, game/actor `menu().firewood`);
+ * the plan rule on firewood says what a night takes in pieces.
  * 0.43.2 "One fire": a pile in the stone ring counts all the firewood in the ring (game/actor `inRing`, `fuel`); the fire rule says so.
  * 0.43.1 "Loose": a plan's size (PLAN_STEPS, PLAN_GRACE) is asked for, no longer refused: the fixed part no longer says a plan over PLAN_GRACE is refused.
  * 0.42.0 "Wet": the fixed part says how he gets wet and dries and what it does (game/wet); NOW says how wet he is (`wetText`).
@@ -110,7 +112,7 @@ export function actFixed(name) {
     `- Your notes are the only memory the game does not keep for you. Every request already tells what he did lately (his last ${RECENT_SHOWN} steps and plans, with how they went), his home part by part, his fires, and the places on the menu (only the nearest ${PER_KIND} of each kind, and those within ${NEARBY} m, within about ${SCAN_R} m). The game never updates a note: a count in a note ("2 left") is wrong as soon as he works on. What only the notes keep: places that are not on the menu now, what did not work and where, and what he means to do and why. At most ${NOTES_MAX} lines: a line that repeats what the request tells takes the room of one he may need.`,
     '',
     'HOW TO PLAN',
-    '- Building material (driftwood, branches, fronds, stones, logs for the home) is taken only when the next part of a home needs that kind, and built in straight away: never stocked on piles or carried round. Before a home is begun only a stone for its ring is needed. Only firewood (dry driftwood or branches for a fire) is gathered on a pile ahead.',
+    `- Building material (driftwood, branches, fronds, stones, logs for the home) is taken only when the next part of a home needs that kind, and built in straight away: never stocked on piles or carried round. Before a home is begun only a stone for its ring is needed. Only firewood (dry driftwood or branches for a fire) is gathered on a pile ahead. A night (${hhmm(DUSK)} to ${hhmm(DAWN)}, about ${Math.round((1 - DUSK + DAWN) * 24)} hours) takes about ${Math.ceil((1 - DUSK + DAWN) / BURN)} pieces of dry driftwood, about ${Math.ceil((1 - DUSK + DAWN) / (BURN * RING_BURN))} in a stone ring (a branch burns half as long), and lighting a fire takes ${FIRE_MIN}; the request says how much firewood his piles hold and what the coming night takes.`,
     '- There is no hurry: the home takes days. A day is also for water, food, his fire and looking round the island.',
     `- Before dusk he wants a fire: it gives him a whole night of sleep, dries him and roasts his food. Branches burn too (a pile of ${FIRE_MIN} branches lights as well as driftwood), so a first fire can be made of branches and the driftwood can go to the lean-to.`,
     `- A plan is a short list of steps of about ${PLAN_MINUTES} game minutes: add up the minutes of every step (an action's minutes are in the list below; a walk's minutes on the menu count from where he stands now, so a second walk in the same plan counts from the place before: he walks about ${Math.round(METRES_PER_MINUTE * 10) / 10} m in a game minute, a little more on a winding way; a sleep counts 0, a fishing its minutes) and give your sum as "minutes". Keep a plan within ${PLAN_GRACE} minutes; you are told when your count was off. Bundle small things that belong together ("go to the river, drink, fill the shells"). A walk or a wander longer than that is a plan of its own. At most ${PLAN_STEPS} steps.`,
@@ -237,10 +239,24 @@ export function fireText(fires, menu) {
   const list = Array.isArray(fires) ? fires : [];
   const burning = list.filter(f => f.state === 'burning'), embers = list.filter(f => f.state === 'embers');
   const where = f => `${f.id}${f.ring ? ' in the stone ring' : ''}, ${f.dist} m ${f.dir}`;
-  if (burning.length) return `Fire: ${burning.map(f => `${where(f)}, burns about ${f.hours} more hours`).join('; ')}.`;
-  if (embers.length) return `Fire: none of his burns; embers only at ${embers.map(where).join('; ')}.`;
+  const wood = menu && menu.firewood ? ' ' + firewoodText(menu.firewood) : '';   // 0.43.5 "Enough"
+  if (burning.length) return `Fire: ${burning.map(f => `${where(f)}, burns about ${f.hours} more hours`).join('; ')}.${wood}`;
+  if (embers.length) return `Fire: none of his burns; embers only at ${embers.map(where).join('; ')}.${wood}`;
   const head = !list.length ? 'Fire: he has no fire.' : `Fire: none of his burns (${list.length === 1 ? 'one cold fire place' : `${list.length} cold fire places`}).`;
-  return menu ? `${head} ${kindlingText(menu)}` : head;
+  return menu ? `${head} ${kindlingText(menu)}${wood}` : head;
+}
+
+/** 0.43.5 "Enough": the firewood on his piles in pieces and hours of fire, and what the coming night takes (game/actor `menu().firewood`), as facts:
+ *  "Firewood on his piles: 8 dry driftwood and 3 branches, about 35 hours of fire. The night (19:55 to 04:05) is about 8 hours: about 3 pieces of dry driftwood in his stone ring (a branch burns half as long)." */
+export function firewoodText(fw) {
+  if (!fw) return '';
+  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const kinds = [fw.driftwood ? `${fw.driftwood} dry driftwood` : '', fw.branches ? n(fw.branches, 'branch', 'branches') : ''].filter(Boolean);
+  const have = kinds.length ? `Firewood on his piles: ${kinds.join(' and ')}, about ${fw.hours} hours of fire.` : 'Firewood on his piles: none dry.';
+  const label = fw.dark ? `The rest of the night (until dawn, ${hhmm(DAWN)})` : `The night (${hhmm(DUSK)} to ${hhmm(DAWN)})`;
+  const cover = fw.covered > 0 && fw.need > 0 ? `; his fire burning now has about ${fw.covered} of those hours` : '';
+  const rest = fw.need > 0 ? `: ${fw.covered > 0 ? 'the rest takes ' : ''}about ${n(fw.need, 'piece', 'pieces')} of dry driftwood${fw.ring ? ' in his stone ring' : ''} (a branch burns half as long)` : ': his fire burning now lasts it';
+  return `${have} ${label} is about ${fw.night} hours${cover}${rest}.`;
 }
 
 /** 0.42.1 "Kindling": what a new fire still needs, as the lean-to's "still needs": a pile of FIRE_MIN dry pieces (the best pile he knows on the menu, with its `fuel`)

@@ -85,6 +85,8 @@
  * (`hutTreeBlocks`); a refused "use" says why (`useWhy`: lying down, busy, a torch, water, nothing of that kind carried, no fire for a crab), after waiting up to 20 s for a bend to end;
  * a pile of one piece is "1 log", "1 branch".
  * 0.40.0 "Belt": a felled log says whether it is still green or dry for the hut (game/logs `seasoned`), a log pile how many of its logs are; a refused hut part with a green log says when it is dry.
+ * 0.43.5 "Enough": the menu's `firewood` (`firewoodInfo`): the dry firewood on all his piles and the hours of fire it makes, and what the coming night takes (the night's hours,
+ * the hours his burning fire still covers, the pieces of dry driftwood for the rest), for ai/actPrompt `firewoodText`.
  * 0.43.4 "Give up": a loose thing (or a felled log) that a `go` or a `take` could not get to (stuck, no way, far too long, could not reach it: REACH_FAIL) is left off the menu for
  * UNREACHED_HOURS game hours (`giveUp`, `unreachedAt`; not saved), and the failed step's reason says so.
  * 0.43.3 "Feed": a `lay` of firewood "at" his fire, or at a ring whose fire burns or glows (`fireOf`), goes on the fire (`layOnFire`: one `feed` a piece, `input.feed` the kind; the rest beside it);
@@ -111,8 +113,8 @@ import { LISTS, treeId, sizeKind, trunkRadius } from './felled.js';
 import { seasoned, dryAt, SEASON_DAYS } from './logs.js';
 import { CELL as KNOWN_CELL, NC as KNOWN_NC } from './known.js';
 import { standFor, HUT_KEEP, nextKind, built, partsOf, UP_ORDER, hutKind, hutReady, hutBegun, hutDone, ringCentre, RING_R, RING_NOFIRE, stageOf } from './leanto.js';
-import { fireOutlook, full as fireFull, BURN, TORCH_DRY, FIRE_MIN } from './fire.js';
-import { TIRED_AT, SLEEP_AFTER, NIGHT_AFTER } from './sleep.js';
+import { fireOutlook, full as fireFull, BURN, BRANCH_BURN, RING_BURN, TORCH_DRY, FIRE_MIN } from './fire.js';
+import { TIRED_AT, SLEEP_AFTER, NIGHT_AFTER, DUSK, DAWN } from './sleep.js';
 import { WAIT, PLAN_MINUTES, NEARBY, NEARBY_MAX, PER_KIND, DIRS, DO, USE, LEG_DETOUR, gameMinutes, realSecs, dirOf, checkPlan, stepKind, stepText, stepMinutes } from './actions.js';
 
 const BESIDE_FIRE = 1.2;          // game BESIDE: a fire this close (from its edge) is beside him
@@ -385,9 +387,25 @@ export function createActor(world, game, opts = {}) {
     if (game.bananas.carried.length) uses.push('banana');
     if (game.crabs.carried.length || game.fish.carried.length) uses.push('crab');
     const fires = places.filter(q => q.kind === 'fire').map(q => fireInfo(q));   // 0.37.10 "Body": every fire of his, also when none burns (the request says so)
-    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, fires, dirs: DIRS.slice(), carries: { ...carries(), dryDriftwood: W.carried.filter(l => !l.branch && !l.frond && !wet(l)).length }, light: lightInfo(), island: islandInfo(), minutes: PLAN_MINUTES, count: lastCount };
+    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, fires, dirs: DIRS.slice(), carries: { ...carries(), dryDriftwood: W.carried.filter(l => !l.branch && !l.frond && !wet(l)).length }, light: lightInfo(), firewood: firewoodInfo(), island: islandInfo(), minutes: PLAN_MINUTES, count: lastCount };
     menuMemo = { t: now, m };
     return m;
+  }
+  /** 0.43.5 "Enough": the firewood on all his piles and what the coming night takes: { driftwood, branches (dry pieces), hours (of fire they make, in a ring where
+   *  they lie in one), ring (he has a finished stone ring), dark, night (hours from dusk, or from now in the dark, to dawn), covered (of those, the hours his burning fires still have),
+   *  need (pieces of dry driftwood for the rest, in the ring when he has one) }. */
+  function firewoodInfo() {
+    let driftwood = 0, branches = 0, hours = 0;
+    for (const q of W.piles) {
+      if (!fuelKind(q)) continue;
+      const n = q.kind === 'branch' ? q.logs.length : q.logs.filter(l => !wet(l)).length, per = BURN * 24 * (ringOf(q.x, q.z) ? RING_BURN : 1);
+      if (q.kind === 'branch') { branches += n; hours += n * per * BRANCH_BURN; } else { driftwood += n; hours += n * per; }
+    }
+    const t = clock.time, dark = isDark(t), toDusk = dark ? 0 : hoursToDusk(t), night = dark ? hoursToDawn(t) : (1 - DUSK + DAWN) * 24;
+    const left = game.fire.fires.filter(f => game.fire.strength(f) > 0).reduce((h, f) => Math.max(h, fireOutlook({ fuel: f.fuel, ring: !!game.leantos.ring(f.x, f.z) }).hoursLeft), 0);
+    const covered = Math.min(night, Math.max(0, left - toDusk)), ring = game.leantos.list.some(l => game.leantos.has(l, 'ring'));
+    const need = Math.max(0, Math.ceil((night - covered) / (BURN * 24 * (ring ? RING_BURN : 1)) - 1e-9));
+    return { driftwood, branches, hours: Math.round(hours), ring, dark, night: Math.round(night * 2) / 2, covered: Math.round(covered * 2) / 2, need };
   }
   const lightsNow = () => ({ fires: game.fire.fires.filter(f => game.fire.strength(f) > 0), torches: game.fire.torches });
   function lightInfo() {

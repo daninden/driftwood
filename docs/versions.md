@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.43.5 "Enough" — 2026-11-20
+
+Agreed with the user 2026-11-20 ("Ok") after the question why he fetched so much wood for the fire and seemed to have no other aim. Firewood is the only thing gathered ahead (0.41.1 "Straight"), and the request never said how much a night takes, so the model went on fetching it. Facts only, no advice.
+
+- **The fire line of the request** (`ai/actPrompt` `firewoodText`, from `game/actor` `menu().firewood`): the dry firewood on all his piles in pieces and hours of fire (1.5 times in the stone ring where a pile lies in one; wet driftwood not counted), and what the coming night takes: "Firewood on his piles: 8 dry driftwood and 3 branches, about 35 hours of fire. The night (19:55 to 04:04) is about 8 hours: about 3 pieces of dry driftwood in his stone ring (a branch burns half as long)." At night it is the rest of the night until dawn, less the hours his burning fire still has.
+- **The plan rule on firewood** says a night takes about 4 pieces of dry driftwood, about 3 in a stone ring, and lighting a fire takes 4.
+- **Tests:** `tests/enough.test.js`.
+- **Next:** 0.43.6 "Mouth" (was 0.43.5).
+
 ## 0.43.4 "Give up" — 2026-11-20
 
 Agreed with the user 2026-11-20 ("A en B") after watching him try to reach a piece of wood, get stuck, and keep at it for a long time before he gave up.

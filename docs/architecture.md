@@ -194,6 +194,11 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Enough (0.43.5)
+
+- `game/actor` `firewoodInfo()` -> the menu's `firewood` `{ driftwood, branches, hours, ring, dark, night, covered, need }`: dry pieces on every pile of driftwood or branches (driftwood under `TORCH_DRY` is wet and not counted), their hours of fire (`BURN`, `BRANCH_BURN`, times `RING_BURN` for a pile in a finished ring), whether he has a finished ring, the night's hours (by day dusk to dawn, in the dark now to dawn), the hours of it his longest burning fire still covers (its hours left past dusk), and the pieces of dry driftwood for the rest (ring pieces when he has a ring).
+- `ai/actPrompt` `firewoodText(fw)` puts it after the fire line (`fireText`, whether a fire burns, glows or not); the fixed plan rule on firewood gives a night in pieces from the same constants.
+
 ### Give up (0.43.4)
 
 - `game/route` `update`: besides the stall of 0.7 s, "no gain": the least `remaining` so far and when it last got `NO_GAIN_M` (0.5 m) shorter; after `NO_GAIN_SECS` (8 s) without that, while not busy, the route ends: 'arrived' within the stall's arrival distance (tap's `near`, else `ARRIVED`), else 'unreachable' (reason 'stuck'). `plan` (a replan, a drift) starts the count again; replans and drifts are capped, so it is bounded. Both the actor's walks and the game's routed clicks (`routeAim`) use it.
