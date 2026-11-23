@@ -70,7 +70,7 @@ export const hoursTo = (time, to) => (((to - time) % 1 + 1) % 1) * 24;
 const h1 = v => { const r = Math.round(v * 2) / 2; return Number.isInteger(r) ? String(r) : r.toFixed(1); };   // hours to the nearest half
 const d1 = v => (Math.round((+v || 0) * 10) / 10).toFixed(1);
 
-/** The state as lines of text. o.body replaces the thirst, hunger and awake line (ai/actPrompt `bodyText`), o.fire comes after the home line (`fireText`), o.arm after what he carries (0.38.1, `armText`). */
+/** The state as lines of text. o.body replaces the thirst, hunger and awake line (ai/actPrompt `bodyText`), o.material (0.43.6, `materialText`) and o.fire come after the home line (`fireText`), o.arm after what he carries (0.38.1, `armText`). */
 export function stateText(s, o = {}) {
   const c = s.carries || {}, has = [];
   for (const [k, label] of [['driftwood', 'driftwood'], ['branches', 'branches'], ['fronds', 'fronds'], ['stones', 'stones'], ['fibre', 'fibre'], ['nuts', 'coconuts'], ['emptyShells', 'empty half shells'], ['fullShells', 'full half shells'], ['crabs', 'crabs'], ['fish', 'fish'], ['berries', 'handfuls of berries'], ['bananas', 'banana bunches']]) if (c[k] > 0) has.push(`${c[k]} ${label}`);
@@ -84,6 +84,7 @@ export function stateText(s, o = {}) {
     `Carrying: ${has.filter(x => x !== 'no fibre').length ? has.join(', ') : 'nothing (no fibre)'}.`,
     ...(o.arm ? [o.arm] : []),
     `Home: ${home}.`,
+    ...(o.material ? [o.material] : []),
     ...(o.fire ? [o.fire] : []),
     ...(t ? [`Tide: ${t.name === 'low' ? 'low' : t.name === 'high' ? 'high' : 'half tide'}, ${t.falling ? 'falling, low water' : 'rising, high water'} about ${hhmm(t.turn)}.`] : []),
     ...(s.strip != null ? [`Tide strip: ${s.strip > 0 ? 'some wet driftwood to rescue' : 'no wet driftwood known there'}.`] : []),

@@ -194,6 +194,11 @@ The third part of *Full AI play*: the dark and the long actions. Pure code only 
 - **Not built:** the tide round (no multi-step crab round exists in the action layer; a dig is one action per hole) and the journey (postponed by the user until after 0.37.3).
 - **Tests:** `tests/actor.test.js` (the dark rule alone and in the actor for (a), (b), (c) and the failure reason, sleep and fish in `checkPlan`, fishing with a catch and without, the light in the menu and the request); `tests/helpers/actorSim.js`: the fake chooser walks only where the rule allows and sleeps as a plan of its own.
 
+### Stock (0.43.6)
+
+- `game/actor`: `onPiles(kind)` counts the pieces on his piles of that kind (firewood piles in a finished stone ring not counted), `homesWant(kind)` what all his homes still need of it over every stage (`ring`, `leanto`, `walls`, `bed`, `hut`), `looseKnown(kind)` the loose pieces he knows within `SCAN_R` (not unreached). `stillNeeds(l, w, facts = true)` adds `stockNote` to each run (the ring stage's preview of the lean-to without). `menu().material` = `{ fronds, stones, logs, dryLogs }`. `frondsSpare()`: with a home and `onPiles('frond') >= homesWant('frond')`, the menu takes only the nearest `PER_KIND` fronds and adds "(not needed now: …)" to their `what`.
+- `ai/actPrompt` `materialText(material)` -> the NOW line after the home line (`ai/prompt` `stateText` option `material`); the fixed part's notes rule says a note no longer true is dropped or rewritten.
+
 ### Enough (0.43.5)
 
 - `game/actor` `firewoodInfo()` -> the menu's `firewood` `{ driftwood, branches, hours, ring, dark, night, covered, need }`: dry pieces on every pile of driftwood or branches (driftwood under `TORCH_DRY` is wet and not counted), their hours of fire (`BURN`, `BRANCH_BURN`, times `RING_BURN` for a pile in a finished ring), whether he has a finished ring, the night's hours (by day dusk to dawn, in the dark now to dawn), the hours of it his longest burning fire still covers (its hours left past dusk), and the pieces of dry driftwood for the rest (ring pieces when he has a ring).

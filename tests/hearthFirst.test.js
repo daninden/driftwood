@@ -99,10 +99,10 @@ describe('the request', () => {
     const g = actorGame(), a = createActor(w, g, { chooser: () => null });
     g.leantos.list.push({ id: 0, x: g.player.x + 3, z: g.player.z, heading: 0, progress: 0, up: { ring: 2 / 6 } }); g.leantos.version++;
     let l = a.menu().places.find(q => q.kind === 'leanto');
-    expect(l.what).toBe('his home, begun: its stone ring has 2 of 6 stones; it still needs 4 stones, then the lean-to behind it (4 pieces of driftwood, then 6 branches, then 5 fronds)');
+    expect(l.what).toBe('his home, begun: its stone ring has 2 of 6 stones; it still needs 4 stones (none on his piles), then the lean-to behind it (4 pieces of driftwood, then 6 branches, then 5 fronds)');
     g.leantos.list[0].up.ring = 1; g.leantos.version++; a.step(0.1);   // (the menu is read again at the next step)
     l = a.menu().places.find(q => q.kind === 'leanto');
-    expect(l.what).toMatch(/^his lean-to \(its stone ring is finished, the lean-to not begun\): 0 of 15 parts; it still needs 4 pieces of driftwood, then 6 branches, then 5 fronds; its stone ring is empty/);
+    expect(l.what).toMatch(/^his lean-to \(its stone ring is finished, the lean-to not begun\): 0 of 15 parts; it still needs 4 pieces of driftwood \([^)]*\), then 6 branches \([^)]*\), then 5 fronds \([^)]*\); its stone ring is empty/);
     expect(l.what).toContain(`${FIRE_MIN} pieces of dry driftwood or branches there, then "light", make a fire in it`);
   });
   it('a refused "buildHere" without a stone says the home begins with its ring', () => {

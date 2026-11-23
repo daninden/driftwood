@@ -261,7 +261,7 @@ describe('following a plan (game/actor)', () => {
     g.leantos.list.push({ id: 1, x: g.player.x + 3, z: g.player.z, heading: 0, progress: 4 / 15, up: { ring: 1 } }); g.leantos.version++;
     g.fire.fires.push({ id: 7, x: g.player.x - 2, z: g.player.z, fuel: 2 * 2.5 / 24, embers: 0.5, lit: g.clock.total, fed: 2 }); g.fire.version++;
     const m = a.menu(), l = m.places.find(q => q.kind === 'leanto'), f = m.places.find(q => q.kind === 'fire');
-    expect(l.id).toBe('leanto1'); expect(l.what).toMatch(/4 of 15 parts; it still needs 6 branches, then 5 fronds/);   // 0.37.6: all it still needs, counted
+    expect(l.id).toBe('leanto1'); expect(l.what).toMatch(/4 of 15 parts; it still needs 6 branches \([^)]*\), then 5 fronds \([^)]*\)/);   // 0.37.6: all it still needs, counted
     expect(f.id).toBe('fire1'); expect(f.what).toMatch(/2 pieces on it, about 5 hours left/);
   });
   it('the menu\'s walk minutes are close to the real walk (0.37.5: the route\'s length, not its paced cost)', () => {

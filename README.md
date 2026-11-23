@@ -215,6 +215,8 @@ A log is heavy. He picks it up with nothing else in his arms or hands and carrie
 
 **Firewood.** Firewood is the only thing he gathers ahead. He is told how much dry firewood his piles hold, in pieces and hours of fire, and how much the coming night takes: about four pieces of driftwood, three in his stone ring, where a fire lasts longer.
 
+**Building material.** He is also told how much building material lies on his piles (fronds, stones, logs), and for what his home still needs, how many of each kind already lie on his piles, or that he knows of none nearby and has to wander to find more. Once his piles hold all the fronds his home still needs, loose fronds are marked as not needed, and only the nearest few are shown.
+
 **When he cannot get there.** If he gets no nearer to where he is going for a few seconds, he gives up that walk. A piece of wood or another loose thing he could not get to is left out of what he can choose for about six hours of game time, so he goes for something else.
 
 **In the dark.** He walks only with a burning torch in his hand (taken from a fire with flames, which costs the fire half a piece of wood; it burns about two hours, twice as fast in rain), or between places that both lie in the light of a burning fire or of a torch stuck in the ground; without light he stays where he is. A walk that would end after dusk counts too. Sleeping and fishing are plans of their own: he sleeps until he wakes, and fishes for the minutes the model chooses until he catches a fish.

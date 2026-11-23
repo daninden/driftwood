@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.43.6 "Stock" — 2026-11-23
+
+Agreed with the user 2026-11-23 ("ja") after a log of two game days: he gathered about 35 fronds onto three piles round his hut, while the hut needed 8 branches first and only 12 fronds after, and he said "I'll gather branches" while he took fronds. No branch was on the menu (those near home were all used), fronds lay everywhere (the palms he felled), nothing said how many fronds lay ready (each pile was one line among 30), and his own notes kept "clearing the fronds from the hut area" alive. Facts only, no advice.
+
+- **A. NOW says the building material on his piles** (`ai/actPrompt` `materialText`, from `game/actor` `menu().material`): "Building material on his piles: 35 fronds, 1 log (green)." (fronds, stones, logs; driftwood and branches are in the firewood line; nothing said with none).
+- **A. What a home still needs says what lies ready** (`game/actor` `stockNote`): each kind of the "still needs" with how many lie on his piles ("12 fronds (35 on his piles: enough)", for logs how many are dry); with none on his piles and none he knows within 150 m: "(none on his piles, none he knows within reach: a wander finds new ones)". Firewood in a stone ring is not counted as building material.
+- **B. Fronds not needed** (`game/actor` `frondsSpare`): once he has a home and his piles hold every frond his homes still need (all their stages), only the nearest 3 loose fronds are on the menu (not all those within 15 m), each "a fallen palm frond (not needed now: 35 fronds on his piles, his home needs 12 more)". Only fronds: driftwood and branches are firewood, stones make tools.
+- **C. Notes:** the fixed part says a note that is no longer true (a job done, a thing no longer in the way) is dropped or rewritten; the menu rule says every lean-to tells how many of each kind lie on his piles already.
+- **Tests:** `tests/stock.test.js`.
+- **Next:** 0.43.7 "Mouth" (was 0.43.6).
+
 ## 0.43.5 "Enough" — 2026-11-20
 
 Agreed with the user 2026-11-20 ("Ok") after the question why he fetched so much wood for the fire and seemed to have no other aim. Firewood is the only thing gathered ahead (0.41.1 "Straight"), and the request never said how much a night takes, so the model went on fetching it. Facts only, no advice.

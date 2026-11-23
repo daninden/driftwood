@@ -25,6 +25,8 @@
  *
  * 0.39.0 "Landfall": the fixed part says a lean-to starts only where the whole home can stand (game `homeFits`), that a home stays where it is begun, and that the menu lists the places for a home he has seen.
  * 0.43.3 "Feed": the fire rule says a lay at his fire (or at the ring with his fire in it) puts the wood on it, embers flame up again without the drill, and no second fire in the ring.
+ * 0.43.6 "Stock": NOW says the building material on his piles that is no firewood (`materialText`, game/actor `menu().material`), the lean-to's "still needs" how many of each kind
+ * lie on his piles (game/actor); the fixed part says a note that is no longer true is dropped or rewritten. Exports `materialText(material) -> string` too.
  * 0.43.5 "Enough": the fire line of the request says the dry firewood on his piles in pieces and hours, and what the coming night takes (`firewoodText`, game/actor `menu().firewood`);
  * the plan rule on firewood says what a night takes in pieces.
  * 0.43.2 "One fire": a pile in the stone ring counts all the firewood in the ring (game/actor `inRing`, `fuel`); the fire rule says so.
@@ -107,9 +109,9 @@ export function actFixed(name) {
     '- Tools: a spear ("makeSpear": a branch in his arms and a stone beside him; what else he carries is laid down first) for fishing in shallow sea water; an axe ("makeAxe": a branch, a stone beside him and a tuft of fibre) to fell trees for logs; there is one spear and one axe. The axe hangs at his belt once it is made: it is always with him, takes no hand and is never laid down. His hands: one hand holds the spear, one hand a torch, and under the other arm he carries wood (driftwood, branches, fronds). So with the spear in his hand he can still carry wood; with a torch he can carry wood or hold the spear, not both. Stones take both hands: no stones with the spear or a torch. A log on his shoulder takes everything. Felling ("fell", beside a standing trunk) takes the axe from his belt in both hands: no spear, torch, stones or log (wood under his arm is laid down first). Building a piece in and making a tool need the spear and the torch out of his hands ("laySpear", "plant"); digging needs the torch out of his hand.',
     `- Walking in the dark (from dusk, about ${hhmm(DUSK)}, to dawn, about ${hhmm(DAWN)}): a "go" in the dark needs light: he holds a burning torch, or he stands in the light of a burning fire (about ${FIRE_LIGHT} m) or of a torch stuck in the ground (about ${TORCH_LIGHT} m) and the place he walks to is in such light too. Without light he does not walk in the dark: the step fails. A "wander" in the dark needs a torch in his hand. A walk that would end after dusk counts as a walk in the dark; by day, a walk that ends before dusk is free. A step that is not allowed fails with the reason. A torch ("torch", at a burning fire) takes half a piece of wood's worth out of that fire, burns about ${Math.round(TORCH_DAYS * 24)} hours (${TORCH_RAIN} times as fast in rain), and can be stuck in the ground with "plant"; he can hold one torch.`,
     '- He knows only the ground he has walked; he learns what he walks past (about 40 m round him). The menu shows only places he knows; the request says how much of the island he has seen. "wander" takes him out into ground he may not know. He can sleep, drink at any river and make a fire anywhere, far from home too.',
-    `- Every fire he knows is on the menu with how long it still burns, every lean-to with what it still needs, every pile with what lies on it.`,
+    `- Every fire he knows is on the menu with how long it still burns, every lean-to with what it still needs (and how many of each kind lie on his piles already), every pile with what lies on it.`,
     `- His lessons (below the notes) are what he has learned on this island: one is written at sunset.`,
-    `- Your notes are the only memory the game does not keep for you. Every request already tells what he did lately (his last ${RECENT_SHOWN} steps and plans, with how they went), his home part by part, his fires, and the places on the menu (only the nearest ${PER_KIND} of each kind, and those within ${NEARBY} m, within about ${SCAN_R} m). The game never updates a note: a count in a note ("2 left") is wrong as soon as he works on. What only the notes keep: places that are not on the menu now, what did not work and where, and what he means to do and why. At most ${NOTES_MAX} lines: a line that repeats what the request tells takes the room of one he may need.`,
+    `- Your notes are the only memory the game does not keep for you. Every request already tells what he did lately (his last ${RECENT_SHOWN} steps and plans, with how they went), his home part by part, his fires, and the places on the menu (only the nearest ${PER_KIND} of each kind, and those within ${NEARBY} m, within about ${SCAN_R} m). The game never updates a note: a count in a note ("2 left") is wrong as soon as he works on. What only the notes keep: places that are not on the menu now, what did not work and where, and what he means to do and why. At most ${NOTES_MAX} lines: a line that repeats what the request tells takes the room of one he may need. A note that is no longer true (a job done, a thing no longer in the way) is dropped or rewritten.`,
     '',
     'HOW TO PLAN',
     `- Building material (driftwood, branches, fronds, stones, logs for the home) is taken only when the next part of a home needs that kind, and built in straight away: never stocked on piles or carried round. Before a home is begun only a stone for its ring is needed. Only firewood (dry driftwood or branches for a fire) is gathered on a pile ahead. A night (${hhmm(DUSK)} to ${hhmm(DAWN)}, about ${Math.round((1 - DUSK + DAWN) * 24)} hours) takes about ${Math.ceil((1 - DUSK + DAWN) / BURN)} pieces of dry driftwood, about ${Math.ceil((1 - DUSK + DAWN) / (BURN * RING_BURN))} in a stone ring (a branch burns half as long), and lighting a fire takes ${FIRE_MIN}; the request says how much firewood his piles hold and what the coming night takes.`,
@@ -259,6 +261,15 @@ export function firewoodText(fw) {
   return `${have} ${label} is about ${fw.night} hours${cover}${rest}.`;
 }
 
+/** 0.43.6 "Stock": the building material on his piles that is no firewood (game/actor `menu().material`), as a fact: "Building material on his piles: 35 fronds, 1 log (green)."
+ *  Empty when there is none (driftwood and branches are in the firewood line). */
+export function materialText(m) {
+  if (!m) return '';
+  const logs = m.logs ? `${m.logs} log${m.logs === 1 ? '' : 's'} (${m.dryLogs >= m.logs ? 'dry for the hut' : !m.dryLogs ? 'green' : `${m.dryLogs} dry for the hut, ${m.logs - m.dryLogs} green`})` : '';
+  const kinds = [m.fronds ? `${m.fronds} frond${m.fronds === 1 ? '' : 's'}` : '', m.stones ? `${m.stones} stone${m.stones === 1 ? '' : 's'}` : '', logs].filter(Boolean);
+  return kinds.length ? `Building material on his piles: ${kinds.join(', ')}.` : '';
+}
+
 /** 0.42.1 "Kindling": what a new fire still needs, as the lean-to's "still needs": a pile of FIRE_MIN dry pieces (the best pile he knows on the menu, with its `fuel`)
  *  and a tuft of fibre (or a burning torch), with the nearest coconut to husk when he has no fibre; then "light" there. */
 export function kindlingText(menu) {
@@ -290,7 +301,7 @@ export function buildActMessages({ name, state, menu, ask, recent, notes, lesson
     askLine(ask) + (cl ? ' ' + cl : ''),
     '',
     'NOW',
-    stateText(actState(state, menu), { body: bodyText(state || {}), fire: fireText(menu && menu.fires, menu || {}), arm: armText(actState(state, menu).carries) }),
+    stateText(actState(state, menu), { body: bodyText(state || {}), fire: fireText(menu && menu.fires, menu || {}), material: materialText(menu && menu.material), arm: armText(actState(state, menu).carries) }),
     '',
     'WHAT HE DID LATELY',
     actRecentText(recent),

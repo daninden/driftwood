@@ -74,6 +74,9 @@
  * followed when the chooser counted it itself.
  * The menu also has `light`: { dark, hours (until dusk by day, until dawn in the dark), torch: { minutes left } | null, planted: [{ dist, dir, minutes }] (torches in the ground within 40 m), lit (he stands in firelight) }.
  *
+ * 0.43.6 "Stock": what a home still needs says, for each kind, how many lie on his piles (firewood in a stone ring not counted) and, with none there and none known
+ * within SCAN_R, that a wander finds new ones (`stockNote`); `menu().material` = { fronds, stones, logs, dryLogs } on his piles; when his piles already hold every frond
+ * his homes still need (`frondsSpare`), only the nearest PER_KIND loose fronds are on the menu, each "(not needed now: ...)".
  * 0.41.1 "Straight": a `lay` `at` a place for a home lays the new pile beside the room the whole home keeps free (`homeAside`), never on it.
  * 0.41.0 "Hands": the steps `take` and `lay` (game/actions; "pickup" and "lay" are no `do` actions any more). A `take` fails at once when the thing is gone or his hands are no room for it
  * (`holdWhy`), keeps the dark rule of a walk, sets input.take ({ id } of a loose piece, { pile, count? } of a pile) for that step, walks there (a pile's 'take' standing spot of game/stand) and
@@ -226,13 +229,33 @@ export function createActor(world, game, opts = {}) {
   };
   const kindWord = k => (k === 'branch' ? 'a branch' : k === 'frond' ? 'a frond' : k === 'stone' ? 'a stone' : k === 'log' ? 'a log' : 'a piece of driftwood');
   const kindPlural = (k, n) => (n === 1 ? kindWord(k) : `${n} ${k === 'branch' ? 'branches' : k === 'frond' ? 'fronds' : k === 'stone' ? 'stones' : k === 'log' ? 'logs' : 'pieces of driftwood'}`);
-  const stillNeeds = (l, w) => {   // 0.37.6 "Free hands": what a part still needs, in order, the runs of one kind counted: "3 branches, then 5 fronds"
+  // ---------- 0.43.6 "Stock": the building material on his piles, and what his homes still need of a kind ----------
+  const HOME_STAGES = ['ring', 'leanto', ...UP_ORDER, 'hut'];
+  const onPiles = k => W.piles.reduce((n, q) => n + (q.kind === k && !(fuelKind(q) && ringOf(q.x, q.z)) ? q.logs.length : 0), 0);   // firewood in a stone ring is no building material
+  const dryLogsOnPiles = () => W.piles.reduce((n, q) => n + (q.kind === 'log' ? q.logs.filter(l => seasoned(l, clock.total)).length : 0), 0);
+  const homesWant = k => game.leantos.list.reduce((n, l) => n + HOME_STAGES.reduce((m, w) => m + partsOf(w).slice(built(l, w)).filter(x => x === k).length, 0), 0);
+  const looseKnown = k => {   // how many loose pieces of kind k he knows within SCAN_R (as the menu's candidates)
+    const near = q => Math.hypot(q.x - p.x, q.z - p.z) <= SCAN_R && known.has(q.x, q.z) && !unreached(q);
+    if (k === 'log') return game.logs.near(p.x, p.z, SCAN_R).filter(near).length;
+    const L = LOOSE[k]; if (!L) return 0;
+    let n = 0; for (const t of tilesNear(p.x, p.z, SCAN_R)) for (const o of L.list(t)) if (near(o)) n++;
+    return n;
+  };
+  const stockNote = r => {   // what of a run he still needs lies ready: "(35 on his piles: enough)", "(none on his piles, none he knows within reach: a wander finds new ones)"
+    const have = onPiles(r.k), dry = r.k === 'log' && have ? `, ${dryLogsOnPiles()} dry for the hut` : '';
+    if (have >= r.n) return ` (${have} on his piles${dry}: enough)`;
+    if (have) return ` (${have} on his piles${dry})`;
+    return looseKnown(r.k) ? ' (none on his piles)' : ' (none on his piles, none he knows within reach: a wander finds new ones)';
+  };
+  /** 0.43.6 "Stock": loose fronds are not needed when his piles already hold every frond his homes still need: { have, want } then, else null (no home yet: a new one needs them). */
+  const frondsSpare = () => { if (!game.leantos.list.length) return null; const have = onPiles('frond'), want = homesWant('frond'); return have >= want ? { have, want } : null; };
+  const stillNeeds = (l, w, facts = true) => {   // 0.37.6 "Free hands": what a part still needs, in order, the runs of one kind counted: "3 branches, then 5 fronds" (0.43.6: with what lies ready of each)
     const rest = partsOf(w).slice(built(l, w)), runs = [];
     for (const k of rest) { const r = runs[runs.length - 1]; if (r && r.k === k) r.n++; else runs.push({ k, n: 1 }); }
-    return runs.map(r => kindPlural(r.k, r.n)).join(', then ');
+    return runs.map(r => kindPlural(r.k, r.n) + (facts ? stockNote(r) : '')).join(', then ');
   };
   const leantoWhat = l => {   // 0.37.4: how far it is and what it needs next (0.37.6: all it still needs, counted)
-    if (stageOf(l) === 'ring') return `his home, begun: its stone ring has ${built(l, 'ring')} of ${partsOf('ring').length} stones; it still needs ${stillNeeds(l, 'ring')}, then the lean-to behind it (${stillNeeds({ progress: 0 }, 'leanto')})`;   // 0.43.0 "Hearth": the ring first
+    if (stageOf(l) === 'ring') return `his home, begun: its stone ring has ${built(l, 'ring')} of ${partsOf('ring').length} stones; it still needs ${stillNeeds(l, 'ring')}, then the lean-to behind it (${stillNeeds({ progress: 0 }, 'leanto', false)})`;   // 0.43.0 "Hearth": the ring first
     const next = nextKind(l, 'leanto');
     if (next) return `his lean-to${built(l, 'leanto') ? ', begun' : ' (its stone ring is finished, the lean-to not begun)'}: ${built(l, 'leanto')} of ${partsOf('leanto').length} parts; it still needs ${stillNeeds(l, 'leanto')}`;
     const up = UP_ORDER.map(w => [w, nextKind(l, w)]).find(([, k]) => k);
@@ -362,7 +385,9 @@ export function createActor(world, game, opts = {}) {
       list.sort((a, b) => a.dist - b.dist);
       const pool = kind === 'water' ? spaced(list, 20) : list;   // river points lie every few metres: a few spread out
       const close = c => Math.round(c.dist) <= NEARBY, nearby = pool.filter(close).slice(0, NEARBY_MAX), rest = pool.filter(c => !close(c));
-      const pick = [...nearby, ...rest].slice(0, Math.max(PER_KIND, nearby.length));
+      const spare = kind === 'frond' ? frondsSpare() : null;   // 0.43.6 "Stock": fronds he does not need: only the nearest few, and said so
+      const pick = spare ? pool.slice(0, PER_KIND) : [...nearby, ...rest].slice(0, Math.max(PER_KIND, nearby.length));
+      const note = !spare ? '' : spare.want ? ` (not needed now: ${spare.have} fronds on his piles, his home needs ${spare.want} more)` : ' (not needed: his home needs no more fronds)';
       if (kind === 'tree') { const blocks = hutTreeBlocks(); for (const c of pool) if (blocks.has(c.ref.id) && !pick.includes(c)) pick.push(c); }   // 0.40.2: the trunk in the hut's way, however far down the list
       for (const c of pick) {
         const r = c.dist < 1.5 ? null : path.find(p, c);   // 0.37.5 "Ways": the walk's minutes from the length of its route (the path's cost in paced seconds was about four times the real walk)
@@ -373,7 +398,7 @@ export function createActor(world, game, opts = {}) {
         const offers = [...new Set(all.map(k => (k === 'pickup' ? 'take' : k)))].filter(k => DO[k] || k === 'take' || k === 'lay');   // 0.41.0 "Hands": a pickup there is a "take" of it
         const mins = walkMinutes(len / paceNow());   // 0.37.8: at the pace he walks with now (his load, tired, thirsty, hungry), as game/game
         const notNow = takeable ? null : holdWhy(kind, c.ref);   // 0.40.0: why what lies there cannot be taken up with what he holds now
-        places.push({ id: placeId(kind, c.ref), kind, ref: c.ref, what: c.what, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
+        places.push({ id: placeId(kind, c.ref), kind, ref: c.ref, what: c.what + note, x: c.x, z: c.z, dist: Math.round(c.dist), dir: dirOf(c.x - p.x, c.z - p.z),
           minutes: mins, nearby: Math.round(c.dist) <= NEARBY, offers, ...(notNow ? { notNow } : {}), ...(kind === 'pile' ? { ...(fuelKind(c.ref) && ringOf(c.ref.x, c.ref.z) ? { inRing: true } : {}), fuel: fuelKind(c.ref) && ringOf(c.ref.x, c.ref.z) ? ringDry(ringOf(c.ref.x, c.ref.z)) : c.ref.kind === 'branch' ? c.ref.logs.length : c.ref.kind === 'driftwood' ? c.ref.logs.filter(l => !wet(l)).length : 0 } : {})   /* 0.43.2: a pile in the ring: the dry firewood of the whole ring */ });   // 0.42.1 "Kindling": a pile's dry pieces that burn (ai/actPrompt `fireText`)
       }
     }
@@ -387,10 +412,12 @@ export function createActor(world, game, opts = {}) {
     if (game.bananas.carried.length) uses.push('banana');
     if (game.crabs.carried.length || game.fish.carried.length) uses.push('crab');
     const fires = places.filter(q => q.kind === 'fire').map(q => fireInfo(q));   // 0.37.10 "Body": every fire of his, also when none burns (the request says so)
-    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, fires, dirs: DIRS.slice(), carries: { ...carries(), dryDriftwood: W.carried.filter(l => !l.branch && !l.frond && !wet(l)).length }, light: lightInfo(), firewood: firewoodInfo(), island: islandInfo(), minutes: PLAN_MINUTES, count: lastCount };
+    const m = { here, uses: uses.map(id => ({ id, what: USE[id].what })), places, fires, dirs: DIRS.slice(), carries: { ...carries(), dryDriftwood: W.carried.filter(l => !l.branch && !l.frond && !wet(l)).length }, light: lightInfo(), firewood: firewoodInfo(), material: materialInfo(), island: islandInfo(), minutes: PLAN_MINUTES, count: lastCount };
     menuMemo = { t: now, m };
     return m;
   }
+  /** 0.43.6 "Stock": the building material on his piles that is no firewood: { fronds, stones, logs, dryLogs } (driftwood and branches are in `firewood`). */
+  const materialInfo = () => ({ fronds: onPiles('frond'), stones: onPiles('stone'), logs: onPiles('log'), dryLogs: dryLogsOnPiles() });
   /** 0.43.5 "Enough": the firewood on all his piles and what the coming night takes: { driftwood, branches (dry pieces), hours (of fire they make, in a ring where
    *  they lie in one), ring (he has a finished stone ring), dark, night (hours from dusk, or from now in the dark, to dawn), covered (of those, the hours his burning fires still have),
    *  need (pieces of dry driftwood for the rest, in the ring when he has one) }. */
