@@ -1,6 +1,7 @@
 // 0.44.2 "One step" (agreed with the user 2026-11-23): a "take" walks to the piece or pile itself, and so does a "lay" with "at"; a "go" to that same place
 // straight before it is dropped by game/actions checkPlan, so the plan (and the panel) shows one step: "pick up a stone", not "walk to a stone" and then "pick up a stone".
 // Covers: go + take and go + lay at folded (minutes as the take or lay alone, the go's thought kept), a go to another place kept, a go before a "do" kept, the prompt's rule.
+// 0.44.3 "Daylight": the rules say what a torch is for and that digging and roasting need no torch in his hand.
 // Depends on: game/actions, ai/actPrompt.
 import { describe, it, expect } from 'vitest';
 import { checkPlan, stepMinutes, stepText } from '../src/game/actions.js';
@@ -33,5 +34,11 @@ describe('0.44.2 "One step": no "go" before a "take" or a "lay at" of the same p
   it('the rules tell the model not to write the go', () => {
     const t = actFixed('Dave');
     expect(t).toMatch(/never write a "go" to the same place before it/);
+  });
+  it('0.44.3 "Daylight": the rules say what a torch is for, and that digging and roasting need no torch in his hand', () => {
+    const t = actFixed('Dave');
+    expect(t).toMatch(/A torch is for two things only: light to walk in the dark, and fire carried to a dry pile somewhere else/);
+    expect(t).toMatch(/By day it gives him nothing else/);
+    expect(t).toMatch(/He digs and roasts only with no torch in his hand/);
   });
 });

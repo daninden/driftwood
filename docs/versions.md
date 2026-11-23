@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.44.3 "Daylight" — 2026-11-23
+
+Agreed with the user 2026-11-23 ("bouw 1 en 2") after an AI log on 0.44.1: at 10:37 on a sunny morning he took a torch from his fire "to check the nearby crab holes", stuck it in the ground there to dig (digging needs no torch in his hand), took it up again for the next hole and stuck it in again. "torch" is offered at every burning fire by day too, and the rules said what a torch costs, not what it is for.
+
+- **The rules** (`ai/actPrompt`): a torch is for two things only, light to walk in the dark and fire carried to a dry pile elsewhere (lit without fibre); by day it gives nothing else and costs his fire wood. Digging and roasting go only with no torch in his hand.
+- **Not changed:** the menu still offers "torch" by day (the stricter rule, offering it by day only near dusk or with a dry pile to light, waits until the rules alone prove not enough).
+- **Tests:** `tests/oneStep.test.js` (the two rules in the fixed part).
+- **Next:** nothing agreed is waiting.
+
 ## 0.44.2 "One step" — 2026-11-23
 
 Agreed with the user 2026-11-23 ("ja"): the panel still showed "walk to a stone" and then "pick up a stone". Since 0.41.0 "Hands" a `take` walks to the piece or pile itself, but the model often wrote a `go` to the same place first (the rules only said "no go before it is needed").
@@ -9,7 +18,7 @@ Agreed with the user 2026-11-23 ("ja"): the panel still showed "walk to a stone"
 - **The plan check** (`game/actions` `checkPlan`): a `go` straight before a `take` of the same place, or before a `lay` "at" it, is dropped; the plan has one step for it, and its minutes are those of the take or lay alone. A thought (`say`) on the dropped `go` goes to the next step. A `go` before a `do` (husk, drink, light...) stays: those actions happen where he stands.
 - **The rules** (`ai/actPrompt`): a take walks there itself, so never a `go` to the same place before it; the same for a lay "at" a pile.
 - **Tests:** `tests/oneStep.test.js`.
-- **Next:** nothing agreed is waiting.
+- **Next:** 0.44.3 "Daylight".
 
 ## 0.44.1 "Low" — 2026-11-23
 
