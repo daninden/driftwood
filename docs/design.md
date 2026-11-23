@@ -133,7 +133,7 @@ Tree trunks (broadleaf, rain forest, pine and palm), boulders of 0.35 m and larg
 
 ## Gathering driftwood
 
-(Since 0.41.0 "Hands" the model picks wood up with a `take` of that piece or pile, and lays it down with a `lay` of one kind on a pile, beside a place or here; from 0.38.0 to 0.40.5 it was `go` to a piece or pile and `do: pickup`, and `do: lay` for everything; the clicks, taps and the action button below are history. Since 0.38.1 the request says what each pick-up took and lay-down laid. Since 0.44.2 "One step" a `go` to the same place straight before a `take`, or before a `lay` "at" it, is dropped by the plan check: the take or lay walks there itself, so it is one step.)
+(Since 0.41.0 "Hands" the model picks wood up with a `take` of that piece or pile, and lays it down with a `lay` of one kind on a pile, beside a place or here; from 0.38.0 to 0.40.5 it was `go` to a piece or pile and `do: pickup`, and `do: lay` for everything; the clicks, taps and the action button below are history. Since 0.38.1 the request says what each pick-up took and lay-down laid. Since 0.44.4 "Switch" a step written with the action as its key, `{"buildIn": ""}`, is followed as `{"do": "buildIn"}`, and the player can choose the model asked first in the AI panel; an overloaded model rests two minutes. Since 0.44.2 "One step" a `go` to the same place straight before a `take`, or before a `lay` "at" it, is dropped by the plan check: the take or lay walks there itself, so it is one step.)
 
 The first game element. Driftwood lies on the dry beach above the tide line at the start, a few pieces per stretch of beach, and the sea leaves new pieces in the strip between low and high water, each with its own look (bleached colour, sometimes a side branch or a root plate).
 

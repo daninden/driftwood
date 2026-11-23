@@ -77,14 +77,14 @@ describe('the steps and the plan check (game/actions)', () => {
     }
   });
   it('a step that is not a step says what was written, the five forms and the right one (0.40.5 "Form")', () => {
-    const c = checkPlan([{ sleep: true }], places);
+    const c = checkPlan([{ sleep: true, extra: 1 }], places);   // 0.44.4 "Switch": {"sleep": true} alone is read as {"do": "sleep"}; with another key it is still refused
     expect(c.ok).toBe(false);
-    expect(c.reason).toContain('step 1 {"sleep":true} is not a step (write {"do": "sleep"})');
+    expect(c.reason).toContain('step 1 {"sleep":true,"extra":1} is not a step (write {"do": "sleep"})');
     expect(c.reason).toMatch(/\{"go": "<place id>"\}.*\{"wait": n\}/);
-    expect(checkPlan([{ go: 'water1' }, { nut: 1 }], places).reason).toContain('step 2 {"nut":1} is not a step (write {"use": "nut"})');
+    expect(checkPlan([{ go: 'water1' }, { nut: 1, x: 2 }], places).reason).toContain('step 2 {"nut":1,"x":2} is not a step (write {"use": "nut"})');
     const odd = checkPlan([{ action: 'x'.repeat(100) }], places).reason;
     expect(odd).toMatch(/^step 1 \{"action":"x+\.\.\. is not a step: a step is/);
-    expect(stepText({ sleep: true }, places)).toBe('an unknown step {"sleep":true}');
+    expect(stepText({ sleep: true, extra: 1 }, places)).toBe('an unknown step {"sleep":true,"extra":1}');
     expect(actFixed('Dave')).toContain('Sleep is a plan of its own: {"do": "sleep"}, its only step.');
   });
   it('fishing needs its minutes (5 to 60), is the only step of its plan, and its estimate is its minutes (0.37.2)', () => {
@@ -197,7 +197,7 @@ describe('following a plan (game/actor)', () => {
   });
   it('a plan that cannot be followed is remembered as rejected and the chooser is asked again; 0.43.1 "Loose": a long one is followed', () => {
     const g = fresh(), asks = [];
-    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return asks.length === 1 ? [{ wait: 5 }, { upgrade: '' }] : null; } });
+    const a = createActor(w, g, { chooser: (m, ask) => { asks.push(ask); return asks.length === 1 ? [{ wait: 5 }, { upgradeIt: '' }] : null; } });
     run(g, a, 1);
     expect(a.stats.rejected).toBe(1); expect(a.stats.plans).toBe(0);
     expect(asks[1].why).toBe('rejected'); expect(asks[1].last.reason).toMatch(/is not a step/);

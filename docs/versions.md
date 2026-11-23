@@ -2,6 +2,18 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.44.4 "Switch" — 2026-11-23
+
+Agreed with the user 2026-11-23 ("can I have an option to manually switch models?", "ai errors, can we do something about it?", "yes"). In a log on 0.44.3 every new request went to `gemma-4-31b-it` first and failed (503 "high demand", no answer in 12 s, 429), then reached 3.5; a plan was refused for `{"buildIn": ""}`, which cost another request. AI Studio showed the cause of the 429: Gemma's 16K input tokens a minute (21.6K used), while the game counted only requests (28 a minute); a request is 5 to 7K tokens.
+
+- **A. The model asked first** (`ai/client` `setChoice`, `choice`; localStorage `driftwood.ai.model`; a choice in the ⚙ settings of the AI panel): "auto (in order)" or one model; the others stay as backup when it fails.
+- **B. An overloaded model rests** (`ai/config` `BUSY_PAUSE`, 2 minutes): a 5xx or no answer in the timeout pauses that model, as a 429 does, so the next request goes straight to another.
+- **C. Why a model is skipped** (`render/aiPanel` `modelLines`): paused until when and why ("quota (429)", "busy (503)", "no answer"), spent for today, full this minute, the chosen one marked; "copy log" has these lines under "Models now".
+- **D. An action written as the key** (`game/actions` `repairStep`, read by `checkPlan` and `stepText`): `{"buildIn": ""}` is followed as `{"do": "buildIn"}`, `{"nut": 1}` as `{"use": "nut"}`, `{"fish": 20}` as a fishing of 20 minutes; only when that is its one key (besides "minutes" and "say"); anything else is refused as before.
+- **Gemma's budget** (`ai/config` `AI_BUDGET`): 2 requests a minute (was 28), for its tokens a minute.
+- **Tests:** `tests/switch.test.js`; `tests/client.test.js` and `tests/actor.test.js` follow.
+- **Next:** nothing agreed is waiting.
+
 ## 0.44.3 "Daylight" — 2026-11-23
 
 Agreed with the user 2026-11-23 ("bouw 1 en 2") after an AI log on 0.44.1: at 10:37 on a sunny morning he took a torch from his fire "to check the nearby crab holes", stuck it in the ground there to dig (digging needs no torch in his hand), took it up again for the next hole and stuck it in again. "torch" is offered at every burning fire by day too, and the rules said what a torch costs, not what it is for.
@@ -9,7 +21,7 @@ Agreed with the user 2026-11-23 ("bouw 1 en 2") after an AI log on 0.44.1: at 10
 - **The rules** (`ai/actPrompt`): a torch is for two things only, light to walk in the dark and fire carried to a dry pile elsewhere (lit without fibre); by day it gives nothing else and costs his fire wood. Digging and roasting go only with no torch in his hand.
 - **Not changed:** the menu still offers "torch" by day (the stricter rule, offering it by day only near dusk or with a dry pile to light, waits until the rules alone prove not enough).
 - **Tests:** `tests/oneStep.test.js` (the two rules in the fixed part).
-- **Next:** nothing agreed is waiting.
+- **Next:** 0.44.4 "Switch".
 
 ## 0.44.2 "One step" — 2026-11-23
 

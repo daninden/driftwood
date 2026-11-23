@@ -6,7 +6,8 @@
  * Top, one line (`summaryLine`): "3.5-flash-lite 6/480 · not asking", any problem in red (an error, a model paused or not available, all budgets spent, Dave waiting), the
  * "copy log" and "download log" buttons and a small "⚙" that expands the settings: the key field (a password field: a new key is saved when the field changes; it is never shown
  * again), "remove key" (0.38.0: the game cannot go on without a key: `onKeyRemoved`, main reloads the page to the start screen), "list models", the models in order and the
- * address, a status line and one line per model. The expanded state is kept in localStorage (`driftwood.aiPanelOpen`, try/catch).
+ * address, a status line and one line per model (0.44.4 "Switch": why a model is skipped: paused and why, spent for today, full this minute; the chosen one marked), and
+ * (0.44.4) a choice of the model asked first: "auto (in order)" or one model, the others as backup (ai/client `setChoice`). "copy log" has the model lines too. The expanded state is kept in localStorage (`driftwood.aiPanelOpen`, try/catch).
  * Under it: the "Now" line (the running step, or "waiting for a plan"), the collapsible "Memory" block (his notes and his lessons; `driftwood.aiMemoryOpen`), the current plan
  * with its thought and a marker at the running step (`actPlanLines`), and the planner's requests, newest first (`actEntryParts`); a click on one shows the full request and the
  * raw answer. "copy log" copies `playLogText` (the last request as the model saw it, then the requests of the last 2 game days); "download log" saves the whole logbook
@@ -66,9 +67,11 @@ export function statusLine(s, nowMs = Date.now()) {
 /** One plain line per model. */
 export function modelLines(s, nowMs = Date.now()) {
   return (s.models || []).map(m => {
-    const parts = [`${m.model}: ${m.today} of ${m.perDay} today, ${m.lastMinute} of ${m.perMin} this minute`];
+    const parts = [`${m.model}${s.choice === m.model ? ' (chosen)' : ''}: ${m.today} of ${m.perDay} today, ${m.lastMinute} of ${m.perMin} this minute`];
     if (m.dead) parts.push('not available (model not found)');
-    else if (m.pausedUntil && m.pausedUntil > nowMs) parts.push(`paused until ${clock(m.pausedUntil)}`);
+    else if (m.pausedUntil && m.pausedUntil > nowMs) parts.push(`paused until ${clock(m.pausedUntil)}${m.pauseWhy ? ': ' + m.pauseWhy : ''}`);
+    else if (m.today >= m.perDay) parts.push('spent for today');
+    else if (m.lastMinute >= m.perMin) parts.push('full this minute');
     if (m.lastError) parts.push('last error: ' + m.lastError);
     return parts.join(' · ');
   });
@@ -80,7 +83,8 @@ export const shortModel = m => String(m || '').replace(/^gemini-/, '');
 /** The ONE line of the collapsed panel (pure): { text, problem }. s: the client's status, o: { waiting, inFlight }. */
 export function summaryLine(s, o = {}, nowMs = Date.now()) {
   const models = s.models || [], paused = m => !!m.pausedUntil && m.pausedUntil > nowMs;
-  const free = models.find(m => !m.dead && !paused(m) && m.today < m.perDay);
+  const ord = s.choice ? [...models.filter(m => m.model === s.choice), ...models.filter(m => m.model !== s.choice)] : models;   // 0.44.4: the chosen model first
+  const free = ord.find(m => !m.dead && !paused(m) && m.today < m.perDay);
   const pending = o.waiting ? 'Dave is waiting' : o.inFlight ? 'asking…' : 'not asking';
   const parts = [];
   parts.push(free ? `${shortModel(free.model)} ${free.today}/${free.perDay}` : 'no model free');
@@ -140,10 +144,11 @@ const stepTextOf = (st, places) => { try { return stepText(st, places); } catch 
  * the planner's requests (newest first), `days` how many game days back from the newest. The last request's own text comes first (what the model saw: the situation, what he
  * did lately, the notes, the lessons, the menu), then every request of those days, oldest first, with its plan, its thought and what was not followed. Never holds the key.
  */
-export function playLogText({ entries = [], model = null, days = 2 } = {}) {
+export function playLogText({ entries = [], model = null, days = 2, models = null } = {}) {   // models (0.44.4 "Switch"): the lines of modelLines, why each model is used or skipped
   const top = Math.max(-Infinity, ...entries.map(e => e.day).filter(Number.isFinite));
   const keep = entries.filter(e => !Number.isFinite(e.day) || top === -Infinity || e.day > top - days).slice().reverse();
   const out = [`Driftwood ${VERSION} "${NAME}" · AI log (full AI play), the last ${days} game days`, `Model: ${model || 'none yet'} · ${entries.length} requests since the page was loaded`];
+  if (Array.isArray(models) && models.length) out.push('Models now:', ...models.map(l => '- ' + l));
   const last = entries.find(e => Array.isArray(e.messages) && e.messages.length > 1);
   if (last) out.push('', `The last request (day ${last.day} ${hhmm(last.time)}), as the model saw it`, String(last.messages[1].content || ''));
   out.push('', 'The requests, oldest first');
@@ -180,7 +185,12 @@ export function createAiPanel(el, { client, play, now = () => Date.now(), logboo
   const key = mk('input', 'ai-key'); key.type = 'password'; key.autocomplete = 'off'; key.spellcheck = false; key.setAttribute('aria-label', 'API key');
   const clear = mk('button', null, 'remove key'); clear.type = 'button'; clear.title = 'remove the key: the game stops and asks for a key again';
   const list = mk('button', null, 'list models'); list.type = 'button';
-  row.append(key, clear, list);
+  // 0.44.4 "Switch": the model asked first, chosen by the player ("auto": the order of ai/config); the others stay as backup
+  const pick = mk('select', 'ai-pick'); pick.setAttribute('aria-label', 'model asked first');
+  for (const v of ['', ...st.models.map(m => m.model)]) { const o = mk('option', null, v ? v + ' first' : 'auto (in order)'); o.value = v; pick.append(o); }
+  pick.value = (client.choice && client.choice()) || '';
+  pick.addEventListener('change', () => { if (client.setChoice) client.setChoice(pick.value || null); lastStatus = ''; lastModels = ''; lastSummary = ''; });
+  row.append(key, clear, list, pick);
   const addr = mk('div', 'ai-dim', st.url), planBox = mk('div', 'ai-plan');
   const status = mk('div', 'ai-status'), perModel = mk('div', 'ai-models-status'), models = mk('div', 'ai-models'), log = mk('div', 'ai-log');
   models.hidden = true;
@@ -200,7 +210,7 @@ export function createAiPanel(el, { client, play, now = () => Date.now(), logboo
   memHead.addEventListener('click', () => { memOpen = !memOpen; saveMem(memOpen); renderMemory(); });
   copy.addEventListener('click', async () => {
     const last = play.planner.entries().find(e => e.model);
-    const text = playLogText({ entries: play.planner.entries(), model: last ? last.model : null });
+    const text = playLogText({ entries: play.planner.entries(), model: last ? last.model : null, models: modelLines(client.status(), now()) });
     let ok = false; try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { ok = false; }
     if (ok) { copyBox.hidden = true; copy.textContent = 'copied'; setTimeout(() => { copy.textContent = 'copy log'; }, 1500); return; }
     copyBox.textContent = '';   // no clipboard: the text in a box, selected, to copy by hand

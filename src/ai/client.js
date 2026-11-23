@@ -8,6 +8,9 @@
  * Pacific-time date changes, as Google's free quota does) and its own pause. A request goes to the first model that is not dead, not paused and within its budget. HTTP 429 pauses that model until Retry-After (else 60 s);
  * 404 (model not found) marks it dead for the rest of the session; either way the SAME request is retried once on the next available model; 0.37.1: so is every other error (a 5xx, a timeout, the network), except a refused key (401, 403). Every attempt that is sent counts for its model, whatever the answer.
  *
+ * 0.44.4 "Switch": the player may choose a model (`setChoice`, kept under config CHOICE_NAME): it is asked first, the others in their order as backup; null is "auto" (the order of AI_MODELS).
+ *   A 5xx ("high demand") or no answer in the timeout pauses that model for BUSY_PAUSE (2 minutes), as a 429 pauses it, so the next request goes to another model; `status()` says why
+ *   each model is paused (`pauseWhy`: 'quota (429)', 'busy (503)', 'no answer') and the chosen one (`choice`).
  * 0.38.3 "Steady": the count of the day is kept in memory too (the daily budget holds when storage fails, within the session); listModels is bounded by the timeout; an error text is
  * scrubbed of the key its request was sent with as well (a key changed meanwhile); `blocked()` says why nothing can be sent.
  * 0.38.0 "Only him": the AI is no longer switched on or off and has no leash: it is the only way to play, so `on`, `setOn`, `mode` and `setMode` are gone.
@@ -17,15 +20,16 @@
  *   forModel(model, messages) -> messages   what is sent to that model: unchanged for Gemini, the system message folded into the first user message for a 'gemma-' model (0.36.4)
  *   createClient({ fetch, storage, now?, url?, modelsUrl?, models?, timeout?, budget?, perMin?, perDay? })   (budget: { model: { perMin, perDay } }, default AI_BUDGET; perMin / perDay give every model the same budget) -> client
  *     client.hasKey() / setKey(s) / clearKey()
+ *     client.choice() -> model | null, client.setChoice(model | null)   (0.44.4) the model asked first (null: auto)
  *     client.canSend() -> bool       the key is set, nothing is in flight and some model is available
  *     client.send(messages) -> Promise<{ text, ms, model }>   rejects with an Error (message scrubbed; .code 'nokey' | 'busy' | 'budget' | 'http' | 'timeout' | 'bad' | 'net')
  *     client.listModels(key?) -> Promise<string[]>    the model names the key can use (not counted in the budget); 0.38.0: with `key`, that key instead of the saved one (the start screen checks a key before it is saved; a refused key rejects with .status 400, 401 or 403)
  *     client.blocked() -> null | { kind: 'nokey' | 'dead' } | { kind: 'paused', secs } | { kind: 'spent', at: 'HH:MM' }   0.38.3: why nothing can be sent now (the "thinking…" line says so)
- *     client.status() -> { hasKey, models: [{ model, today, perDay, lastMinute, perMin, pausedUntil, dead, lastError }], today (all models), perDay (all), lastError, pausedUntil (0, or when the first model is back if none is available), inFlight, url }
+ *     client.status() -> { hasKey, models: [{ model, today, perDay, lastMinute, perMin, pausedUntil, pauseWhy, dead, lastError }], choice, today (all models), perDay (all), lastError, pausedUntil (0, or when the first model is back if none is available), inFlight, url }
  *
  * Depends on: ai/config
  */
-import { AI_URL, AI_MODELS_URL, AI_MODELS, AI_BUDGET, AI_BUDGET_DEFAULT, AI_TIMEOUT, KEY_NAME, COUNT_NAME } from './config.js';
+import { AI_URL, AI_MODELS_URL, AI_MODELS, AI_BUDGET, AI_BUDGET_DEFAULT, AI_TIMEOUT, KEY_NAME, COUNT_NAME, CHOICE_NAME, BUSY_PAUSE } from './config.js';
 
 const FMT = (() => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return null; } })();
 export function pacificDay(ms) {
@@ -52,7 +56,10 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
   const set = (k, v) => { try { if (storage) { if (v === null) storage.removeItem(k); else storage.setItem(k, v); } } catch (e) { /* storage may be blocked: then nothing is remembered */ } };
   let inFlight = false, lastError = null;
   let memKey = null;   // used when storage is not available
-  const M = new Map(models.map(m => [m, { recent: [], pausedUntil: 0, dead: false, lastError: null, mem: null }]));
+  const M = new Map(models.map(m => [m, { recent: [], pausedUntil: 0, pauseWhy: null, dead: false, lastError: null, mem: null }]));
+  let memChoice = null;   // 0.44.4 "Switch": the chosen model when storage is not available
+  const choice = () => { const c = get(CHOICE_NAME) || memChoice; return models.includes(c) ? c : null; };
+  const order = () => { const c = choice(); return c ? [c, ...models.filter(m => m !== c)] : models; };   // the chosen model first, the others as backup
 
   const key = () => { const k = get(KEY_NAME); return k || memKey || ''; };
   const scrub = (s, used = null) => { let t = String(s == null ? '' : s); for (const k of [used, key()]) if (k) t = t.split(k).join('***'); return t.slice(0, 400); };   // 0.38.3: also the key the request was sent with (a key changed meanwhile)
@@ -65,7 +72,7 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
   const windowCount = m => { const t = now(), st = M.get(m); st.recent = st.recent.filter(x => t - x < 60000); return st.recent.length; };
   const paused = m => now() < M.get(m).pausedUntil;
   const available = m => !M.get(m).dead && !paused(m) && counter(m).n < limits(m).perDay && windowCount(m) < limits(m).perMin;
-  const next = skip => models.find(m => !skip.includes(m) && available(m)) || null;
+  const next = skip => order().find(m => !skip.includes(m) && available(m)) || null;
 
   function canSend() { return !!key() && !inFlight && next([]) !== null; }
 
@@ -82,8 +89,9 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
           let body = ''; try { body = await res.text(); } catch (e) { /* no body */ }
           const err = fail('http', 'HTTP ' + res.status + (body ? ': ' + body.replace(/\s+/g, ' ').slice(0, 160) : ''));
           err.status = res.status;
-          if (res.status === 429) { const ra = Number(res.headers && res.headers.get && res.headers.get('Retry-After')); st.pausedUntil = now() + (ra > 0 ? ra * 1000 : 60000); }
+          if (res.status === 429) { const ra = Number(res.headers && res.headers.get && res.headers.get('Retry-After')); st.pausedUntil = now() + (ra > 0 ? ra * 1000 : 60000); st.pauseWhy = 'quota (429)'; }
           else if (res.status === 404) st.dead = true;
+          else if (res.status >= 500) { st.pausedUntil = now() + BUSY_PAUSE; st.pauseWhy = `busy (${res.status})`; }   // 0.44.4 "Switch": an overloaded model rests
           throw err;
         }
         let data; try { data = await res.json(); } catch (e) { throw fail('bad', 'the answer is not JSON'); }
@@ -97,6 +105,7 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
       return out;
     } catch (e) {
       const err = fail(e && e.code || (timedOut ? 'timeout' : 'net'), scrub(model + ': ' + (e && e.message || e), k));
+      if (timedOut) { st.pausedUntil = now() + BUSY_PAUSE; st.pauseWhy = 'no answer'; }   // 0.44.4 "Switch": a model that does not answer rests too
       err.status = e && e.status;
       st.lastError = err.message;
       throw err;
@@ -143,9 +152,9 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
   }
 
   function status() {
-    const rows = models.map(m => ({ model: m, today: counter(m).n, perDay: limits(m).perDay, lastMinute: windowCount(m), perMin: limits(m).perMin, pausedUntil: paused(m) ? M.get(m).pausedUntil : 0, dead: M.get(m).dead, lastError: M.get(m).lastError }));
+    const rows = models.map(m => ({ model: m, today: counter(m).n, perDay: limits(m).perDay, lastMinute: windowCount(m), perMin: limits(m).perMin, pausedUntil: paused(m) ? M.get(m).pausedUntil : 0, pauseWhy: paused(m) ? M.get(m).pauseWhy : null, dead: M.get(m).dead, lastError: M.get(m).lastError }));
     const none = next([]) === null, waits = rows.filter(r => r.pausedUntil && !r.dead).map(r => r.pausedUntil);
-    return { hasKey: !!key(), models: rows, today: rows.reduce((a, r) => a + r.today, 0), perDay: rows.reduce((a, r) => a + r.perDay, 0), lastError, pausedUntil: none && waits.length ? Math.min(...waits) : 0, inFlight, url };
+    return { hasKey: !!key(), models: rows, today: rows.reduce((a, r) => a + r.today, 0), perDay: rows.reduce((a, r) => a + r.perDay, 0), lastError, pausedUntil: none && waits.length ? Math.min(...waits) : 0, inFlight, url, choice: choice() };
   }
 
   /** 0.38.3 "Steady": why no request can be sent now: null (one can, or one is running), { kind: 'nokey' }, { kind: 'dead' } (every model was not found), { kind: 'paused', secs }
@@ -168,6 +177,8 @@ export function createClient({ fetch: doFetch, storage, now = () => Date.now(), 
     hasKey: () => !!key(),
     setKey(s) { const v = String(s || '').trim(); if (v) { set(KEY_NAME, v); memKey = v; } },
     clearKey() { set(KEY_NAME, null); memKey = null; lastError = null; },
+    choice,   // 0.44.4 "Switch": the chosen model, or null for auto
+    setChoice(m) { const v = models.includes(m) ? m : null; set(CHOICE_NAME, v); memChoice = v; },
     canSend, send, listModels, status,   // blocked (0.38.3) above
   };
 }

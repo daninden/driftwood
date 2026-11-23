@@ -28,6 +28,7 @@
  *   stepMinutes(step, places, from?) -> number | null   the estimate of one step (null: no estimate, unknown place or kind); 0.37.5: a `go` from `from` (the place of the go before it in the plan) is legMinutes(from, place)
  *   legMinutes(a, b), METRES_PER_MINUTE, LEG_DETOUR, LEG_SLACK   (0.37.5 "Ways") a walk between two places of a plan: the straight line x 1.3 at the walking pace with the menu's slack; about 1.9 m a game minute
  *   stepText(step, places) -> string             a step in plain words, for logs and the panel (0.40.5: an unknown step shows what was written)
+ *   repairStep(step) -> step     (0.44.4 "Switch") {"buildIn": ""} read as {"do": "buildIn"}, {"nut": 1} as {"use": "nut"}; checkPlan reads every step through it
  *   shortStep(step), notAStep(step, n)           (0.40.5 "Form") a step as written, short; the reason a step is not a step: what was written, the five forms, the right form when its key is an action ({"sleep": true}: write {"do": "sleep"})
  *   checkPlan(plan, places) -> { ok, steps, minutes, claimed, reason }   plan: [step] or { steps: [step], minutes? }; ok false with a plain reason when it cannot be followed (0.37.2: a sleep or a fishing not alone, fishing without 5 to 60 minutes)
  *     0.40.5 "Form": a refused sleep says to answer with {"do": "sleep"} alone.
@@ -151,6 +152,7 @@ export function stepMinutes(s, places, from = null) {
 }
 
 export function stepText(s, places) {
+  s = repairStep(s);   // 0.44.4: shown as it is followed
   const k = stepKind(s);
   if (k === 'go') { const q = placeOf(places, s.go); return 'walk to ' + (q ? q.what : s.go); }
   if (k === 'take') { const q = placeOf(places, s.take), what = q ? q.what : s.take; return q && q.kind === 'pile' && Number.isFinite(s.count) ? `pick up ${s.count} from ${what} (${s.take})` : `pick up ${what} (${s.take})`; }
@@ -182,6 +184,19 @@ export function notAStep(s, n) {
   return `step ${n} ${shortStep(s)} is not a step${hint}: ${FORMS}`;
 }
 
+/** 0.44.4 "Switch": a step whose key is an action ({"buildIn": ""}, {"sleep": true}) or a thing he eats or drinks ({"nut": 1}) is read as {"do": ...} or {"use": ...}
+ *  (its "minutes" and "say" kept; a fishing's minutes may be its value). Only when that is its one key besides "minutes" and "say"; anything else stays as written (and is refused). */
+export function repairStep(s) {
+  if (!s || typeof s !== 'object' || Array.isArray(s) || stepKind(s)) return s;
+  const keys = Object.keys(s).filter(k => k !== 'say' && k !== 'minutes');
+  if (keys.length !== 1) return s;
+  const k = keys[0], out = DO[k] ? { do: k } : USE[k] ? { use: k } : null;
+  if (!out) return s;
+  if (s.minutes !== undefined) out.minutes = s.minutes; else if (k === 'fish' && Number.isFinite(Number(s[k])) && s[k] !== true && s[k] !== '') out.minutes = Number(s[k]);
+  if (s.say !== undefined) out.say = s.say;
+  return out;
+}
+
 /** Can the plan be followed? It checks the steps (known kinds and places, sensible minutes) and the sleep and the fishing alone. 0.43.1 "Loose" (the user, 2026-11-20): the size of a plan
  *  (PLAN_STEPS steps, PLAN_GRACE minutes) is only asked for, never refused: a longer plan is followed as it is (its `minutes` and `claimed` still go back to the chooser).
  *  Whether an action is possible is not known beforehand (it depends on where he stands then): that is checked when the step starts (game/actor). */
@@ -191,7 +206,7 @@ export function checkPlan(plan, places) {
   const steps = [];
   let minutes = 0, at = null;   // at (0.37.5): the place the last `go` led to (a later walk counts from there); null at the start and after a wander
   for (let i = 0; i < list.length; i++) {
-    const s = list[i], k = stepKind(s), n = i + 1;
+    const s = repairStep(list[i]), k = stepKind(s), n = i + 1;
     if (!k) return { ok: false, steps: [], minutes: 0, reason: notAStep(s, n) };
     let step;
     if (k === 'go') { if (!placeOf(places, s.go)) return { ok: false, steps: [], minutes: 0, reason: `step ${n}: no place "${s.go}" on the menu` }; step = { go: s.go }; }

@@ -5,7 +5,7 @@
  * AI_URL          the chat endpoint (OpenAI-compatible, Google AI Studio)
  * AI_MODELS_URL   the list of models the key can use (the start screen checks a key with it; the panel's "list models" button)
  * AI_MODELS       the models in order of preference (two free Gemini models, 3.1 first since 0.43.2 for its speed, then Gemma 4; ai/client folds the system message into the first user message for 'gemma-' ids); a request goes to the first whose budget allows and that is not paused
- * AI_BUDGET       the budget PER MODEL { perMin, perDay }, a little under Google's free-tier limits as AI Studio shows them (0.36.4: gemini-3.5-flash-lite and gemini-3.1-flash-lite 14 a minute and 480 a day, gemma-4-31b-it 28 a minute and 14,000 a day). The day is the Pacific-time day, as Google counts it
+ * AI_BUDGET       the budget PER MODEL { perMin, perDay }, a little under Google's free-tier limits as AI Studio shows them (0.36.4: gemini-3.5-flash-lite and gemini-3.1-flash-lite 14 a minute and 480 a day, gemma-4-31b-it 2 a minute since 0.44.4 (its 16K tokens a minute) and 14,000 a day). The day is the Pacific-time day, as Google counts it
  * AI_BUDGET_DEFAULT   the budget of a model that is not in AI_BUDGET (tests, a changed list)
  * AI_TIMEOUT      ms before a request is given up
  * AI_LOG_MAX      requests kept in the panel's log (memory only)
@@ -14,6 +14,8 @@
  * NOTES_MAX, NOTE_LEN   (0.36.7 "Memory") his own notes: at most 20 lines of 80 characters
  * SAID_LEN        (0.36.9 "Voice") the longest thought the request asks for, 140 characters (the same as render/voice SAID_MAX)
  * KEY_NAME, COUNT_NAME   the localStorage names: the key (only here, never in the save) and the day's counter (COUNT_NAME + '.' + model, one per model)
+ * CHOICE_NAME     (0.44.4 "Switch") the localStorage name of the model the player chose in the AI panel (none: "auto", the order of AI_MODELS)
+ * BUSY_PAUSE      (0.44.4 "Switch") ms a model rests after a 5xx ("high demand") or no answer in AI_TIMEOUT (2 minutes), so the next request goes to another one
  *
  * Depends on: nothing
  */
@@ -23,7 +25,7 @@ export const AI_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gem
 export const AI_BUDGET = {
   'gemini-3.5-flash-lite': { perMin: 14, perDay: 480 },   // Google's free tier: 15 a minute, 500 a day
   'gemini-3.1-flash-lite': { perMin: 14, perDay: 480 },   // the same
-  'gemma-4-31b-it': { perMin: 28, perDay: 14000 },   // Google: 30 a minute, 14,400 a day (and 16K input tokens a minute: a plan request is about 4K and requests come a few seconds apart at most, so the request count is the limit that matters)
+  'gemma-4-31b-it': { perMin: 2, perDay: 14000 },   // 0.44.4 "Switch": its 16K input tokens a minute are the real limit (a request is 5 to 7K tokens; AI Studio showed 21.6K of 16K): 2 a minute (was 28; Google: 30 a minute, 14,400 a day)
 };
 export const AI_BUDGET_DEFAULT = { perMin: 12, perDay: 900 };   // a model not listed in AI_BUDGET
 export const AI_TIMEOUT = 12000;
@@ -36,3 +38,5 @@ export const LESSONS_MAX = 10;   // 0.37.4 "Lessons": the lessons of the days (o
 export const LESSON_LEN = 140;
 export const KEY_NAME = 'driftwood.ai.key';
 export const COUNT_NAME = 'driftwood.ai.count';
+export const CHOICE_NAME = 'driftwood.ai.model';   // 0.44.4 "Switch"
+export const BUSY_PAUSE = 120000;   // 0.44.4 "Switch": a model that is overloaded (5xx) or does not answer rests this long

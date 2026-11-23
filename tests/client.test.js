@@ -87,7 +87,7 @@ describe('client', () => {
     const [a, b, g] = AI_MODELS.map(m => AI_BUDGET[m].perMin);
     for (let i = 0; i < a + b + g; i++) { t.ms += 100; await c.send([]); }
     const order = calls.map(x => bodyModel(x.init));
-    expect(order.slice(0, a).every(m => m === AI_MODELS[0])).toBe(true); expect(order.slice(a, a + b).every(m => m === AI_MODELS[1])).toBe(true); expect(order.slice(a + b).every(m => m === AI_MODELS[2])).toBe(true); expect(g).toBeGreaterThan(a);   // each model has its own minute budget
+    expect(order.slice(0, a).every(m => m === AI_MODELS[0])).toBe(true); expect(order.slice(a, a + b).every(m => m === AI_MODELS[1])).toBe(true); expect(order.slice(a + b).every(m => m === AI_MODELS[2])).toBe(true); expect(g).toBeLessThan(a);   // 0.44.4: Gemma 2 a minute (its tokens); each model has its own minute budget
     expect(c.canSend()).toBe(false); await expect(c.send([])).rejects.toMatchObject({ code: 'budget' });
     t.ms += 61000; expect(c.canSend()).toBe(true); await c.send([]); expect(bodyModel(calls.at(-1).init)).toBe(AI_MODELS[0]);   // the first is back with its minute
   });
@@ -172,11 +172,11 @@ describe('0.36.4 "Hindsight": the models, a budget per model, Gemma', () => {
 
   it('the list is two Gemini models, then Gemma 4, each with its own budget just under Google\'s free tier', () => {
     expect(AI_MODELS).toEqual(['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemma-4-31b-it']);   // 0.43.2: 3.1 first (faster)
-    expect(AI_BUDGET).toEqual({ 'gemini-3.5-flash-lite': { perMin: 14, perDay: 480 }, 'gemini-3.1-flash-lite': { perMin: 14, perDay: 480 }, 'gemma-4-31b-it': { perMin: 28, perDay: 14000 } });
+    expect(AI_BUDGET).toEqual({ 'gemini-3.5-flash-lite': { perMin: 14, perDay: 480 }, 'gemini-3.1-flash-lite': { perMin: 14, perDay: 480 }, 'gemma-4-31b-it': { perMin: 2, perDay: 14000 } });
   });
   it('the status gives every model its own budget', () => {
     const { c } = make();
-    expect(c.status().models.map(m => [m.model, m.perMin, m.perDay])).toEqual([['gemini-3.1-flash-lite', 14, 480], ['gemini-3.5-flash-lite', 14, 480], ['gemma-4-31b-it', 28, 14000]]);
+    expect(c.status().models.map(m => [m.model, m.perMin, m.perDay])).toEqual([['gemini-3.1-flash-lite', 14, 480], ['gemini-3.5-flash-lite', 14, 480], ['gemma-4-31b-it', 2, 14000]]);
   });
   it('a model whose day is spent is passed over for the next one, which has its own count', async () => {
     const { c, calls } = make({ [KEY_NAME]: KEY, [COUNT_NAME + '.gemini-3.1-flash-lite']: JSON.stringify({ day: pacificDay(T0), n: 480 }) });
