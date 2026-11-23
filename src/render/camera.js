@@ -28,14 +28,18 @@
  *   device coordinates), or null, by marching the view ray over the
  *   heightfield.
  *
- * depthRange(dist?, zoomMax?, pitchMin?) -> { near, far }   pure: the camera's depth range for its distance (0.22.2: 30 to 760 instead of 1 to 4000, so a 16-bit depth buffer resolves 1 cm, not 6)
+ * depthRange(dist?, zoomMax?, pitchMin?) -> { near, far }   pure: the camera's depth range for its distance (0.22.2: 30 to 760 instead of 1 to 4000, so a 16-bit depth buffer resolves 1 cm, not 6; 0.44.1 "Low": 40 to 1140 at CAM_DIST 600 and the 15° tilt, 2 cm)
+ * CAM_DIST   the camera's distance from its target (600; render/mood measures the highland fog from it)
  * Depends on: three, core/view
  */
 import * as THREE from 'three';
 import { PITCH, YAW, PITCH_MIN, PITCH_MAX, ZOOM_START, ZOOM_MIN, ZOOM_MAX, ZOOM_DEV_MAX, clampView } from '../core/view.js';
 
 export const GAME_ZOOM = ZOOM_START, MIN_ZOOM = ZOOM_MIN, MAX_ZOOM = ZOOM_MAX, SUMMIT_FACTOR = 1.6, SUMMIT_MAX = 14;
-const R = 400, STEP = 1.1;
+// R: the camera's distance from its target. 0.44.1 "Low": 600 (was 400), so at the flatter tilt (PITCH_MIN 15°) the tallest thing at the bottom of the
+// widest view still lies in front of the camera; render/mood measures its highland fog from it.
+export const CAM_DIST = 600;
+const R = CAM_DIST, STEP = 1.1;
 // The depth range (0.22.2). Anything seen along a view ray lies between the lowest bed and the tallest thing above the summit; with the
 // widest view (ZOOM_DEV_MAX, a summit does not add to the dev zoom) and the flattest tilt that stretches it along the ray by (height range) / sin(tilt).
 // A range of 1 to 4000 gave a 16-bit depth buffer a step of 6 cm: shallow fish and layered fronds flickered or vanished on some phones.

@@ -26,10 +26,11 @@
  * createMood({ stage, canvas, container }) -> { update(tier, dt, sky, rain?) }
  *   sky: skyAt(time) from render/sky; rain: 0..1 (default 0)
  *
- * Depends on: three, core/math
+ * Depends on: three, core/math, render/camera (CAM_DIST)
  */
 import * as THREE from 'three';
 import { lerp } from '../core/math.js';
+import { CAM_DIST } from './camera.js';
 
 const TINT = ['rgba(255,170,95,0.34)', 'rgba(255,190,120,0.24)', 'rgba(255,190,120,0.24)', 'rgba(160,190,225,0.18)', 'rgba(160,190,225,0.22)'];
 const MIST = [0, 0, 1, 0, 0.4];
@@ -60,7 +61,7 @@ export function createMood({ stage, canvas, container }) {
     if (f !== filter) { canvas.style.filter = f; filter = f; }
     const warm = 0.3 + 0.7 * sky.day, w = (beach * warm).toFixed(2) + ',' + warm.toFixed(2);
     if (w !== warmth) { mult.style.opacity = (beach * warm).toFixed(2); tint.style.opacity = warm.toFixed(2); warmth = w; }
-    fog.near = lerp(4000, 405, fogAmt); fog.far = lerp(5000, 480, fogAmt);
+    fog.near = lerp(4000, CAM_DIST + 5, fogAmt); fog.far = lerp(5000, CAM_DIST + 80, fogAmt);   // 0.44.1 "Low": measured from the camera (render/camera CAM_DIST; was 405..480 at 400)
     const { light, fill } = sky;
     const sunLight = stage.sun.color.setRGB(...light.color).lerp(sunC, cool * sky.day).lerp(greyC, 0.6 * rain);
     stage.setSun(sunLight, light.intensity * lerp(1, 0.5, rain));

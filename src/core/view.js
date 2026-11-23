@@ -12,7 +12,7 @@
  *
  * Exports
  *   YAW, PITCH             the starting angles in radians
- *   PITCH_MIN, PITCH_MAX   how far the view may tilt (25°..45°)
+ *   PITCH_MIN, PITCH_MAX   how far the view may tilt (15°..45°; 25° before 0.44.1 "Low")
  *   basis(yaw) -> { cam, right }   unit vectors on the ground: towards the
  *                                  camera, and to screen right
  *   CAMDIR, RIGHT          basis(YAW), the starting view
@@ -36,7 +36,7 @@
 
 export const YAW = Math.PI / 4;
 export const PITCH = Math.PI / 6;
-export const PITCH_MIN = 25 * Math.PI / 180, PITCH_MAX = 45 * Math.PI / 180;
+export const PITCH_MIN = 15 * Math.PI / 180, PITCH_MAX = 45 * Math.PI / 180;
 
 export const ZOOM_START = 7, ZOOM_MIN = 5, ZOOM_MAX = 10, ZOOM_DEV_MAX = 25;
 export const zoomMax = devVisible => (devVisible ? ZOOM_DEV_MAX : ZOOM_MAX);

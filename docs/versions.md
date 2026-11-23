@@ -2,6 +2,16 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.44.1 "Low" — 2026-11-23
+
+Agreed with the user 2026-11-23 ("akkoord met alles"), asked the same day: a flatter view, to see further. Purely visual.
+
+- **The tilt** (`core/view`): `PITCH_MIN` 15° (was 25°); `PITCH_MAX` 45° as before. At the flattest tilt the view shows about 60 % more ground in the distance at the same zoom (the ground depth is 1 / sin(tilt): 3.86 against 2.37).
+- **The camera stands further back** (`render/camera` `CAM_DIST` 600, was 400): with the flatter tilt the tallest thing at the bottom of the widest view (the dev zoom of 25) would lie behind a camera 400 m away. The depth range follows (`depthRange`: near 40, far 1140; a 16-bit depth buffer still resolves about 2 cm). An orthographic camera's distance changes nothing else in the picture; the highland fog of `render/mood` was measured from the camera (405 to 480 m) and is now `CAM_DIST` + 5 to + 80.
+- **Checked:** screenshots on seed 60313 at 30° and 15°; shadows fit the view by themselves (`render/shadowFit`), the tiles in view follow the tilt (`tests/streaming.test.js`).
+- **Tests:** `tests/view.test.js` (the depth range at `CAM_DIST` and 15°).
+- **Next:** nothing agreed is waiting.
+
 ## 0.44.0 "Dry" — 2026-11-23
 
 Agreed with the user 2026-11-23 ("geen geulen, alleen binnenmeren als bij vloed verbinding is"; "akkoord met alles"). On seed 60313 the user saw lakes inside the island that rose and fell with the tide. The sea is one level all round, so every hollow below high water held water, even behind dunes: measured on the real ground, seed 60313 had six lakes of 360 to 3000 m² behind 0.15 to 2.5 m of land, seed 1337 nine behind bars of 0.16 to 0.34 m; none was joined to the sea at any tide. Eight islands (1, 2, 3, 4, 5, 42, 2024, 60313) held 2000 to 19000 m² of such water each.
