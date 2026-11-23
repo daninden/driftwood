@@ -37,6 +37,7 @@ import { createShape } from './shape.js';
 import { createTerrain } from './terrain.js';
 import { buildHeightfield, sampleGrid } from './heightfield.js';
 import { computeRivers, rockCoast } from './rivers.js';
+import { fillLagoons } from './lagoons.js';
 import { scatterTiles } from './vegetation.js';
 import { buildOcclusion } from './occlusion.js';
 import { HALF, GR, NG } from './constants.js';
@@ -53,6 +54,7 @@ export async function generateWorld(seed, { progress, heightfield } = {}) {
   const hp = (l, f) => p('heights', f);
   const { HG, LG } = heightfield ? await heightfield(seed, hp) : await buildHeightfield(shp, terrain, hp);
   await p('rivers', 0);
+  fillLagoons(HG, LG);   // 0.44.0 "Dry": no water inside the island that the sea cannot reach at high water
   const { rivers, RD, RT, RI } = computeRivers({ HG, LG, noise, HL: shp.HL });
 
   const H = (x, z) => sampleGrid(HG, x, z);

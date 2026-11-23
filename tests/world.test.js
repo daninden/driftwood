@@ -43,6 +43,16 @@ describe('world generation (seed 1337)', () => {
       for (let k = r.kMouth; k < r.n; k++) expect(w.H(r.pts[k].x, r.pts[k].z)).toBeLessThan(MOUTH_DEEP + 0.05);
     }
   });
+  it('holds no water at high water that the sea cannot reach (0.44.0 "Dry")', () => {
+    const st = 1, N = 2 * 360 / st + 1, h = new Float32Array(N * N), open = new Uint8Array(N * N), stack = [];
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) h[j * N + i] = w.H(-360 + i * st, -360 + j * st);
+    const take = k => { if (!open[k] && h[k] < 0) { open[k] = 1; stack.push(k); } };
+    for (let i = 0; i < N; i++) { take(i); take((N - 1) * N + i); take(i * N); take(i * N + N - 1); }
+    while (stack.length) { const k = stack.pop(), x = k % N; if (x > 0) take(k - 1); if (x < N - 1) take(k + 1); if (k >= N) take(k - N); if (k < N * N - N) take(k + N); }
+    let shut = 0;
+    for (let k = 0; k < N * N; k++) if (h[k] < 0 && !open[k] && !w.riverAt(-360 + (k % N) * st, -360 + ((k / N) | 0) * st)) shut++;
+    expect(shut).toBe(0);
+  });
   it('has 2 to 4 fords per river, clear of the falls and above the mouth', () => {
     w.rivers.forEach(r => {
       expect(r.fords.length).toBeGreaterThanOrEqual(2);

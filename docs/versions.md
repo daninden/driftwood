@@ -2,6 +2,17 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.44.0 "Dry" — 2026-11-23
+
+Agreed with the user 2026-11-23 ("geen geulen, alleen binnenmeren als bij vloed verbinding is"; "akkoord met alles"). On seed 60313 the user saw lakes inside the island that rose and fell with the tide. The sea is one level all round, so every hollow below high water held water, even behind dunes: measured on the real ground, seed 60313 had six lakes of 360 to 3000 m² behind 0.15 to 2.5 m of land, seed 1337 nine behind bars of 0.16 to 0.34 m; none was joined to the sea at any tide. Eight islands (1, 2, 3, 4, 5, 42, 2024, 60313) held 2000 to 19000 m² of such water each.
+
+- **The fill** (`world/lagoons` `fillLagoons`, run by `world/world` after the heightfield and before the rivers, and the prototype `prototypes/island-generator/generator.html` the same way): the open sea is every cell below high water (0) joined to the map's edge; a priority flood over the low cells beside it gives each its spill level (the lowest height a way to the sea has to climb over, capped at `DRY_FILL` 0.3 m); every group of cells below its spill level that holds a cell below 0 is raised to that level, with its terrace level at least `DRY_L` 0.36. No channels are cut; a lake joined to the sea at high water stays (it is the sea). Dry hollows are left alone. About 0.35 s at load.
+- **What is there instead:** a low, flat plain of dry sand (the existing rules: no trees, no tide line, no driftwood or crabs above the beach's terrace level 0.35).
+- **Rivers:** they look for the sea by the terrace level, so rivers that ended in a closed lake now run on to the sea (seeds 60313, 1, 5 and 2024; 1337's rivers are unchanged).
+- **Seed 1337 changed on purpose:** the golden fixture was regenerated with `prototypes/make-golden.js`; 6069 bushes (were 6059).
+- **Tests:** `tests/lagoons.test.js` (a closed lake filled, one behind a low bar filled only to the bar, a lake with a strait kept, dry hollows and land untouched); `tests/world.test.js` (seed 1337 holds no water at high water that the sea cannot reach).
+- **Next:** 0.44.1 "Low".
+
 ## 0.43.7 "Mouth" — 2026-11-23
 
 Agreed with the user 2026-11-20 (built 2026-11-23, "implementeer de volgende"); purely visual. Rivers often did not reach the sea: past the mouth the carved bed faded into the natural sea floor over a fixed 8 m (`MOUTH_FADE`), and about 4 to 11 m past the mouth that floor rises to a bar at -0.4 to +0.25 m, dry sand at low water (the sea at -0.4, game/tide `RANGE`).

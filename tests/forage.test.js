@@ -53,7 +53,7 @@ describe('which bushes bear', () => {
     expect(again).toEqual(berries.map(p => p.id));
     expect(berries.length).toBe(again.length);
     const n = w.tiles.reduce((s, t) => s + t.bushes.length, 0);
-    expect(n).toBe(6059);   // the number of bushes in the world is untouched (tests/world.test.js guards the rest)
+    expect(n).toBe(6069);   // 0.44.0 "Dry": 6059 before the closed lagoons became land. The number of bushes in the world is untouched (tests/world.test.js guards the rest)
   });
   it('is about a fifth of the lowland bushes, never the dune scrub, and some lie inland of the start', () => {
     expect(BERRY_SHARE).toBe(1 / 5); expect(berries.length).toBe(375);   // seed 1337 (0.29: was 1 in 8)
