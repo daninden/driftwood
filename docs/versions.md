@@ -2,6 +2,15 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.44.2 "One step" — 2026-11-23
+
+Agreed with the user 2026-11-23 ("ja"): the panel still showed "walk to a stone" and then "pick up a stone". Since 0.41.0 "Hands" a `take` walks to the piece or pile itself, but the model often wrote a `go` to the same place first (the rules only said "no go before it is needed").
+
+- **The plan check** (`game/actions` `checkPlan`): a `go` straight before a `take` of the same place, or before a `lay` "at" it, is dropped; the plan has one step for it, and its minutes are those of the take or lay alone. A thought (`say`) on the dropped `go` goes to the next step. A `go` before a `do` (husk, drink, light...) stays: those actions happen where he stands.
+- **The rules** (`ai/actPrompt`): a take walks there itself, so never a `go` to the same place before it; the same for a lay "at" a pile.
+- **Tests:** `tests/oneStep.test.js`.
+- **Next:** nothing agreed is waiting.
+
 ## 0.44.1 "Low" — 2026-11-23
 
 Agreed with the user 2026-11-23 ("akkoord met alles"), asked the same day: a flatter view, to see further. Purely visual.
@@ -10,7 +19,7 @@ Agreed with the user 2026-11-23 ("akkoord met alles"), asked the same day: a fla
 - **The camera stands further back** (`render/camera` `CAM_DIST` 600, was 400): with the flatter tilt the tallest thing at the bottom of the widest view (the dev zoom of 25) would lie behind a camera 400 m away. The depth range follows (`depthRange`: near 40, far 1140; a 16-bit depth buffer still resolves about 2 cm). An orthographic camera's distance changes nothing else in the picture; the highland fog of `render/mood` was measured from the camera (405 to 480 m) and is now `CAM_DIST` + 5 to + 80.
 - **Checked:** screenshots on seed 60313 at 30° and 15°; shadows fit the view by themselves (`render/shadowFit`), the tiles in view follow the tilt (`tests/streaming.test.js`).
 - **Tests:** `tests/view.test.js` (the depth range at `CAM_DIST` and 15°).
-- **Next:** nothing agreed is waiting.
+- **Next:** 0.44.2 "One step".
 
 ## 0.44.0 "Dry" — 2026-11-23
 

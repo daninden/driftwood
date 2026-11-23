@@ -33,6 +33,7 @@
  *     0.40.5 "Form": a refused sleep says to answer with {"do": "sleep"} alone.
  *     0.41.0 "Hands": a `take` names a loose piece or a pile on the menu (count 1 to PILE_MAX, for a pile), a `lay` a kind of LAY_KINDS (count 1 to CARRY_MAX) and "here" or a place on the menu;
  *     {"do": "pickup"} and {"do": "lay"} are refused with the right form.
+ *     0.44.2 "One step": a `go` straight before a `take` of that place or a `lay` "at" it is dropped (the take or lay walks there itself).
  *     0.37.4 "Lessons": `minutes` is the chooser's own count of the plan (claimed). 0.37.8 "Firelight": PLAN_MINUTES is the size a plan is asked to have; a plan of several
  *     steps is refused only when the chooser's count or the game's is over PLAN_GRACE (so a walk and an hour of felling fit). 0.43.1 "Loose": not refused at all any more (the size is only asked for).
  *
@@ -234,6 +235,15 @@ export function checkPlan(plan, places) {
     if (step.go || step.take || step.at) at = placeOf(places, step.go || step.take || step.at); else if (step.wander) at = null;
     steps.push(step);
   }
+  // 0.44.2 "One step" (the user, 2026-11-23): a "take" or a "lay ... at" walks there itself; a "go" to the same place just before it is dropped (its thought goes to the next step)
+  for (let i = steps.length - 2; i >= 0; i--) {
+    const g = steps[i], t = steps[i + 1];
+    if (g.go === undefined || (t.take !== g.go && t.at !== g.go)) continue;
+    if (g.say && !t.say) t.say = g.say;
+    steps.splice(i, 1);
+  }
+  minutes = 0; at = null;
+  for (const step of steps) { minutes += stepMinutes(step, places, at); if (step.go || step.take || step.at) at = placeOf(places, step.go || step.take || step.at); else if (step.wander) at = null; }
   minutes = Math.round(minutes * 10) / 10;
   const raw = plan && !Array.isArray(plan) ? Number(plan.minutes) : NaN, claimed = Number.isFinite(raw) && raw >= 0 ? Math.round(raw) : null;   // 0.37.4: the chooser's own count
   return { ok: true, steps, minutes, claimed, reason: null };
