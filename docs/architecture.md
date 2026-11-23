@@ -39,7 +39,7 @@ Rules:
 | `world/shape` | Island outline and scattered highlands; scale to terrace level L. |
 | `world/terrain` | From L to height: terraces, rock walls and the natural passages. |
 | `world/heightfield` | The height and level grids, and bilinear sampling. |
-| `world/rivers` | Rivers (Dijkstra, smooth curve), waterfalls, 2 to 4 fords per river along the middle reach (`rv.fords`, `rv.fordAt(k)`, `FORD_DEPTH`), carving beds and banks (shallow where a river is narrow, `bedDepth`; the bed rises to `FORD_DEPTH` on a ford; past the mouth the carve fades out over `MOUTH_FADE` samples so the bed flattens into the sea floor). |
+| `world/rivers` | Rivers (Dijkstra, smooth curve), waterfalls, 2 to 4 fords per river along the middle reach (`rv.fords`, `rv.fordAt(k)`, `FORD_DEPTH`), carving beds and banks (shallow where a river is narrow, `bedDepth`; the bed rises to `FORD_DEPTH` on a ford; past the mouth the carve fades out over `MOUTH_FADE` samples so the bed flattens into the sea floor; 0.43.7 "Mouth": from the mouth to `rv.kDeep`, the first sample where the natural sea floor lies below `MOUTH_DEEP` (-0.6), a shallow channel is carved, `MOUTH_DEEP` at its middle, easing out over `MOUTH_RAMP` samples; the prototype does the same). |
 | `world/vegetation` | Per tile: trees, palms, rocks, bushes, root spots, and what can be gathered: driftwood and the coconuts under the palms (each with its own PRNG and an id per piece) (data only). |
 | `world/occlusion` | Darker ground under crowns and in hollows. |
 | `world/spots` | Finding places: the start spot, examples of each passage (for tests). |

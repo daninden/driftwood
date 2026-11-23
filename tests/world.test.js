@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { generateWorld } from '../src/world/world.js';
-import { MOUTH_FADE } from '../src/world/rivers.js';
+import { MOUTH_FADE, MOUTH_DEEP, MOUTH_RAMP } from '../src/world/rivers.js';
 import { createTerrainColor } from '../src/render/terrainColor.js';
 
 const golden = JSON.parse(readFileSync(new URL('./fixtures/golden-1337.json', import.meta.url)));
@@ -31,10 +31,16 @@ describe('world generation (seed 1337)', () => {
     });
   });
   it('leaves no trough beyond a river mouth: the bed is level with the sea floor beside it', () => {
-    for (const r of w.rivers) for (let k = r.kMouth + MOUTH_FADE; k < r.n; k += 2) {
+    for (const r of w.rivers) for (let k = Math.max(r.kMouth + MOUTH_FADE, r.kDeep + MOUTH_RAMP); k < r.n; k += 2) {   // 0.43.7 "Mouth": past the channel through the bar
       const p = r.pts[k], a = r.pts[Math.max(0, k - 1)], b = r.pts[Math.min(r.n - 1, k + 1)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1, px = -(b.z - a.z) / l, pz = (b.x - a.x) / l;
       const side = (w.H(p.x + px * 7, p.z + pz * 7) + w.H(p.x - px * 7, p.z - pz * 7)) / 2;
       expect(Math.abs(w.H(p.x, p.z) - side)).toBeLessThan(0.15);
+    }
+  });
+  it('meets the sea at every tide: past the mouth its middle lies below low water until the sea floor is deeper (0.43.7 "Mouth")', () => {
+    for (const r of w.rivers) {
+      expect(r.kDeep).toBeGreaterThanOrEqual(r.kMouth);
+      for (let k = r.kMouth; k < r.n; k++) expect(w.H(r.pts[k].x, r.pts[k].z)).toBeLessThan(MOUTH_DEEP + 0.05);
     }
   });
   it('has 2 to 4 fords per river, clear of the falls and above the mouth', () => {

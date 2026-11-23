@@ -3,6 +3,8 @@
 // the prototype is changed in the same way.
 //
 //   node prototypes/make-golden.js
+//   (THREE_LOCAL=<three.min.js> to load Three.js from disk, CHROME_PATH=<chromium> for a browser
+//   Playwright did not install itself, as scripts/smoke.js)
 //
 // It injects a hook into generator.html that exposes the world queries,
 // samples 400 fixed points and every tile, and writes the fixture.
@@ -18,7 +20,7 @@ const hooked = src.replace("log('water & foam');", "log('water & foam'); window.
 if (hooked === src) throw new Error('hook point not found in generator.html');
 const tmp = here('./island-generator/.golden.html'); writeFileSync(tmp, hooked);
 
-const browser = await chromium.launch(), page = await browser.newPage();
+const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH, args: ['--no-sandbox'] } : {}), page = await browser.newPage();
 if (process.env.THREE_LOCAL) await page.route('**/three.min.js', r => r.fulfill({ body: readFileSync(process.env.THREE_LOCAL), contentType: 'text/javascript' }));
 await page.goto('file://' + tmp + '?seed=1337', { waitUntil: 'commit', timeout: 0 });
 await page.waitForFunction(() => window.__done, null, { timeout: 300000, polling: 1000 });

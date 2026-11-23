@@ -2,6 +2,16 @@
 
 Each push that delivers something gets a version number and a short name, shown in the developer panel. Newest first.
 
+## 0.43.7 "Mouth" — 2026-11-23
+
+Agreed with the user 2026-11-20 (built 2026-11-23, "implementeer de volgende"); purely visual. Rivers often did not reach the sea: past the mouth the carved bed faded into the natural sea floor over a fixed 8 m (`MOUTH_FADE`), and about 4 to 11 m past the mouth that floor rises to a bar at -0.4 to +0.25 m, dry sand at low water (the sea at -0.4, game/tide `RANGE`).
+
+- **The channel** (`world/rivers`, and the prototype `prototypes/island-generator/generator.html` the same way): `rv.kDeep` is the first sample from the mouth where the natural sea floor lies below `MOUTH_DEEP` (-0.6 m); from the mouth to there a shallow channel is carved (`MOUTH_DEEP` at its middle, 0.3 m higher at its edge, banks as the river's), easing out over `MOUTH_RAMP` (4) samples. Where the old carve or the sea floor is deeper nothing changes, so there is still no trough offshore.
+- **Measured on seven islands** (1337, 2024, 7, 42, 99, 5, 123, the river's middle past the mouth): before, the highest point was up to +0.25 m (seed 42's main river, a bar of about 12 m), +0.06 (1337's tributary), -0.41 (1337's main river); now every river lies at -0.60 or deeper all the way to the sea.
+- **Seed 1337 changed on purpose:** the golden fixture was regenerated with `prototypes/make-golden.js` (only the river beds past the mouths; the 400 sample points and every tile are as before). `make-golden.js` takes `CHROME_PATH` for a Chromium Playwright did not install itself, as `scripts/smoke.js`.
+- **Tests:** `tests/world.test.js` (a river meets the sea at every tide; no trough past the channel).
+- **Next:** nothing agreed is waiting.
+
 ## 0.43.6 "Stock" — 2026-11-23
 
 Agreed with the user 2026-11-23 ("ja") after a log of two game days: he gathered about 35 fronds onto three piles round his hut, while the hut needed 8 branches first and only 12 fronds after, and he said "I'll gather branches" while he took fronds. No branch was on the menu (those near home were all used), fronds lay everywhere (the palms he felled), nothing said how many fronds lay ready (each pile was one line among 30), and his own notes kept "clearing the fronds from the hut area" alive. Facts only, no advice.

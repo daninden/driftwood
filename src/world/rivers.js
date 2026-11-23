@@ -17,9 +17,13 @@
  *      built around the river, and the bed and banks are carved into HG
  *      (shallow where the river is narrow, near its source, and on the
  *      fords). Beside each waterfall a rough scramble route is carved as well.
+ *      Past the mouth the carved bed fades into the sea floor over MOUTH_FADE
+ *      samples, and (0.43.7 "Mouth") a shallow channel, MOUTH_DEEP at its
+ *      middle, runs on through any bar until the natural sea floor lies below
+ *      MOUTH_DEEP (sample kDeep), so a river meets the sea at every tide.
  *
  * computeRivers({ HG, LG, noise, HL }) -> { rivers, RD, RT, RI }
- *   Mutates HG (carving). Each river: { pts, n, main, RL, kMouth, tMouth,
+ *   Mutates HG (carving). Each river: { pts, n, main, RL, kMouth, tMouth, kDeep,
  *   falls: [{ top, base, drop }], fords: [{ k0, k1 }], W(t), L(t), LW(t),
  *   fordAt(k) }
  *     fords  stretches of samples k0..k1 where the bed is shallow
@@ -41,6 +45,8 @@ const CG = 4, NC = Math.round(S / CG) + 1;
 export const FORD_DEPTH = 0.22;   // water depth over a ford's bed
 export const FORD_HALF = 4;       // a ford is 2 * FORD_HALF + 1 samples (4 m) long
 export const MOUTH_FADE = 16;     // samples (8 m) past the mouth over which the carved bed fades out into the sea floor
+export const MOUTH_DEEP = -0.6;   // 0.43.7 "Mouth": past the mouth the channel is carved on to this depth (below low water, game/tide RANGE -0.4, with a margin) until the sea floor lies deeper
+export const MOUTH_RAMP = 4;     // samples over which that channel eases out past the first sample as deep as MOUTH_DEEP
 export const FORD_RAMP = 3;       // samples over which the bed eases down on either side
 /** Bed depth below the water at the river's centre, from its width: shallow where it is narrow. */
 export const bedDepth = w => 0.3 + 0.1 * w - 0.14 * ss(1.45, 0.95, w);
@@ -104,6 +110,7 @@ export function computeRivers({ HG, LG, noise, HL }) {
     const pts = rv.pts, n = pts.length; rv.n = n; rv.RL = new Float32Array(n);
     let m = 1e9; for (let k = 0; k < n; k++) { m = Math.min(m, sampleGrid(HG, pts[k].x, pts[k].z) - 0.45); rv.RL[k] = m; }
     rv.kMouth = n - 1; for (let k = 0; k < n; k++) if (rv.RL[k] <= 0.02) { rv.kMouth = k; break; }
+    rv.kDeep = rv.kMouth; while (rv.kDeep < n - 1 && sampleGrid(HG, pts[rv.kDeep].x, pts[rv.kDeep].z) > MOUTH_DEEP) rv.kDeep++;   // 0.43.7 "Mouth": the first sample past the mouth where the natural sea floor lies below MOUTH_DEEP
     rv.tMouth = rv.kMouth / (n - 1);
     rv.W = t => rv.main ? 1.0 + 3.2 * ss(0, 0.6, t) + 4.5 * ss(rv.tMouth - 0.04, rv.tMouth + 0.01, t) : 0.8 + 1.6 * ss(0, 1, t);
     rv.L = t => { const f = Math.max(0, Math.min(n - 1.0001, t * (n - 1))), k = f | 0, u = f - k; return rv.RL[k] + (rv.RL[k + 1] - rv.RL[k]) * u; };
@@ -140,6 +147,9 @@ export function computeRivers({ HG, LG, noise, HL }) {
     // past the mouth the bed fades out into the sea floor (no trough offshore)
   const mf = 1 - ss(rv.kMouth, rv.kMouth + MOUTH_FADE, t * (rv.n - 1));
   if (cy < HG[id]) HG[id] = lerp(HG[id], cy, mf);
+  // 0.43.7 "Mouth": past the mouth a shallow channel runs on through any bar until the natural sea floor lies below MOUTH_DEEP (under low water), so the river meets the sea at every tide
+  const kp = t * (rv.n - 1);
+  if (kp > rv.kMouth && kp < rv.kDeep + MOUTH_RAMP) { const cc = d < hw ? MOUTH_DEEP + 0.3 * (d / hw) ** 2 : MOUTH_DEEP + 0.3 + (d - hw) * 0.75; if (cc < HG[id]) HG[id] = lerp(cc, HG[id], ss(rv.kDeep, rv.kDeep + MOUTH_RAMP, kp)); }
     for (const fl of rv.falls) {
       const t0 = (fl.top - 10) / (rv.n - 1), t1 = (fl.base + 10) / (rv.n - 1); if (t < t0 || t > t1 || d < hw + 0.2 || d > hw + 4.5) continue;
       const x = -HALF + (id % NG) * GR, z = -HALF + Math.floor(id / NG) * GR, pr = (t - t0) / (t1 - t0);

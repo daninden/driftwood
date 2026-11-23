@@ -69,7 +69,7 @@ A light wind moves the palms, trees, bushes and grass near him, and now and then
 
 ### Rivers and the sea
 
-He can wade up to his waist. Upstream, where a river is a narrow brook, he can cross anywhere. Along the middle reach he can cross only at fords, which he can tell by stones sticking out of the water and white rippling water. The deep stretch towards the sea cannot be crossed.
+He can wade up to his waist. Upstream, where a river is a narrow brook, he can cross anywhere. Along the middle reach he can cross only at fords, which he can tell by stones sticking out of the water and white rippling water. The deep stretch towards the sea cannot be crossed. Every river runs on into the sea at every tide, through a shallow channel where a sandbar lies in front of its mouth.
 
 The tide comes in and goes out twice a day. At low water there is more beach to walk on. His footprints stay clear for a short while, then fade away over about a minute of game time; a sleep moves that time on too. When the flood comes in round him, he can always wade back to shore. The flood wipes out his footprints.
 
